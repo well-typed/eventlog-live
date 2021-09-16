@@ -23,7 +23,7 @@ library
                       , ekg-core
                       , network
                       , bytestring
-                      , eventlog-socket
+                      -- , eventlog-socket
                       , temporary
                       , async
                       , containers
