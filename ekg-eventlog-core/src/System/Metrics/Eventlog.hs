@@ -16,7 +16,7 @@ import qualified System.IO as IO
 import System.IO (Handle)
 import GHC.RTS.Events
 import Control.Monad
-import qualified GHC.Eventlog.Socket as EventLogSocket
+-- import qualified GHC.Eventlog.Socket as EventLogSocket
 import System.IO.Temp
 import Control.Concurrent
 import Control.Concurrent.Async
@@ -177,12 +177,13 @@ processEventsWithOffset o EventLogState{..} (Event raw_t e _cap) =
 
 -- | By default the eventlog is only flushed quite rarely so we flush it
 -- more frequently to get events faster.
+{-
 flushThread :: IO ()
 flushThread = forever $ do
     print "flushing"
     threadDelay 1_000_000
     flushEventLog
-
+-}
 
 initEventLogState st = do
   createdThreads <- createGauge "eventlog.created_threads" st
