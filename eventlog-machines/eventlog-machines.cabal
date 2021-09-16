@@ -1,0 +1,33 @@
+cabal-version: 2.4
+name:          eventlog-machines
+version:       0.1.0.0
+synopsis:      machines processing eventlog
+category:      Debug, Monitoring, System, Machines 
+description:   
+  [machines](https://hackage.haskell.org/package/machines)
+  for processing GHC eventlog
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Oleg Grenrus <oleg.grenrus@iki.fi>
+maintainer:    Not me.
+copyright:     (c) 2021 someone
+
+source-repository head
+  type:     git
+  location: https://github.com/mpickering/eventlog-live.git
+  subdir:   eventlog-machines
+
+library
+  default-language: Haskell2010
+  ghc-options:      -Wall
+  hs-source-dirs:   src/
+  build-depends:
+    , base          >=4.13   && <5
+    , bytestring
+    , clock
+    , ghc-events    >=0.17.0
+    , machines
+    , stm
+    , transformers
+
+  exposed-modules:  GHC.Eventlog.Machines
