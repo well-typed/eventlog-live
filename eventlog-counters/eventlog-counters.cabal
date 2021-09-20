@@ -21,9 +21,10 @@ library
   hs-source-dirs:   src/
   default-language: Haskell2010
   build-depends:
-    , base        >=4.13   && <5
+    , base             >=4.13   && <5
     , containers
-    , ghc-events  >=0.17.0
+    , ghc-events       ^>=0.17.0
+    , ghc-events2prof  ^>=0.1
     , stm
 
   exposed-modules:  GHC.Eventlog.Counters

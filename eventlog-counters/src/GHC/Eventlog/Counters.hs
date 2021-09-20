@@ -12,6 +12,7 @@ import Data.Word              (Word32, Word64)
 import qualified Data.IntSet     as IS
 import qualified Data.Map.Strict as Map
 
+import GHC.Events2Prof (Acc, emptyAcc, processEvent)
 import GHC.RTS.Events
 
 -- | Various counters we update with 'count'.
@@ -35,6 +36,8 @@ data Counters = Counters
     , cntGcCountS   :: TVar Word64
 
     , cntThreads    :: TVar (Map ThreadId ThreadState)
+
+    , cntE2P        :: TVar Acc
     }
 
 -- | Wall-clock information.
@@ -82,12 +85,17 @@ newCounters = do
 
     cntThreads    <- newTVar Map.empty
 
+    cntE2P        <- newTVar emptyAcc
+
     return Counters {..}
 
 count :: Counters -> Event -> STM ()
-count cnt (Event t s c) = do
+count cnt ev@(Event t s c) = do
     -- Count events
     modifyTVar' (cntEvents cnt) (+ 1)
+
+    -- ghc-events2prof
+    modifyTVar' (cntE2P cnt) (`processEvent` ev)
 
     -- Update time
     t' <- readTVar (cntTime cnt)

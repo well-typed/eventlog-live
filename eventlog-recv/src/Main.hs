@@ -11,8 +11,10 @@ import Control.Applicative       (optional, (<**>), (<|>))
 import Control.Concurrent.STM    (STM, atomically, readTVar)
 import Control.Monad.IO.Class    (liftIO)
 import Data.Foldable             (for_)
+import Data.List                 (intercalate)
 import Data.Void                 (Void)
 import Data.Word                 (Word64)
+import GHC.Events2Prof           (accToProfile)
 import System.Console.Concurrent (outputConcurrent)
 import System.Console.Regions
        (RegionLayout (Linear), displayConsoleRegions, finishConsoleRegion,
@@ -23,7 +25,9 @@ import Text.Printf               (PrintfArg, PrintfType, printf)
 import qualified Data.ByteString          as BS
 import qualified Data.IntSet              as IS
 import qualified Data.Map.Strict          as Map
+import qualified Data.Scientific          as Sci
 import qualified Data.Text                as T
+import qualified GHC.Prof                 as Prof
 import qualified Network.Socket           as Sock
 import qualified Options.Applicative      as O
 import qualified System.IO                as IO
@@ -53,7 +57,7 @@ main = displayConsoleRegions $ do
     let events :: ProcessT IO (Maybe BS.ByteString) Event
         events = decodeEventsMaybe
             ~> reorderEvents 1_000_000_000
-            ~> checkOrder (\e e' -> print (e, e'))
+            ~> checkOrder (\e e' -> outputConcurrent $ show (e, e') ++ "\n")
 
     counters <- atomically newCounters
 
@@ -124,8 +128,8 @@ withDisplay Counters {..} action0 =
     with textCaps $
     with textGc $
     with textThread $
-    with textHeap
-    action0
+    with textHeap $
+    with textProf action0
 
   where
     textTime =  do
@@ -163,6 +167,11 @@ withDisplay Counters {..} action0 =
 
             return $ printf "Heap: size %s; live %s; alloc %s" (humaniseW64 s) (humaniseW64 l) (humaniseW64 a)
 
+    textProf = do
+        acc <- readTVar cntE2P
+        let prof = accToProfile acc
+        return $ topCostCentres prof
+
     with :: STM String -> IO a -> IO a
     with regionText action = do
         withConsoleRegion Linear $ \reg -> do
@@ -192,6 +201,57 @@ withDisplay Counters {..} action0 =
         unit 4 = "T"
         unit 5 = "E"
         unit _ = "alot"
+
+-------------------------------------------------------------------------------
+-- Profile top cost centres
+-------------------------------------------------------------------------------
+
+topCostCentres :: Prof.Profile -> String
+topCostCentres prof =
+    table $ topHeader $ map top $ Prof.profileTopCostCentres prof
+  where
+    topHeader = (:)
+        [ "COST CENTRE"
+        , "MODULE"
+        , "SRC"
+        , "%time"
+        , "%alloc"
+        , "ticks"
+        , "bytes"
+        ]
+
+    top :: Prof.AggregatedCostCentre -> [String]
+    top acc =
+        [ T.unpack (Prof.aggregatedCostCentreName acc)
+        , T.unpack (Prof.aggregatedCostCentreModule acc)
+        , maybe "?" T.unpack (Prof.aggregatedCostCentreSrc acc)
+        , printf "%.01f" (Sci.toRealFloat $ Prof.aggregatedCostCentreTime acc :: Double)
+        , printf "%.01f" (Sci.toRealFloat $ Prof.aggregatedCostCentreAlloc acc :: Double)
+        , maybe "?" (printf "%d") (Prof.aggregatedCostCentreTicks acc)
+        , maybe "?" (printf "%d") (Prof.aggregatedCostCentreBytes acc)
+        ]
+
+table :: [[String]] -> String
+table cells = unlines rows
+  where
+    cols      :: Int
+    rowWidths :: [Int]
+    rows      :: [String]
+
+    (cols, rowWidths, rows) = foldr go (0, repeat 0, []) cells
+
+    go :: [String] -> (Int, [Int], [String]) -> (Int, [Int], [String])
+    go xs (c, w, yss) =
+        ( max c (length xs)
+        , zipWith max w (map length xs ++ repeat 0)
+        , unwords2 (take cols (zipWith fill xs rowWidths))
+          : yss
+        )
+
+    fill :: String -> Int -> String
+    fill s n = s ++ replicate (n - length s) ' '
+
+    unwords2 = intercalate "  "
 
 -------------------------------------------------------------------------------
 -- Options

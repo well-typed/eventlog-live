@@ -6,3 +6,8 @@ packages: eventlog-counters
 packages: eventlog-counters-ekg
 packages: eventlog-machines
 packages: eventlog-recv
+
+source-repository-package
+  type: git
+  location: https://github.com/phadej/ghc-events2prof.git
+  tag: 3581ac913dfd5d51340e9b46a5ac7c4ad3af062d

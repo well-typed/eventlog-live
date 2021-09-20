@@ -6,6 +6,7 @@ category:      Debug, Monitoring, System, Network
 description:
   This a demo application which shows how to receive and process
   eventlog over a UNIX socket, from an application using @eventlog-socket@.
+
 author:        Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:    Not me.
 license:       BSD-3-Clause
@@ -23,18 +24,21 @@ executable eventlog-recv
   ghc-options:      -Wall -threaded
   main-is:          Main.hs
   build-depends:
-    , base                  ^>=4.14.0.0
-    , ghc-events            >=0.17.0
-    , containers
-    , optparse-applicative  ^>=0.16.1.0
+    , base                   ^>=4.14.0.0
+    , bytestring
     , concurrent-output
-    , text
-    , stm
+    , containers
     , ekg
     , ekg-core
-    , eventlog-machines
-    , bytestring
     , eventlog-counters
     , eventlog-counters-ekg
-    , network
+    , eventlog-machines
+    , ghc-events             >=0.17.0
+    , ghc-events2prof
+    , ghc-prof
     , machines
+    , network
+    , optparse-applicative   ^>=0.16.1.0
+    , scientific
+    , stm
+    , text
