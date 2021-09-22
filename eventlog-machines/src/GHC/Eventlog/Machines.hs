@@ -7,12 +7,15 @@ module GHC.Eventlog.Machines (
     reorderEvents,
     checkOrder,
 
+    -- ** Delimiting
+    delimit,
+    between,
+
     -- * Exceptions
     DecodeError (..),
 ) where
 
-import Control.Exception          (Exception, throwIO, catch)
-import System.IO.Error (isEOFError)
+import Control.Exception          (Exception, catch, throwIO)
 import Control.Monad              (when)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Trans.Class  (lift)
@@ -20,11 +23,15 @@ import Data.Foldable              (traverse_)
 import Data.Function              (fix)
 import Data.Int                   (Int64)
 import Data.List                  (partition, sortBy)
+import Data.Machine.Moore         (Moore (..))
 import Data.Ord                   (comparing)
+import Data.Text                  (Text)
 import Data.Word                  (Word64)
-import GHC.RTS.Events             (Event, Timestamp, evTime)
+import GHC.RTS.Events
+       (Event (evSpec), EventInfo (UserMarker), Timestamp, evTime)
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import System.IO                  (Handle, hWaitForInput)
+import System.IO.Error            (isEOFError)
 
 import Data.Machine (Is, MachineT, PlanT, ProcessT, await, construct, yield)
 
@@ -180,3 +187,34 @@ checkOrder f = construct start where
         when (evTime e' < evTime e) $ lift $ f e e'
         yield e'
         loop e'
+
+-------------------------------------------------------------------------------
+-- Filtering semaphores
+-------------------------------------------------------------------------------
+
+-- | A simple delimiting 'Moore' machine,
+-- which is opened by one constant marker and closed by the other one.
+between :: Text -> Text -> Moore Text Bool
+between x y = open where
+    open  = Moore False open' where open' x' = if x == x' then close else open
+    close = Moore True close' where close' y' = if y == y' then end else close
+    end   = Moore False (const end)
+
+-- | Delimit the event process.
+delimit :: Monad m => Moore Text Bool -> ProcessT m Event Event
+delimit = construct . go where
+    go :: Monad m => Moore Text Bool -> PlanT (Is Event) Event m ()
+    go mm@(Moore s next) = do
+        e <- await
+        case evSpec e of
+            -- on marker step the moore machine.
+            UserMarker m -> do
+                let mm'@(Moore s' _) = next m
+                -- if current or next state is open (== True), emit the marker.
+                when (s || s') $ yield e
+                go mm'
+
+            -- for other events, emit if the state is open.
+            _ -> do
+                when s $ yield e
+                go mm
