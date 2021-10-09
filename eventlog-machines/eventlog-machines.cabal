@@ -3,9 +3,10 @@ name:          eventlog-machines
 version:       0.1.0.0
 synopsis:      machines processing eventlog
 category:      Debug, Monitoring, System, Machines 
-description:   
+description:
   [machines](https://hackage.haskell.org/package/machines)
   for processing GHC eventlog
+
 license:       BSD-3-Clause
 license-file:  LICENSE
 author:        Oleg Grenrus <oleg.grenrus@iki.fi>
@@ -28,6 +29,7 @@ library
     , ghc-events    >=0.17.0
     , machines
     , stm
+    , text
     , transformers
 
   exposed-modules:  GHC.Eventlog.Machines
