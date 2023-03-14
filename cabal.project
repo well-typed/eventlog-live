@@ -6,3 +6,18 @@ packages: eventlog-counters
 packages: eventlog-counters-ekg
 packages: eventlog-machines
 packages: eventlog-recv
+
+source-repository-package
+  type: git
+  location: https://github.com/finleymcilwaine/influxdb-haskell
+  tag: 46a4995c57bb09bf6757c105260c1cc1873392af
+
+source-repository-package
+  type: git
+  location: https://github.com/finleymcilwaine/ekg
+  tag: a5306f582d80a769e1df9d2838654604f6426c71
+
+source-repository-package
+  type: git
+  location: https://github.com/finleymcilwaine/ekg-json
+  tag: bcc382c4d94c507bd56e9c06c193108ff2d3a221
