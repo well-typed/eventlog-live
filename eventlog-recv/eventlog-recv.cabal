@@ -23,7 +23,7 @@ executable eventlog-recv
   ghc-options:      -Wall -threaded
   main-is:          Main.hs
   build-depends:
-    , base                  ^>=4.14.0.0
+    , base                  ^>=4.16.0.0
     , ghc-events            >=0.17.0
     , containers
     , optparse-applicative  ^>=0.16.1.0
