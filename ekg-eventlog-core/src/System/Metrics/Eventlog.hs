@@ -152,7 +152,7 @@ processEvents el@EventLogState{..} ev@(Event t e _) =
 
 -- | Events which we *need* the offset for
 processEventsWithOffset :: Word64 -> EventLogState -> Event -> IO ()
-processEventsWithOffset o EventLogState{..} (Event raw_t e _cap) =
+processEventsWithOffset o EventLogState{..} ev@(Event raw_t e _cap) =
   case e of
     -- These two events are a bit hard to understand because you might
     -- connect to the process when there are k threads already running so
@@ -168,7 +168,9 @@ processEventsWithOffset o EventLogState{..} (Event raw_t e _cap) =
       set t returnedMblocks (fromIntegral returned)
     StartGC {} -> gcPause (Left t)
     EndGC {} -> gcPause (Right t)
-    e -> return ()
+    e -> do
+      putStrLn $ "ignoring event: " ++ show ev
+      return ()
   where
     t = o + raw_t
 

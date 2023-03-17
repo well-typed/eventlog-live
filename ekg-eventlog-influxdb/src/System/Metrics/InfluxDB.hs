@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications   #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE NumericUnderscores #-}
 module System.Metrics.InfluxDB where
 
@@ -10,7 +10,6 @@ import Control.Monad
 import Debug.Trace
 import qualified Database.InfluxDB as Influxdb
 import qualified Database.InfluxDB.Format as Influxdb
-import Control.Monad
 import System.Mem
 import Control.Lens
 import Data.Time
@@ -18,6 +17,8 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import qualified Data.Map as Map
 import Control.Applicative
+import GHC.IO.Handle (hFlush)
+import System.IO (stdout)
 
 type ILine = Influxdb.Line NominalDiffTime
 
@@ -41,13 +42,19 @@ workerThread p chan = forever $ do
   lines <- makeBatch chan
   case lines of
     [] -> return ()
-    _ -> Influxdb.writeBatch p lines
+    _ -> do
+      putStrLn $ "writing batch of size " ++ show (length lines)
+      hFlush stdout
+      Influxdb.writeBatch p lines
+      putStrLn $ "wrote batch of size " ++ show (length lines)
+      hFlush stdout
 
 makeBatch :: TChan ILine -> IO [ILine]
 makeBatch t = do
     d <- registerDelay maxWaitTime
     atomically $ loop d batchSize []
   where
+    loop :: TVar Bool -> Integer -> [ILine] -> STM [ILine]
     loop d 0 acc = return acc
     loop d n acc = do
       elem <- (Just <$> readTChan t) <|> (readTVar d >>= \done -> if done then return Nothing else retry)
@@ -55,12 +62,13 @@ makeBatch t = do
         Nothing -> return acc
         Just v -> loop d (n - 1) (v : acc)
 
-
-
 influxContinuation :: Influxdb.WriteParams -> IO (Line -> IO (), IO ())
 influxContinuation p = do
-  chan <- newTChanIO
-  worker <- async (workerThread p chan)
-  return (atomically . writeTChan chan . formatLine, cancel worker)
-
-
+    chan <- newTChanIO
+    worker <- async (workerThread p chan)
+    return (writeLine chan, cancel worker)
+  where
+    writeLine :: TChan ILine -> Line -> IO ()
+    writeLine chan line = do
+      let formatted = formatLine line
+      atomically $ writeTChan chan formatted
