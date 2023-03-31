@@ -1,12 +1,22 @@
+{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
-module System.Metrics.Eventlog(Field(..), FieldValue(..), Line(..), Store(..), eventlogMetrics) where
+{-# LANGUAGE NumericUnderscores  #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE OverloadedStrings   #-}
 
-import qualified System.Metrics as EKG
+module System.Metrics.Eventlog(
+    Field(..)
+  , FieldValue(..)
+  , Line(..)
+  , Store(..)
+  , eventlogMetrics
+  ) where
+
+import qualified System.Metrics       as EKG
+import qualified System.Metrics.Gauge (set)
 import qualified System.Metrics.Gauge as EKG
+import qualified System.Metrics.Label (set)
+import qualified System.Metrics.Label as EKG
 import GHC.RTS.Events.Incremental
 import Network.Socket
 import Network.Socket.ByteString
@@ -34,47 +44,79 @@ import Data.Time
 import Data.Fixed
 
 
-data Field = Field Text FieldValue deriving Show
+data Field = Field Text FieldValue
+  deriving Show
 
-data FieldValue = FieldInt Int64
-                | FieldFloat Double
-                | FieldString Text
-                | FieldBool Bool deriving Show
+data FieldValue
+    = FieldInt Int64
+    | FieldFloat Double
+    | FieldString Text
+    | FieldBool Bool
+  deriving Show
 
-data Line = Line { measurementName :: !Text
-                 , timestamp :: !NominalDiffTime
-                 , fields :: ![Field]
-                 } deriving Show
+data Line = Line
+    { measurementName :: !Text
+    , timestamp :: !NominalDiffTime
+    , fields :: ![Field]
+    }
+  deriving Show
 
-
-data Store = Store { ekgStore :: EKG.Store
-                    , lineCont :: !(Line -> IO ())
-                    }
+data Store = Store
+    { ekgStore :: EKG.Store
+    , lineCont :: !(Line -> IO ())
+    }
 
 newStore :: (Line -> IO ()) -> IO Store
 newStore k = Store <$> EKG.newStore <*> pure k
 
 -------------------
-data Gauge = Gauge EKG.Gauge Text (IORef Int64) (Line -> IO ())
+
+data Gauge =
+    Gauge
+      EKG.Gauge
+      Text
+      (IORef Int64)
+      (Line -> IO ())
+
+data Label =
+    Label
+      EKG.Label
+      Text
+      (IORef Text)
+      (Line -> IO ())
 
 createGauge :: Text -> Store ->  IO Gauge
 createGauge t (Store s k) = Gauge <$> EKG.createGauge t s <*> pure t <*> newIORef 0 <*> pure k
 
+createLabel :: Text -> Store ->  IO Label
+createLabel t (Store s k) = Label <$> EKG.createLabel t s <*> pure t <*> newIORef "" <*> pure k
 
-genG :: (EKG.Gauge -> IO ()) -> (Int64 -> Int64) -> Timestamp -> Gauge -> IO ()
-genG ekg f t (Gauge g n r k) = do
+modifyGauge :: (EKG.Gauge -> IO ()) -> (Int64 -> Int64) -> Timestamp -> Gauge -> IO ()
+modifyGauge ekg f t (Gauge g n r k) = do
   ekg g
   new_val <- atomicModifyIORef' r (\n -> (f n, f n))
-  k (Line ("gauge." <> n) (nanoToDiffTime t) [(Field "value" (FieldInt new_val))])
+  k (Line ("gauge." <> n) (nanoToDiffTime t) [Field "value" (FieldInt new_val)])
   where
     nanoToDiffTime :: Timestamp -> NominalDiffTime
     nanoToDiffTime t = secondsToNominalDiffTime (MkFixed (fromIntegral t * 1_000))
 
-inc = genG EKG.inc (+ 1)
-set :: Word64 -> Gauge -> Int64 -> IO ()
-set t g n = genG (\g -> EKG.set g n) (const n) t g
+modifyLabel :: (EKG.Label -> IO ()) -> (Text -> Text) -> Timestamp -> Label -> IO ()
+modifyLabel ekg f t (Label g n r k) = do
+  ekg g
+  new_val <- atomicModifyIORef' r (\n -> (f n, f n))
+  k (Line ("label." <> n) (nanoToDiffTime t) [Field "value" (FieldString new_val)])
+  where
+    nanoToDiffTime :: Timestamp -> NominalDiffTime
+    nanoToDiffTime t = secondsToNominalDiffTime (MkFixed (fromIntegral t * 1_000))
 
+incGauge :: Timestamp -> Gauge -> IO ()
+incGauge = modifyGauge EKG.inc (+ 1)
 
+setGauge :: Word64 -> Gauge -> Int64 -> IO ()
+setGauge t g n = modifyGauge (\g -> System.Metrics.Gauge.set g n) (const n) t g
+
+setLabel :: Word64 -> Label -> Text -> IO ()
+setLabel t l v = modifyLabel (\l -> System.Metrics.Label.set l v) (const v) t l
 
 -------------------
 
@@ -128,11 +170,7 @@ eventlogMetrics :: FilePath -> (Line -> IO ()) -> IO (Async r, EKG.Store)
 eventlogMetrics f k = do
     store <- newStore k
     st <- initEventLogState store
-    print "STARTING"
-    --EventLogSocket.start (Just f)
-    print "DONE_START"
-    -- Need this delay to wait for the socket to exist
-    print "DONE_DELAY"
+    print "starting eventlog listener"
     h' <- connectToEventlogSocket f
     print "connected"
     a <- async $ readEventlog h' (processEvents st)
@@ -157,35 +195,33 @@ processEventsWithOffset o EventLogState{..} ev@(Event raw_t e _cap) =
     -- These two events are a bit hard to understand because you might
     -- connect to the process when there are k threads already running so
     -- you will see more StopThread events than CreateThread events
-    CreateThread {} -> inc t createdThreads
-    StopThread _ ThreadFinished   -> inc t finishedThreads
-    HeapLive _ nlb -> set t liveBytes(fromIntegral nlb)
-    HeapSize _ ns -> set t heapSize (fromIntegral ns)
-    BlocksSize _ ns -> set t blocksSize (fromIntegral ns)
+    CreateThread {} -> incGauge t createdThreads
+    StopThread _ ThreadFinished   -> incGauge t finishedThreads
+    HeapLive _ nlb -> setGauge t liveBytes(fromIntegral nlb)
+    HeapSize _ ns -> setGauge t heapSize (fromIntegral ns)
+    BlocksSize _ ns -> setGauge t blocksSize (fromIntegral ns)
     MemReturn _ current needed returned -> do
-      set t currentMblocks (fromIntegral current)
-      set t neededMblocks (fromIntegral needed)
-      set t returnedMblocks (fromIntegral returned)
+      setGauge t currentMblocks (fromIntegral current)
+      setGauge t neededMblocks (fromIntegral needed)
+      setGauge t returnedMblocks (fromIntegral returned)
     StartGC {} -> gcPause (Left t)
     EndGC {} -> gcPause (Right t)
+
+    -- Heap profiles
+
+    -- User messages (e.g. from `traceEvent` and `traceMarker`)
+    UserMessage {..} -> do
+      putStrLn "handling UserMessage event"
+      setLabel t userMessages msg
+    UserMarker {..} -> do
+      putStrLn "handling UserMarker event"
+      setLabel t userMarkers markername
+
     e -> do
       putStrLn $ "ignoring event: " ++ show ev
       return ()
   where
     t = o + raw_t
-
-
---eventToMetric :: Event ->
-
--- | By default the eventlog is only flushed quite rarely so we flush it
--- more frequently to get events faster.
-{-
-flushThread :: IO ()
-flushThread = forever $ do
-    print "flushing"
-    threadDelay 1_000_000
-    flushEventLog
--}
 
 initEventLogState st = do
   createdThreads <- createGauge "eventlog.created_threads" st
@@ -197,6 +233,9 @@ initEventLogState st = do
   neededMblocks <- createGauge "eventlog.needed_mblocks" st
   returnedMblocks <- createGauge "eventlog.returned_mblocks" st
   gcPause <- initGCPause st
+  let heapAllocationStats = []
+  userMessages <- createLabel "eventlog.user_messages" st
+  userMarkers <- createLabel "eventlog.user_markers" st
   timeOffset <- newIORef Nothing
   return EventLogState{..}
 
@@ -215,29 +254,32 @@ initGCPause st = do
             Just v  -> go v ett)
         let end_t = either id id ett
         -- Time is already correct by this point
-        forM_ mt $ \t -> set end_t g (fromIntegral t)
+        forM_ mt $ \t -> setGauge end_t g (fromIntegral t)
   return func
 
 --data GcStatsState = GcStatsState
 
-
 data EventLogState = EventLogState
-      { createdThreads :: Gauge
-      , finishedThreads :: Gauge
-      , liveBytes :: Gauge
-      , heapSize :: Gauge
-      , blocksSize :: Gauge
-      , currentMblocks :: Gauge
-      , neededMblocks :: Gauge
-      , returnedMblocks :: Gauge
-      --, gcStatsState :: GcStatsState
-      , gcPause :: Either Timestamp Timestamp -> IO ()
-      -- Add this number to timestamps, we need to see the WallClockSync
-      -- event in order to set this value.
-      , timeOffset :: IORef (Maybe Word64)
-      }
+    { createdThreads :: Gauge
+    , finishedThreads :: Gauge
+    , liveBytes :: Gauge
+    , heapSize :: Gauge
+    , blocksSize :: Gauge
+    , currentMblocks :: Gauge
+    , neededMblocks :: Gauge
+    , returnedMblocks :: Gauge
+    , gcPause :: Either Timestamp Timestamp -> IO ()
 
+    , heapAllocationStats :: [Gauge]
 
+    -- User messages and markers
+    , userMessages :: Label
+    , userMarkers  :: Label
+
+    -- Add this number to timestamps, we need to see the WallClockSync
+    -- event in order to set this value.
+    , timeOffset :: IORef (Maybe Word64)
+    }
 
 
 data Gc = Gc { requestor     :: Cap
