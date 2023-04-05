@@ -95,19 +95,35 @@ modifyGauge :: (EKG.Gauge -> IO ()) -> (Int64 -> Int64) -> Timestamp -> Gauge ->
 modifyGauge ekg f t (Gauge g n r k) = do
   ekg g
   new_val <- atomicModifyIORef' r (\n -> (f n, f n))
-  k (Line ("gauge." <> n) (nanoToDiffTime t) [Field "value" (FieldInt new_val)])
+  k
+    ( Line measurementName (nanoToDiffTime t)
+        [ Field "value" (FieldInt new_val)
+        , Field "measurement_name" (FieldString measurementName)
+        ]
+    )
   where
     nanoToDiffTime :: Timestamp -> NominalDiffTime
     nanoToDiffTime t = secondsToNominalDiffTime (MkFixed (fromIntegral t * 1_000))
+
+    measurementName :: Text
+    measurementName = "gauge." <> n
 
 modifyLabel :: (EKG.Label -> IO ()) -> (Text -> Text) -> Timestamp -> Label -> IO ()
 modifyLabel ekg f t (Label g n r k) = do
   ekg g
   new_val <- atomicModifyIORef' r (\n -> (f n, f n))
-  k (Line ("label." <> n) (nanoToDiffTime t) [Field "value" (FieldString new_val)])
+  k
+    ( Line measurementName (nanoToDiffTime t)
+        [ Field "value" (FieldString new_val)
+        , Field "measurement_name" (FieldString measurementName)
+        ]
+    )
   where
     nanoToDiffTime :: Timestamp -> NominalDiffTime
     nanoToDiffTime t = secondsToNominalDiffTime (MkFixed (fromIntegral t * 1_000))
+
+    measurementName :: Text
+    measurementName = "label." <> n
 
 incGauge :: Timestamp -> Gauge -> IO ()
 incGauge = modifyGauge EKG.inc (+ 1)
