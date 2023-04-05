@@ -170,15 +170,13 @@ eventlogMetrics :: FilePath -> (Line -> IO ()) -> IO (Async r, EKG.Store)
 eventlogMetrics f k = do
     store <- newStore k
     st <- initEventLogState store
-    print "starting eventlog listener"
+    putStrLn "starting eventlog listener"
     h' <- connectToEventlogSocket f
-    print "connected"
-    a <- async $ readEventlog h' (processEvents st)
+    a <- async $ readEventlog h' (processEvents store st)
     return (a, ekgStore store)
 
-
-processEvents :: EventLogState -> Event -> IO ()
-processEvents el@EventLogState{..} ev@(Event t e _) =
+processEvents :: Store -> EventLogState -> Event -> IO ()
+processEvents store el@EventLogState{..} ev@(Event t e _) =
   case e of
     WallClockTime c w n -> do
       let o = (w * 1_000_000_000 + fromIntegral n) - t
@@ -186,17 +184,18 @@ processEvents el@EventLogState{..} ev@(Event t e _) =
       writeIORef timeOffset (Just o)
     _ -> do
       mo <- readIORef timeOffset
-      forM_ mo $ \o -> processEventsWithOffset o el ev
+      forM_ mo $ \o -> processEventsWithOffset o store el ev
 
 -- | Events which we *need* the offset for
-processEventsWithOffset :: Word64 -> EventLogState -> Event -> IO ()
-processEventsWithOffset o EventLogState{..} ev@(Event raw_t e _cap) =
+processEventsWithOffset :: Word64 -> Store -> EventLogState -> Event -> IO ()
+processEventsWithOffset o store EventLogState{..} ev@(Event raw_t e _cap) =
   case e of
     -- These two events are a bit hard to understand because you might
     -- connect to the process when there are k threads already running so
     -- you will see more StopThread events than CreateThread events
     CreateThread {} -> incGauge t createdThreads
     StopThread _ ThreadFinished   -> incGauge t finishedThreads
+
     HeapLive _ nlb -> setGauge t liveBytes(fromIntegral nlb)
     HeapSize _ ns -> setGauge t heapSize (fromIntegral ns)
     BlocksSize _ ns -> setGauge t blocksSize (fromIntegral ns)
@@ -209,17 +208,27 @@ processEventsWithOffset o EventLogState{..} ev@(Event raw_t e _cap) =
 
     -- Heap profiles
 
-    -- User messages (e.g. from `traceEvent` and `traceMarker`)
-    UserMessage {..} -> do
-      putStrLn "handling UserMessage event"
-      setLabel t userMessages msg
-    UserMarker {..} -> do
-      putStrLn "handling UserMarker event"
-      setLabel t userMarkers markername
+    -- Residency stats for a heap item (closure, info table, etc.)
+    HeapProfSampleString {..} -> do
+      -- Read the current stats
+      heapStats <- readIORef heapAllocationStats
 
-    e -> do
-      putStrLn $ "ignoring event: " ++ show ev
-      return ()
+      -- Check if this item already has a gauge and create one if necessary
+      g <- case M.lookup heapProfLabel heapStats of
+        Just gauge -> return gauge
+        Nothing    -> createGauge ("eventlog.heap_prof_sample." <> heapProfLabel) store
+
+      -- Set the value of the gauge to the current residency and update the heap
+      -- stats in the state
+      setGauge t g (fromIntegral heapProfResidency)
+      writeIORef heapAllocationStats $ M.insert heapProfLabel g heapStats
+
+    -- User messages (e.g. from `traceEvent` and `traceMarker`)
+    UserMessage {..} -> setLabel t userMessages msg
+    UserMarker {..}  -> setLabel t userMarkers markername
+
+    -- Ignore all other events
+    e -> return ()
   where
     t = o + raw_t
 
@@ -233,7 +242,7 @@ initEventLogState st = do
   neededMblocks <- createGauge "eventlog.needed_mblocks" st
   returnedMblocks <- createGauge "eventlog.returned_mblocks" st
   gcPause <- initGCPause st
-  let heapAllocationStats = []
+  heapAllocationStats <- newIORef M.empty
   userMessages <- createLabel "eventlog.user_messages" st
   userMarkers <- createLabel "eventlog.user_markers" st
   timeOffset <- newIORef Nothing
@@ -270,7 +279,7 @@ data EventLogState = EventLogState
     , returnedMblocks :: Gauge
     , gcPause :: Either Timestamp Timestamp -> IO ()
 
-    , heapAllocationStats :: [Gauge]
+    , heapAllocationStats :: IORef (M.Map Text Gauge)
 
     -- User messages and markers
     , userMessages :: Label
