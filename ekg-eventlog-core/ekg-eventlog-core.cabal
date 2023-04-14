@@ -6,6 +6,8 @@ author:              Matthew Pickering
 maintainer:          matthewtpickering@gmail.com
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
+tested-with: GHC==9.2.7
+
 
 library
   exposed-modules:

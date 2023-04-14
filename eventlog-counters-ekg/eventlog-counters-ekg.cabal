@@ -10,6 +10,7 @@ maintainer:         matthewtpickering@gmail.com
 copyright:          (c) 2021 someone
 category:           Debug, Monitoring, System, Network
 build-type:         Simple
+tested-with: GHC==9.2.7
 
 library
   ghc-options: -Wall

@@ -4,12 +4,13 @@ version:             0.1.0.0
 author:              Matthew Pickering
 maintainer:          matthewtpickering@gmail.com
 extra-source-files:  CHANGELOG.md
+tested-with: GHC==9.2.7
 
 library
   exposed-modules:
       System.Metrics.InfluxDB
   build-depends:
-      base ^>=4.16.0.0
+      base >=4.16.0.0 && < 5
     , influxdb
     , ekg-eventlog-core
     , lens

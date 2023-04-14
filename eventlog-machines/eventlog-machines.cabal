@@ -2,7 +2,7 @@ cabal-version: 2.4
 name:          eventlog-machines
 version:       0.1.0.0
 synopsis:      machines processing eventlog
-category:      Debug, Monitoring, System, Machines 
+category:      Debug, Monitoring, System, Machines
 description:
   [machines](https://hackage.haskell.org/package/machines)
   for processing GHC eventlog
@@ -10,12 +10,13 @@ description:
 license:       BSD-3-Clause
 license-file:  LICENSE
 author:        Oleg Grenrus <oleg.grenrus@iki.fi>
-maintainer:    Not me.
+maintainer:    Matthew Pickering <matthew@well-typed.com>
 copyright:     (c) 2021 someone
+tested-with: GHC==9.2.7
 
 source-repository head
   type:     git
-  location: https://github.com/mpickering/eventlog-live.git
+  location: https://github.com/well-typed/eventlog-live.git
   subdir:   eventlog-machines
 
 library
