@@ -1,13 +1,14 @@
 cabal-version:       2.4
 synopsis:            Read an eventlog from a socket and place the results in an Influx database
-description:         Read an eventlog from a socket and place the results in an Influx database
+description:         Read an eventlog from a socket and place the results in an Influx database.
 name:                ekg-eventlog-influxdb
 version:             0.1.0.0
 author:              Matthew Pickering
 maintainer:          matthewtpickering@gmail.com
-extra-source-files:  CHANGELOG.md
+extra-doc-files:  CHANGELOG.md
 license: BSD-3-Clause
 tested-with: GHC==9.2.7
+category: Debug, Monitoring, System, Network
 
 source-repository head
   type:     git
