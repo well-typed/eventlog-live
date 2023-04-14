@@ -161,7 +161,7 @@ readLoop h d =
 
 
 -- | Connect to the event log socket (if it exists) and start a thread that
--- processes incomming events.
+-- processes incoming events.
 readEventlog ::
      Handle
   -> (Event -> IO r)
