@@ -7,14 +7,15 @@ description:
   This a demo application which shows how to receive and process
   eventlog over a UNIX socket, from an application using @eventlog-socket@.
 author:        Oleg Grenrus <oleg.grenrus@iki.fi>
-maintainer:    Not me.
+maintainer:    Matthew Pickering <matthew@well-typed.com>
 license:       BSD-3-Clause
 license-file:  LICENSE
 copyright:     (c) 2021 someone
+tested-with: GHC==9.2.7
 
 source-repository head
   type:     git
-  location: https://github.com/mpickering/eventlog-live.git
+  location: https://github.com/well-typed/eventlog-live.git
   subdir:   eventlog-recv
 
 executable eventlog-recv
@@ -23,7 +24,7 @@ executable eventlog-recv
   ghc-options:      -Wall -threaded
   main-is:          Main.hs
   build-depends:
-    , base                  ^>=4.16.0.0
+    , base                  >=4.16.0.0 && < 5
     , ghc-events            >=0.17.0
     , containers
     , optparse-applicative  ^>=0.16.1.0

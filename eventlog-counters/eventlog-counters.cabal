@@ -8,12 +8,13 @@ description:
 license:       BSD-3-Clause
 license-file:  LICENSE
 author:        Matthew Pickering, Oleg Grenrus <oleg.grenrus@iki.fi>
-maintainer:    Not me.
+maintainer:    Matthew Pickering <matthew@well-typed.com>
 category:      Debug, Monitoring, System
+tested-with: GHC==9.2.7
 
 source-repository head
   type:     git
-  location: https://github.com/mpickering/eventlog-counters.git
+  location: https://github.com/well-typed/eventlog-counters.git
   subdir:   eventlog-counters
 
 library
