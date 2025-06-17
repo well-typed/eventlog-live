@@ -1,14 +1,14 @@
-packages: ./ekg-eventlog-core
-packages: ./ekg-eventlog-influxdb
+packages:
+  ekg-eventlog-core
+  ekg-eventlog-influxdb
+  eventlog-counters
+  eventlog-counters-ekg
+  eventlog-machines
+  eventlog-recv
 
-packages: eventlog-counters
-packages: eventlog-counters-ekg
-packages: eventlog-machines
-packages: eventlog-recv
-
-allow-newer:
-    influxdb:lens
-  , influxdb:aeson
-  , ekg:base
-  , ekg:time
-  , ekg:aeson
+-- NOTE (2025-06-17): Required for GHC version 9.12
+if impl(ghc >= 9.12)
+  allow-newer:
+    , ghc-events:base
+    , hashable:base
+    , influxdb:base
