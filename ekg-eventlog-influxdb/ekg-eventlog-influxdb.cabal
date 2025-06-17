@@ -7,8 +7,14 @@ author:              Matthew Pickering
 maintainer:          matthewtpickering@gmail.com
 extra-doc-files:  CHANGELOG.md
 license: BSD-3-Clause
-tested-with: GHC==9.2.7
 category: Debug, Monitoring, System, Network
+tested-with:
+    GHC==9.2.8
+     ||==9.4.8
+     ||==9.6.7
+     ||==9.8.4
+     ||==9.10.2
+     ||==9.12.2
 
 source-repository head
   type:     git
