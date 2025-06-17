@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "master"
+  pull_request:
+
+# Set the default shell on all platforms.
+defaults:
+  run:
+    shell: sh
+
+jobs:
+  ################################################################################
+  # Build
+  ################################################################################
+  build:
+    name: |
+      ${{ matrix.name
+       || format(
+            'Build on {0}{1}',
+            startsWith(matrix.os, 'ubuntu-') && 'Linux' || startsWith(matrix.os, 'macOS-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows',
+            matrix.ghc-version && format(' with GHC {0}', matrix.ghc-version)
+          )
+       }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup Haskell
+        id: setup-haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+
+      - name: 🗄️ Generate Cabal plan
+        run: cabal build all --dry-run
+
+      - name: 💾 Restore Cabal dependencies
+        uses: actions/cache/restore@v4
+        id: cache-cabal
+        env:
+          key: build-${{ runner.os }}-ghc-${{ steps.setup-haskell.outputs.ghc-version }}-cabal-${{ steps.setup-haskell.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('dist-newstyle/cache/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: 🛠️ Build Cabal dependencies
+        run: cabal build all --only-dependencies
+
+      - name: 💾 Save Cabal dependencies
+        uses: actions/cache/save@v4
+        if: ${{ steps.cache-cabal.outputs.cache-hit != 'true' }}
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: ${{ steps.cache-cabal.outputs.cache-primary-key }}
+
+      - name: 🏗️ Build
+        run: cabal build all
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - "ubuntu-latest"
+          - "macOS-latest"
+        ghc-version:
+          - "9.2.8"
+          - "9.4.8"
+          - "9.6.7"
+          - "9.8.4"
+          - "9.10.2"
+          - "9.12.2"
