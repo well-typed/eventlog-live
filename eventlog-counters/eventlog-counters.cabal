@@ -10,7 +10,13 @@ license-file:  LICENSE
 author:        Matthew Pickering, Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:    Matthew Pickering <matthew@well-typed.com>
 category:      Debug, Monitoring, System
-tested-with: GHC==9.2.7
+tested-with:
+    GHC==9.2.8
+     ||==9.4.8
+     ||==9.6.7
+     ||==9.8.4
+     ||==9.10.2
+     ||==9.12.2
 
 source-repository head
   type:     git
