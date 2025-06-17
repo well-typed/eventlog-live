@@ -12,9 +12,3 @@ allow-newer:
   , ekg:base
   , ekg:time
   , ekg:aeson
-
--- Unfortunately, ekg-json needs some fixes to be aeson >2 compatible
-source-repository-package
-  type: git
-  location: https://github.com/finleymcilwaine/ekg-json
-  tag: bcc382c4d94c507bd56e9c06c193108ff2d3a221
