@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeOperators      #-}
 module Main (main) where
 
 import Control.Applicative       (optional, (<**>), (<|>))
