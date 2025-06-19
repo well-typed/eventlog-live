@@ -1,0 +1,56 @@
+# syntax=docker/dockerfile:1.7-labs
+
+# To build this image, run:
+# docker build --tag wenkokke/eventlog-recv:0.1.0.0 --file ./dockerfiles/Dockerfile.eventlog-recv .
+
+# Use the Haskell image with GHC 9.12.2
+# See: https://hub.docker.com/_/haskell
+FROM haskell:9.12-slim-bookworm AS build
+
+# Configure eventlog-recv
+ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
+ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
+
+# Copy required packages to container
+WORKDIR "/eventlog-live"
+COPY --parents \
+    "./eventlog-counters-ekg/eventlog-counters-ekg.cabal" \
+    "./eventlog-counters-ekg/LICENSE" \
+    "./eventlog-counters-ekg/src/GHC/Eventlog/Counters/EKG.hs" \
+    "./eventlog-counters/eventlog-counters.cabal" \
+    "./eventlog-counters/LICENSE" \
+    "./eventlog-counters/src/GHC/Eventlog/Counters.hs" \
+    "./eventlog-machines/eventlog-machines.cabal" \
+    "./eventlog-machines/LICENSE" \
+    "./eventlog-machines/src/GHC/Eventlog/Machines.hs" \
+    "./eventlog-recv/app/Main.hs" \
+    "./eventlog-recv/eventlog-recv.cabal" \
+    "./eventlog-recv/LICENSE" \
+    "/eventlog-live/"
+
+# Create cabal.project file
+COPY <<EOF /eventlog-live/cabal.project
+packages:
+  eventlog-counters-ekg
+  eventlog-counters
+  eventlog-machines
+  eventlog-recv
+EOF
+
+# Build eventlog-recv
+RUN <<EOF
+cabal update
+mkdir "/eventlog-live/bin"
+cabal install \
+    --overwrite-policy=always \
+    --install-method=copy \
+    --installdir="/eventlog-live/bin" \
+    eventlog-recv
+EOF
+
+# Copy eventlog-recv to output stage
+FROM debian:bookworm-slim AS output
+COPY --from=build "/eventlog-live/bin/eventlog-recv" "/bin/eventlog-recv"
+
+# Run command
+CMD sleep 5 && eventlog-recv --unix ${GHC_EVENTLOG_SOCKET}
