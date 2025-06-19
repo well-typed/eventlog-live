@@ -1,0 +1,21 @@
+cabal-version:      2.2
+name:               fibber
+version:            0.1.0.0
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Wen Kokke
+copyright:          (c) 2025 Wen Kokke
+build-type:         Simple
+
+executable fibber
+    main-is:          Main.hs
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    build-depends:
+        , base >=4.14 && <5
+        , eventlog-socket
+
+    ghc-options: -threaded -rtsopts "-with-rtsopts=-l -hT --eventlog-flush-interval=1"
+
+    if impl(ghc < 9.4)
+        ghc-options: -eventlog
