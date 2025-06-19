@@ -5,6 +5,7 @@ packages:
   eventlog-counters-ekg
   eventlog-machines
   eventlog-recv
+  examples/fibber
 
 -- NOTE (2025-06-17): Required for GHC version 9.12
 if impl(ghc >= 9.12)
