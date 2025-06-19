@@ -19,8 +19,8 @@ jobs:
     name: |
       ${{ matrix.name
        || format(
-            'Build on {0}{1}',
-            startsWith(matrix.os, 'ubuntu-') && 'Linux' || startsWith(matrix.os, 'macOS-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows',
+            'Build and Test on {0}{1}',
+            startsWith(matrix.os, 'ubuntu-') && 'Linux' || startsWith(matrix.os, 'macOS-') && 'macOS',
             matrix.ghc-version && format(' with GHC {0}', matrix.ghc-version)
           )
        }}
@@ -60,6 +60,10 @@ jobs:
 
       - name: 🏗️ Build
         run: cabal build all
+
+      - name: 🧪 Test fibber-ghc-eventlog-recv
+        # if: ${{ runner.os == 'Linux' }}
+        run: ./examples/fibber/fibber-ghc-eventlog-recv.sh
 
     strategy:
       fail-fast: false
