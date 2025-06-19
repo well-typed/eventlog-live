@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.7-labs
+
+# To build this image, run:
+# docker build --tag wenkokke/fibber:0.1.0.0 --file ./dockerfiles/Dockerfile.fibber .
+
+# Use the Haskell image with GHC 9.12.2
+# See: https://hub.docker.com/_/haskell
+FROM haskell:9.12-slim-bookworm AS build
+
+# Configure fibber
+ARG GHC_EVENTLOG_SOCKET "/tmp/ghc_eventlog.sock"
+
+# Copy files from the project directory
+WORKDIR "/eventlog-live/examples/fibber"
+COPY --parents \
+    "./examples/fibber/app/Main.hs" \
+    "./examples/fibber/fibber.cabal" \
+    "./examples/fibber/LICENSE" \
+    "/eventlog-live/"
+
+# Build fibber
+RUN <<EOF
+cabal update
+mkdir "/eventlog-live/bin"
+cabal install \
+    --overwrite-policy=always \
+    --install-method=copy \
+    --installdir="/eventlog-live/bin" \
+    fibber
+EOF
+
+# Copy fibber to output stage
+FROM debian:bookworm-slim AS output
+COPY --from=build "/eventlog-live/bin/fibber" "/bin/fibber"
+ENTRYPOINT ["/bin/fibber"]
