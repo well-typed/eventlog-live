@@ -26,7 +26,7 @@ source-repository head
 
 executable eventlog-recv
   default-language: Haskell2010
-  hs-source-dirs:   src
+  hs-source-dirs:   app
   ghc-options:      -Wall -threaded
   main-is:          Main.hs
   build-depends:
