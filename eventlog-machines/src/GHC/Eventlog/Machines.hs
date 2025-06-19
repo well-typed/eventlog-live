@@ -2,6 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 module GHC.Eventlog.Machines (
     -- * Machines
+    events,
     sourceHandleWait,
     decodeEventsMaybe,
     reorderEvents,
@@ -33,10 +34,28 @@ import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import System.IO                  (Handle, hWaitForInput)
 import System.IO.Error            (isEOFError)
 
-import Data.Machine (Is, MachineT, PlanT, ProcessT, await, construct, yield)
+import Data.Machine (Is, MachineT, PlanT, ProcessT, await, construct, yield, (~>))
 
 import qualified Data.ByteString as BS
 import qualified System.Clock    as Clock
+
+-------------------------------------------------------------------------------
+-- Event source
+-------------------------------------------------------------------------------
+
+events ::
+    (MonadIO m) =>
+    Handle ->
+    Int ->
+    Int ->
+    Word64 ->
+    (Event -> Event -> m ()) ->
+    MachineT m k Event
+events handle timeout chunkSize interval nonCausalAction =
+    sourceHandleWait handle timeout chunkSize
+        ~> decodeEventsMaybe
+        ~> reorderEvents interval
+        ~> checkOrder nonCausalAction
 
 -------------------------------------------------------------------------------
 -- Reading from a handle
