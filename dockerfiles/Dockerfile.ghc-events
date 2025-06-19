@@ -1,0 +1,31 @@
+# To build this image, run:
+# docker build --tag wenkokke/ghc-events-show:0.1.0.0 --file ./dockerfiles/Dockerfile.ghc-events .
+
+# Use the Haskell image with GHC 9.12.2
+# See: https://hub.docker.com/_/haskell
+FROM haskell:9.12-slim-bookworm AS build
+
+# Configure ghc-events-show
+ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
+ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
+
+# Build ghc-events
+RUN <<EOF
+mkdir -p "/ghc-events/bin"
+cabal update
+cabal install \
+    --overwrite-policy=always \
+    --install-method=copy \
+    --installdir="/ghc-events/bin" \
+    ghc-events
+EOF
+
+# Copy ghc-events to output stage
+FROM debian:bookworm-slim AS output
+COPY --from=build "/ghc-events/bin/ghc-events" "/bin/ghc-events"
+
+# Install netcat-openbsd
+RUN apt-get update && apt-get install -y netcat-openbsd
+
+# Run command
+CMD sleep 5 && nc -U ${GHC_EVENTLOG_SOCKET} >"/tmp/ghc.eventlog" && ghc-events show "/tmp/ghc.eventlog"
