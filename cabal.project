@@ -4,6 +4,7 @@ packages:
   eventlog-counters
   eventlog-counters-ekg
   eventlog-machines
+  eventlog-print
   eventlog-recv
   examples/fibber
   examples/oddball
