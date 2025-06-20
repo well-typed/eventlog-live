@@ -1,0 +1,22 @@
+cabal-version:      2.2
+name:               eventlog-print
+version:            0.1.0.0
+license:            AGPL-3.0-only
+license-file:       LICENSE
+author:             Wen Kokke
+maintainer:         wen@well-typed.com
+build-type:         Simple
+
+executable eventlog-print
+    main-is:          Main.hs
+    build-depends:
+        , base
+        , bytestring
+        , optparse-applicative
+        , eventlog-machines
+        , ghc-events
+        , machines
+        , network
+
+    hs-source-dirs:   app
+    default-language: Haskell2010
