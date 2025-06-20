@@ -33,9 +33,7 @@ import GHC.RTS.Events
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import System.IO                  (Handle, hWaitForInput)
 import System.IO.Error            (isEOFError)
-
-import Data.Machine (Is, MachineT, PlanT, ProcessT, await, construct, yield, (~>))
-
+import Data.Machine (Is, MachineT, PlanT, ProcessT, await, construct, repeatedly, yield, (~>))
 import qualified Data.ByteString as BS
 import qualified System.Clock    as Clock
 
@@ -52,10 +50,17 @@ events ::
     (Event -> Event -> m ()) ->
     MachineT m k Event
 events handle timeout chunkSize interval nonCausalAction =
-    sourceHandleWait handle timeout chunkSize
-        ~> decodeEventsMaybe
-        ~> reorderEvents interval
-        ~> checkOrder nonCausalAction
+  sourceHandleWait handle timeout chunkSize
+    ~> decodeEventsMaybe
+    ~> reorderEventsMaybe
+    ~> checkOrder nonCausalAction
+ where
+  reorderEventsMaybe
+    | interval == 0 = forwardEventsMaybe
+    | otherwise = reorderEvents interval
+
+  forwardEventsMaybe :: Monad m => ProcessT m (Maybe a) a
+  forwardEventsMaybe = let go = await >>= maybe go yield in repeatedly go
 
 -------------------------------------------------------------------------------
 -- Reading from a handle
