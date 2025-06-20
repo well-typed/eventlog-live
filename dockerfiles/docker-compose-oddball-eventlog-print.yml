@@ -1,0 +1,27 @@
+services:
+  oddball:
+    image: "wenkokke/oddball:0.1.0.0"
+    build:
+      context: ".."
+      dockerfile: "./dockerfiles/Dockerfile.oddball"
+    volumes:
+      - "ghc-eventlog-socket:/run/ghc-eventlog-socket"
+    environment:
+      GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
+    command: "44"
+
+  eventlog-print:
+    image: "wenkokke/eventlog-print:0.1.0.0"
+    build:
+      context: ".."
+      dockerfile: "./dockerfiles/Dockerfile.eventlog-print"
+    depends_on:
+      oddball:
+        condition: "service_started"
+    volumes:
+      - "ghc-eventlog-socket:/run/ghc-eventlog-socket"
+    environment:
+      GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
+
+volumes:
+  ghc-eventlog-socket:
