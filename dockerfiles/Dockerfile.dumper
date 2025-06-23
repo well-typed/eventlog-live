@@ -14,22 +14,22 @@ ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-    "./eventlog-print/app/Main.hs" \
-    "./eventlog-print/eventlog-print.cabal" \
-    "./eventlog-print/LICENSE" \
     "./eventlog-machines/eventlog-machines.cabal" \
     "./eventlog-machines/LICENSE" \
     "./eventlog-machines/src/GHC/Eventlog/Machines.hs" \
+    "./examples/dumper/app/Main.hs" \
+    "./examples/dumper/dumper.cabal" \
+    "./examples/dumper/LICENSE" \
     "/eventlog-live/"
 
 # Create cabal.project file
 COPY <<EOF /eventlog-live/cabal.project
 packages:
-  eventlog-print
+  examples/dumper
   eventlog-machines
 EOF
 
-# Build eventlog-live
+# Build dumper
 RUN <<EOF
 cabal update
 mkdir "/eventlog-live/bin"
@@ -37,12 +37,12 @@ cabal install \
     --overwrite-policy=always \
     --install-method=copy \
     --installdir="/eventlog-live/bin" \
-    eventlog-print
+    dumper
 EOF
 
-# Copy eventlog-print to output stage
+# Copy dumper to output stage
 FROM debian:bookworm-slim AS output
-COPY --from=build "/eventlog-live/bin/eventlog-print" "/bin/eventlog-print"
+COPY --from=build "/eventlog-live/bin/dumper" "/bin/dumper"
 
 # Run command
-CMD sleep 5 && eventlog-print --unix ${GHC_EVENTLOG_SOCKET} --interval=0
+CMD sleep 5 && dumper --unix ${GHC_EVENTLOG_SOCKET} --interval=0
