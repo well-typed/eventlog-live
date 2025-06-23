@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # To build this image, run:
-# docker build --tag wenkokke/eventlog-recv:0.1.0.0 --file ./dockerfiles/Dockerfile.eventlog-recv .
+# docker build --tag wenkokke/collatzer:0.1.0.0 --file ./dockerfiles/Dockerfile.collatzer .
 
 # Use the Haskell image with GHC 9.12.2
 # See: https://hub.docker.com/_/haskell
 FROM haskell:9.12-slim-bookworm AS build
 
-# Configure eventlog-recv
+# Configure collatzer
 ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
 ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 
@@ -23,9 +23,9 @@ COPY --parents \
     "./eventlog-machines/eventlog-machines.cabal" \
     "./eventlog-machines/LICENSE" \
     "./eventlog-machines/src/GHC/Eventlog/Machines.hs" \
-    "./eventlog-recv/app/Main.hs" \
-    "./eventlog-recv/eventlog-recv.cabal" \
-    "./eventlog-recv/LICENSE" \
+    "./examples/collatzer/app/Main.hs" \
+    "./examples/collatzer/collatzer.cabal" \
+    "./examples/collatzer/LICENSE" \
     "/eventlog-live/"
 
 # Create cabal.project file
@@ -34,10 +34,10 @@ packages:
   eventlog-counters-ekg
   eventlog-counters
   eventlog-machines
-  eventlog-recv
+  examples/collatzer
 EOF
 
-# Build eventlog-recv
+# Build collatzer
 RUN <<EOF
 cabal update
 mkdir "/eventlog-live/bin"
@@ -45,12 +45,12 @@ cabal install \
     --overwrite-policy=always \
     --install-method=copy \
     --installdir="/eventlog-live/bin" \
-    eventlog-recv
+    collatzer
 EOF
 
-# Copy eventlog-recv to output stage
+# Copy collatzer to output stage
 FROM debian:bookworm-slim AS output
-COPY --from=build "/eventlog-live/bin/eventlog-recv" "/bin/eventlog-recv"
+COPY --from=build "/eventlog-live/bin/collatzer" "/bin/collatzer"
 
 # Run command
-CMD sleep 5 && eventlog-recv --unix ${GHC_EVENTLOG_SOCKET}
+CMD sleep 5 && collatzer --unix ${GHC_EVENTLOG_SOCKET}
