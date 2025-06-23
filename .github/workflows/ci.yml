@@ -61,9 +61,9 @@ jobs:
       - name: 🏗️ Build
         run: cabal build all
 
-      - name: 🧪 Test fibber-ghc-eventlog-recv
+      - name: 🧪 Test fibber-collatzer
         # if: ${{ runner.os == 'Linux' }}
-        run: ./examples/fibber/fibber-ghc-eventlog-recv.sh
+        run: ./examples/fibber/fibber-collatzer.sh
 
     strategy:
       fail-fast: false

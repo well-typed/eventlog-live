@@ -10,11 +10,11 @@ services:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
     command: "44"
 
-  eventlog-recv:
-    image: "wenkokke/eventlog-recv:0.1.0.0"
+  collatzer:
+    image: "wenkokke/collatzer:0.1.0.0"
     build:
       context: ".."
-      dockerfile: "./dockerfiles/Dockerfile.eventlog-recv"
+      dockerfile: "./dockerfiles/Dockerfile.collatzer"
     depends_on:
       fibber:
         condition: "service_started"
