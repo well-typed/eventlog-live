@@ -10,7 +10,7 @@ The following is a screenshow of Grafana which shows live heap profiling statist
 
 ![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](assets/oddball-grafana.png)
 
-To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then nagivate to Grafana at <https://localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Heap Stats_.
+To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then nagivate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Heap Stats_.
 
 ```sh
 docker compose -f dockerfiles/docker-compose-oddball-grafana.yml up --build
