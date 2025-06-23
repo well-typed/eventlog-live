@@ -31,10 +31,10 @@ import qualified System.IO                as IO
 import qualified System.Metrics           as EKG
 import qualified System.Remote.Monitoring
 
-import GHC.Eventlog.Counters
-import GHC.Eventlog.Counters.EKG
-import GHC.Eventlog.Machines
-import GHC.RTS.Events
+import GHC.Eventlog.Counters     (Counters(..), ThreadState(..), newCounters, count)
+import GHC.Eventlog.Counters.EKG (registerCounters)
+import GHC.Eventlog.Machines     (sourceHandleWait, decodeEventsMaybe, reorderEvents, checkOrder)
+import GHC.RTS.Events            (Event)
 
 import Data.Machine        (MachineT, ProcessT, await, repeatedly, runT_, (~>))
 import Data.Machine.Fanout (fanout)
