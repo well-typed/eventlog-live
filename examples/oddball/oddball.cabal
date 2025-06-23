@@ -16,7 +16,7 @@ executable oddball
         , eventlog-socket
         , random
 
-    ghc-options: -threaded -rtsopts "-with-rtsopts=-l -hT --eventlog-flush-interval=1"
+    ghc-options: -threaded -rtsopts "-with-rtsopts=-l -hT --eventlog-flush-interval=1 --no-automatic-heap-samples"
 
     if impl(ghc < 9.4)
         ghc-options: -eventlog
