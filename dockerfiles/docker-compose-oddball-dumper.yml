@@ -10,11 +10,11 @@ services:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
     command: "44"
 
-  eventlog-print:
-    image: "wenkokke/eventlog-print:0.1.0.0"
+  dumper:
+    image: "wenkokke/dumper:0.1.0.0"
     build:
       context: ".."
-      dockerfile: "./dockerfiles/Dockerfile.eventlog-print"
+      dockerfile: "./dockerfiles/Dockerfile.dumper"
     depends_on:
       oddball:
         condition: "service_started"

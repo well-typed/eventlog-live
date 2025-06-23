@@ -1,5 +1,5 @@
 cabal-version:      2.2
-name:               eventlog-print
+name:               dumper
 version:            0.1.0.0
 license:            AGPL-3.0-only
 license-file:       LICENSE
@@ -7,7 +7,7 @@ author:             Wen Kokke
 maintainer:         wen@well-typed.com
 build-type:         Simple
 
-executable eventlog-print
+executable dumper
     main-is:          Main.hs
     build-depends:
         , base
