@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.7-labs
+
+# To build this image, run:
+# docker build --tag wenkokke/eventlog-influxdb:0.1.0.0 --file ./dockerfiles/Dockerfile.eventlog-influxdb .
+
+# Use the Haskell image with GHC 9.12.2
+# See: https://hub.docker.com/_/haskell
+FROM haskell:9.12-slim-bookworm AS build
+
+# Configure eventlog-influxdb
+ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
+ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
+ARG GHC_EVENTLOG_INFLUXDB_HOST="influxdb"
+ENV GHC_EVENTLOG_INFLUXDB_HOST=${GHC_EVENTLOG_INFLUXDB_HOST}
+ARG GHC_EVENTLOG_INFLUXDB_DB="eventlog"
+ENV GHC_EVENTLOG_INFLUXDB_DB=${GHC_EVENTLOG_INFLUXDB_DB}
+ARG GHC_EVENTLOG_INFLUXDB_USERNAME="admin"
+ENV GHC_EVENTLOG_INFLUXDB_USERNAME=${GHC_EVENTLOG_INFLUXDB_USERNAME}
+ARG GHC_EVENTLOG_INFLUXDB_PASSWORD="admin"
+ENV GHC_EVENTLOG_INFLUXDB_PASSWORD=${GHC_EVENTLOG_INFLUXDB_PASSWORD}
+
+# Copy required packages to container
+WORKDIR "/eventlog-live"
+COPY --parents \
+    "./eventlog-influxdb/app/Main.hs" \
+    "./eventlog-influxdb/LICENSE" \
+    "./eventlog-influxdb/eventlog-influxdb.cabal" \
+    "./eventlog-influxdb/src/System/Metrics/InfluxDB.hs" \
+    "./eventlog-machines/eventlog-machines.cabal" \
+    "./eventlog-machines/LICENSE" \
+    "./eventlog-machines/src/GHC/Eventlog/Machines.hs" \
+    "/eventlog-live/"
+
+# Create cabal.project file
+COPY <<EOF /eventlog-live/cabal.project
+packages:
+  eventlog-influxdb
+  eventlog-machines
+
+-- NOTE (2025-06-17): Required for GHC version 9.12
+if impl(ghc >= 9.12)
+  allow-newer:
+    , ghc-events:base
+    , hashable:base
+    , influxdb:base
+EOF
+
+# Build eventlog-influxdb
+RUN <<EOF
+cabal update
+mkdir "/eventlog-live/bin"
+cabal install \
+    --overwrite-policy=always \
+    --install-method=copy \
+    --installdir="/eventlog-live/bin" \
+    eventlog-influxdb
+EOF
+
+# Copy eventlog-influxdb to output stage
+FROM debian:bookworm-slim AS output
+COPY --from=build "/eventlog-live/bin/eventlog-influxdb" "/bin/eventlog-influxdb"
+
+# Run command
+ENTRYPOINT ["/bin/eventlog-influxdb"]

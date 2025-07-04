@@ -3,6 +3,7 @@ packages:
   ekg-eventlog-influxdb
   eventlog-counters
   eventlog-counters-ekg
+  eventlog-influxdb
   eventlog-machines
   examples/collatzer
   examples/dumper
