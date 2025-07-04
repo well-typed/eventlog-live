@@ -11,12 +11,12 @@ author:        Matthew Pickering, Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:    Matthew Pickering <matthew@well-typed.com>
 category:      Debug, Monitoring, System
 tested-with:
-    GHC==9.2.8
-     ||==9.4.8
-     ||==9.6.7
-     ||==9.8.4
-     ||==9.10.2
-     ||==9.12.2
+  GHC ==9.2.8
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.2
+   || ==9.12.2
 
 source-repository head
   type:     git
@@ -27,10 +27,9 @@ library
   ghc-options:      -Wall
   hs-source-dirs:   src/
   default-language: Haskell2010
+  exposed-modules:  GHC.Eventlog.Counters
   build-depends:
     , base        >=4.13   && <5
     , containers
     , ghc-events  >=0.17.0
     , stm
-
-  exposed-modules:  GHC.Eventlog.Counters
