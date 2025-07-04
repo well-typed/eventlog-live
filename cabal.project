@@ -3,6 +3,7 @@ packages:
   ekg-eventlog-influxdb
   eventlog-counters
   eventlog-counters-ekg
+  eventlog-influxdb
   eventlog-machines
   examples/collatzer
   examples/dumper
@@ -15,3 +16,7 @@ if impl(ghc >= 9.12)
     , ghc-events:base
     , hashable:base
     , influxdb:base
+
+if impl(ghc >= 9.14)
+  allow-newer:
+    , *
