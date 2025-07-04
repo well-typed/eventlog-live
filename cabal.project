@@ -3,11 +3,14 @@ packages:
   ekg-eventlog-influxdb
   eventlog-counters
   eventlog-counters-ekg
+  eventlog-influxdb
   eventlog-machines
   examples/collatzer
   examples/dumper
   examples/fibber
   examples/oddball
+  examples/parfib
+  examples/spectral-norm
 
 -- NOTE (2025-06-17): Required for GHC version 9.12
 if impl(ghc >= 9.12)
@@ -15,3 +18,12 @@ if impl(ghc >= 9.12)
     , ghc-events:base
     , hashable:base
     , influxdb:base
+
+if impl(ghc >= 9.14)
+  allow-newer:
+    , *
+
+source-repository-package
+  type:     git
+  location: https://github.com/haskell/ghc-events
+  tag:      10bb9091e8bc7f8012c28d5dfe7f5c4586961436

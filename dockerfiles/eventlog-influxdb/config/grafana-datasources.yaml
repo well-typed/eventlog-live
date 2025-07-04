@@ -1,0 +1,13 @@
+apiVersion: 1
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    database: eventlog
+    url: http://influxdb:8086
+    basicAuth: true
+    basicAuthUser: admin
+    jsonData:
+      httpMode: POST
+    secureJsonData:
+      basicAuthPassword: admin
