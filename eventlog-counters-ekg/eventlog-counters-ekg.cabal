@@ -1,15 +1,14 @@
 cabal-version: 2.4
 name:          eventlog-counters-ekg
 version:       0.1.0.0
-synopsis:      write me
-description:   write me too
-license:       BSD-3-Clause
-license-file:  LICENSE
+synopsis:      Bridge for EKG.
+description:   Bridge to use eventlog-counters with EKG.
 author:        Matthew Pickering
 maintainer:    matthewtpickering@gmail.com
-copyright:     (c) 2021 someone
+copyright:     (c) 2021 Well-Typed
+license:       BSD-3-Clause
+license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
-build-type:    Simple
 tested-with:
   GHC ==9.2.8
    || ==9.4.8

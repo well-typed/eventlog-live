@@ -1,11 +1,14 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          oddball
 version:       0.1.0.0
+synopsis:      Example with an interesting heap profile.
+description:   Repeatedly sum long sequences of random numbers.
+author:        Finley McIlwaine
+maintainer:    wen@well-typed.com
+copyright:     (c) 2023 Well-Typed
 license:       BSD-3-Clause
 license-file:  LICENSE
-author:        Finley McIlwaine
-copyright:     (c) 2023 Finley McIlwaine
-build-type:    Simple
+category:      Debug, Monitoring, System, Network
 
 executable oddball
   main-is:          Main.hs

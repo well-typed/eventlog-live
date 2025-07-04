@@ -1,11 +1,21 @@
 cabal-version: 2.2
 name:          fibber
 version:       0.1.0.0
+synopsis:      Example with an interesting call profile.
+description:   Compute the Fibonacci sequence naively.
+author:        Wen Kokke
+maintainer:    wen@well-typed.com
+copyright:     (c) 2025 Well-Typed
 license:       BSD-3-Clause
 license-file:  LICENSE
-author:        Wen Kokke
-copyright:     (c) 2025 Wen Kokke
-build-type:    Simple
+category:      Debug, Monitoring, System, Network
+tested-with:
+  GHC ==9.2.8
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.2
+   || ==9.12.2
 
 executable fibber
   main-is:          Main.hs

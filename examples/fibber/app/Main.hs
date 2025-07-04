@@ -15,6 +15,8 @@ main = do
     for_ args $ \arg ->
         print (fib (read arg))
 
+-- Taken from the Haskell Wiki:
+-- https://wiki.haskell.org/The_Fibonacci_sequence#Naive_definition
 fib :: Integer -> Integer
 fib 0 = 0
 fib 1 = 1
