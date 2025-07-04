@@ -1,0 +1,36 @@
+services:
+  influxdb:
+    container_name: influxdb
+    image: "influxdb:1.8"
+    restart: "always"
+    ports:
+    - "8086:8086"
+    healthcheck:
+      test: "curl -f http://localhost:8086/ping"
+      interval: 1m
+      timeout: 10s
+      retries: 5
+    environment:
+      INFLUXDB_HTTP_AUTH_ENABLED: "true"
+      INFLUXDB_DB: "eventlog"
+      INFLUXDB_ADMIN_USER: "admin"
+      INFLUXDB_ADMIN_PASSWORD: "admin"
+
+  grafana:
+    container_name: grafana
+    image: "grafana/grafana"
+    restart: "always"
+    ports:
+    - "3000:3000"
+    healthcheck:
+      test: "curl -f http://localhost:3000/api/health"
+      interval: 1m
+      timeout: 10s
+      retries: 5
+    volumes:
+      - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
+      - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
+      - "./config/grafana-dashboards-default.json:/var/lib/grafana/dashboards/default.json"
+
+volumes:
+  ghc_eventlog_socket:
