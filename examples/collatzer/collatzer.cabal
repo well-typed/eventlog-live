@@ -1,17 +1,14 @@
 cabal-version: 2.4
 name:          collatzer
 version:       0.1
-synopsis:      Receive eventlog over a socket
-category:      Debug, Monitoring, System, Network
-description:
-  This a demo application which shows how to receive and process
-  eventlog over a UNIX socket, from an application using @eventlog-socket@.
-
+synopsis:      Collate eventlog data.
+description:   Collate eventlog data received over a socket.
 author:        Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:    Matthew Pickering <matthew@well-typed.com>
+copyright:     (c) 2021 Well-Typed
 license:       BSD-3-Clause
 license-file:  LICENSE
-copyright:     (c) 2021 someone
+category:      Debug, Monitoring, System, Network
 tested-with:
   GHC ==9.2.8
    || ==9.4.8

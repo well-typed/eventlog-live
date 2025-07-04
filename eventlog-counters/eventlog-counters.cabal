@@ -2,13 +2,12 @@ cabal-version: 2.4
 name:          eventlog-counters
 version:       0.1.0.0
 synopsis:      Counters for eventlog.
-description:
-  Counters for eventlog, primarily meant for the live monitoring.
-
-license:       BSD-3-Clause
-license-file:  LICENSE
+description:   Counters for eventlog for live monitoring.
 author:        Matthew Pickering, Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:    Matthew Pickering <matthew@well-typed.com>
+copyright:     (c) 2021 Well-Typed
+license:       BSD-3-Clause
+license-file:  LICENSE
 category:      Debug, Monitoring, System
 tested-with:
   GHC ==9.2.8

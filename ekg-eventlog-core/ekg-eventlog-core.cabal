@@ -1,18 +1,14 @@
-cabal-version:   2.4
-synopsis:
-  Read an eventlog from a socket and place the results into an EKG store
-
-description:
-  Read an eventlog from a socket and place the results into an EKG store.
-
-name:            ekg-eventlog-core
-version:         0.1.0.0
-author:          Matthew Pickering
-maintainer:      matthewtpickering@gmail.com
-build-type:      Simple
-extra-doc-files: CHANGELOG.md
-license:         BSD-3-Clause
-category:        Debug, Monitoring, System, Network
+cabal-version: 2.4
+name:          ekg-eventlog-core
+version:       0.1.0.0
+synopsis:      Transfer events into an EKG store.
+description:   Transfer events from an eventlog socket into an EKG store.
+author:        Matthew Pickering
+maintainer:    matthewtpickering@gmail.com
+copyright:     (c) 2021 Well-Typed
+license:       BSD-3-Clause
+license-file:  LICENSE
+category:      Debug, Monitoring, System, Network
 tested-with:
   GHC ==9.2.8
    || ==9.4.8

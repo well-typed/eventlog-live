@@ -1,11 +1,21 @@
 cabal-version: 2.2
 name:          dumper
 version:       0.1.0.0
-license:       AGPL-3.0-only
-license-file:  LICENSE
+synopsis:      Dump eventlog data.
+description:   Transfer events from an eventlog socket to stdout.
 author:        Wen Kokke
 maintainer:    wen@well-typed.com
-build-type:    Simple
+copyright:     (c) 2025 Well-Typed
+license:       AGPL-3.0-only
+license-file:  LICENSE
+category:      Debug, Monitoring, System, Network
+tested-with:
+  GHC ==9.2.8
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.2
+   || ==9.12.2
 
 executable dumper
   hs-source-dirs:   app
