@@ -33,7 +33,7 @@ import qualified System.Remote.Monitoring
 
 import GHC.Eventlog.Counters     (Counters(..), ThreadState(..), newCounters, count)
 import GHC.Eventlog.Counters.EKG (registerCounters)
-import GHC.Eventlog.Machines     (sourceHandleWait, decodeEventsMaybe, reorderEvents, checkOrder)
+import GHC.Eventlog.Machines     (Tick (..), sourceHandleWait, decodeEventsTick, reorderEvents, checkOrder)
 import GHC.RTS.Events            (Event)
 
 import Data.Machine        (MachineT, ProcessT, await, repeatedly, runT_, (~>))
@@ -48,11 +48,11 @@ main = displayConsoleRegions $ do
         PathTypeSocket -> connectToEventlogSocket (optEventLogPath opts)
         PathTypeFile   -> openEventlogFile (optEventLogPath opts)
 
-    let input :: MachineT IO k (Maybe BS.ByteString)
-        input = sourceHandleWait hdl 1_000_000 4096
+    let input :: MachineT IO k (Tick BS.ByteString)
+        input = sourceHandleWait 1_000_000 4096 hdl
 
-    let events :: ProcessT IO (Maybe BS.ByteString) Event
-        events = decodeEventsMaybe
+    let events :: ProcessT IO (Tick BS.ByteString) Event
+        events = decodeEventsTick
             ~> reorderEvents 1_000_000_000
             ~> checkOrder (\e e' -> print (e, e'))
 
@@ -76,7 +76,7 @@ main = displayConsoleRegions $ do
                 runT_ $ input ~> fanout [events ~> count', fileSink whdl]
 
 -- 'Void' output to help inference.
-fileSink :: Handle -> ProcessT IO (Maybe BS.ByteString) Void
+fileSink :: Handle -> ProcessT IO (Tick BS.ByteString) Void
 fileSink hdl = repeatedly $ do
     mbs <- await
     liftIO $ for_ mbs $ BS.hPut hdl
