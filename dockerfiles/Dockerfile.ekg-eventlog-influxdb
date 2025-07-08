@@ -22,11 +22,11 @@ ENV GHC_EVENTLOG_INFLUXDB_PASSWORD=${GHC_EVENTLOG_INFLUXDB_PASSWORD}
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-    "./ekg-eventlog-core/CHANGELOG.md" \
+    "./ekg-eventlog-core/LICENSE" \
     "./ekg-eventlog-core/ekg-eventlog-core.cabal" \
     "./ekg-eventlog-core/src/System/Metrics/Eventlog.hs" \
     "./ekg-eventlog-influxdb/app/Main.hs" \
-    "./ekg-eventlog-influxdb/CHANGELOG.md" \
+    "./ekg-eventlog-influxdb/LICENSE" \
     "./ekg-eventlog-influxdb/ekg-eventlog-influxdb.cabal" \
     "./ekg-eventlog-influxdb/src/System/Metrics/InfluxDB.hs" \
     "/eventlog-live/"
