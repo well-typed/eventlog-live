@@ -61,4 +61,4 @@ FROM debian:bookworm-slim AS output
 COPY --from=build "/eventlog-live/bin/ekg-eventlog-influxdb" "/bin/ekg-eventlog-influxdb"
 
 # Run command
-CMD sleep 5 && ekg-eventlog-influxdb
+ENTRYPOINT ["ekg-eventlog-influxdb"]
