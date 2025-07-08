@@ -4,19 +4,10 @@
 
 module Main where
 
--- import Control.Concurrent.Async (wait)
--- import Control.Lens (set, (&))
--- import Data.String (IsString (fromString))
--- import qualified Database.InfluxDB as InfluxDB
--- import System.Environment (lookupEnv)
--- import System.Exit (exitFailure)
--- import System.Metrics.Eventlog (eventlogMetrics)
--- import System.Metrics.InfluxDB (influxContinuation)
-
 import Data.ByteString (ByteString)
 import Data.Machine.Process (ProcessT, (~>))
 import Data.Machine.Type (MachineT, repeatedly)
-import GHC.Eventlog.Machines (events)
+import GHC.Eventlog.Machines (sourceHandleWait, decodeEventsTick)
 import GHC.RTS.Events (Event)
 import qualified Network.Socket as S
 import qualified Options.Applicative as O
@@ -35,26 +26,16 @@ import Data.Machine.Runner (runT_)
 main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
-  eventlogSource <- constructEventlogSource eventlogSourceOptions
-  runT_ (eventlogSource ~> hPrintSink IO.stdout)
-
---------------------------------------------------------------------------------
--- Print Sink
---------------------------------------------------------------------------------
-
-hPrintSink :: Show a => Handle -> ProcessT IO a Void
-hPrintSink handle = repeatedly $ await >>= liftIO . IO.hPrint handle
-
---------------------------------------------------------------------------------
--- Reading from the Eventlog Socket
---------------------------------------------------------------------------------
-
-constructEventlogSource :: EventlogSourceOptions -> IO (MachineT IO k Event)
-constructEventlogSource EventlogSourceOptions{..} = do
+  let EventlogSourceOptions{..} = eventlogSourceOptions
   eventlogHandle <- connect eventlogSourceSocket
-  let nonCausalEventAction _ _ = pure ()
-  pure (events eventlogHandle eventlogSourceTimeoutMcs eventlogSourceChunkSizeBytes eventlogSourceIntervalMcs nonCausalEventAction)
+  let eventlogSource = sourceHandleWait eventlogSourceTimeoutMcs eventlogSourceChunkSizeBytes eventlogHandle
+  runT_ (eventlogSource ~> decodeEventsTick ~> printSink)
 
+-- | Sink to handle
+printSink :: Show a => ProcessT IO a Void
+printSink = repeatedly (await >>= liftIO . print)
+
+-- | Connect to eventlog socket.
 connect :: EventlogSocket -> IO Handle
 connect = \case
   EventlogSocketUnix socketName -> do
