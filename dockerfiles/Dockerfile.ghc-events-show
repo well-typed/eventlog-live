@@ -28,4 +28,4 @@ COPY --from=build "/ghc-events/bin/ghc-events" "/bin/ghc-events"
 RUN apt-get update && apt-get install -y netcat-openbsd
 
 # Run command
-CMD sleep 5 && nc -U ${GHC_EVENTLOG_SOCKET} >"/tmp/ghc.eventlog" && ghc-events show "/tmp/ghc.eventlog"
+CMD nc -U ${GHC_EVENTLOG_SOCKET} >"/tmp/ghc.eventlog" && ghc-events show "/tmp/ghc.eventlog"

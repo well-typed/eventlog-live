@@ -1,27 +1,29 @@
 services:
   fibber:
+    container_name: fibber
     image: "wenkokke/fibber:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.fibber"
     volumes:
-      - "ghc-eventlog-socket:/run/ghc-eventlog-socket"
+      - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
     environment:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
     command: "22"
 
   ghc-events-show:
+    container_name: ghc-events-show
     image: "wenkokke/ghc-events-show:0.1.0.0"
     build:
       context: ".."
-      dockerfile: "./dockerfiles/Dockerfile.ghc-events"
+      dockerfile: "./dockerfiles/Dockerfile.ghc-events-show"
     depends_on:
       fibber:
         condition: "service_started"
     volumes:
-      - "ghc-eventlog-socket:/run/ghc-eventlog-socket"
+      - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
     environment:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
 
 volumes:
-  ghc-eventlog-socket:
+  ghc_eventlog_socket:
