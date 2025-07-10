@@ -4,20 +4,22 @@
 
 module Main where
 
+import Control.Monad (when)
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
+import Data.Machine.Plan (await, yield)
 import Data.Machine.Process (ProcessT, (~>))
+import Data.Machine.Runner (runT_)
 import Data.Machine.Type (MachineT, repeatedly)
-import GHC.Eventlog.Machines (sourceHandleWait, decodeEventsTick, dropTick)
+import Data.Void (Void)
+import Data.Word (Word64)
+import GHC.Eventlog.Machines (decodeEventsTick, dropTick, sourceHandleWait)
 import GHC.RTS.Events (Event)
 import qualified Network.Socket as S
 import qualified Options.Applicative as O
 import System.IO (Handle)
 import qualified System.IO as IO
-import Data.Word (Word64)
-import Data.Void (Void)
-import Data.Machine.Plan (await, yield)
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Machine.Runner (runT_)
+import qualified Text.Regex.TDFA as RE
 
 --------------------------------------------------------------------------------
 -- Main
@@ -26,14 +28,20 @@ import Data.Machine.Runner (runT_)
 main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
+  let maybePattern = RE.makeRegex <$> eventlogPattern
   let EventlogSourceOptions{..} = eventlogSourceOptions
   eventlogHandle <- connect eventlogSourceSocket
   let eventlogSource = sourceHandleWait eventlogSourceTimeoutMcs eventlogSourceChunkSizeBytes eventlogHandle
-  runT_ (eventlogSource ~> decodeEventsTick ~> dropTick ~> printSink)
+  runT_ (eventlogSource ~> decodeEventsTick ~> dropTick ~> printSink maybePattern)
 
--- | Sink to handle
-printSink :: Show a => ProcessT IO a Void
-printSink = repeatedly (await >>= liftIO . print)
+-- | Filter entries and print them to standard output.
+printSink :: (Show a) => Maybe RE.Regex -> ProcessT IO a Void
+printSink maybePattern = repeatedly go
+  where
+    go =
+      show <$> await >>= \str ->
+        when (maybe True (`RE.matchTest` str) maybePattern) $
+          liftIO . putStrLn $ str
 
 -- | Connect to eventlog socket.
 connect :: EventlogSocket -> IO Handle
@@ -52,8 +60,9 @@ connect = \case
 optionsInfo :: O.ParserInfo Options
 optionsInfo = O.info (optionsParser O.<**> O.helper) O.idm
 
-newtype Options = Options
+data Options = Options
   { eventlogSourceOptions :: EventlogSourceOptions
+  , eventlogPattern :: Maybe ByteString
   }
   deriving (Show)
 
@@ -61,6 +70,14 @@ optionsParser :: O.Parser Options
 optionsParser =
   Options
     <$> eventlogSourceOptionsParser
+    <*> O.optional
+    ( O.strOption
+      ( O.short 'P'
+          <> O.long "pattern"
+          <> O.help "Regular expression to filter events"
+          <> O.metavar "PATTERN"
+      )
+    )
 
 data EventlogSourceOptions = EventlogSourceOptions
   { eventlogSourceSocket :: EventlogSocket
