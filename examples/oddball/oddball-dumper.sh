@@ -5,24 +5,22 @@ export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
-cabal build oddball
-echo
+cabal build oddball -v0
 
 # Build dumper
 echo "Build dumper"
-cabal build dumper
-echo
+cabal build dumper -v0
 
 # Run oddball
-echo "Run oddball"
-cabal run oddball -v0 >/dev/null -- +RTS -l -hT -RTS &
+echo "Start oddball"
+ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
+"${ODDBALL_BIN}" +RTS -l -hT --eventlog-flush-interval=1 -RTS >/dev/null &
 ODDBALL_PID=$!
-echo
 
 # Run dumper
 # NOTE: The purpose of 'sleep 5' is to give the oddball process
 #       sufficient time to create the Unix socket.
-echo "Run dumper"
+echo "Start dumper"
 sleep 5 && cabal run dumper -v0 -- --unix "$GHC_EVENTLOG_SOCKET" "$@"
 
 # Wait for oddball to finish
