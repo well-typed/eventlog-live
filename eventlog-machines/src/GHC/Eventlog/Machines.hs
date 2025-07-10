@@ -39,7 +39,7 @@ import Data.Foldable (traverse_)
 import Data.Function (fix)
 import Data.Int (Int64)
 import Data.List (partition, sortBy)
-import Data.Machine (Is, MachineT, PlanT, Process, ProcessT, await, construct, yield)
+import Data.Machine (Is, MachineT, PlanT, Process, ProcessT, await, construct, yield, repeatedly)
 import Data.Machine.Moore (Moore (..))
 import Data.Ord (comparing)
 import Data.Text (Text)
@@ -171,11 +171,11 @@ batchByTick = construct start
       Tick -> yield (reverse acc) >> start
 
 dropTick :: Process (Tick a) a
-dropTick = construct start
+dropTick = repeatedly go
   where
-    start = await >>= \case
+    go = await >>= \case
       Item a -> yield a
-      Tick -> start
+      Tick -> pure ()
 
 -------------------------------------------------------------------------------
 -- Decoding events
