@@ -1,1 +1,4 @@
-dist-newstyle
+dist-newstyle/
+*.eventlog
+*.hp
+*.prof
