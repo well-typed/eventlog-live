@@ -23,7 +23,7 @@ echo
 # NOTE: The purpose of 'sleep 5' is to give the oddball process
 #       sufficient time to create the Unix socket.
 echo "Run dumper"
-sleep 5 && cabal run dumper -v0 -- --unix "$GHC_EVENTLOG_SOCKET"
+sleep 5 && cabal run dumper -v0 -- --unix "$GHC_EVENTLOG_SOCKET" "$@"
 
 # Wait for oddball to finish
 wait $ODDBALL_PID
