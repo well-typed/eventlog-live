@@ -1,0 +1,6 @@
+import: cabal.project
+
+profiling: True
+
+package *
+    profiling-detail: late-toplevel
