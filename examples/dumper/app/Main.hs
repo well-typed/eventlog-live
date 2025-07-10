@@ -7,7 +7,7 @@ module Main where
 import Data.ByteString (ByteString)
 import Data.Machine.Process (ProcessT, (~>))
 import Data.Machine.Type (MachineT, repeatedly)
-import GHC.Eventlog.Machines (sourceHandleWait, decodeEventsTick)
+import GHC.Eventlog.Machines (sourceHandleWait, decodeEventsTick, dropTick)
 import GHC.RTS.Events (Event)
 import qualified Network.Socket as S
 import qualified Options.Applicative as O
@@ -29,7 +29,7 @@ main = do
   let EventlogSourceOptions{..} = eventlogSourceOptions
   eventlogHandle <- connect eventlogSourceSocket
   let eventlogSource = sourceHandleWait eventlogSourceTimeoutMcs eventlogSourceChunkSizeBytes eventlogHandle
-  runT_ (eventlogSource ~> decodeEventsTick ~> printSink)
+  runT_ (eventlogSource ~> decodeEventsTick ~> dropTick ~> printSink)
 
 -- | Sink to handle
 printSink :: Show a => ProcessT IO a Void
