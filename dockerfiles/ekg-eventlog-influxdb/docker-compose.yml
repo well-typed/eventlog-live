@@ -8,7 +8,10 @@ services:
       - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
     environment:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
-    command: "44"
+    command:
+      - "+RTS"
+      - "-l"
+      - "-hT"
 
   ekg-eventlog-influxdb:
     image: "wenkokke/ekg-eventlog-influxdb:0.1.0.0"

@@ -15,7 +15,7 @@ echo
 
 # Run oddball
 echo "Run oddball"
-cabal run oddball -v0 >/dev/null &
+cabal run oddball -v0 >/dev/null -- +RTS -l -hT -RTS &
 ODDBALL_PID=$!
 echo
 

@@ -9,6 +9,11 @@ services:
       - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
     environment:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
+    command:
+      - "+RTS"
+      - "-l"
+      - "-hT"
+      - "--eventlog-flush-interval=1"
 
   dumper:
     container_name: dumper

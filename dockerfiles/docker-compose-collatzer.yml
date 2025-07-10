@@ -9,6 +9,10 @@ services:
       - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
     environment:
       GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
+    command:
+      - "+RTS"
+      - "-l"
+      - "-hT"
 
   collatzer:
     container_name: collatzer
