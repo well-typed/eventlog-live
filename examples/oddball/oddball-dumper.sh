@@ -11,6 +11,9 @@ cabal build oddball -v0
 echo "Build dumper"
 cabal build dumper -v0
 
+# Install cleanup handler
+trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+
 # Run oddball
 echo "Start oddball"
 ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
