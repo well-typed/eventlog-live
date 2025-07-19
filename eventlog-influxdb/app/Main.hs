@@ -23,9 +23,12 @@ import Control.Lens ((^.))
 import Control.Lens.Setter (set)
 import Control.Monad (when, unless)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.ByteString qualified as BS
 import Data.Int (Int64)
+import Data.Foldable (for_)
 import Data.Kind (Type, Constraint)
 import Data.List (uncons)
+import Data.Machine.Fanout (fanout)
 import Data.Machine.Is (Is)
 import Data.Machine.Plan (PlanT (..), await, yield)
 import Data.Machine.Process (ProcessT, (~>))
@@ -36,11 +39,12 @@ import Data.Map.Strict qualified as M
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Void (Void)
 import Data.Word (Word8, Word32, Word64)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
-import GHC.Eventlog.Machines (Tick (..), batchByTick, decodeEventsTick, sourceHandleInterval)
+import GHC.Eventlog.Machines (Tick (..), batchByTick, decodeEventsTick, dropTick, sourceHandleInterval)
 import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..))
 import Network.Socket qualified as S
 import Options.Applicative qualified as O
@@ -59,12 +63,23 @@ main = do
   Options{..} <- O.execParser optionsInfo
   let BatchOptions{..} = batchOptions
   eventlogHandle <- connect eventlogSocket
-  runT_ $
-    sourceHandleInterval batchIntervalMs defaultChunkSizeBytes eventlogHandle
-      ~> decodeEventsTick
-      ~> processEventsTick heapProfOptions
-      ~> batchByTick
-      ~> influxDBWriter influxDBWriteParams
+  let filePath = "my.eventlog"
+  IO.withFile filePath IO.WriteMode $ \fp ->
+    runT_ $
+      sourceHandleInterval batchIntervalMs defaultChunkSizeBytes eventlogHandle
+        ~> fanout
+        [  decodeEventsTick
+        ~> processEventsTick heapProfOptions
+        ~> batchByTick
+        ~> influxDBWriter influxDBWriteParams
+        ,  fileSink fp
+        ]
+
+-- 'Void' output to help inference.
+fileSink :: Handle -> ProcessT IO (Tick BS.ByteString) ()
+fileSink hdl = repeatedly $ do
+    mbs <- await
+    liftIO $ for_ mbs $ BS.hPut hdl
 
 {- |
 Eventlog chunk size in bytes.

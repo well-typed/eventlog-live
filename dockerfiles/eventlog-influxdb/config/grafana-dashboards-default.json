@@ -106,11 +106,15 @@
         {
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["heapProfLabel::tag"],
+              "params": [
+                "heapProfLabel::tag"
+              ],
               "type": "tag"
             }
           ],
@@ -122,7 +126,9 @@
           "select": [
             [
               {
-                "params": ["heapProfResidency"],
+                "params": [
+                  "heapProfResidency"
+                ],
                 "type": "field"
               },
               {
@@ -222,11 +228,15 @@
         {
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
@@ -238,7 +248,91 @@
           "select": [
             [
               {
-                "params": ["sizeBytes"],
+                "params": [
+                  "sizeBytes"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "HeapLive",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "liveBytes"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "BlocksSize",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "blocksSize"
+                ],
                 "type": "field"
               },
               {
@@ -250,7 +344,7 @@
           "tags": []
         }
       ],
-      "title": "HeapSize",
+      "title": "HeapSize / HeapLive / BlocksSize",
       "type": "timeseries"
     },
     {
@@ -261,8 +355,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds",
-            "seriesBy": "max"
+            "mode": "palette-classic"
           },
           "custom": {
             "axisBorderShow": false,
@@ -294,33 +387,23 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "dashed"
+              "mode": "off"
             }
           },
           "mappings": [],
-          "max": 1,
-          "min": 0,
           "thresholds": {
-            "mode": "percentage",
+            "mode": "absolute",
             "steps": [
               {
-                "color": "red"
+                "color": "green"
               },
               {
-                "color": "orange",
-                "value": 25
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 75
+                "color": "red",
+                "value": 80
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "mblock"
         },
         "overrides": []
       },
@@ -330,7 +413,7 @@
         "x": 12,
         "y": 24
       },
-      "id": 3,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [],
@@ -349,15 +432,19 @@
         {
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
-          "measurement": "HeapSize",
+          "measurement": "MemReturn",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "A",
@@ -365,7 +452,9 @@
           "select": [
             [
               {
-                "params": ["sizeBytes"],
+                "params": [
+                  "current"
+                ],
                 "type": "field"
               },
               {
@@ -383,16 +472,20 @@
           },
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
           "hide": false,
-          "measurement": "BlocksSize",
+          "measurement": "MemReturn",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "B",
@@ -400,7 +493,50 @@
           "select": [
             [
               {
-                "params": ["blocksSize"],
+                "params": [
+                  "needed"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "MemReturn",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "returned"
+                ],
                 "type": "field"
               },
               {
@@ -412,34 +548,7 @@
           "tags": []
         }
       ],
-      "title": "BlocksSize",
-      "transformations": [
-        {
-          "id": "calculateField",
-          "options": {
-            "binary": {
-              "left": {
-                "matcher": {
-                  "id": "byName",
-                  "options": "BlocksSize.mean"
-                }
-              },
-              "operator": "/",
-              "right": {
-                "matcher": {
-                  "id": "byName",
-                  "options": "HeapSize.mean"
-                }
-              }
-            },
-            "mode": "binary",
-            "reduce": {
-              "reducer": "sum"
-            },
-            "replaceFields": true
-          }
-        }
-      ],
+      "title": "MemReturn",
       "type": "timeseries"
     },
     {
@@ -543,11 +652,15 @@
           },
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
@@ -559,7 +672,9 @@
           "select": [
             [
               {
-                "params": ["sizeBytes"],
+                "params": [
+                  "sizeBytes"
+                ],
                 "type": "field"
               },
               {
@@ -577,11 +692,15 @@
           },
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
@@ -594,7 +713,9 @@
           "select": [
             [
               {
-                "params": ["liveBytes"],
+                "params": [
+                  "liveBytes"
+                ],
                 "type": "field"
               },
               {
@@ -646,7 +767,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds",
+            "seriesBy": "max"
           },
           "custom": {
             "axisBorderShow": false,
@@ -678,23 +800,33 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "dashed"
             }
           },
           "mappings": [],
+          "max": 1,
+          "min": 0,
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
-                "color": "green"
+                "color": "red"
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "orange",
+                "value": 25
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 75
               }
             ]
           },
-          "unit": "mblock"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -704,7 +836,7 @@
         "x": 12,
         "y": 32
       },
-      "id": 5,
+      "id": 3,
       "options": {
         "legend": {
           "calcs": [],
@@ -723,15 +855,19 @@
         {
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
-          "measurement": "MemReturn",
+          "measurement": "HeapSize",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "A",
@@ -739,7 +875,9 @@
           "select": [
             [
               {
-                "params": ["current"],
+                "params": [
+                  "sizeBytes"
+                ],
                 "type": "field"
               },
               {
@@ -757,16 +895,20 @@
           },
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
           "hide": false,
-          "measurement": "MemReturn",
+          "measurement": "BlocksSize",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "B",
@@ -774,42 +916,9 @@
           "select": [
             [
               {
-                "params": ["needed"],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "groupBy": [
-            {
-              "params": ["$__interval"],
-              "type": "time"
-            },
-            {
-              "params": ["null"],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "measurement": "MemReturn",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": ["returned"],
+                "params": [
+                  "blocksSize"
+                ],
                 "type": "field"
               },
               {
@@ -821,7 +930,34 @@
           "tags": []
         }
       ],
-      "title": "MemReturn",
+      "title": "BlocksSize",
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "binary": {
+              "left": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "BlocksSize.mean"
+                }
+              },
+              "operator": "/",
+              "right": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "HeapSize.mean"
+                }
+              }
+            },
+            "mode": "binary",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "replaceFields": true
+          }
+        }
+      ],
       "type": "timeseries"
     },
     {
@@ -909,11 +1045,15 @@
         {
           "groupBy": [
             {
-              "params": ["$__interval"],
+              "params": [
+                "$__interval"
+              ],
               "type": "time"
             },
             {
-              "params": ["null"],
+              "params": [
+                "null"
+              ],
               "type": "fill"
             }
           ],
@@ -925,7 +1065,9 @@
           "select": [
             [
               {
-                "params": ["allocBytes"],
+                "params": [
+                  "allocBytes"
+                ],
                 "type": "field"
               },
               {
@@ -955,5 +1097,5 @@
   "timezone": "browser",
   "title": "Eventlog Heap",
   "uid": "d47b8d70-56b7-454a-8c29-b742c49cfe19",
-  "version": 7
+  "version": 1
 }

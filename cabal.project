@@ -9,6 +9,7 @@ packages:
   examples/dumper
   examples/fibber
   examples/oddball
+  /Users/keri/Projects/ghc-events
 
 -- NOTE (2025-06-17): Required for GHC version 9.12
 if impl(ghc >= 9.12)
@@ -16,6 +17,9 @@ if impl(ghc >= 9.12)
     , ghc-events:base
     , hashable:base
     , influxdb:base
+
+  allow-newer:
+    , ghc-events
 
 if impl(ghc >= 9.14)
   allow-newer:
