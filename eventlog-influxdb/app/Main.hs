@@ -4,27 +4,28 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NoFieldSelectors #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Main where
 
 import Control.Applicative (Alternative ((<|>)))
 import Control.Lens ((^.))
 import Control.Lens.Setter (set)
-import Control.Monad (when, unless)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Foldable (for_)
 import Data.Int (Int64)
-import Data.Kind (Type, Constraint)
+import Data.Kind (Constraint, Type)
 import Data.List (uncons)
 import Data.Machine.Is (Is)
 import Data.Machine.Plan (PlanT (..), await, yield)
@@ -36,12 +37,16 @@ import Data.Map.Strict qualified as M
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Word (Word8, Word32, Word64)
+import Data.Word (Word32, Word64, Word8)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
 import GHC.Eventlog.Machines (Tick (..), batchByTick, decodeEventsTick, sourceHandleInterval)
-import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..))
+import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), ThreadStopStatus (..))
+import GHC.RTS.Events.Analysis qualified as Analysis
+import GHC.RTS.Events.Analysis.Thread (ThreadState (..))
+import GHC.RTS.Events.Analysis.Thread qualified as Analysis.Thread
+import GHC.Stack (HasCallStack)
 import Network.Socket qualified as S
 import Options.Applicative qualified as O
 import System.Clock (TimeSpec)
@@ -79,19 +84,23 @@ defaultChunkSizeBytes = 4096
 
 type Line = I.Line Clock.TimeSpec
 
-data Metric (tagOrField :: Type -> Constraint) =
-  forall a. (tagOrField a) => I.Key := a
+data Metric (tagOrField :: Type -> Constraint)
+  = forall a. (tagOrField a) => I.Key := a
 
 class Tag t where
   toTag :: t -> Maybe I.Key
 
-instance Tag t => Tag (Maybe t) where
+instance (Tag t) => Tag (Maybe t) where
   toTag :: Maybe t -> Maybe I.Key
   toTag = (toTag =<<)
 
 instance Tag I.Key where
   toTag :: I.Key -> Maybe I.Key
   toTag = Just
+
+instance Tag Int where
+  toTag :: Int -> Maybe I.Key
+  toTag = toTag . show
 
 instance Tag Word8 where
   toTag :: Word8 -> Maybe I.Key
@@ -115,12 +124,16 @@ toTagSet kts = M.fromList (mapMaybe (\(k := t) -> (k,) <$> toTag t) kts)
 class Field f where
   toField :: f -> Maybe (I.Field 'I.NonNullable)
 
-instance Field f => Field (Maybe f) where
+instance (Field f) => Field (Maybe f) where
   toField :: Maybe f -> Maybe (I.Field 'I.NonNullable)
   toField = (toField =<<)
 
-integralToField :: Integral i => i -> I.Field 'I.NonNullable
+integralToField :: (Integral i) => i -> I.Field 'I.NonNullable
 integralToField = I.FieldInt . fromIntegral
+
+instance Field Int where
+  toField :: Int -> Maybe (I.Field 'I.NonNullable)
+  toField = Just . integralToField
 
 instance Field Word32 where
   toField :: Word32 -> Maybe (I.Field 'I.NonNullable)
@@ -137,6 +150,10 @@ instance Field String where
 instance Field Text where
   toField :: Text -> Maybe (I.Field 'I.NonNullable)
   toField = Just . I.FieldString
+
+instance Field ThreadState where
+  toField :: ThreadState -> Maybe (I.Field 'I.NonNullable)
+  toField = toField . show
 
 toFieldSet :: [Metric Field] -> Map I.Key (I.Field 'I.NonNullable)
 toFieldSet kvs = M.fromList (mapMaybe (\(k := v) -> (k,) <$> toField v) kvs)
@@ -163,6 +180,29 @@ newEventProcessorState HeapProfOptions{..} =
     , warnIfMissingHeapProfBreakdown = True
     }
 
+-- | Get whether or not an event is a thread event.
+isThreadEvent :: EventInfo -> Bool
+isThreadEvent = Analysis.alpha Analysis.Thread.threadMachine
+
+{- | Determine the thread state after a thread event.
+
+This function should satisfy the following properties:
+
+prop> isThreadEvent evSpec ==> isJust (getThreadState evSpec)
+prop> Analysis.delta threadMachine threadState evSpec == getThreadState evSpec
+-}
+getThreadState :: (HasCallStack) => EventInfo -> Maybe Analysis.Thread.ThreadState
+getThreadState = \case
+  CreateThread{} -> Just ThreadQueued
+  RunThread{} -> Just ThreadRunning
+  WakeupThread{} -> Just ThreadQueued
+  StopThread{status = StackOverflow} -> Just ThreadQueued
+  StopThread{status = HeapOverflow} -> Just ThreadQueued
+  StopThread{status = ForeignCall} -> Just ThreadQueued
+  StopThread{status = ThreadFinished} -> Just ThreadFinal
+  StopThread{} -> Just ThreadStopped
+  _ -> Nothing
+
 processEventsTick :: forall m. (MonadIO m) => HeapProfOptions -> ProcessT m (Tick Event) (Tick Line)
 processEventsTick = construct . go . newEventProcessorState
  where
@@ -187,7 +227,7 @@ processEventsTick = construct . go . newEventProcessorState
             go st{startRealtime = Just (Clock.TimeSpec secInt nsecInt)}
           -- This event announces the heap profiling configuration for the process.
           HeapProfBegin{..} -> do
-            go st {currentHeapProfBreakdown = Just heapProfBreakdown}
+            go st{currentHeapProfBreakdown = Just heapProfBreakdown}
 
           --------------------------------------------------------------------
           -- Heap Profiling
@@ -195,7 +235,9 @@ processEventsTick = construct . go . newEventProcessorState
           -- This event announces the current size of the heap, in bytes,
           -- calculated by how many megablocks are allocated.
           HeapSize{..} -> do
-            emit "HeapSize" timestamp
+            emit
+              "HeapSize"
+              timestamp
               [ "heapCapset" := heapCapset
               ]
               [ "sizeBytes" := sizeBytes
@@ -203,21 +245,27 @@ processEventsTick = construct . go . newEventProcessorState
           -- This event announces the current size of the heap, in bytes,
           -- calculated by how many blocks are allocated.
           BlocksSize{..} -> do
-            emit "BlocksSize" timestamp
+            emit
+              "BlocksSize"
+              timestamp
               [ "heapCapset" := heapCapset
               ]
               [ "blocksSize" := blocksSize
               ]
           -- This event announces that a new chunk of heap has been allocated.
           HeapAllocated{..} -> do
-            emit "HeapAllocated" timestamp
+            emit
+              "HeapAllocated"
+              timestamp
               [ "heapCapset" := heapCapset
               ]
               [ "allocBytes" := allocBytes
               ]
           -- This event announces the current size of the live on-heap data.
           HeapLive{..} -> do
-            emit "HeapLive" timestamp
+            emit
+              "HeapLive"
+              timestamp
               [ "heapCapset" := heapCapset
               ]
               [ "liveBytes" := liveBytes
@@ -228,7 +276,9 @@ processEventsTick = construct . go . newEventProcessorState
           -- than needed value but returned will be less than the difference
           -- between the two.
           MemReturn{..} -> do
-            emit "MemReturn" timestamp
+            emit
+              "MemReturn"
+              timestamp
               [ "heapCapset" := heapCapset
               ]
               [ "current" := current
@@ -237,7 +287,7 @@ processEventsTick = construct . go . newEventProcessorState
               ]
           -- This event announces the beginning of a series of heap profiling samples.
           HeapProfSampleBegin{..} -> do
-            go st {currentHeapProfSampleEraStack = heapProfSampleEra : currentHeapProfSampleEraStack}
+            go st{currentHeapProfSampleEraStack = heapProfSampleEra : currentHeapProfSampleEraStack}
           -- This event announces the end of a series of heap profiling samples.
           HeapProfSampleEnd{..} -> do
             -- Try and remove the current era from the era stack
@@ -255,7 +305,7 @@ processEventsTick = construct . go . newEventProcessorState
                   -- ...issue a warning
                   warnMismatchedHeapProfSampleEras heapProfSampleEra (Just currentHeapProfSampleEra)
                 -- ...and continue regardless
-                go st {currentHeapProfSampleEraStack = currentHeapProfSampleEraStack'}
+                go st{currentHeapProfSampleEraStack = currentHeapProfSampleEraStack'}
           -- This event announces a heap profiling sample.
           HeapProfSampleString{..} -> do
             -- If the heap profile breakdown is not known:
@@ -265,19 +315,42 @@ processEventsTick = construct . go . newEventProcessorState
                 when warnIfMissingHeapProfBreakdown . liftIO $
                   warnMissingHeapProfBreakdown
                 -- ...then ignore heap profile samples going forwards
-                go st {warnIfMissingHeapProfBreakdown = False}
-              else do case currentHeapProfBreakdown of
-                        Just HeapProfBreakdownClosureType ->
-                          emit "HeapProfSample" timestamp
-                            [ "heapProfId" := heapProfId
-                            , "heapProfLabel" := heapProfLabel
-                            ]
-                            [ "heapProfResidency" := heapProfResidency
-                            , "heapProfSampleEra" := (fst <$> uncons currentHeapProfSampleEraStack)
-                            ]
-                        _ -> pure ()
+                go st{warnIfMissingHeapProfBreakdown = False}
+              else do
+                case currentHeapProfBreakdown of
+                  Just HeapProfBreakdownClosureType ->
+                    emit
+                      "HeapProfSample"
+                      timestamp
+                      [ "heapProfId" := heapProfId
+                      , "heapProfLabel" := heapProfLabel
+                      ]
+                      [ "heapProfResidency" := heapProfResidency
+                      , "heapProfSampleEra" := (fst <$> uncons currentHeapProfSampleEraStack)
+                      ]
+                  _ -> pure ()
                 -- liftIO . print $ (heapProfId, heapProfResidency, heapProfLabel)
-                      go st
+                go st
+
+          --------------------------------------------------------------------
+          -- Thread Profiling
+          --
+          -- These events announce thread state changes, which we handle all at
+          -- once by reducing them to a thread ID and the resulting thread state.
+          _ | isThreadEvent evSpec -> do
+            for_ (getThreadState evSpec) $ \threadState -> do
+              emit
+                "ThreadState"
+                timestamp
+                [ -- NOTE:
+                  -- The `thread` field selector is a partial function, so this
+                  -- is only safe because `getThreadState` returned a `Just`.
+                  "threadId" := thread evSpec
+                , "evCap" := evCap
+                ]
+                [ "threadState" := threadState
+                ]
+            go st
 
           --------------------------------------------------------------------
           -- The remaining events are ignored.
@@ -288,10 +361,11 @@ processEventsTick = construct . go . newEventProcessorState
 
 warnMissingHeapProfBreakdown :: IO ()
 warnMissingHeapProfBreakdown =
-  warn "Warning: Cannot infer heap profile breakdown.\n\
-       \         If your binary was compiled with a GHC version prior to 9.14,\n\
-       \         you must also pass the heap profile type to this executable.\n\
-       \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+  warn
+    "Warning: Cannot infer heap profile breakdown.\n\
+    \         If your binary was compiled with a GHC version prior to 9.14,\n\
+    \         you must also pass the heap profile type to this executable.\n\
+    \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
 
 warnMismatchedHeapProfSampleEras :: Word64 -> Maybe Word64 -> IO ()
 warnMismatchedHeapProfSampleEras endEra = \case
@@ -301,7 +375,7 @@ warnMismatchedHeapProfSampleEras endEra = \case
     warn $ printf "Warning: Eventlog closed era %d, but the current era is era %d." endEra currentEra
 
 warn :: String -> IO ()
-warn msg = IO.hPutStrLn IO.stderr msg
+warn = IO.hPutStrLn IO.stderr
 
 --------------------------------------------------------------------------------
 -- InfluxDB Batch Writer
@@ -389,11 +463,12 @@ heapProfOptionsParser :: O.Parser HeapProfOptions
 heapProfOptionsParser =
   HeapProfOptions
     <$> O.optional
-      ( O.option (O.eitherReader heapProfileBreakdownParser)
-        ( O.short 'h'
-            <> O.metavar "HEAP_PROFILE_BREAKDOWN"
-            <> O.help "Heap profile breakdown (Tcmdyrbi)"
-        )
+      ( O.option
+          (O.eitherReader heapProfileBreakdownParser)
+          ( O.short 'h'
+              <> O.metavar "HEAP_PROFILE_BREAKDOWN"
+              <> O.help "Heap profile breakdown (Tcmdyrbi)"
+          )
       )
 
 heapProfileBreakdownParser :: String -> Either String HeapProfBreakdown
@@ -403,7 +478,7 @@ heapProfileBreakdownParser = \case
   "m" -> Right HeapProfBreakdownModule
   "d" -> Right HeapProfBreakdownClosureDescr
   "y" -> Right HeapProfBreakdownTypeDescr
-  "e" -> Left $ "Unsupported heap profile breakdown by era."
+  "e" -> Left "Unsupported heap profile breakdown by era."
   "r" -> Right HeapProfBreakdownRetainer
   "b" -> Right HeapProfBreakdownBiography
   "i" -> Right HeapProfBreakdownInfoTable
