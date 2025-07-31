@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE RankNTypes #-}
 
 module GHC.Eventlog.Machines (
   -- * Machines
@@ -17,6 +18,9 @@ module GHC.Eventlog.Machines (
   Tick (..),
   batchByTick,
   dropTick,
+
+  -- ** Event Analysis
+  analyse,
 
   -- ** Event Order
   reorderEvents,
@@ -35,9 +39,10 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import qualified Data.ByteString as BS
-import Data.Foldable (traverse_)
+import Data.Foldable (traverse_, for_)
 import Data.Function (fix)
 import Data.Int (Int64)
+import qualified Data.IntMap.Strict as IM
 import Data.List (partition, sortBy)
 import Data.Machine (Is, MachineT, PlanT, Process, ProcessT, await, construct, yield, repeatedly)
 import Data.Machine.Moore (Moore (..))
@@ -51,10 +56,13 @@ import GHC.RTS.Events (
   Timestamp,
   evTime,
  )
+import qualified GHC.RTS.Events.Analysis as EA
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import qualified System.Clock as Clock
 import System.IO (Handle, hWaitForInput)
 import System.IO.Error (isEOFError)
+import Data.Maybe (fromMaybe)
+import Control.Applicative (Alternative((<|>)))
 
 -------------------------------------------------------------------------------
 -- Source from handle
@@ -178,6 +186,17 @@ dropTick = repeatedly go
       Tick -> pure ()
 
 -------------------------------------------------------------------------------
+-- Helper functions
+--
+--     [ l ] ———————— [ l' ]
+--       |              |
+-- [Either l r]   [Either l' r']
+--       |              |
+--     [ r ] ———————— [ r' ]
+--
+-------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
 -- Decoding events
 -------------------------------------------------------------------------------
 
@@ -201,6 +220,38 @@ decodeEventsTick = construct $ loop decodeEventLog
 newtype DecodeError = DecodeError String deriving (Show)
 
 instance Exception DecodeError
+
+-------------------------------------------------------------------------------
+-- Running ghc-events Analysis Machines
+-------------------------------------------------------------------------------
+
+analyse ::
+  (MonadIO m) =>
+  (i -> Int) ->
+  EA.Machine s i ->
+  ProcessT m i (s, i)
+analyse key m = construct (go IM.empty)
+ where
+  -- go :: (MonadIO m) => IntMap s -> PlanT (Is i) (s, i) m ()
+  go st = await >>= \case
+      i | EA.alpha m i -> do
+          let handle ms = do
+                -- The input state (initial if missing).
+                let s   = fromMaybe (EA.initial m) ms
+                -- The output state (Nothing if step fails).
+                let ms' = rightToMaybe (EA.step m s i)
+                -- The altered state in the map (deleted if final).
+                let ms'_in_st'
+                      | any (EA.final m) ms' = Nothing
+                      | otherwise = ms' <|> Just s
+                (ms', ms'_in_st')
+          let (ms', st') = IM.alterF handle (key i) st
+          for_ ms' $ \s' -> yield (s', i)
+          go st'
+        | otherwise -> go st
+
+rightToMaybe :: Either e a -> Maybe a
+rightToMaybe = either (const Nothing) Just
 
 -------------------------------------------------------------------------------
 -- Reordering buffer.
