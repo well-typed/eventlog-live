@@ -7,7 +7,6 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -23,10 +22,12 @@ import Control.Lens ((^.))
 import Control.Lens.Setter (set)
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Foldable (for_)
+import Data.ByteString qualified as BS
+import Data.Foldable (for_, traverse_)
 import Data.Int (Int64)
 import Data.Kind (Constraint, Type)
 import Data.List (uncons)
+import Data.Machine.Fanout (fanout)
 import Data.Machine.Is (Is)
 import Data.Machine.Plan (PlanT (..), await, yield)
 import Data.Machine.Process (ProcessT, (~>))
@@ -37,6 +38,7 @@ import Data.Map.Strict qualified as M
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Void (Void)
 import Data.Word (Word32, Word64, Word8)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
@@ -64,12 +66,22 @@ main = do
   Options{..} <- O.execParser optionsInfo
   let BatchOptions{..} = batchOptions
   eventlogHandle <- connect eventlogSocket
-  runT_ $
-    sourceHandleInterval batchIntervalMs defaultChunkSizeBytes eventlogHandle
-      ~> decodeEventsTick
-      ~> processEventsTick heapProfOptions
-      ~> batchByTick
-      ~> influxDBWriter influxDBWriteParams
+  let fromSocket =
+        sourceHandleInterval batchIntervalMs defaultChunkSizeBytes eventlogHandle
+  let toInfluxDB =
+        decodeEventsTick
+          ~> processEventsTick heapProfOptions
+          ~> batchByTick
+          ~> influxDBWriter influxDBWriteParams
+  case maybeOutputFile of
+    Nothing ->
+      runT_ $
+        fromSocket ~> toInfluxDB
+    Just outputFile ->
+      IO.withFile outputFile IO.WriteMode $ \outputFileHandle -> do
+        let toFile = fileSink outputFileHandle
+        runT_ $
+          fromSocket ~> fanout [toFile, toInfluxDB]
 
 {- |
 Eventlog chunk size in bytes.
@@ -77,6 +89,14 @@ This should be equal to the page size.
 -}
 defaultChunkSizeBytes :: Int
 defaultChunkSizeBytes = 4096
+
+{- |
+File sink for optional eventlog output file.
+-}
+fileSink :: Handle -> ProcessT IO (Tick BS.ByteString) Void
+fileSink handle =
+  repeatedly $
+    await >>= liftIO . traverse_ (BS.hPut handle)
 
 --------------------------------------------------------------------------------
 -- Writing to InfluxDB
@@ -380,7 +400,7 @@ warn = IO.hPutStrLn IO.stderr
 --------------------------------------------------------------------------------
 -- InfluxDB Batch Writer
 
-influxDBWriter :: I.WriteParams -> ProcessT IO [Line] ()
+influxDBWriter :: I.WriteParams -> ProcessT IO [Line] Void
 influxDBWriter writeParams = repeatedly go
  where
   go =
@@ -411,6 +431,7 @@ optionsInfo = O.info (optionsParser O.<**> O.helper) O.idm
 data Options = Options
   { eventlogSocket :: EventlogSocket
   , batchOptions :: BatchOptions
+  , maybeOutputFile :: Maybe FilePath
   , heapProfOptions :: HeapProfOptions
   , influxDBWriteParams :: I.WriteParams
   }
@@ -420,6 +441,7 @@ optionsParser =
   Options
     <$> eventlogSocketParser
     <*> batchOptionsParser
+    <*> outputFileParser
     <*> heapProfOptionsParser
     <*> influxDBWriteParamsParser
 
@@ -454,6 +476,16 @@ batchOptionsParser =
           <> O.help "Batch interval in microseconds."
           <> O.value defaultBatchIntervalMs
       )
+
+outputFileParser :: O.Parser (Maybe FilePath)
+outputFileParser =
+  O.optional
+    ( O.strOption
+        ( O.long "output-file"
+            <> O.metavar "FILE"
+            <> O.help "Eventlog output file."
+        )
+    )
 
 newtype HeapProfOptions = HeapProfOptions
   { legacyHeapProfBreakdown :: Maybe HeapProfBreakdown
