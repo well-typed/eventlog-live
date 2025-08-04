@@ -35,6 +35,8 @@ import Data.Machine.Runner (runT_)
 import Data.Machine.Type (construct, repeatedly)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
+import Data.IntMap.Strict (IntMap)
+import Data.IntMap.Strict qualified as IM
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -189,6 +191,7 @@ data EventProcessorState = EventProcessorState
   , currentHeapProfBreakdown :: Maybe HeapProfBreakdown
   , currentHeapProfSampleEraStack :: [Word64]
   , warnIfMissingHeapProfBreakdown :: Bool
+  , threadLabels :: IntMap Text
   }
 
 newEventProcessorState :: HeapProfOptions -> EventProcessorState
@@ -198,6 +201,7 @@ newEventProcessorState HeapProfOptions{..} =
     , currentHeapProfBreakdown = legacyHeapProfBreakdown
     , currentHeapProfSampleEraStack = []
     , warnIfMissingHeapProfBreakdown = True
+    , threadLabels = IM.empty
     }
 
 -- | Get whether or not an event is a thread event.
@@ -359,18 +363,25 @@ processEventsTick = construct . go . newEventProcessorState
           -- once by reducing them to a thread ID and the resulting thread state.
           _ | isThreadEvent evSpec -> do
             for_ (getThreadState evSpec) $ \threadState -> do
+              let threadId = fromIntegral (thread evSpec) :: Int
               emit
                 "ThreadState"
                 timestamp
                 [ -- NOTE:
                   -- The `thread` field selector is a partial function, so this
                   -- is only safe because `getThreadState` returned a `Just`.
-                  "threadId" := thread evSpec
+                  "threadId" := threadId
+                , "threadLabel" := IM.lookup threadId threadLabels
                 , "evCap" := evCap
                 ]
                 [ "threadState" := threadState
                 ]
             go st
+
+          -- This event announces a thread name.
+          ThreadLabel {..} -> do
+            let threadId = fromIntegral thread :: Int
+            go st {threadLabels = IM.insert threadId threadlabel threadLabels }
 
           --------------------------------------------------------------------
           -- The remaining events are ignored.
