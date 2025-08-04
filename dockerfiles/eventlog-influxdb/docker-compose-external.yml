@@ -6,7 +6,7 @@ services:
     ports:
     - "8086:8086"
     healthcheck:
-      test: "curl -f http://localhost:8086/ping"
+      test: "curl -f http://localhost:8086/health"
       interval: 1m
       timeout: 10s
       retries: 5
