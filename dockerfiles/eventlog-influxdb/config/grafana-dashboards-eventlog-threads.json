@@ -18,9 +18,142 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 2,
   "links": [],
   "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 1000,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "GCRunning": {
+                  "color": "purple",
+                  "index": 3
+                },
+                "GCStopped": {
+                  "color": "transparent",
+                  "index": 4
+                },
+                "ThreadFinal": {
+                  "color": "transparent",
+                  "index": 5
+                },
+                "ThreadQueued": {
+                  "color": "orange",
+                  "index": 1
+                },
+                "ThreadRunning": {
+                  "color": "green",
+                  "index": 0
+                },
+                "ThreadStopped": {
+                  "color": "red",
+                  "index": 2
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "never",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0-16711121739",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "evCap::tag"
+              ],
+              "type": "tag"
+            }
+          ],
+          "measurement": "Capability",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "state"
+                ],
+                "type": "field"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Activity by Capacity",
+      "transformations": [
+        {
+          "id": "timeSeriesTable",
+          "options": {}
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "Capability\\.state { evCap: (\\d+) }",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "state-timeline"
+    },
     {
       "datasource": {
         "type": "influxdb",
@@ -66,7 +199,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "transparent"
+                "color": "transparent",
+                "value": 0
               }
             ]
           }
@@ -77,7 +211,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 8
       },
       "id": 2,
       "options": {
@@ -96,7 +230,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.2",
+      "pluginVersion": "12.2.0-16711121739",
       "targets": [
         {
           "groupBy": [
@@ -107,7 +241,7 @@
               "type": "tag"
             }
           ],
-          "measurement": "ThreadState",
+          "measurement": "Capability",
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT \"threadState\" FROM \"ThreadState\" WHERE $timeFilter GROUP BY \"threadId\"::tag",
@@ -118,176 +252,41 @@
             [
               {
                 "params": [
-                  "threadState"
+                  "state"
                 ],
                 "type": "field"
               }
             ]
           ],
-          "tags": []
+          "tags": [
+            {
+              "key": "state::field",
+              "operator": "!=",
+              "value": "GCRunning"
+            },
+            {
+              "condition": "AND",
+              "key": "state::field",
+              "operator": "!=",
+              "value": "GCStopped"
+            }
+          ]
         }
       ],
       "title": "Activity per Thread",
       "transformations": [
         {
-          "disabled": true,
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "threadId",
-            "emptyValue": "null",
-            "rowField": "Time",
-            "valueField": "threadState"
-          }
-        },
-        {
           "id": "timeSeriesTable",
           "options": {
             "A": {
-              "stat": "firstNotNull"
+              "stat": "lastNotNull"
             }
           }
         },
         {
           "id": "renameByRegex",
           "options": {
-            "regex": "ThreadState\\.threadState { threadId: (\\d+) }",
-            "renamePattern": "$1"
-          }
-        }
-      ],
-      "type": "state-timeline"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "transparent",
-            "mode": "fixed"
-          },
-          "custom": {
-            "axisPlacement": "auto",
-            "fillOpacity": 70,
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": 1000,
-            "lineWidth": 0,
-            "spanNulls": true
-          },
-          "mappings": [
-            {
-              "options": {
-                "ThreadQueued": {
-                  "color": "orange",
-                  "index": 1
-                },
-                "ThreadRunning": {
-                  "color": "green",
-                  "index": 0
-                },
-                "ThreadStopped": {
-                  "color": "red",
-                  "index": 2
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "transparent"
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "id": 1,
-      "options": {
-        "alignValue": "left",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "mergeValues": true,
-        "rowHeight": 0.9,
-        "showValue": "never",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.0.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "groupBy": [
-            {
-              "params": [
-                "evCap::tag"
-              ],
-              "type": "tag"
-            }
-          ],
-          "measurement": "ThreadState",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT \"threadState\" FROM \"ThreadState\" WHERE $timeFilter GROUP BY \"threadId\"::tag",
-          "rawQuery": false,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "threadState"
-                ],
-                "type": "field"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "title": "Activity per Capability",
-      "transformations": [
-        {
-          "disabled": true,
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "evCap",
-            "emptyValue": "null",
-            "rowField": "Time",
-            "valueField": "threadState"
-          }
-        },
-        {
-          "id": "timeSeriesTable",
-          "options": {}
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "ThreadState\\.threadState { evCap: (\\d+) }",
+            "regex": "Capability\\.state { threadId: (\\d+) }",
             "renamePattern": "$1"
           }
         }
