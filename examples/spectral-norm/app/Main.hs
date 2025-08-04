@@ -16,7 +16,6 @@
 {-# LANGUAGE BangPatterns, MagicHash #-}
 {-# OPTIONS_GHC -fexcess-precision #-}
 
-import System.Environment
 import Data.Foldable (for_)
 import Foreign.Marshal.Array
 import Foreign
@@ -72,7 +71,7 @@ await (Cyclic k waitsVar) = do
       takeMVar var
 
 newCyclicBarrier :: Int -> IO CyclicBarrier
-newCyclicBarrier k = liftM (Cyclic k) (newMVar (k, []))
+newCyclicBarrier k = Cyclic k <$> newMVar (k, [])
 
 powerMethod :: Int -> Int -> Reals -> Reals -> IO ()
 powerMethod z n u v = allocaArray n $ \ !t -> do
@@ -83,9 +82,12 @@ powerMethod z n u v = allocaArray n $ \ !t -> do
         await barrier
         timesAtv n t d l r
         await barrier
-  let thread !l !r = foldr (>>) (return ()) $ replicate z $ do
-        timesAtAv u v l r
-        timesAtAv v u l r
+  let thread !l !r = do
+        threadId <- myThreadId
+        labelThread threadId (printf "powerMethod#thread(%d,%d)" l r)
+        replicateM_ z $ do
+          timesAtAv u v l r
+          timesAtAv v u l r
   let go l = case l + chunk of
         r | r < n -> forkIO (thread l r) >> go r
           | otherwise -> thread l n
@@ -98,7 +100,7 @@ timesAv !n !u !au !l !r = go l where
       let avsum !j !acc
             | j < n = do
               !uj <- peekElemOff u j
-              avsum (j+1) (acc + ((aij i j) * uj))
+              avsum (j+1) (acc + (aij i j * uj))
             | otherwise = pokeElemOff au i acc >> go (i+1)
       avsum 0 0
 
@@ -110,7 +112,7 @@ timesAtv !n !u !a !l !r = go l
       let atvsum !j !acc
             | j < n = do
                 !uj <- peekElemOff u j
-                atvsum (j+1) (acc + ((aij j i) * uj))
+                atvsum (j+1) (acc + (aij j i * uj))
             | otherwise = pokeElemOff a i acc >> go (i+1)
       atvsum 0 0
 
