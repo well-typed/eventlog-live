@@ -1,16 +1,23 @@
 module GHC.Eventlog.Live.Machines (
   -- * Event Processing
   sourceHandleWait,
-  defaultChunkSizeBytes,
   fileSink,
+  decodeEvent,
+  defaultChunkSizeBytes,
 
   -- * Batch Event Processing
   Tick (..),
+  batchByTick,
+  liftTick,
+  dropTick,
+  onlyTick,
   sourceHandleBatch,
   fileSinkBatch,
-  batchByTick,
-  dropTick,
-  decodeEventsTick,
+  decodeEventBatch,
+
+  -- * Timestamps
+  setStartTime,
+  tryMakeAbsolute,
 
   -- * Event Order
   sortEventsUpTo,
@@ -22,15 +29,16 @@ module GHC.Eventlog.Live.Machines (
 ) where
 
 import Control.Exception (Exception, catch, throwIO)
-import Control.Monad (when)
+import Control.Monad (forever, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
 import Data.Foldable (traverse_)
 import Data.Function (fix)
+import Data.Functor ((<&>))
 import Data.Int (Int64)
 import Data.List qualified as L
-import Data.Machine (Is, MachineT, Moore (..), PlanT, Process, ProcessT, await, construct, repeatedly, yield, (~>))
+import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, repeatedly, yield, (~>))
 import Data.Ord (comparing)
 import Data.Text (Text)
 import Data.Void (Void)
@@ -184,12 +192,57 @@ batchByTick = construct start
       Tick -> yield (reverse acc) >> start
 
 dropTick :: Process (Tick a) a
-dropTick = repeatedly go
- where
-  go =
+dropTick =
+  repeatedly $
     await >>= \case
       Item a -> yield a
       Tick -> pure ()
+
+onlyTick :: Process (Tick a) ()
+onlyTick =
+  repeatedly $
+    await >>= \case
+      Tick -> yield ()
+      Item{} -> pure ()
+
+--------------------------------------------------------------------------------
+-- Lift a machine to a machine that passes on ticks unchanged
+
+{- |
+
+Constructs the following machine:
+
+@
+           ┌─(if Tick)────────────────────┐
+  [ Tick a ]                              [ Tick b ]
+           └─(if Item)─( ProcessT m a b )─┘
+@
+-}
+liftTick ::
+  (Monad m) =>
+  ProcessT m a b ->
+  ProcessT m (Tick a) (Tick b)
+liftTick m =
+  MachineT $
+    runMachineT m <&> \case
+      Stop ->
+        Stop
+      Yield o k ->
+        Yield (Item o) (liftTick k)
+      Await (onNext :: t -> ProcessT m a b) Refl onStop ->
+        await'
+       where
+        await' = Await onNext' Refl onStop'
+         where
+          onNext' :: Tick a -> ProcessT m (Tick a) (Tick b)
+          onNext' = \case
+            Tick ->
+              MachineT . pure . Yield Tick $
+                MachineT . pure $
+                  await'
+            Item a -> liftTick (onNext a)
+          onStop' :: ProcessT m (Tick a) (Tick b)
+          onStop' = liftTick onStop
 
 -------------------------------------------------------------------------------
 -- Decoding events
@@ -199,21 +252,60 @@ Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.
 
 Throws 'DecodeError' on error.
 -}
-decodeEventsTick :: (MonadIO m) => ProcessT m (Tick BS.ByteString) (Tick Event)
-decodeEventsTick = construct $ loop decodeEventLog
+decodeEvent :: (MonadIO m) => ProcessT m BS.ByteString Event
+decodeEvent = construct $ loop decodeEventLog
  where
-  loop :: (MonadIO m) => Decoder a -> PlanT (Is (Tick BS.ByteString)) (Tick a) m ()
+  loop :: (MonadIO m) => Decoder a -> PlanT (Is BS.ByteString) a m ()
   loop Done{} = pure ()
-  loop (Consume k) =
-    await >>= \case
-      Item chunk -> loop (k chunk)
-      Tick -> yield Tick >> loop (Consume k)
-  loop (Produce a d') = yield (Item a) >> loop d'
+  loop (Consume k) = await >>= \chunk -> loop (k chunk)
+  loop (Produce a d') = yield a >> loop d'
   loop (Error _ err) = liftIO $ throwIO $ DecodeError err
+
+{- |
+Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.
+
+Throws 'DecodeError' on error.
+-}
+decodeEventBatch :: (MonadIO m) => ProcessT m (Tick BS.ByteString) (Tick Event)
+decodeEventBatch = liftTick decodeEvent
 
 newtype DecodeError = DecodeError String deriving (Show)
 
 instance Exception DecodeError
+
+{- | Uses the provided getter and setter to set an absolute timestamp for every
+  event issued /after/ the `WallClockTime` event. The provided setter should
+  /get/ the old relative timestamp and should /set/ the new absolute timestamp.
+
+  This machine swallows the first and only `WallClockTime` event.
+-}
+setStartTime ::
+  forall m i o.
+  (Monad m) =>
+  -- | Getter that gets event info from the input.
+  (i -> EventInfo) ->
+  -- | Setter that adds the start time timestamp.
+  (i -> Maybe Timestamp -> o) ->
+  ProcessT m i o
+setStartTime getEvSpec setStartTimeNs = construct start
+ where
+  start =
+    await >>= \case
+      ev
+        -- The `WallClockTime` event announces the wall-clock time at which the
+        -- process was started.
+        | WallClockTime{..} <- getEvSpec ev -> do
+            -- This will start overflowing on Sunday, 21 July 2554 23:34:33, UTC.
+            let !startTimeNs = sec * 1_000_000_000 + fromIntegral nsec
+            -- We do not re-emit the `WallClockTime` event.
+            continue startTimeNs
+        | otherwise ->
+            yield (setStartTimeNs ev Nothing) >> start
+  continue startTimeNs = mappingPlan (\ev -> setStartTimeNs ev (Just startTimeNs))
+
+tryMakeAbsolute :: Event -> Maybe Timestamp -> Event
+tryMakeAbsolute ev@Event{..} startTimeNs =
+  ev {evTime = maybe evTime (evTime +) startTimeNs}
 
 -------------------------------------------------------------------------------
 -- Sorting the eventlog event stream
@@ -277,7 +369,7 @@ sortEventsUpTo flushoutIntervalNs = construct start
 
   timeSpec :: Clock.TimeSpec -> Int64
   timeSpec ts
-    | ns >= 0 = fromIntegral ns
+    | ns >= 0 = ns
     | otherwise = 0
    where
     ns = Clock.sec ts * 1_000_000_000 + Clock.nsec ts
@@ -336,3 +428,9 @@ delimit = construct . go
       _ -> do
         when s $ yield e
         go mm
+
+-------------------------------------------------------------------------------
+-- Internal Helpers
+
+mappingPlan :: (a -> b) -> PlanT (Is a) b m a
+mappingPlan f = forever (await >>= \a -> yield (f a))

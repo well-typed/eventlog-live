@@ -37,7 +37,7 @@ import qualified System.Remote.Monitoring
 
 import GHC.Eventlog.Counters (Counters (..), ThreadState (..), count, newCounters)
 import GHC.Eventlog.Counters.EKG (registerCounters)
-import GHC.Eventlog.Live.Machines (Tick (..), decodeEventsTick, fileSinkBatch, handleOutOfOrderEvents, sortEventsUpTo, sourceHandleWait)
+import GHC.Eventlog.Live.Machines (Tick (..), decodeEventBatch, fileSinkBatch, handleOutOfOrderEvents, sortEventsUpTo, sourceHandleWait)
 import GHC.RTS.Events (Event)
 
 import Data.Machine (MachineT, ProcessT, await, repeatedly, runT_, (~>))
@@ -59,7 +59,7 @@ main = displayConsoleRegions $ do
 
   let events :: ProcessT IO (Tick BS.ByteString) Event
       events =
-        decodeEventsTick
+        decodeEventBatch
           ~> sortEventsUpTo 1_000_000_000
           ~> handleOutOfOrderEvents (curry print)
 

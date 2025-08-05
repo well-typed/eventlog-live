@@ -37,7 +37,7 @@ import Options.Applicative qualified as O
 import System.Clock (TimeSpec)
 import System.Clock qualified as Clock
 import System.IO qualified as IO
-import Text.Printf (printf)
+import Text.Printf (HPrintfType, hPrintf)
 
 --------------------------------------------------------------------------------
 -- Main function
@@ -369,15 +369,23 @@ processEventsTick = construct . go . newEventProcessorState
 --------------------------------------------------------------------------------
 -- Warnings
 
+warnMissingHeapProfBreakdown :: IO ()
+warnMissingHeapProfBreakdown =
+  warnf
+    "Warning: Cannot infer heap profile breakdown.\n\
+    \         If your binary was compiled with a GHC version prior to 9.14,\n\
+    \         you must also pass the heap profile type to this executable.\n\
+    \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+
 warnMismatchedHeapProfSampleEras :: Word64 -> Maybe Word64 -> IO ()
 warnMismatchedHeapProfSampleEras endEra = \case
   Nothing ->
-    warn $ printf "Warning: Eventlog closed era %d, but there is no current era." endEra
+    warnf "Warning: Eventlog closed era %d, but there is no current era." endEra
   Just currentEra ->
-    warn $ printf "Warning: Eventlog closed era %d, but the current era is era %d." endEra currentEra
+    warnf "Warning: Eventlog closed era %d, but the current era is era %d." endEra currentEra
 
-warn :: String -> IO ()
-warn = IO.hPutStrLn IO.stderr
+warnf :: (HPrintfType r) => String -> r
+warnf = hPrintf IO.stderr
 
 --------------------------------------------------------------------------------
 -- InfluxDB Batch Writer

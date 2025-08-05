@@ -42,6 +42,6 @@ executable collatzer
     , ghc-events             >=0.17.0
     , machines
     , network
-    , optparse-applicative   ^>=0.16.1.0
+    , optparse-applicative   >=0.16.1
     , stm
     , text

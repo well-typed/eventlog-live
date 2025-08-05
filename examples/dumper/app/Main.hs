@@ -13,7 +13,6 @@ import Data.Machine.Type (MachineT, repeatedly)
 import Data.Void (Void)
 import Data.Word (Word64)
 import GHC.Eventlog.Live
-import GHC.Eventlog.Live.Machines (decodeEventsTick, dropTick, sourceHandleWait)
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event)
 import qualified Network.Socket as S
