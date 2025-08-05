@@ -15,9 +15,13 @@ packages:
 -- NOTE (2025-06-17): Required for GHC version 9.12
 if impl(ghc >= 9.12)
   allow-newer:
+    , ekg-eventlog-core:bytestring
     , ghc-events:base
     , hashable:base
     , influxdb:base
+    , proto-lens:base
+    , proto-lens:ghc-prim
+    , proto-lens-runtime:base
 
 if impl(ghc >= 9.14)
   allow-newer:
