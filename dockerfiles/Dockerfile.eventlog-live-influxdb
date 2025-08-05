@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1.7-labs
+
+# To build this image, run:
+# docker build --tag wenkokke/eventlog-live-influxdb:0.1.0.0 --file ./dockerfiles/Dockerfile.eventlog-live-influxdb .
+
+# Use the Haskell image with GHC 9.10.1
+# See: https://hub.docker.com/_/haskell
+FROM haskell:9.10-slim-bullseye AS build
+
+# Configure eventlog-live-influxdb
+ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
+ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
+ARG GHC_EVENTLOG_INFLUXDB_HOST="influxdb"
+ENV GHC_EVENTLOG_INFLUXDB_HOST=${GHC_EVENTLOG_INFLUXDB_HOST}
+ARG GHC_EVENTLOG_INFLUXDB_DB="eventlog"
+ENV GHC_EVENTLOG_INFLUXDB_DB=${GHC_EVENTLOG_INFLUXDB_DB}
+ARG GHC_EVENTLOG_INFLUXDB_USERNAME="admin"
+ENV GHC_EVENTLOG_INFLUXDB_USERNAME=${GHC_EVENTLOG_INFLUXDB_USERNAME}
+ARG GHC_EVENTLOG_INFLUXDB_PASSWORD="admin"
+ENV GHC_EVENTLOG_INFLUXDB_PASSWORD=${GHC_EVENTLOG_INFLUXDB_PASSWORD}
+
+# Copy required packages to container
+WORKDIR "/eventlog-live"
+COPY --parents \
+  "./eventlog-live/app-influxdb/Main.hs" \
+  "./eventlog-live/eventlog-live.cabal" \
+  "./eventlog-live/LICENSE" \
+  "./eventlog-live/src/GHC/Eventlog/Live.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machines.hs" \
+  "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
+  "/eventlog-live/"
+
+# Create cabal.project file
+COPY <<EOF /eventlog-live/cabal.project
+packages: eventlog-live
+EOF
+
+# Build eventlog-live-influxdb
+RUN <<EOF
+cabal update
+mkdir "/eventlog-live/bin"
+cabal install \
+    --overwrite-policy=always \
+    --install-method=copy \
+    --installdir="/eventlog-live/bin" \
+    eventlog-live-influxdb
+EOF
+
+# Copy eventlog-live-influxdb to output stage
+FROM debian:bullseye-slim AS output
+COPY --from=build "/eventlog-live/bin/eventlog-live-influxdb" "/bin/eventlog-live-influxdb"
+
+# Run command
+ENTRYPOINT ["/bin/eventlog-live-influxdb"]

@@ -6,7 +6,6 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,16 +21,13 @@ import Control.Lens ((^.))
 import Control.Lens.Setter (set)
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.ByteString qualified as BS
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.Int (Int64)
 import Data.Kind (Constraint, Type)
 import Data.List (uncons)
-import Data.Machine.Fanout (fanout)
 import Data.Machine.Is (Is)
 import Data.Machine.Plan (PlanT (..), await, yield)
 import Data.Machine.Process (ProcessT, (~>))
-import Data.Machine.Runner (runT_)
 import Data.Machine.Type (construct, repeatedly)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
@@ -45,19 +41,19 @@ import Data.Word (Word32, Word64, Word8)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
-import GHC.Eventlog.Machines (Tick (..), batchByTick, decodeEventsTick, sourceHandleInterval)
 import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), ThreadStopStatus (..))
 import GHC.RTS.Events.Analysis qualified as Analysis
 import GHC.RTS.Events.Analysis.Thread (ThreadState (..))
 import GHC.RTS.Events.Analysis.Thread qualified as Analysis.Thread
+import GHC.Eventlog.Live
+import GHC.Eventlog.Live.Options
 import GHC.Stack (HasCallStack)
-import Network.Socket qualified as S
 import Options.Applicative qualified as O
 import System.Clock (TimeSpec)
 import System.Clock qualified as Clock
-import System.IO (Handle)
 import System.IO qualified as IO
 import Text.Printf (printf)
+import GHC.Eventlog.Live.Machines (batchByTick)
 
 --------------------------------------------------------------------------------
 -- Main function
@@ -66,39 +62,16 @@ import Text.Printf (printf)
 main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
-  let BatchOptions{..} = batchOptions
-  eventlogHandle <- connect eventlogSocket
-  let fromSocket =
-        sourceHandleInterval batchIntervalMs defaultChunkSizeBytes eventlogHandle
   let toInfluxDB =
-        decodeEventsTick
-          ~> processEventsTick heapProfOptions
+             processEventsTick maybeHeapProfBreakdown
           ~> batchByTick
           ~> influxDBWriter influxDBWriteParams
-  case maybeOutputFile of
-    Nothing ->
-      runT_ $
-        fromSocket ~> toInfluxDB
-    Just outputFile ->
-      IO.withFile outputFile IO.WriteMode $ \outputFileHandle -> do
-        let toFile = fileSink outputFileHandle
-        runT_ $
-          fromSocket ~> fanout [toFile, toInfluxDB]
-
-{- |
-Eventlog chunk size in bytes.
-This should be equal to the page size.
--}
-defaultChunkSizeBytes :: Int
-defaultChunkSizeBytes = 4096
-
-{- |
-File sink for optional eventlog output file.
--}
-fileSink :: Handle -> ProcessT IO (Tick BS.ByteString) Void
-fileSink handle =
-  repeatedly $
-    await >>= liftIO . traverse_ (BS.hPut handle)
+  runWithEventlogSocket
+    batchInterval
+    Nothing -- chunk size (bytes)
+    eventlogSocket
+    maybeEventlogLogFile
+    toInfluxDB
 
 --------------------------------------------------------------------------------
 -- Writing to InfluxDB
@@ -194,11 +167,11 @@ data EventProcessorState = EventProcessorState
   , threadLabels :: IntMap Text
   }
 
-newEventProcessorState :: HeapProfOptions -> EventProcessorState
-newEventProcessorState HeapProfOptions{..} =
+newEventProcessorState :: Maybe HeapProfBreakdown -> EventProcessorState
+newEventProcessorState maybeHeapProfBreakdown =
   EventProcessorState
     { startRealtime = Nothing
-    , currentHeapProfBreakdown = legacyHeapProfBreakdown
+    , currentHeapProfBreakdown = maybeHeapProfBreakdown
     , currentHeapProfSampleEraStack = []
     , warnIfMissingHeapProfBreakdown = True
     , threadLabels = IM.empty
@@ -227,7 +200,7 @@ getThreadState = \case
   StopThread{} -> Just ThreadStopped
   _ -> Nothing
 
-processEventsTick :: forall m. (MonadIO m) => HeapProfOptions -> ProcessT m (Tick Event) (Tick Line)
+processEventsTick :: forall m. (MonadIO m) => Maybe HeapProfBreakdown -> ProcessT m (Tick Event) (Tick Line)
 processEventsTick = construct . go . newEventProcessorState
  where
   go :: (MonadIO m) => EventProcessorState -> PlanT (Is (Tick Event)) (Tick Line) m ()
@@ -410,15 +383,7 @@ processEventsTick = construct . go . newEventProcessorState
           _ignored -> go st
 
 --------------------------------------------------------------------------------
--- Logging
-
-warnMissingHeapProfBreakdown :: IO ()
-warnMissingHeapProfBreakdown =
-  IO.hPutStrLn IO.stderr
-    "Warning: Cannot infer heap profile breakdown.\n\
-    \         If your binary was compiled with a GHC version prior to 9.14,\n\
-    \         you must also pass the heap profile type to this executable.\n\
-    \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+-- Warnings
 
 warnMismatchedHeapProfSampleEras :: Word64 -> Maybe Word64 -> IO ()
 warnMismatchedHeapProfSampleEras endEra = \case
@@ -442,19 +407,6 @@ influxDBWriter writeParams = repeatedly go
         liftIO (I.writeBatch writeParams batch)
 
 --------------------------------------------------------------------------------
--- Connecting to the eventlog socket
---------------------------------------------------------------------------------
-
-connect :: EventlogSocket -> IO Handle
-connect = \case
-  EventlogSocketUnix socketName -> do
-    socket <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
-    S.connect socket (S.SockAddrUnix socketName)
-    handle <- S.socketToHandle socket IO.ReadMode
-    IO.hSetBuffering handle IO.NoBuffering
-    pure handle
-
---------------------------------------------------------------------------------
 -- Options
 --------------------------------------------------------------------------------
 
@@ -463,9 +415,9 @@ optionsInfo = O.info (optionsParser O.<**> O.helper) O.idm
 
 data Options = Options
   { eventlogSocket :: EventlogSocket
-  , batchOptions :: BatchOptions
-  , maybeOutputFile :: Maybe FilePath
-  , heapProfOptions :: HeapProfOptions
+  , batchInterval :: Int
+  , maybeEventlogLogFile :: Maybe FilePath
+  , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , influxDBWriteParams :: I.WriteParams
   }
 
@@ -473,81 +425,13 @@ optionsParser :: O.Parser Options
 optionsParser =
   Options
     <$> eventlogSocketParser
-    <*> batchOptionsParser
-    <*> outputFileParser
-    <*> heapProfOptionsParser
+    <*> batchIntervalParser
+    <*> O.optional eventlogLogFileParser
+    <*> O.optional heapProfBreakdownParser
     <*> influxDBWriteParamsParser
 
-newtype EventlogSocket
-  = EventlogSocketUnix FilePath
-
-eventlogSocketParser :: O.Parser EventlogSocket
-eventlogSocketParser = socketUnixParser
- where
-  socketUnixParser =
-    EventlogSocketUnix
-      <$> O.strOption
-        ( O.long "eventlog-socket"
-            <> O.metavar "SOCKET"
-            <> O.help "Eventlog source Unix socket."
-        )
-
-newtype BatchOptions = BatchOptions
-  { batchIntervalMs :: Int
-  }
-
-defaultBatchIntervalMs :: Int
-defaultBatchIntervalMs = 1_000
-
-batchOptionsParser :: O.Parser BatchOptions
-batchOptionsParser =
-  BatchOptions
-    <$> O.option
-      O.auto
-      ( O.long "batch-interval"
-          <> O.metavar "BATCH_INTERVAL"
-          <> O.help "Batch interval in microseconds."
-          <> O.value defaultBatchIntervalMs
-      )
-
-outputFileParser :: O.Parser (Maybe FilePath)
-outputFileParser =
-  O.optional
-    ( O.strOption
-        ( O.long "output-file"
-            <> O.metavar "FILE"
-            <> O.help "Eventlog output file."
-        )
-    )
-
-newtype HeapProfOptions = HeapProfOptions
-  { legacyHeapProfBreakdown :: Maybe HeapProfBreakdown
-  }
-
-heapProfOptionsParser :: O.Parser HeapProfOptions
-heapProfOptionsParser =
-  HeapProfOptions
-    <$> O.optional
-      ( O.option
-          (O.eitherReader heapProfileBreakdownParser)
-          ( O.short 'h'
-              <> O.metavar "HEAP_PROFILE_BREAKDOWN"
-              <> O.help "Heap profile breakdown (Tcmdyrbi)"
-          )
-      )
-
-heapProfileBreakdownParser :: String -> Either String HeapProfBreakdown
-heapProfileBreakdownParser = \case
-  "T" -> Right HeapProfBreakdownClosureType
-  "c" -> Right HeapProfBreakdownCostCentre
-  "m" -> Right HeapProfBreakdownModule
-  "d" -> Right HeapProfBreakdownClosureDescr
-  "y" -> Right HeapProfBreakdownTypeDescr
-  "e" -> Left "Unsupported heap profile breakdown by era."
-  "r" -> Right HeapProfBreakdownRetainer
-  "b" -> Right HeapProfBreakdownBiography
-  "i" -> Right HeapProfBreakdownInfoTable
-  str -> Left $ "Unsupported heap profile breakdown -h" <> str
+--------------------------------------------------------------------------------
+-- InfluxDB Configuration
 
 influxDBWriteParamsParser :: O.Parser I.WriteParams
 influxDBWriteParamsParser = params4
