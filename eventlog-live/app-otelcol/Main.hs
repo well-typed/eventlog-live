@@ -1,15 +1,25 @@
 module Main (main) where
 
-import Options.Applicative qualified as O
-import GHC.RTS.Events (HeapProfBreakdown (..))
+import Data.Machine (ProcessT)
+import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.Eventlog.Live
 import GHC.Eventlog.Live.Machines (batchByTick)
 import GHC.Eventlog.Live.Options
+import Options.Applicative qualified as O
+import System.Clock (TimeSpec)
+import System.Clock qualified as Clock
 
 main :: IO ()
 main = do
   Options {..} <- O.execParser options
   putStrLn "Hello, Wen!"
+
+--------------------------------------------------------------------------------
+-- Machines
+--------------------------------------------------------------------------------
+
+getStartTime :: ProcessT m Event (a, Maybe Clock.TimeSpec)
+getStartTime = undefined
 
 --------------------------------------------------------------------------------
 -- Options

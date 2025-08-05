@@ -94,6 +94,7 @@ executable eventlog-live-otelcol
   hs-source-dirs: app-otelcol
   build-depends:
     , base
+    , clock
     , eventlog-live
     , eventlog-live:eventlog-live-machines
     , eventlog-live:eventlog-live-options
