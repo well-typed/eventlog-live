@@ -3,9 +3,9 @@
 # To build this image, run:
 # docker build --tag wenkokke/collatzer:0.1.0.0 --file ./dockerfiles/Dockerfile.collatzer .
 
-# Use the Haskell image with GHC 9.12.2
+# Use the Haskell image with GHC 9.10
 # See: https://hub.docker.com/_/haskell
-FROM haskell:9.12-slim-bookworm AS build
+FROM haskell:9.10-slim-bullseye AS build
 
 # Configure collatzer
 ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
@@ -14,27 +14,29 @@ ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-    "./eventlog-counters-ekg/eventlog-counters-ekg.cabal" \
-    "./eventlog-counters-ekg/LICENSE" \
-    "./eventlog-counters-ekg/src/GHC/Eventlog/Counters/EKG.hs" \
-    "./eventlog-counters/eventlog-counters.cabal" \
-    "./eventlog-counters/LICENSE" \
-    "./eventlog-counters/src/GHC/Eventlog/Counters.hs" \
-    "./eventlog-machines/eventlog-machines.cabal" \
-    "./eventlog-machines/LICENSE" \
-    "./eventlog-machines/src/GHC/Eventlog/Machines.hs" \
-    "./examples/collatzer/app/Main.hs" \
-    "./examples/collatzer/collatzer.cabal" \
-    "./examples/collatzer/LICENSE" \
-    "/eventlog-live/"
+  "./eventlog-counters-ekg/eventlog-counters-ekg.cabal" \
+  "./eventlog-counters-ekg/LICENSE" \
+  "./eventlog-counters-ekg/src/GHC/Eventlog/Counters/EKG.hs" \
+  "./eventlog-counters/eventlog-counters.cabal" \
+  "./eventlog-counters/LICENSE" \
+  "./eventlog-counters/src/GHC/Eventlog/Counters.hs" \
+  "./eventlog-live/app-influxdb/Main.hs" \
+  "./eventlog-live/eventlog-live.cabal" \
+  "./eventlog-live/LICENSE" \
+  "./eventlog-live/src/GHC/Eventlog/Live.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machines.hs" \
+  "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
+  "./examples/collatzer/app/Main.hs" \
+  "./examples/collatzer/collatzer.cabal" \
+  "./examples/collatzer/LICENSE" \
+  "/eventlog-live/"
 
 # Create cabal.project file
 COPY <<EOF /eventlog-live/cabal.project
-packages:
-  eventlog-counters-ekg
-  eventlog-counters
-  eventlog-machines
-  examples/collatzer
+packages: eventlog-counters-ekg
+packages: eventlog-counters
+packages: eventlog-live
+packages: examples/collatzer
 EOF
 
 # Build collatzer
@@ -49,7 +51,7 @@ cabal install \
 EOF
 
 # Copy collatzer to output stage
-FROM debian:bookworm-slim AS output
+FROM debian:bullseye-slim AS output
 COPY --from=build "/eventlog-live/bin/collatzer" "/bin/collatzer"
 
 # Run command
