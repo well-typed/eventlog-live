@@ -2,3 +2,6 @@ dist-newstyle/
 *.eventlog
 *.hp
 *.prof
+
+# Data files for OpenTelemetry Collector & Prometheus
+dockerfiles/eventlog-live-otelcol/data/

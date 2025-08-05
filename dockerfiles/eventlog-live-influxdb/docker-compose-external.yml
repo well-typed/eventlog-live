@@ -1,6 +1,6 @@
 services:
   influxdb:
-    container_name: influxdb
+    # container_name: influxdb
     image: "influxdb:1.8"
     restart: "always"
     ports:
@@ -17,7 +17,7 @@ services:
       INFLUXDB_ADMIN_PASSWORD: "admin"
 
   grafana:
-    container_name: grafana
+    # container_name: grafana
     image: "grafana/grafana"
     restart: "always"
     ports:
