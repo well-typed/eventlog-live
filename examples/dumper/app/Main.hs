@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
@@ -13,7 +12,9 @@ import Data.Machine.Runner (runT_)
 import Data.Machine.Type (MachineT, repeatedly)
 import Data.Void (Void)
 import Data.Word (Word64)
-import GHC.Eventlog.Machines (decodeEventsTick, dropTick, sourceHandleWait)
+import GHC.Eventlog.Live
+import GHC.Eventlog.Live.Machines (decodeEventsTick, dropTick, sourceHandleWait)
+import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event)
 import qualified Network.Socket as S
 import qualified Options.Applicative as O
@@ -27,21 +28,23 @@ import qualified Text.Regex.TDFA as RE
 
 main :: IO ()
 main = do
-  Options{..} <- O.execParser optionsInfo
-  let maybePattern = RE.makeRegex <$> eventlogPattern
-  let EventlogSourceOptions{..} = eventlogSourceOptions
-  eventlogHandle <- connect eventlogSourceSocket
-  let eventlogSource = sourceHandleWait eventlogSourceTimeoutMcs eventlogSourceChunkSizeBytes eventlogHandle
-  runT_ (eventlogSource ~> decodeEventsTick ~> dropTick ~> printSink maybePattern)
+  Options{..} <- O.execParser options
+  runWithEventlogSocket
+    batchInterval
+    Nothing
+    eventlogSocket
+    Nothing
+    $ printSink (RE.makeRegex <$> eventlogPattern)
 
 -- | Filter entries and print them to standard output.
 printSink :: (Show a) => Maybe RE.Regex -> ProcessT IO a Void
 printSink maybePattern = repeatedly go
-  where
-    go =
-      show <$> await >>= \str ->
-        when (maybe True (`RE.matchTest` str) maybePattern) $
-          liftIO . putStrLn $ str
+ where
+  go =
+    await >>= \ev -> do
+      let evStr = show ev
+      when (maybe True (`RE.matchTest` evStr) maybePattern) . liftIO $
+        putStrLn evStr
 
 -- | Connect to eventlog socket.
 connect :: EventlogSocket -> IO Handle
@@ -57,75 +60,25 @@ connect = \case
 -- Options
 --------------------------------------------------------------------------------
 
-optionsInfo :: O.ParserInfo Options
-optionsInfo = O.info (optionsParser O.<**> O.helper) O.idm
+options :: O.ParserInfo Options
+options = O.info (optionsParser O.<**> O.helper) O.idm
 
 data Options = Options
-  { eventlogSourceOptions :: EventlogSourceOptions
+  { eventlogSocket :: EventlogSocket
+  , batchInterval :: Int
   , eventlogPattern :: Maybe ByteString
   }
-  deriving (Show)
 
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> eventlogSourceOptionsParser
-    <*> O.optional
-    ( O.strOption
-      ( O.short 'P'
-          <> O.long "pattern"
-          <> O.help "Regular expression to filter events"
-          <> O.metavar "PATTERN"
-      )
-    )
-
-data EventlogSourceOptions = EventlogSourceOptions
-  { eventlogSourceSocket :: EventlogSocket
-  -- ^ Eventlog source socket.
-  , eventlogSourceTimeoutMcs :: Int
-  -- ^ Eventlog source timeout in microseconds.
-  , eventlogSourceChunkSizeBytes :: Int
-  -- ^ Eventlog source chunk size in bytes.
-  , eventlogSourceIntervalMcs :: Word64
-  -- ^ Eventlog source flush interval.
-  }
-  deriving (Show)
-
-eventlogSourceOptionsParser :: O.Parser EventlogSourceOptions
-eventlogSourceOptionsParser =
-  EventlogSourceOptions
     <$> eventlogSocketParser
-    <*> O.option
-      O.auto
-      ( O.long "timeout"
-          <> O.help "Eventlog source timeout in microseconds"
-          <> O.value 1_000_000
+    <*> batchIntervalParser
+    <*> O.optional
+      ( O.strOption
+          ( O.short 'P'
+              <> O.long "pattern"
+              <> O.help "Regular expression to filter events"
+              <> O.metavar "PATTERN"
+          )
       )
-    <*> O.option
-      O.auto
-      ( O.long "chuck-size"
-          <> O.help "Eventlog source chuck size in bytes"
-          <> O.value 4096
-      )
-    <*> O.option
-      O.auto
-      ( O.long "interval"
-          <> O.help "Eventlog source interval in microseconds"
-          <> O.value 4096
-      )
-
-newtype EventlogSocket
-  = EventlogSocketUnix FilePath
-  deriving (Show)
-
-eventlogSocketParser :: O.Parser EventlogSocket
-eventlogSocketParser = socketUnixParser
- where
-  socketUnixParser =
-    EventlogSocketUnix
-      <$> O.strOption
-        ( O.short 'U'
-            <> O.long "unix"
-            <> O.metavar "SOCKET"
-            <> O.help "Eventlog source Unix socket."
-        )
