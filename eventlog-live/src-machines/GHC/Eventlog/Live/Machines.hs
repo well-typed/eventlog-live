@@ -1,0 +1,338 @@
+module GHC.Eventlog.Live.Machines (
+  -- * Event Processing
+  sourceHandleWait,
+  defaultChunkSizeBytes,
+  fileSink,
+
+  -- * Batch Event Processing
+  Tick (..),
+  sourceHandleBatch,
+  fileSinkBatch,
+  batchByTick,
+  dropTick,
+  decodeEventsTick,
+
+  -- * Event Order
+  sortEventsUpTo,
+  handleOutOfOrderEvents,
+
+  -- * Delimiting
+  between,
+  delimit,
+) where
+
+import Control.Exception (Exception, catch, throwIO)
+import Control.Monad (when)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Data.ByteString qualified as BS
+import Data.Foldable (traverse_)
+import Data.Function (fix)
+import Data.Int (Int64)
+import Data.List qualified as L
+import Data.Machine (Is, MachineT, Moore (..), PlanT, Process, ProcessT, await, construct, repeatedly, yield, (~>))
+import Data.Ord (comparing)
+import Data.Text (Text)
+import Data.Void (Void)
+import Data.Word (Word64)
+import GHC.Clock (getMonotonicTimeNSec)
+import GHC.RTS.Events (Event (..), EventInfo (..), Timestamp)
+import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
+import System.Clock qualified as Clock
+import System.IO (Handle, hWaitForInput)
+import System.IO.Error (isEOFError)
+
+-------------------------------------------------------------------------------
+-- Socket source
+
+{- |
+A source which waits for input using 'hWaitForInput',
+produces 'Tick' events on timeout.
+-}
+sourceHandleWait ::
+  (MonadIO m) =>
+  -- | The wait timeout in milliseconds.
+  Int ->
+  -- | The number of bytes to read.
+  Int ->
+  -- | The eventlog socket handle.
+  Handle ->
+  MachineT m k (Tick BS.ByteString)
+sourceHandleWait timeoutMs chunkSizeBytes handle =
+  construct $ fix $ \loop -> do
+    ready <- liftIO $ hWaitForInput' handle timeoutMs
+    case ready of
+      Ready -> do
+        bs <- liftIO $ BS.hGetSome handle chunkSizeBytes
+        yield (Item bs)
+        loop
+      NotReady -> do
+        yield Tick
+        loop
+      EOF ->
+        pure ()
+
+-------------------------------------------------------------------------------
+-- Socket source with batches
+
+sourceHandleBatch ::
+  (MonadIO m) =>
+  -- | The batch interval in milliseconds.
+  Int ->
+  -- | The number of bytes to read.
+  Int ->
+  -- | The eventlog socket handle.
+  Handle ->
+  MachineT m k (Tick BS.ByteString)
+sourceHandleBatch batchIntervalMs chunkSizeBytes handle = construct start
+ where
+  start = do
+    startTimeMs <- liftIO getMonotonicTimeMs
+    batch startTimeMs
+  batch startTimeMs = waitForInput
+   where
+    getRemainingTimeMs = do
+      currentTimeMs <- liftIO getMonotonicTimeMs
+      pure $ (startTimeMs + batchIntervalMs) - currentTimeMs
+    waitForInput = do
+      remainingTimeMs <- getRemainingTimeMs
+      if remainingTimeMs <= 0
+        then do
+          yield Tick
+          start
+        else do
+          ready <- liftIO (hWaitForInput' handle remainingTimeMs)
+          case ready of
+            Ready -> do
+              chunk <- liftIO $ BS.hGetSome handle chunkSizeBytes
+              yield (Item chunk) >> waitForInput
+            NotReady -> waitForInput
+            EOF -> pure ()
+
+{- |
+Eventlog chunk size in bytes.
+This should be equal to the page size.
+-}
+defaultChunkSizeBytes :: Int
+defaultChunkSizeBytes = 4096
+
+{- |
+Internal helper.
+Return monotonic time in milliseconds, since some unspecified starting point
+-}
+getMonotonicTimeMs :: IO Int
+getMonotonicTimeMs = nanoToMilli <$> getMonotonicTimeNSec
+
+{- |
+Internal helper.
+Convert nanoseconds to milliseconds.
+The conversion from 'Word64' to 'Int' is safe.
+It cannot overflow due to the division by 1_000_000.
+-}
+nanoToMilli :: Word64 -> Int
+nanoToMilli = fromIntegral . (`div` 1_000_000)
+
+data Ready = Ready | NotReady | EOF
+
+hWaitForInput' :: Handle -> Int -> IO Ready
+hWaitForInput' handle timeoutMs =
+  catch (boolToReady <$> hWaitForInput handle timeoutMs) handleEOFError
+ where
+  boolToReady True = Ready
+  boolToReady False = NotReady
+  handleEOFError err
+    | isEOFError err = pure EOF
+    | otherwise = throwIO err
+
+-------------------------------------------------------------------------------
+-- Log file sink
+
+{- |
+File sink for optional eventlog log file.
+-}
+fileSink ::
+  (MonadIO m) =>
+  Handle ->
+  ProcessT m BS.ByteString Void
+fileSink handle = repeatedly $ await >>= liftIO . BS.hPut handle
+
+-------------------------------------------------------------------------------
+-- Log file sink with batches
+
+{- |
+File sink for optional eventlog log file.
+-}
+fileSinkBatch ::
+  (MonadIO m) =>
+  Handle ->
+  ProcessT m (Tick BS.ByteString) Void
+fileSinkBatch handle = dropTick ~> fileSink handle
+
+-------------------------------------------------------------------------------
+-- Ticks
+
+data Tick a = Item !a | Tick
+  deriving (Eq, Functor, Foldable, Traversable, Show)
+
+batchByTick :: Process (Tick a) [a]
+batchByTick = construct start
+ where
+  start = batch []
+  batch acc =
+    await >>= \case
+      Item a -> batch (a : acc)
+      Tick -> yield (reverse acc) >> start
+
+dropTick :: Process (Tick a) a
+dropTick = repeatedly go
+ where
+  go =
+    await >>= \case
+      Item a -> yield a
+      Tick -> pure ()
+
+-------------------------------------------------------------------------------
+-- Decoding events
+
+{- |
+Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.
+
+Throws 'DecodeError' on error.
+-}
+decodeEventsTick :: (MonadIO m) => ProcessT m (Tick BS.ByteString) (Tick Event)
+decodeEventsTick = construct $ loop decodeEventLog
+ where
+  loop :: (MonadIO m) => Decoder a -> PlanT (Is (Tick BS.ByteString)) (Tick a) m ()
+  loop Done{} = pure ()
+  loop (Consume k) =
+    await >>= \case
+      Item chunk -> loop (k chunk)
+      Tick -> yield Tick >> loop (Consume k)
+  loop (Produce a d') = yield (Item a) >> loop d'
+  loop (Error _ err) = liftIO $ throwIO $ DecodeError err
+
+newtype DecodeError = DecodeError String deriving (Show)
+
+instance Exception DecodeError
+
+-------------------------------------------------------------------------------
+-- Sorting the eventlog event stream
+
+{- | Buffer and reorder 'Event's to hopefully achieve
+monotonic, causal stream of 'Event's.
+-}
+sortEventsUpTo ::
+  (MonadIO m) =>
+  -- | Interval in nanoseconds.
+  Word64 ->
+  ProcessT m (Tick Event) Event
+sortEventsUpTo flushoutIntervalNs = construct start
+ where
+  -- Interval to wait for cutoff, 1.5 times the flushout interval
+  cutoffIntervalNs :: Int64
+  cutoffIntervalNs = fromIntegral $ flushoutIntervalNs + flushoutIntervalNs `div` 2
+
+  start :: (MonadIO m) => PlanT (Is (Tick Event)) Event m ()
+  start = do
+    mev <- await
+    case mev of
+      Tick -> start
+      Item ev -> do
+        our <- liftIO (timeSpec <$> Clock.getTime Clock.Monotonic)
+        loop (our - timeStampNs (evTime ev)) [ev]
+
+  -- the Int64 argument is the minimum difference we have seen between our
+  -- clock and incoming events.
+  loop :: (MonadIO m) => Int64 -> [Event] -> PlanT (Is (Tick Event)) Event m ()
+  loop diff evs = do
+    mev <- await
+    case mev of
+      Tick -> do
+        our <- liftIO (timeSpec <$> Clock.getTime Clock.Monotonic)
+        yieldEvents our diff evs
+      Item ev -> do
+        our <- liftIO (timeSpec <$> Clock.getTime Clock.Monotonic)
+
+        -- Adjust the difference
+        let this :: Int64
+            this = our - timeStampNs (evTime ev)
+
+        let diff'
+              | abs diff < abs this = diff
+              | otherwise = this
+
+        yieldEvents our diff' (ev : evs)
+
+  yieldEvents :: (MonadIO m) => Int64 -> Int64 -> [Event] -> PlanT (Is (Tick Event)) Event m ()
+  yieldEvents our diff evs = do
+    -- approximation of events time in our clock
+    let approx e = timeStampNs (evTime e) + diff
+    let cutoff = our - cutoffIntervalNs
+    let (old, new) = L.partition (\e -> approx e < cutoff) evs
+    traverse_ yield (L.sortBy (comparing evTime) old)
+    loop diff new
+
+  timeStampNs :: Timestamp -> Int64
+  timeStampNs = fromIntegral
+
+  timeSpec :: Clock.TimeSpec -> Int64
+  timeSpec ts
+    | ns >= 0 = fromIntegral ns
+    | otherwise = 0
+   where
+    ns = Clock.sec ts * 1_000_000_000 + Clock.nsec ts
+
+{- |
+Machine which checks that consecutive events are properly ordered.
+Runs an effect on non-causal events.
+-}
+handleOutOfOrderEvents ::
+  (Monad m) =>
+  (Event -> Event -> m ()) ->
+  ProcessT m Event Event
+handleOutOfOrderEvents cbOutOfOrderEvents = construct start
+ where
+  start = do
+    e <- await
+    yield e
+    loop e
+
+  loop e = do
+    e' <- await
+    when (evTime e' < evTime e) . lift $
+      cbOutOfOrderEvents e e'
+    yield e'
+    loop e'
+
+-------------------------------------------------------------------------------
+-- Filtering semaphores
+
+{- | A simple delimiting 'Moore' machine,
+which is opened by one constant marker and closed by the other one.
+-}
+between :: Text -> Text -> Moore Text Bool
+between x y = open
+ where
+  open = Moore False open' where open' x' = if x == x' then close else open
+  close = Moore True close' where close' y' = if y == y' then end else close
+  end = Moore False (const end)
+
+-- | Delimit the event process.
+delimit :: (Monad m) => Moore Text Bool -> ProcessT m Event Event
+delimit = construct . go
+ where
+  go :: (Monad m) => Moore Text Bool -> PlanT (Is Event) Event m ()
+  go mm@(Moore s next) = do
+    e <- await
+    case evSpec e of
+      -- on marker step the moore machine.
+      UserMarker m -> do
+        let mm'@(Moore s' _) = next m
+        -- if current or next state is open (== True), emit the marker.
+        when (s || s') $ yield e
+        go mm'
+
+      -- for other events, emit if the state is open.
+      _ -> do
+        when s $ yield e
+        go mm

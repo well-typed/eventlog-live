@@ -1,6 +1,6 @@
 services:
   oddball:
-    container_name: oddball
+    # container_name: oddball
     image: "wenkokke/oddball:0.1.0.0"
     build:
       context: "../.."
@@ -15,12 +15,12 @@ services:
       - "-hT"
       - "--eventlog-flush-interval=1"
 
-  eventlog-influxdb:
-    container_name: eventlog-influxdb
-    image: "wenkokke/eventlog-influxdb:0.1.0.0"
+  eventlog-live-influxdb:
+    # container_name: eventlog-live-influxdb
+    image: "wenkokke/eventlog-live-influxdb:0.1.0.0"
     build:
       context: "../.."
-      dockerfile: "./dockerfiles/Dockerfile.eventlog-influxdb"
+      dockerfile: "./dockerfiles/Dockerfile.eventlog-live-influxdb"
     depends_on:
       oddball:
         condition: "service_started"
@@ -37,7 +37,7 @@ services:
       - "--influxdb-password=admin"
 
   influxdb:
-    container_name: influxdb
+    # container_name: influxdb
     image: "influxdb:1.8"
     restart: "always"
     ports:
@@ -54,7 +54,7 @@ services:
       INFLUXDB_ADMIN_PASSWORD: "admin"
 
   grafana:
-    container_name: grafana
+    # container_name: grafana
     image: "grafana/grafana"
     restart: "always"
     ports:

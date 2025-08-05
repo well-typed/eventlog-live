@@ -1,0 +1,82 @@
+cabal-version: 3.0
+name:          eventlog-live
+version:       0.1.0.0
+license:       AGPL-3.0-only
+license-file:  LICENSE
+author:        Wen Kokke
+maintainer:    wen@well-typed.com
+copyright:     (c) 2025 Well-Typed
+build-type:    Simple
+
+common language
+  ghc-options:        -Wall
+  default-language:   Haskell2010
+  default-extensions:
+    DeriveFunctor
+    DeriveFoldable
+    DeriveTraversable
+    ImportQualifiedPost
+    LambdaCase
+    NumericUnderscores
+
+library
+  import:         language
+  hs-source-dirs: src
+  exposed-modules:
+    GHC.Eventlog.Live
+  build-depends:
+    , base
+    , eventlog-live:eventlog-live-machines
+    , ghc-events
+    , machines
+    , unliftio-core
+    , network
+
+library eventlog-live-options
+  import:         language
+  visibility:     public
+  hs-source-dirs: src-options
+  exposed-modules:
+    GHC.Eventlog.Live.Options
+  build-depends:
+    , base
+    , eventlog-live
+    , ghc-events
+    , optparse-applicative
+
+library eventlog-live-machines
+  import:         language
+  visibility:     public
+  hs-source-dirs: src-machines
+  exposed-modules:
+    GHC.Eventlog.Live.Machines
+  build-depends:
+    , base
+    , bytestring
+    , clock
+    , ghc-events
+    , machines
+    , text
+    , transformers
+
+executable eventlog-live-influxdb
+  import:         language
+  main-is:        Main.hs
+  hs-source-dirs: app-influxdb
+  build-depends:
+    , base
+    , bytestring
+    , clock
+    , containers
+    , eventlog-live
+    , eventlog-live:eventlog-live-machines
+    , eventlog-live:eventlog-live-options
+    , ghc-events
+    , influxdb
+    , lens
+    , machines
+    , network
+    , optparse-applicative
+    , text
+    , time
+    , transformers
