@@ -1,7 +1,8 @@
 module GHC.Eventlog.Live.Options (
   eventlogSocketParser,
   heapProfBreakdownParser,
-  warnMissingHeapProfBreakdown,
+  heapProfBreakdownEitherReader,
+  heapProfBreakdownShow,
   eventlogLogFileParser,
   batchIntervalParser,
 ) where
@@ -9,7 +10,6 @@ module GHC.Eventlog.Live.Options (
 import GHC.Eventlog.Live (EventlogSocket (..))
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
-import System.IO qualified as IO
 
 --------------------------------------------------------------------------------
 -- Eventlog Socket
@@ -22,7 +22,7 @@ eventlogSocketParser = socketUnixParser
       <$> O.strOption
         ( O.long "eventlog-socket"
             <> O.metavar "SOCKET"
-            <> O.help "Eventlog source Unix socket."
+            <> O.help "Eventlog Unix socket."
         )
 
 --------------------------------------------------------------------------------
@@ -33,30 +33,35 @@ heapProfBreakdownParser =
   O.option
     (O.eitherReader heapProfBreakdownEitherReader)
     ( O.short 'h'
-        <> O.metavar "HEAP_PROFILE_BREAKDOWN"
-        <> O.help "Heap profile breakdown (Tcmdyrbi)"
+        <> O.metavar "[Tcmdyrbi]"
+        <> O.help "Heap profile breakdown."
     )
 
 heapProfBreakdownEitherReader :: String -> Either String HeapProfBreakdown
-heapProfBreakdownEitherReader = \case
-  "T" -> Right HeapProfBreakdownClosureType
-  "c" -> Right HeapProfBreakdownCostCentre
-  "m" -> Right HeapProfBreakdownModule
-  "d" -> Right HeapProfBreakdownClosureDescr
-  "y" -> Right HeapProfBreakdownTypeDescr
-  "e" -> Left "Unsupported heap profile breakdown by era."
-  "r" -> Right HeapProfBreakdownRetainer
-  "b" -> Right HeapProfBreakdownBiography
-  "i" -> Right HeapProfBreakdownInfoTable
-  str -> Left $ "Unsupported heap profile breakdown -h" <> str
+heapProfBreakdownEitherReader =
+  \case
+    "T" -> Right HeapProfBreakdownClosureType
+    "c" -> Right HeapProfBreakdownCostCentre
+    "m" -> Right HeapProfBreakdownModule
+    "d" -> Right HeapProfBreakdownClosureDescr
+    "y" -> Right HeapProfBreakdownTypeDescr
+    "e" -> Right HeapProfBreakdownEra
+    "r" -> Right HeapProfBreakdownRetainer
+    "b" -> Right HeapProfBreakdownBiography
+    "i" -> Right HeapProfBreakdownInfoTable
+    str -> Left $ "Unsupported heap profile breakdown -h" <> str
 
-warnMissingHeapProfBreakdown :: IO ()
-warnMissingHeapProfBreakdown =
-  IO.hPutStrLn IO.stderr $
-    "Warning: Cannot infer heap profile breakdown.\n\
-    \         If your binary was compiled with a GHC version prior to 9.14,\n\
-    \         you must also pass the heap profile type to this executable.\n\
-    \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+heapProfBreakdownShow :: HeapProfBreakdown -> String
+heapProfBreakdownShow = ("-h" <>) . \case
+  HeapProfBreakdownClosureType -> "T"
+  HeapProfBreakdownCostCentre -> "c"
+  HeapProfBreakdownModule -> "m"
+  HeapProfBreakdownClosureDescr -> "d"
+  HeapProfBreakdownTypeDescr -> "y"
+  HeapProfBreakdownEra -> "e"
+  HeapProfBreakdownRetainer -> "r"
+  HeapProfBreakdownBiography -> "b"
+  HeapProfBreakdownInfoTable -> "i"
 
 --------------------------------------------------------------------------------
 -- Eventlog Log File
@@ -66,7 +71,7 @@ eventlogLogFileParser =
   O.strOption
     ( O.long "eventlog-log-file"
         <> O.metavar "FILE"
-        <> O.help "If provided, the binary eventlog data is logged to this file."
+        <> O.help "Use file to log binary eventlog data."
     )
 
 --------------------------------------------------------------------------------
@@ -77,7 +82,7 @@ batchIntervalParser =
   O.option
     O.auto
     ( O.long "batch-interval"
-        <> O.metavar "BATCH_INTERVAL"
+        <> O.metavar "NUM"
         <> O.help "Batch interval in microseconds."
         <> O.value defaultBatchIntervalMs
     )
