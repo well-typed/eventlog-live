@@ -3,7 +3,6 @@ packages:
   ekg-eventlog-influxdb
   eventlog-counters
   eventlog-counters-ekg
-  eventlog-influxdb
   eventlog-live
   eventlog-machines
   examples/collatzer
