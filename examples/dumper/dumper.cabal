@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 3.0
 name:          dumper
 version:       0.1.0.0
 synopsis:      Dump eventlog data.
@@ -24,7 +24,9 @@ executable dumper
   build-depends:
     , base
     , bytestring
-    , eventlog-machines
+    , eventlog-live
+    , eventlog-live:eventlog-live-machines
+    , eventlog-live:eventlog-live-options
     , ghc-events
     , machines
     , network

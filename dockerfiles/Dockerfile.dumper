@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # To build this image, run:
-# docker build --tag wenkokke/eventlog-live:0.1.0.0 --file ./dockerfiles/Dockerfile.eventlog-live .
+# docker build --tag wenkokke/dumper:0.1.0.0 --file ./dockerfiles/Dockerfile.dumper .
 
-# Use the Haskell image with GHC 9.12.2
+# Use the Haskell image with GHC 9.10
 # See: https://hub.docker.com/_/haskell
-FROM haskell:9.12-slim-bookworm AS build
+FROM haskell:9.10-slim-bullseye AS build
 
 # Configure eventlog-live
 ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
@@ -14,19 +14,21 @@ ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-    "./eventlog-machines/eventlog-machines.cabal" \
-    "./eventlog-machines/LICENSE" \
-    "./eventlog-machines/src/GHC/Eventlog/Machines.hs" \
-    "./examples/dumper/app/Main.hs" \
-    "./examples/dumper/dumper.cabal" \
-    "./examples/dumper/LICENSE" \
-    "/eventlog-live/"
+  "./eventlog-live/app-influxdb/Main.hs" \
+  "./eventlog-live/eventlog-live.cabal" \
+  "./eventlog-live/LICENSE" \
+  "./eventlog-live/src/GHC/Eventlog/Live.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machines.hs" \
+  "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
+  "./examples/dumper/app/Main.hs" \
+  "./examples/dumper/dumper.cabal" \
+  "./examples/dumper/LICENSE" \
+  "/eventlog-live/"
 
 # Create cabal.project file
 COPY <<EOF /eventlog-live/cabal.project
-packages:
-  examples/dumper
-  eventlog-machines
+packages: examples/dumper
+packages: eventlog-live
 EOF
 
 # Build dumper
@@ -41,7 +43,7 @@ cabal install \
 EOF
 
 # Copy dumper to output stage
-FROM debian:bookworm-slim AS output
+FROM debian:bullseye-slim AS output
 COPY --from=build "/eventlog-live/bin/dumper" "/bin/dumper"
 
 # Run command
