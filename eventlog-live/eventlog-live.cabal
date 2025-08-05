@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.12
 name:          eventlog-live
 version:       0.1.0.0
 license:       AGPL-3.0-only
@@ -7,27 +7,38 @@ author:        Wen Kokke
 maintainer:    wen@well-typed.com
 copyright:     (c) 2025 Well-Typed
 build-type:    Simple
+tested-with:   GHC ==9.10.2
 
 common language
-  ghc-options:        -Wall
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wprepositive-qualified-module
+    -Wredundant-constraints -Wunticked-promoted-constructors
+    -Wunused-packages
+
   default-language:   Haskell2010
   default-extensions:
+    BangPatterns
     DataKinds
     DeriveFoldable
     DeriveFunctor
     DeriveTraversable
+    DerivingStrategies
     FlexibleInstances
     GADTs
+    GeneralizedNewtypeDeriving
     ImportQualifiedPost
     InstanceSigs
     KindSignatures
     LambdaCase
-    NoFieldSelectors
+    MultiParamTypeClasses
     NumericUnderscores
     OverloadedStrings
     RankNTypes
     RecordWildCards
+    ScopedTypeVariables
     TupleSections
+    TypeApplications
+    TypeFamilies
 
 library
   import:          language
@@ -66,13 +77,22 @@ library eventlog-live-machines
     , text
     , transformers
 
+library eventlog-live-lens
+  import:          language
+  visibility:      public
+  hs-source-dirs:  src-lens
+  exposed-modules: GHC.Eventlog.Live.Lens
+  build-depends:
+    , base
+    , ghc-events
+    , lens-family
+
 executable eventlog-live-influxdb
   import:         language
   main-is:        Main.hs
   hs-source-dirs: app-influxdb
   build-depends:
     , base
-    , bytestring
     , clock
     , containers
     , eventlog-live
@@ -82,25 +102,29 @@ executable eventlog-live-influxdb
     , influxdb
     , lens
     , machines
-    , network
     , optparse-applicative
     , text
-    , time
-    , transformers
 
 executable eventlog-live-otelcol
-  import:         language
-  main-is:        Main.hs
-  hs-source-dirs: app-otelcol
+  import:          language
+  main-is:         Main.hs
+  hs-source-dirs:  app-otelcol
+  other-modules:   PackageInfo_eventlog_live
+  autogen-modules: PackageInfo_eventlog_live
   build-depends:
     , base
+    , dlist
     , eventlog-live
+    , eventlog-live:eventlog-live-lens
     , eventlog-live:eventlog-live-machines
     , eventlog-live:eventlog-live-options
     , ghc-events
     , grapesy
+    , hashable
     , hs-opentelemetry-otlp
-    , lens
+    , lens-family
     , machines
-    , optparse-applicative
+    , optparse-applicative                  >=0.19
     , proto-lens
+    , text
+    , unordered-containers

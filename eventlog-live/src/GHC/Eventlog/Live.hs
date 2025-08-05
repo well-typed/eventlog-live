@@ -45,7 +45,7 @@ runWithEventlogSocket batchIntervalMs maybeChuckSizeBytes eventlogSocket maybeOu
   case maybeOutputFile of
     Nothing ->
       runT_ $
-        fromSocket ~> decodeEventsTick ~> toEventSink
+        fromSocket ~> decodeEventBatch ~> toEventSink
     Just outputFile ->
       withRunInIO $ \runInIO ->
         IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
@@ -53,7 +53,7 @@ runWithEventlogSocket batchIntervalMs maybeChuckSizeBytes eventlogSocket maybeOu
             fromSocket
               ~> fanout
                 [ fileSinkBatch outputHandle
-                , decodeEventsTick ~> toEventSink
+                , decodeEventBatch ~> toEventSink
                 ]
 
 -------------------------------------------------------------------------------
