@@ -1,19 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE NoFieldSelectors #-}
-
 module Main where
 
 import Control.Applicative (Alternative ((<|>)))
@@ -23,6 +7,8 @@ import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Foldable (for_)
 import Data.Int (Int64)
+import Data.IntMap.Strict (IntMap)
+import Data.IntMap.Strict qualified as IM
 import Data.Kind (Constraint, Type)
 import Data.List (uncons)
 import Data.Machine.Is (Is)
@@ -31,8 +17,6 @@ import Data.Machine.Process (ProcessT, (~>))
 import Data.Machine.Type (construct, repeatedly)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
-import Data.IntMap.Strict (IntMap)
-import Data.IntMap.Strict qualified as IM
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -41,19 +25,19 @@ import Data.Word (Word32, Word64, Word8)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
+import GHC.Eventlog.Live
+import GHC.Eventlog.Live.Machines (batchByTick)
+import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), ThreadStopStatus (..))
 import GHC.RTS.Events.Analysis qualified as Analysis
 import GHC.RTS.Events.Analysis.Thread (ThreadState (..))
 import GHC.RTS.Events.Analysis.Thread qualified as Analysis.Thread
-import GHC.Eventlog.Live
-import GHC.Eventlog.Live.Options
 import GHC.Stack (HasCallStack)
 import Options.Applicative qualified as O
 import System.Clock (TimeSpec)
 import System.Clock qualified as Clock
 import System.IO qualified as IO
 import Text.Printf (printf)
-import GHC.Eventlog.Live.Machines (batchByTick)
 
 --------------------------------------------------------------------------------
 -- Main function
@@ -63,7 +47,7 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
   let toInfluxDB =
-             processEventsTick maybeHeapProfBreakdown
+        processEventsTick maybeHeapProfBreakdown
           ~> batchByTick
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSocket
@@ -219,8 +203,8 @@ processEventsTick = construct . go . newEventProcessorState
           WallClockTime{..} -> do
             -- If this coercion overflows, you're running this in the year ~292B.
             -- That's not my problem.
-            let secInt = fromIntegral @Word64 @Int64 sec
-            let nsecInt = fromIntegral @Word32 @Int64 nsec
+            let secInt = fromIntegral sec :: Int64
+            let nsecInt = fromIntegral nsec :: Int64
             go st{startRealtime = Just (Clock.TimeSpec secInt nsecInt)}
           -- This event announces the heap profiling configuration for the process.
           HeapProfBegin{..} -> do
@@ -352,12 +336,12 @@ processEventsTick = construct . go . newEventProcessorState
             go st
 
           -- This event announces a thread name.
-          ThreadLabel {..} -> do
+          ThreadLabel{..} -> do
             let threadId = fromIntegral thread :: Int
-            go st {threadLabels = IM.insert threadId threadlabel threadLabels }
+            go st{threadLabels = IM.insert threadId threadlabel threadLabels}
 
           -- This event announces the start of a GC.
-          StartGC {} -> do
+          StartGC{} -> do
             emit
               "Capability"
               timestamp
@@ -368,7 +352,7 @@ processEventsTick = construct . go . newEventProcessorState
             go st
 
           -- This event announces the end of a GC.
-          EndGC {} -> do
+          EndGC{} -> do
             emit
               "Capability"
               timestamp
