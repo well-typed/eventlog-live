@@ -12,32 +12,30 @@ common language
   ghc-options:        -Wall
   default-language:   Haskell2010
   default-extensions:
-    DeriveFunctor
     DeriveFoldable
+    DeriveFunctor
     DeriveTraversable
     ImportQualifiedPost
     LambdaCase
     NumericUnderscores
 
 library
-  import:         language
-  hs-source-dirs: src
-  exposed-modules:
-    GHC.Eventlog.Live
+  import:          language
+  hs-source-dirs:  src
+  exposed-modules: GHC.Eventlog.Live
   build-depends:
     , base
     , eventlog-live:eventlog-live-machines
     , ghc-events
     , machines
-    , unliftio-core
     , network
+    , unliftio-core
 
 library eventlog-live-options
-  import:         language
-  visibility:     public
-  hs-source-dirs: src-options
-  exposed-modules:
-    GHC.Eventlog.Live.Options
+  import:          language
+  visibility:      public
+  hs-source-dirs:  src-options
+  exposed-modules: GHC.Eventlog.Live.Options
   build-depends:
     , base
     , eventlog-live
@@ -45,11 +43,10 @@ library eventlog-live-options
     , optparse-applicative
 
 library eventlog-live-machines
-  import:         language
-  visibility:     public
-  hs-source-dirs: src-machines
-  exposed-modules:
-    GHC.Eventlog.Live.Machines
+  import:          language
+  visibility:      public
+  hs-source-dirs:  src-machines
+  exposed-modules: GHC.Eventlog.Live.Machines
   build-depends:
     , base
     , bytestring
@@ -80,3 +77,19 @@ executable eventlog-live-influxdb
     , text
     , time
     , transformers
+
+executable eventlog-live-otelcol
+  import:         language
+  main-is:        Main.hs
+  hs-source-dirs: app-otelcol
+  build-depends:
+    , base
+    , eventlog-live
+    , eventlog-live:eventlog-live-machines
+    , eventlog-live:eventlog-live-options
+    , grapesy
+    , hs-opentelemetry-otlp
+    , lens
+    , machines
+    , optparse-applicative
+    , proto-lens
