@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name:          collatzer
 version:       0.1
 synopsis:      Collate eventlog data.
@@ -36,7 +36,9 @@ executable collatzer
     , ekg-core
     , eventlog-counters
     , eventlog-counters-ekg
-    , eventlog-machines
+    , eventlog-live
+    , eventlog-live:eventlog-live-machines
+    , eventlog-live:eventlog-live-options
     , ghc-events             >=0.17.0
     , machines
     , network
