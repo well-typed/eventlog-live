@@ -29,7 +29,7 @@ import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
 import GHC.Eventlog.Live.Lens qualified as EF
 import GHC.Eventlog.Live.Machines (Tick, batchByTick, liftTick, setStartTime)
 import GHC.Eventlog.Live.Options
-import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), Timestamp)
+import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), ThreadId, Timestamp)
 import Lens.Family2 ((&), (.~), (^.))
 import Lens.Family2.Stock
 import Lens.Family2.Unchecked (lens)
@@ -108,6 +108,43 @@ otelcolResourceMetricsExporter conn =
 type instance G.RequestMetadata (Protobuf MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf MetricsService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf MetricsService meth) = G.NoMetadata
+
+--------------------------------------------------------------------------------
+-- Thread Events
+--------------------------------------------------------------------------------
+
+data ThreadStateState = ThreadStateState
+  { threadLabelMap :: HashMap ThreadId Text
+  }
+
+processThreadStateData ::
+  (MonadIO m) =>
+  ProcessT m (WithContext Event) NumberDataPoint
+processThreadStateData =
+  construct $
+    go
+      ThreadStateState
+        { threadLabelMap = mempty
+        }
+ where
+  go st@ThreadStateState{..} =
+    await >>= \ev -> case ev ^. value . EF.evSpec of
+      -- Announces a thread label.
+      ThreadLabel{..} ->
+        go st{threadLabelMap = HM.insert thread threadlabel threadLabelMap}
+      CreateThread {..} -> do
+        go st
+      RunThread {..} -> do
+        go st
+      StopThread {..} -> do
+        go st
+      ThreadRunnable {..} -> do
+        go st
+      MigrateThread {..} -> do
+        go st
+      WakeupThread {..} -> do
+        go st
+      _otherwise -> go st
 
 --------------------------------------------------------------------------------
 -- Heap Events
