@@ -1,8 +1,6 @@
 packages:
   ekg-eventlog-core
   ekg-eventlog-influxdb
-  eventlog-counters
-  eventlog-counters-ekg
   eventlog-live
   examples/collatzer
   examples/dumper
