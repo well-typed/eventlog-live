@@ -11,23 +11,23 @@ runs:
       uses: actions/cache/restore@v4
       if: ${{ !env.ACT }}
       with:
-        path: "${{ github.workspace }}/.protoc/bin"
+        path: "${{ github.workspace }}/.protoc"
         key: ${{ runner.os }}-protoc-${{ inputs.protoc-version }}
       id: cache-protoc
 
     - name: 🛠️ Install protoc
       if: ${{ env.ACT || steps.cache-protoc.outputs.cache-hit != 'true' }}
       run: |
-        mkdir --parents "${{ github.workspace }}/.protoc/bin"
-        curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v30.2/protoc-30.2-linux-x86_64.zip"
-        PB_URL="${{
-          format(
-            'https://github.com/protocolbuffers/protobuf/releases/download/v{0}/protoc-{0}-{1}-{2}.zip',
-            inputs.protoc-version,
-            (runner.os == 'Linux' && 'linux') || (runner.os == 'macOS' && 'osx'),
-            (runner.os == 'Linux' && 'x86_64') || (runner.os == 'macOS' && 'aarch_64')
-          )
-          }}"
+        mkdir -p "${{ github.workspace }}/.protoc"
+        curl -Lo protoc.zip "${{
+                    format(
+                      'https://github.com/protocolbuffers/protobuf/releases/download/v{0}/protoc-{0}-{1}-{2}.zip',
+                      inputs.protoc-version,
+                      (runner.os == 'Linux' && 'linux') || (runner.os == 'macOS' && 'osx'),
+                      (runner.os == 'Linux' && 'x86_64') || (runner.os == 'macOS' && 'aarch_64')
+                    )
+                  }}"
+        unzip protoc.zip -d "${{ github.workspace }}/.protoc"
       shell: bash
 
     - name: 🛠️ Add ShellCheck to PATH

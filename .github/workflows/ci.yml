@@ -11,6 +11,10 @@ defaults:
   run:
     shell: sh
 
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
 jobs:
   #############################################################################
   # Build
@@ -29,6 +33,14 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
+      # The dev-dependencies file lists the versions of all system dependencies
+      # required for development. It is formatted in such a way that it is easy
+      # to use from GitHub Actions. This step outputs the versions to make them
+      # available to all following steps under "steps.dev-dependencies.outputs"
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
       - name: 🛠️ Setup Haskell
         id: setup-haskell
         uses: haskell-actions/setup@v2
@@ -36,10 +48,9 @@ jobs:
           ghc-version: ${{ matrix.ghc-version }}
 
       - name: 🛠️ Setup Protobuf Compiler
-        id: setup-protoc
-        uses: ./../.github/actions/setup-protoc
+        uses: ./.github/actions/setup-protoc
         with:
-          protobuf-version: ${{ steps.dev-dependencies.outputs.protoc }}
+          protoc-version: ${{ steps.dev-dependencies.outputs.protoc }}
 
       - name: 🗄️ Generate Cabal plan
         run: cabal build all --dry-run
