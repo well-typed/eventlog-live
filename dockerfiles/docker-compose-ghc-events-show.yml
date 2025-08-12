@@ -1,7 +1,7 @@
 services:
   fibber:
-    container_name: fibber
-    image: "wenkokke/fibber:0.1.0.0"
+    # container_name: fibber
+    image: "well-typed/eventlog-live-example-fibber:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.fibber"
@@ -12,8 +12,8 @@ services:
     command: "22"
 
   ghc-events-show:
-    container_name: ghc-events-show
-    image: "wenkokke/ghc-events-show:0.1.0.0"
+    # container_name: ghc-events-show
+    image: "well-typed/eventlog-live-example-ghc-events-show:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.ghc-events-show"

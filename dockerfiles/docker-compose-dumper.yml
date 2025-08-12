@@ -1,7 +1,7 @@
 services:
   oddball:
-    container_name: oddball
-    image: "wenkokke/oddball:0.1.0.0"
+    # container_name: oddball
+    image: "well-typed/eventlog-live-example-oddball:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.oddball"
@@ -16,8 +16,8 @@ services:
       - "--eventlog-flush-interval=1"
 
   dumper:
-    container_name: dumper
-    image: "wenkokke/dumper:0.1.0.0"
+    # container_name: dumper
+    image: "well-typed/eventlog-live-example-dumper:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.dumper"
