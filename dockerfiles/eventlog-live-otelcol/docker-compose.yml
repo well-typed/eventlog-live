@@ -34,18 +34,23 @@ services:
       - "--otelcol-host=otelcol"
 
   grafana:
-    container_name: grafana
+    # container_name: grafana
     image: grafana/grafana-oss:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
+    healthcheck:
+      test: "curl -f http://localhost:3000/api/health"
+      interval: 1m
+      timeout: 10s
+      retries: 5
     volumes:
       - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
       - "./config/grafana-dashboards-eventlog-heap.json:/var/lib/grafana/dashboards/eventlog-heap.json"
 
   otelcol:
-    container_name: otelcol
+    # container_name: otelcol
     image: otel/opentelemetry-collector-contrib:latest
     command:
       - "--config=/etc/otelcol/config.yaml"
@@ -57,7 +62,7 @@ services:
       - "55679:55679" # zPages extension
 
   prometheus:
-    container_name: prometheus
+    # container_name: prometheus
     image: prom/prometheus:latest
     command:
       - "--config.file=/etc/prometheus/prometheus.yaml"
