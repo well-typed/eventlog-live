@@ -10,10 +10,10 @@ The following is a screenshow of Grafana which shows live heap profiling statist
 
 ![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](assets/oddball-grafana.png)
 
-To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then nagivate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Heap Stats_.
+To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then navigate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Heap Stats_.
 
 ```sh
-docker compose -f dockerfiles/docker-compose-oddball-grafana.yml up --build
+docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose.yml up --build
 ```
 
 This [Docker Compose](https://docs.docker.com/compose/) configuration builds and runs a number of Docker containers:
@@ -33,9 +33,9 @@ The `eventlog-socket` package is not yet published on Hackage, so you must add i
 
 ```cabal
 source-repository-package
-  type: git
-  location: https://github.com/well-typed/ghc-eventlog-socket
-  tag: 1acb92ff60f4bbc87815466f904366ea5078ed9a
+  type:     git
+  location: https://github.com/well-typed/eventlog-socket
+  tag:      1acb92ff60f4bbc87815466f904366ea5078ed9a
 ```
 
 Then add `eventlog-socket` to the `build-depends` for your application:
@@ -45,7 +45,7 @@ executable my-app
   ...
   build-depends:
     ...
-    eventlog-socket,
+    , eventlog-socket  >=0.1.0 && <0.2
     ...
 ```
 
@@ -56,12 +56,17 @@ To instrument your application, and allow the eventlog data to be streamed over 
 ```haskell
 module Main where
 
+import           Data.Maybe (fromMaybe)
 import qualified GHC.Eventlog.Socket
+import           System.Environment (lookupEnv)
 
 main :: IO ()
 main = do
   putStrLn "Creating eventlog socket..."
-  GHC.Eventlog.Socket.start "/tmp/ghc-eventlog.sock"
+  eventlogSocket <-
+      fromMaybe "/tmp/ghc_eventlog.sock"
+          <$> lookupEnv "GHC_EVENTLOG_SOCKET"
+  GHC.Eventlog.Socket.start eventlogSocket
   ...
 ```
 
@@ -89,10 +94,18 @@ executable my-app
   ...
 ```
 
-The program `ekg-eventlog-influxdb` requires that your eventlog is written in binary form, which requires the `-l` RTS option.
-The heap statistics visualisation in the demo requires that your application is run with heap profiling enabled, which requires the `-hT` RTS option.
-Finally, to ensure that the RTS flushes the events queue consistently and every second, you should set the `--eventlog-flush-interval=1` and `--no-automatic-heap-samples` RTS options.
-You can pass these options at runtime with:
+To ensure that the RTS flushes the events queue consistently and every second, you can pass the `--eventlog-flush-interval=1` and `--no-automatic-heap-samples` RTS options at runtime.
+If you do, you must compile your application with `-threaded`.
+See GHC issue [#26222](https://gitlab.haskell.org/ghc/ghc/-/issues/26222) for further details.
+
+```cabal
+executable my-app
+  ...
+  ghc-options: -threaded
+  ...
+```
+
+The program `eventlog-live-influxdb` requires that your eventlog is written in binary form, which requires the `-l` RTS option. The heap statistics visualisation in the demo requires that your application is run with heap profiling enabled, which requires the `-hT` RTS option. You can pass these options at runtime with:
 
 ```sh
 ./my-app +RTS -l -hT --eventlog-flush-interval=1 --no-automatic-heap-samples
@@ -109,32 +122,33 @@ executable my-app
 
 ### Putting it all together
 
-> :warning: This does not work on non-Linux hosts.
-> See [Profiling on Mac](#profiling-on-mac) below for a discussion of workarounds on Mac.
-
 To visualise the profiling data of your instrumented application, you must connect it to the demo system.
-The Docker Compose configuration in [`docker-compose-grafana.yml`](dockerfiles/docker-compose-grafana.yml) sets up the same infrastructure used in the demo without the example program.
+The Docker Compose configuration in [`dockerfiles/eventlog-live-otelcol/docker-compose-external.yml`](dockerfiles/eventlog-live-otelcol/docker-compose-external.yml) sets up the same infrastructure used in the demo without the example program.
 To use it, follow these steps:
 
-1.  Start your instrumented application:
+1.  Start the Grafana container:
+
+    ```sh
+    docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose-external.yaml up --build -d
+    ```
+
+2.  Set the `GHC_EVENTLOG_SOCKET` environment variable:
+
+    ```sh
+    export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
+    ```
+
+3.  Start your instrumented application:
 
     ```sh
     ./my-app +RTS -l -hT --eventlog-flush-interval=1 --no-automatic-heap-samples
     ```
 
-2.  Start the Grafana container:
+4.  Start `eventlog-live-otelcol`:
 
     ```sh
-    docker compose -f dockerfiles/docker-compose-grafana.yml up --build
+    eventlog-live-otelcol \
+      --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
+      -hT \
+      --otelcol-host=localhost
     ```
-
-### Profiling on Mac
-
-Profiling an application running on the host plaform using the infrastructure in the Docker container requires mounting the eventlog locked into a Docker container. This does not, and likely will never, work on non-Linux hosts.
-See Docker for Mac [issue 483](https://github.com/docker/for-mac/issues/483) for a discussion of why this will not work on Mac.
-
-If you are using a Mac, there are three possible workarounds.
-
-1. Containerize your application, as is done in [`docker-compose-oddball-grafana.yml`](dockerfiles/docker-compose-oddball-grafana.yml).
-2. Run all services locally.
-3. Use [`socat`](http://www.dest-unreach.org/socat/) locally to forward the eventlog traffic to a TCP socket and use `socat` within a container to forward the eventlog traffic back to a Unix domain socket.
