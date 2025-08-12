@@ -109,12 +109,22 @@ jobs:
         with:
           submodules: true
 
-      - name: 🏗️ dockerfiles/Dockerfile.${{ matrix.dockerfile }}
-        run: |
-          docker build \
-            --tag well-typed/${{ matrix.dockerfile }} \
-            --file dockerfiles/Dockerfile.${{ matrix.dockerfile }} \
-            .
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🏗️ Build
+        uses: docker/build-push-action@v6
+        with:
+          file: dockerfiles/Dockerfile.${{ matrix.dockerfile }}
+          push: false
+          tags: |
+            well-typed/${{
+              startsWith(matrix.dockerfile, 'eventlog-live-')
+                && matrix.dockerfile
+                || format('eventlog-live-examples-{0}', matrix.dockerfile)
+            }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
     strategy:
       fail-fast: false
