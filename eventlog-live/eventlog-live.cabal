@@ -112,7 +112,6 @@ executable eventlog-live-influxdb
     , lens
     , machines
     , optparse-applicative
-    , text
 
 executable eventlog-live-otelcol
   import:          language
@@ -124,16 +123,13 @@ executable eventlog-live-otelcol
     , base
     , dlist
     , eventlog-live
-    , eventlog-live:eventlog-live-lens
     , eventlog-live:eventlog-live-machines
     , eventlog-live:eventlog-live-options
     , ghc-events
     , grapesy
-    , hashable
     , hs-opentelemetry-otlp
     , lens-family
     , machines
     , optparse-applicative                  >=0.19
     , proto-lens
     , text
-    , unordered-containers
