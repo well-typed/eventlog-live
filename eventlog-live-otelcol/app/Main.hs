@@ -33,7 +33,7 @@ import Network.GRPC.Common.Protobuf (Protobuf)
 import Network.GRPC.Common.Protobuf qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O
-import PackageInfo_eventlog_live qualified as EventlogLive
+import PackageInfo_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
