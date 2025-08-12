@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # To build this image, run:
-# docker build --tag wenkokke/collatzer:0.1.0.0 --file ./dockerfiles/Dockerfile.collatzer .
+# docker build --tag well-typed/eventlog-live-example-collatzer:0.1.0.0 --file ./dockerfiles/Dockerfile.collatzer .
 
 # Use the Haskell image with GHC 9.10
 # See: https://hub.docker.com/_/haskell
