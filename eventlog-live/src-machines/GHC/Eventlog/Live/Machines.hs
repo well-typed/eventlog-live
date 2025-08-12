@@ -79,7 +79,6 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Clock (getMonotonicTimeNSec)
 import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), Timestamp)
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
-import GHC.Records (HasField (..))
 import Numeric (showHex)
 import System.Clock qualified as Clock
 import System.IO (Handle, hWaitForInput)
@@ -346,10 +345,6 @@ data WithStartTime a = WithStartTime
   }
   deriving (Functor, Show)
 
-instance HasField "maybeTimeUnixNano" (WithStartTime Event) (Maybe Timestamp) where
-  getField :: WithStartTime Event -> Maybe Timestamp
-  getField i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
-
 -------------------------------------------------------------------------------
 -- Values with meta data
 
@@ -369,7 +364,7 @@ withMeta ::
 withMeta i v attr =
   WithMeta
     { value = v
-    , maybeTimeUnixNano = i.maybeStartTimeUnixNano
+    , maybeTimeUnixNano = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
     , attr = attr
     }

@@ -126,7 +126,7 @@ influxDBWriter :: I.WriteParams -> ProcessT IO [I.Line TimeSpec] Void
 influxDBWriter writeParams = repeatedly go
  where
   go =
-    await >>= \batch ->
+    await >>= \batch -> do
       unless (null batch) $ do
         liftIO (I.writeBatch writeParams batch)
 
