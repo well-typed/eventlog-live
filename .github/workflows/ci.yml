@@ -12,14 +12,14 @@ defaults:
     shell: sh
 
 jobs:
-  ################################################################################
+  #############################################################################
   # Build
-  ################################################################################
+  #############################################################################
   build:
     name: |
       ${{ matrix.name
        || format(
-            'Build and Test on {0}{1}',
+            'Build on {0}{1}',
             startsWith(matrix.os, 'ubuntu-') && 'Linux' || startsWith(matrix.os, 'macOS-') && 'macOS',
             matrix.ghc-version && format(' with GHC {0}', matrix.ghc-version)
           )
@@ -62,7 +62,6 @@ jobs:
         run: cabal build all
 
       - name: 🧪 Test fibber-collatzer
-        # if: ${{ runner.os == 'Linux' }}
         run: ./examples/fibber/fibber-collatzer.sh
 
     strategy:
@@ -79,6 +78,38 @@ jobs:
           - "9.10.2"
         include:
           - name: false
+
+  #############################################################################
+  # Build dockerfiles
+  #############################################################################
+
+  build-dockerfiles:
+    name: "Build dockerfiles"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🏗️ dockerfiles/Dockerfile.${{ matrix.dockerfile }}
+        run: |
+          docker build \
+            --tag well-typed/${{ matrix.dockerfile }} \
+            --file dockerfiles/Dockerfile.${{ matrix.dockerfile }} \
+            .
+
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - "collatzer"
+          - "dumper"
+          - "eventlog-live-influxdb"
+          - "eventlog-live-otelcol"
+          - "fibber"
+          - "ghc-events-show"
+          - "oddball"
 
   #############################################################################
   # Lint with actionlint
