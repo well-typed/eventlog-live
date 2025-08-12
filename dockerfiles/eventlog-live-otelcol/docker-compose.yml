@@ -1,7 +1,7 @@
 services:
   oddball:
     # container_name: oddball
-    image: "wenkokke/oddball:0.1.0.0"
+    image: "well-typed/eventlog-live-example-oddball:0.1.0.0"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.oddball"
@@ -17,7 +17,7 @@ services:
 
   eventlog-live-otelcol:
     # container_name: eventlog-live-otelcol
-    image: "wenkokke/eventlog-live-otelcol:0.1.0.0"
+    image: "well-typed/eventlog-live-otelcol:0.1.0.0"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.eventlog-live-otelcol"
@@ -65,3 +65,6 @@ services:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
       - 9090:9090
+
+volumes:
+  ghc_eventlog_socket:

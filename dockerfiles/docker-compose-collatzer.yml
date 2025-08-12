@@ -1,7 +1,7 @@
 services:
   oddball:
-    container_name: oddball
-    image: "wenkokke/oddball:0.1.0.0"
+    # container_name: oddball
+    image: "well-typed/eventlog-live-example-oddball:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.oddball"
@@ -15,8 +15,8 @@ services:
       - "-hT"
 
   collatzer:
-    container_name: collatzer
-    image: "wenkokke/collatzer:0.1.0.0"
+    # container_name: collatzer
+    image: "well-typed/eventlog-live-example-collatzer:0.1.0.0"
     build:
       context: ".."
       dockerfile: "./dockerfiles/Dockerfile.collatzer"
