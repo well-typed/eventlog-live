@@ -35,6 +35,12 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc-version }}
 
+      - name: 🛠️ Setup Protobuf Compiler
+        id: setup-protoc
+        uses: ./../.github/actions/setup-protoc
+        with:
+          protobuf-version: ${{ steps.dev-dependencies.outputs.protoc }}
+
       - name: 🗄️ Generate Cabal plan
         run: cabal build all --dry-run
 

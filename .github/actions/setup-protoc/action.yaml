@@ -1,0 +1,42 @@
+name: "Setup Protobuf Compiler"
+description: "Install the latest version of the Protobuf Compiler"
+inputs:
+  protoc-version:
+    required: true
+    description: "Version of protoc"
+runs:
+  using: composite
+  steps:
+    - name: 💾 Restore cache
+      uses: actions/cache/restore@v4
+      if: ${{ !env.ACT }}
+      with:
+        path: "${{ github.workspace }}/.protoc/bin"
+        key: ${{ runner.os }}-protoc-${{ inputs.protoc-version }}
+      id: cache-protoc
+
+    - name: 🛠️ Install protoc
+      if: ${{ env.ACT || steps.cache-protoc.outputs.cache-hit != 'true' }}
+      run: |
+        mkdir --parents "${{ github.workspace }}/.protoc/bin"
+        curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v30.2/protoc-30.2-linux-x86_64.zip"
+        PB_URL="${{
+          format(
+            'https://github.com/protocolbuffers/protobuf/releases/download/v{0}/protoc-{0}-{1}-{2}.zip',
+            inputs.protoc-version,
+            (runner.os == 'Linux' && 'linux') || (runner.os == 'macOS' && 'osx'),
+            (runner.os == 'Linux' && 'x86_64') || (runner.os == 'macOS' && 'aarch_64')
+          )
+          }}"
+      shell: bash
+
+    - name: 🛠️ Add ShellCheck to PATH
+      run: echo "${{ github.workspace }}/.protoc/bin" >> "$GITHUB_PATH"
+      shell: sh
+
+    - name: 💾 Save Cabal dependencies
+      uses: actions/cache/save@v4
+      if: ${{ !env.ACT && steps.cache-protoc.outputs.cache-hit != 'true' }}
+      with:
+        path: "${{ github.workspace }}/.protoc/bin"
+        key: ${{ steps.cache-protoc.outputs.cache-primary-key }}
