@@ -1,0 +1,47 @@
+name: "Setup Fourmolu"
+description: "Install a specific Fourmolu version"
+inputs:
+  fourmolu-version:
+    required: true
+    description: "Version of Fourmolu"
+  ghc-version:
+    required: true
+    description: "Version of GHC"
+  cabal-version:
+    required: true
+    description: "Version of cabal"
+runs:
+  using: composite
+  steps:
+    - name: 💾 Restore cache
+      uses: actions/cache/restore@v4
+      if: ${{ !env.ACT }}
+      id: cache-fourmolu
+      with:
+        path: "${{ github.workspace }}/.fourmolu/bin"
+        key: ${{ runner.os }}-fourmolu-${{ inputs.fourmolu-version }}
+
+    - name: 🛠️ Install Haskell
+      if: ${{ env.ACT || steps.cache-cabal-fmt.outputs.cache-hit != 'true' }}
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ inputs.ghc-version }}
+        cabal-version: ${{ inputs.cabal-version }}
+
+    - name: 🛠️ Install Fourmolu
+      if: ${{ env.ACT || steps.cache-fourmolu.outputs.cache-hit != 'true' }}
+      run: |
+        mkdir --parents "${{ github.workspace }}/.fourmolu/bin"
+        cabal install fourmolu-${{ inputs.fourmolu-version }} --overwrite-policy=always --install-method=copy --installdir="${{ github.workspace }}/.fourmolu/bin"
+      shell: sh
+
+    - name: 🛠️ Add Fourmolu to PATH
+      run: echo "${{ github.workspace }}/.fourmolu/bin" >> "$GITHUB_PATH"
+      shell: sh
+
+    - name: 💾 Save cache
+      uses: actions/cache/save@v4
+      if: ${{ !env.ACT && steps.cache-fourmolu.outputs.cache-hit != 'true' }}
+      with:
+        path: "${{ github.workspace }}/.fourmolu/bin"
+        key: ${{ steps.cache-fourmolu.outputs.cache-primary-key }}

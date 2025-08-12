@@ -1,0 +1,34 @@
+name: "Setup actionlint"
+description: "Install a specific actionlint version"
+inputs:
+  actionlint-version:
+    required: true
+    description: "Version of actionlint"
+runs:
+  using: composite
+  steps:
+    - name: 💾 Restore cache
+      uses: actions/cache/restore@v4
+      if: ${{ !env.ACT }}
+      with:
+        path: "${{ github.workspace }}/.actionlint/bin"
+        key: ${{ runner.os }}-actionlint-${{ inputs.actionlint-version }}
+      id: cache-actionlint
+
+    - name: 🛠️ Install actionlint
+      if: ${{ env.ACT || steps.cache-actionlint.outputs.cache-hit != 'true' }}
+      run: |
+        mkdir --parents "${{ github.workspace }}/.actionlint/bin"
+        bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) ${{ inputs.actionlint-version }} "${{ github.workspace }}/.actionlint/bin"
+      shell: bash
+
+    - name: 🛠️ Add ShellCheck to PATH
+      run: echo "${{ github.workspace }}/.actionlint/bin" >> "$GITHUB_PATH"
+      shell: sh
+
+    - name: 💾 Save Cabal dependencies
+      uses: actions/cache/save@v4
+      if: ${{ !env.ACT && steps.cache-actionlint.outputs.cache-hit != 'true' }}
+      with:
+        path: "${{ github.workspace }}/.actionlint/bin"
+        key: ${{ steps.cache-actionlint.outputs.cache-primary-key }}

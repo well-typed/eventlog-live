@@ -79,3 +79,184 @@ jobs:
           - "9.10.2"
         include:
           - name: false
+
+  #############################################################################
+  # Lint with actionlint
+  #############################################################################
+
+  lint-actionlint:
+    name: "Lint with actionlint"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: "Setup actionlint"
+        uses: ./.github/actions/setup-actionlint
+        with:
+          actionlint-version: ${{ steps.dev-dependencies.outputs.actionlint }}
+
+      - name: 🎗️ Lint with actionlint
+        run: ./scripts/lint-actionlint.sh
+
+  #############################################################################
+  # Lint with cabal
+  #############################################################################
+
+  lint-cabal:
+    name: "Lint with Cabal"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Install Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
+          cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
+        id: setup-haskell
+
+      - name: 🎗️ Lint with Cabal
+        run: ./scripts/lint-cabal.sh
+
+  #############################################################################
+  # Lint with cabal-fmt
+  #############################################################################
+
+  lint-cabal-fmt:
+    name: "Lint with cabal-fmt"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Install cabal-fmt
+        uses: ./.github/actions/setup-cabal-fmt
+        with:
+          cabal-fmt-version: ${{ steps.dev-dependencies.outputs.cabal-fmt }}
+          ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
+          cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
+
+      - name: 🎗️ Lint with cabal-fmt
+        run: ./scripts/lint-cabal-fmt.sh
+
+  #############################################################################
+  # Lint with HLint
+  #############################################################################
+
+  lint-hlint:
+    name: "Lint with HLint"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Install HLint
+        uses: haskell-actions/hlint-setup@v2
+        with:
+          version: ${{ steps.dev-dependencies.outputs.hlint }}
+        id: setup-hlint
+
+      - name: 🎗️ Lint with HLint
+        run: ./scripts/lint-hlint.sh
+        env:
+          HLINT: ${{ steps.setup-hlint.outputs.hlint-bin }}
+
+  #############################################################################
+  # Lint with Fourmolu
+  #############################################################################
+
+  lint-fourmolu:
+    name: "Lint with Fourmolu"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Install Fourmolu
+        uses: ./.github/actions/setup-fourmolu
+        with:
+          fourmolu-version: ${{ steps.dev-dependencies.outputs.fourmolu }}
+          ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
+          cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
+
+      - name: 🎗️ Lint with Fourmolu
+        run: ./scripts/lint-fourmolu.sh
+
+  #############################################################################
+  # Lint with Prettier
+  #############################################################################
+
+  lint-prettier:
+    name: "Lint with Prettier"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🎗️ Lint with Prettier
+        run: ./scripts/lint-prettier.sh
+        env:
+          PRETTIER: "npm exec --yes --package=prettier@${{ steps.dev-dependencies.outputs.prettier }} prettier --"
+
+  #############################################################################
+  # Lint with ShellCheck
+  #############################################################################
+
+  lint-shellcheck:
+    name: "Lint with ShellCheck"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Install ShellCheck
+        uses: ./.github/actions/setup-shellcheck
+        with:
+          shellcheck-version: ${{ steps.dev-dependencies.outputs.shellcheck }}
+
+      - name: 🎗️ Lint with ShellCheck
+        run: ./scripts/lint-shellcheck.sh
