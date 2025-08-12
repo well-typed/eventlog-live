@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # To build this image, run:
-# docker build --tag wenkokke/oddball:0.1.0.0 --file ./dockerfiles/Dockerfile.oddball .
+# docker build --tag well-typed/eventlog-live-example-oddball:0.1.0.0 --file ./dockerfiles/Dockerfile.oddball .
 
 # Use the Haskell image with GHC 9.12.2
 # See: https://hub.docker.com/_/haskell
