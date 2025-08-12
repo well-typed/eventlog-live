@@ -10,8 +10,9 @@ FROM haskell:9.10-slim-bullseye AS build
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-  "./eventlog-live/app-influxdb/Main.hs" \
-  "./eventlog-live/app-otelcol/Main.hs" \
+  "./eventlog-live-influxdb/app/Main.hs" \
+  "./eventlog-live-influxdb/eventlog-live-influxdb.cabal" \
+  "./eventlog-live-influxdb/LICENSE" \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
   "./eventlog-live/src/GHC/Eventlog/Live.hs" \
@@ -23,10 +24,8 @@ COPY --parents \
 # Create cabal.project file
 COPY <<EOF /eventlog-live/cabal.project
 packages: eventlog-live
+packages: eventlog-live-influxdb
 EOF
-
-# Install protoc
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y protobuf-compiler
 
 # Build eventlog-live-influxdb
 RUN <<EOF

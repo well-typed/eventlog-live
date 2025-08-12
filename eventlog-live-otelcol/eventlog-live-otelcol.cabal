@@ -1,0 +1,70 @@
+cabal-version: 3.12
+name:          eventlog-live-otelcol
+version:       0.1.0.0
+synopsis:      Stream eventlog data to the OpenTelemetry Collector.
+description:
+  This executable supports live streaming of eventlog data to the OpenTelemetry Collector.
+
+license:       AGPL-3.0-only
+license-file:  LICENSE
+author:        Wen Kokke
+maintainer:    wen@well-typed.com
+copyright:     (c) 2025 Well-Typed
+build-type:    Simple
+category:      Debug, Monitoring, System
+tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+
+common language
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wprepositive-qualified-module
+    -Wredundant-constraints -Wunticked-promoted-constructors
+    -Wunused-packages
+
+  default-language:   Haskell2010
+  default-extensions:
+    BangPatterns
+    DataKinds
+    DeriveFoldable
+    DeriveFunctor
+    DeriveTraversable
+    DerivingStrategies
+    DuplicateRecordFields
+    FlexibleContexts
+    FlexibleInstances
+    GADTs
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    KindSignatures
+    LambdaCase
+    MultiParamTypeClasses
+    NoFieldSelectors
+    NumericUnderscores
+    OverloadedRecordDot
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    TupleSections
+    TypeApplications
+    TypeFamilies
+
+executable eventlog-live-otelcol
+  import:          language
+  main-is:         Main.hs
+  hs-source-dirs:  app
+  other-modules:   PackageInfo_eventlog_live_otelcol
+  autogen-modules: PackageInfo_eventlog_live_otelcol
+  build-depends:
+    , base                                  >=4.16  && <4.21
+    , dlist                                 >=1.0   && <1.1
+    , eventlog-live                         >=0.1   && <0.2
+    , eventlog-live:eventlog-live-machines
+    , eventlog-live:eventlog-live-options
+    , ghc-events                            >=0.20  && <0.21
+    , grapesy                               >=1.1.0 && <1.2
+    , hs-opentelemetry-otlp                 >=0.1.0 && <0.2
+    , lens-family                           >=2.1.3 && <2.2
+    , machines                              >=0.7.4 && <0.8
+    , optparse-applicative                  >=0.19  && <0.20
+    , proto-lens                            >=0.7.1 && <0.8
+    , text                                  >=1.2   && <2.2

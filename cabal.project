@@ -1,5 +1,7 @@
 packages:
   eventlog-live
+  eventlog-live-influxdb
+  eventlog-live-otelcol
   examples/collatzer
   examples/dumper
   examples/fibber

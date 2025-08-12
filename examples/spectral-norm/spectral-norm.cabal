@@ -17,7 +17,7 @@ executable spectral-norm
   default-extensions: BangPatterns
   ghc-options:
     -threaded -rtsopts -funbox-strict-fields -optc-O3
-    -fexcess-precision -optc-ffast-math -Wno-x-partial
+    -fexcess-precision -optc-ffast-math
 
   build-depends:
     , base             >=4.14  && <5
