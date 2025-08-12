@@ -18,6 +18,7 @@ services:
   eventlog-live-influxdb:
     # container_name: eventlog-live-influxdb
     image: "well-typed/eventlog-live-example-eventlog-live-influxdb:0.1.0.0"
+    restart: "unless-stopped"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.eventlog-live-influxdb"
@@ -39,7 +40,7 @@ services:
   grafana:
     # container_name: grafana
     image: "grafana/grafana"
-    restart: "always"
+    restart: "unless-stopped"
     ports:
       - "3000:3000"
     healthcheck:

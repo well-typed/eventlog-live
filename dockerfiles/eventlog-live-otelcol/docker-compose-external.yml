@@ -2,7 +2,7 @@ services:
   grafana:
     # container_name: grafana
     image: grafana/grafana-oss:latest
-    restart: unless-stopped
+    restart: "unless-stopped"
     ports:
       - "3000:3000"
     healthcheck:
