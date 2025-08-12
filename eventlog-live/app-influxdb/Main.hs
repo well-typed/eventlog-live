@@ -3,41 +3,29 @@ module Main where
 import Control.Applicative (Alternative ((<|>)))
 import Control.Lens ((^.))
 import Control.Lens.Setter (set)
-import Control.Monad (unless, when)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Foldable (for_)
-import Data.Int (Int64)
-import Data.IntMap.Strict (IntMap)
-import Data.IntMap.Strict qualified as IM
-import Data.Kind (Constraint, Type)
-import Data.List (uncons)
-import Data.Machine.Is (Is)
-import Data.Machine.Plan (PlanT (..), await, yield)
+import Data.DList (DList)
+import Data.DList qualified as D
+import Data.Machine (mapping, (<~))
+import Data.Machine.Fanout (fanout)
+import Data.Machine.Plan (await)
 import Data.Machine.Process (ProcessT, (~>))
-import Data.Machine.Type (construct, repeatedly)
-import Data.Map.Strict (Map)
+import Data.Machine.Type (repeatedly)
 import Data.Map.Strict qualified as M
-import Data.Maybe (isNothing, mapMaybe)
-import Data.Text (Text)
-import Data.Text qualified as T
+import Data.Maybe (mapMaybe)
+import Data.String (IsString (..))
 import Data.Void (Void)
-import Data.Word (Word32, Word64, Word8)
+import Data.Word (Word32, Word64)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
 import GHC.Eventlog.Live
-import GHC.Eventlog.Live.Machines (batchByTick)
+import GHC.Eventlog.Live.Machines
 import GHC.Eventlog.Live.Options
-import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), ThreadStopStatus (..))
-import GHC.RTS.Events.Analysis qualified as Analysis
-import GHC.RTS.Events.Analysis.Thread (ThreadState (..))
-import GHC.RTS.Events.Analysis.Thread qualified as Analysis.Thread
-import GHC.Stack (HasCallStack)
+import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Options.Applicative qualified as O
-import System.Clock (TimeSpec)
-import System.Clock qualified as Clock
-import System.IO qualified as IO
-import Text.Printf (HPrintfType, hPrintf)
+import System.Clock (TimeSpec, fromNanoSecs)
 
 --------------------------------------------------------------------------------
 -- Main function
@@ -47,8 +35,10 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
   let toInfluxDB =
-        processEventsTick maybeHeapProfBreakdown
+        liftTick withStartTime
+          ~> liftTick (processHeapEvents maybeHeapProfBreakdown)
           ~> batchByTick
+          ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSocket
     batchInterval
@@ -58,339 +48,81 @@ main = do
     toInfluxDB
 
 --------------------------------------------------------------------------------
--- Writing to InfluxDB
+-- Heap events
 --------------------------------------------------------------------------------
 
-type Line = I.Line Clock.TimeSpec
-
-data Metric (tagOrField :: Type -> Constraint)
-  = forall a. (tagOrField a) => I.Key := a
-
-class Tag t where
-  toTag :: t -> Maybe I.Key
-
-instance (Tag t) => Tag (Maybe t) where
-  toTag :: Maybe t -> Maybe I.Key
-  toTag = (toTag =<<)
-
-instance Tag I.Key where
-  toTag :: I.Key -> Maybe I.Key
-  toTag = Just
-
-instance Tag Int where
-  toTag :: Int -> Maybe I.Key
-  toTag = toTag . show
-
-instance Tag Word8 where
-  toTag :: Word8 -> Maybe I.Key
-  toTag = toTag . show
-
-instance Tag Word32 where
-  toTag :: Word32 -> Maybe I.Key
-  toTag = toTag . show
-
-instance Tag Text where
-  toTag :: Text -> Maybe I.Key
-  toTag = toTag . I.Key
-
-instance Tag String where
-  toTag :: String -> Maybe I.Key
-  toTag = toTag . T.pack
-
-toTagSet :: [Metric Tag] -> Map I.Key I.Key
-toTagSet kts = M.fromList (mapMaybe (\(k := t) -> (k,) <$> toTag t) kts)
-
-class Field f where
-  toField :: f -> Maybe (I.Field 'I.NonNullable)
-
-instance (Field f) => Field (Maybe f) where
-  toField :: Maybe f -> Maybe (I.Field 'I.NonNullable)
-  toField = (toField =<<)
-
-integralToField :: (Integral i) => i -> I.Field 'I.NonNullable
-integralToField = I.FieldInt . fromIntegral
-
-instance Field Int where
-  toField :: Int -> Maybe (I.Field 'I.NonNullable)
-  toField = Just . integralToField
-
-instance Field Word32 where
-  toField :: Word32 -> Maybe (I.Field 'I.NonNullable)
-  toField = Just . integralToField
-
-instance Field Word64 where
-  toField :: Word64 -> Maybe (I.Field 'I.NonNullable)
-  toField = Just . integralToField
-
-instance Field String where
-  toField :: String -> Maybe (I.Field 'I.NonNullable)
-  toField = Just . I.FieldString . T.pack
-
-instance Field Text where
-  toField :: Text -> Maybe (I.Field 'I.NonNullable)
-  toField = Just . I.FieldString
-
-instance Field ThreadState where
-  toField :: ThreadState -> Maybe (I.Field 'I.NonNullable)
-  toField = toField . show
-
-toFieldSet :: [Metric Field] -> Map I.Key (I.Field 'I.NonNullable)
-toFieldSet kvs = M.fromList (mapMaybe (\(k := v) -> (k,) <$> toField v) kvs)
-
-line :: I.Measurement -> [Metric Tag] -> [Metric Field] -> Maybe TimeSpec -> Line
-line measurement tagSet fieldSet = I.Line measurement (toTagSet tagSet) (toFieldSet fieldSet)
+processHeapEvents ::
+  (MonadIO m) =>
+  Maybe HeapProfBreakdown ->
+  ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
+processHeapEvents maybeHeapProfBreakdown =
+  fanout
+    [ mapping (D.singleton . toLine "HeapAllocated")
+        <~ processHeapAllocatedData
+    , mapping (D.singleton . toLine "HeapSize")
+        <~ processHeapSizeData
+    , mapping (D.singleton . toLine "BlocksSize")
+        <~ processBlocksSizeData
+    , mapping (D.singleton . toLine "HeapLive")
+        <~ processHeapLiveData
+    , mapping
+        ( \i ->
+            D.fromList
+              [ toLine "MemCurrent" ((.current) <$> i)
+              , toLine "MemNeeded" ((.needed) <$> i)
+              , toLine "MemReturned" ((.returned) <$> i)
+              ]
+        )
+        <~ processMemReturnData
+    , mapping (D.singleton . toLine "HeapProfSample")
+        <~ processHeapProfSampleData maybeHeapProfBreakdown
+    ]
 
 --------------------------------------------------------------------------------
--- Measurements
+-- Interpreting metadata
+--------------------------------------------------------------------------------
 
-data EventProcessorState = EventProcessorState
-  { startRealtime :: Maybe Clock.TimeSpec
-  , currentHeapProfBreakdown :: Maybe HeapProfBreakdown
-  , currentHeapProfSampleEraStack :: [Word64]
-  , warnIfMissingHeapProfBreakdown :: Bool
-  , threadLabels :: IntMap Text
-  }
+class IsField v where
+  toField :: v -> I.Field 'I.NonNullable
 
-newEventProcessorState :: Maybe HeapProfBreakdown -> EventProcessorState
-newEventProcessorState maybeHeapProfBreakdown =
-  EventProcessorState
-    { startRealtime = Nothing
-    , currentHeapProfBreakdown = maybeHeapProfBreakdown
-    , currentHeapProfSampleEraStack = []
-    , warnIfMissingHeapProfBreakdown = True
-    , threadLabels = IM.empty
-    }
+instance IsField Word32 where
+  toField :: Word32 -> I.Field 'I.NonNullable
+  toField = I.FieldInt . fromIntegral
 
--- | Get whether or not an event is a thread event.
-isThreadEvent :: EventInfo -> Bool
-isThreadEvent = Analysis.alpha Analysis.Thread.threadMachine
+-- | __Warning__: This instance may cause overflow.
+instance IsField Word64 where
+  toField :: Word64 -> I.Field 'I.NonNullable
+  toField = I.FieldInt . fromIntegral
 
-{- | Determine the thread state after a thread event.
-
-This function should satisfy the following properties:
-
-prop> isThreadEvent evSpec ==> isJust (getThreadState evSpec)
-prop> Analysis.delta threadMachine threadState evSpec == getThreadState evSpec
--}
-getThreadState :: (HasCallStack) => EventInfo -> Maybe Analysis.Thread.ThreadState
-getThreadState = \case
-  CreateThread{} -> Just ThreadQueued
-  RunThread{} -> Just ThreadRunning
-  WakeupThread{} -> Just ThreadQueued
-  StopThread{status = StackOverflow} -> Just ThreadQueued
-  StopThread{status = HeapOverflow} -> Just ThreadQueued
-  StopThread{status = ForeignCall} -> Just ThreadQueued
-  StopThread{status = ThreadFinished} -> Just ThreadFinal
-  StopThread{} -> Just ThreadStopped
-  _ -> Nothing
-
-processEventsTick :: forall m. (MonadIO m) => Maybe HeapProfBreakdown -> ProcessT m (Tick Event) (Tick Line)
-processEventsTick = construct . go . newEventProcessorState
+toLine :: (IsField v) => I.Measurement -> (WithMeta v) -> I.Line TimeSpec
+toLine measurement@(I.Measurement measurementName) i =
+  I.Line measurement tagSet fieldSet timestamp
  where
-  go :: (MonadIO m) => EventProcessorState -> PlanT (Is (Tick Event)) (Tick Line) m ()
-  go st@EventProcessorState{..} =
-    await >>= \case
-      Tick -> yield Tick >> go st
-      Item Event{..} -> do
-        let emit measurement timestamp tagSet fieldSet =
-              yield (Item $ line measurement tagSet fieldSet timestamp) >> go st
-        let timestamp = (Clock.fromNanoSecs (toInteger evTime) +) <$> startRealtime
-        case evSpec of
-          --------------------------------------------------------------------
-          -- RTS Initialisation
-          --
-          -- This event announces the time at which the process was started.
-          WallClockTime{..} -> do
-            -- If this coercion overflows, you're running this in the year ~292B.
-            -- That's not my problem.
-            let secInt = fromIntegral sec :: Int64
-            let nsecInt = fromIntegral nsec :: Int64
-            go st{startRealtime = Just (Clock.TimeSpec secInt nsecInt)}
-          -- This event announces the heap profiling configuration for the process.
-          HeapProfBegin{..} -> do
-            go st{currentHeapProfBreakdown = Just heapProfBreakdown}
+  tagSet = M.fromList (mapMaybe (\(k, v) -> (I.Key k,) <$> toMaybeTag v) i.attr)
+  fieldSet = M.singleton (I.Key measurementName) (toField i.value)
+  timestamp = fromNanoSecs . toInteger <$> i.maybeTimeUnixNano
 
-          --------------------------------------------------------------------
-          -- Heap Profiling
-          --
-          -- This event announces the current size of the heap, in bytes,
-          -- calculated by how many megablocks are allocated.
-          HeapSize{..} -> do
-            emit
-              "HeapSize"
-              timestamp
-              [ "heapCapset" := heapCapset
-              ]
-              [ "sizeBytes" := sizeBytes
-              ]
-          -- This event announces the current size of the heap, in bytes,
-          -- calculated by how many blocks are allocated.
-          BlocksSize{..} -> do
-            emit
-              "BlocksSize"
-              timestamp
-              [ "heapCapset" := heapCapset
-              ]
-              [ "blocksSize" := blocksSize
-              ]
-          -- This event announces that a new chunk of heap has been allocated.
-          HeapAllocated{..} -> do
-            emit
-              "HeapAllocated"
-              timestamp
-              [ "heapCapset" := heapCapset
-              ]
-              [ "allocBytes" := allocBytes
-              ]
-          -- This event announces the current size of the live on-heap data.
-          HeapLive{..} -> do
-            emit
-              "HeapLive"
-              timestamp
-              [ "heapCapset" := heapCapset
-              ]
-              [ "liveBytes" := liveBytes
-              ]
-          -- This event announces the currently allocated megablocks and
-          -- attempts made to return them to the operating system.
-          -- If your heap is fragmented then the current value will be greater
-          -- than needed value but returned will be less than the difference
-          -- between the two.
-          MemReturn{..} -> do
-            emit
-              "MemReturn"
-              timestamp
-              [ "heapCapset" := heapCapset
-              ]
-              [ "current" := current
-              , "needed" := needed
-              , "returned" := returned
-              ]
-          -- This event announces the beginning of a series of heap profiling samples.
-          HeapProfSampleBegin{..} -> do
-            go st{currentHeapProfSampleEraStack = heapProfSampleEra : currentHeapProfSampleEraStack}
-          -- This event announces the end of a series of heap profiling samples.
-          HeapProfSampleEnd{..} -> do
-            -- Try and remove the current era from the era stack
-            case currentHeapProfSampleEraStack of
-              -- If there is none...
-              [] -> do
-                -- ...issue a warning
-                liftIO $ warnMismatchedHeapProfSampleEras heapProfSampleEra Nothing
-                -- ...and continue
-                go st
-              -- If there is one...
-              (currentHeapProfSampleEra : currentHeapProfSampleEraStack') -> do
-                -- ...and it is a *different* era...
-                unless (heapProfSampleEra == currentHeapProfSampleEra) . liftIO $
-                  -- ...issue a warning
-                  warnMismatchedHeapProfSampleEras heapProfSampleEra (Just currentHeapProfSampleEra)
-                -- ...and continue regardless
-                go st{currentHeapProfSampleEraStack = currentHeapProfSampleEraStack'}
-          -- This event announces a heap profiling sample.
-          HeapProfSampleString{..} -> do
-            -- If the heap profile breakdown is not known:
-            if isNothing currentHeapProfBreakdown
-              then do
-                -- ...issue a warning when the first heap profile sample is encountered
-                when warnIfMissingHeapProfBreakdown . liftIO $
-                  warnMissingHeapProfBreakdown
-                -- ...then ignore heap profile samples going forwards
-                go st{warnIfMissingHeapProfBreakdown = False}
-              else do
-                case currentHeapProfBreakdown of
-                  Just HeapProfBreakdownClosureType ->
-                    emit
-                      "HeapProfSample"
-                      timestamp
-                      [ "heapProfId" := heapProfId
-                      , "heapProfLabel" := heapProfLabel
-                      ]
-                      [ "heapProfResidency" := heapProfResidency
-                      , "heapProfSampleEra" := (fst <$> uncons currentHeapProfSampleEraStack)
-                      ]
-                  _ -> pure ()
-                -- liftIO . print $ (heapProfId, heapProfResidency, heapProfLabel)
-                go st
-
-          --------------------------------------------------------------------
-          -- Thread Profiling
-          --
-          -- These events announce thread state changes, which we handle all at
-          -- once by reducing them to a thread ID and the resulting thread state.
-          _ | isThreadEvent evSpec -> do
-            for_ (getThreadState evSpec) $ \threadState -> do
-              -- NOTE:
-              -- The `thread` field selector is a partial function, so this
-              -- is only safe because `getThreadState` returned a `Just`.
-              let threadId = fromIntegral (thread evSpec) :: Int
-              emit
-                "Capability"
-                timestamp
-                [ "threadId" := threadId
-                , "threadLabel" := IM.lookup threadId threadLabels
-                , "evCap" := evCap
-                ]
-                [ "state" := threadState
-                ]
-            go st
-
-          -- This event announces a thread name.
-          ThreadLabel{..} -> do
-            let threadId = fromIntegral thread :: Int
-            go st{threadLabels = IM.insert threadId threadlabel threadLabels}
-
-          -- This event announces the start of a GC.
-          StartGC{} -> do
-            emit
-              "Capability"
-              timestamp
-              [ "evCap" := evCap
-              ]
-              [ "state" := ("GCRunning" :: Text)
-              ]
-            go st
-
-          -- This event announces the end of a GC.
-          EndGC{} -> do
-            emit
-              "Capability"
-              timestamp
-              [ "evCap" := evCap
-              ]
-              [ "state" := ("GCStopped" :: Text)
-              ]
-            go st
-
-          --------------------------------------------------------------------
-          -- The remaining events are ignored.
-          _ignored -> go st
-
---------------------------------------------------------------------------------
--- Warnings
-
-warnMissingHeapProfBreakdown :: IO ()
-warnMissingHeapProfBreakdown =
-  warnf
-    "Warning: Cannot infer heap profile breakdown.\n\
-    \         If your binary was compiled with a GHC version prior to 9.14,\n\
-    \         you must also pass the heap profile type to this executable.\n\
-    \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
-
-warnMismatchedHeapProfSampleEras :: Word64 -> Maybe Word64 -> IO ()
-warnMismatchedHeapProfSampleEras endEra = \case
-  Nothing ->
-    warnf "Warning: Eventlog closed era %d, but there is no current era." endEra
-  Just currentEra ->
-    warnf "Warning: Eventlog closed era %d, but the current era is era %d." endEra currentEra
-
-warnf :: (HPrintfType r) => String -> r
-warnf = hPrintf IO.stderr
+  toMaybeTag :: AttrValue -> Maybe I.Key
+  toMaybeTag = \case
+    AttrInt v -> Just . fromString . show $ v
+    AttrInt8 v -> Just . fromString . show $ v
+    AttrInt16 v -> Just . fromString . show $ v
+    AttrInt32 v -> Just . fromString . show $ v
+    AttrInt64 v -> Just . fromString . show $ v
+    AttrWord v -> Just . fromString . show $ v
+    AttrWord8 v -> Just . fromString . show $ v
+    AttrWord16 v -> Just . fromString . show $ v
+    AttrWord32 v -> Just . fromString . show $ v
+    AttrWord64 v -> Just . fromString . show $ v
+    AttrDouble v -> Just . fromString . show $ v
+    AttrText v -> Just . I.Key $ v
+    AttrNull -> Nothing
 
 --------------------------------------------------------------------------------
 -- InfluxDB Batch Writer
+--------------------------------------------------------------------------------
 
-influxDBWriter :: I.WriteParams -> ProcessT IO [Line] Void
+influxDBWriter :: I.WriteParams -> ProcessT IO [I.Line TimeSpec] Void
 influxDBWriter writeParams = repeatedly go
  where
   go =
