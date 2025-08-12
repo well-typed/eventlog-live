@@ -12,7 +12,7 @@ echo "Build eventlog-live-influxdb"
 cabal build eventlog-live-influxdb -v0
 
 # Install cleanup handler
-trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+trap 'trap - TERM && kill -- -$$' INT TERM EXIT
 
 # Run oddball
 echo "Start oddball"

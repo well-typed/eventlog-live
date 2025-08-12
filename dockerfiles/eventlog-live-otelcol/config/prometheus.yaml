@@ -2,6 +2,6 @@ global:
   scrape_interval: 1s
 
 scrape_configs:
-  - job_name: 'otelcol'
+  - job_name: "otelcol"
     static_configs:
-      - targets: ['otelcol:9090']
+      - targets: ["otelcol:9090"]

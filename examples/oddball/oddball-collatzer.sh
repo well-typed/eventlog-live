@@ -14,7 +14,7 @@ cabal build collatzer
 echo
 
 # Install cleanup handler
-trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+trap 'trap - TERM && kill -- -$$' INT TERM EXIT
 
 # Run oddball
 echo "Run oddball"

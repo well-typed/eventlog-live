@@ -4,7 +4,7 @@ services:
     image: "influxdb:1.8"
     restart: "always"
     ports:
-    - "8086:8086"
+      - "8086:8086"
     healthcheck:
       test: "curl -f http://localhost:8086/ping"
       interval: 1m
@@ -21,7 +21,7 @@ services:
     image: "grafana/grafana"
     restart: "always"
     ports:
-    - "3000:3000"
+      - "3000:3000"
     healthcheck:
       test: "curl -f http://localhost:3000/api/health"
       interval: 1m

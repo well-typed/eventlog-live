@@ -109,15 +109,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "1s"
-              ],
+              "params": ["1s"],
               "type": "time"
             },
             {
-              "params": [
-                "heapProfLabel::tag"
-              ],
+              "params": ["heapProfLabel::tag"],
               "type": "tag"
             }
           ],
@@ -133,9 +129,7 @@
           "select": [
             [
               {
-                "params": [
-                  "HeapProfSample"
-                ],
+                "params": ["HeapProfSample"],
                 "type": "field"
               },
               {
@@ -242,15 +236,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "previous"
-              ],
+              "params": ["previous"],
               "type": "fill"
             }
           ],
@@ -265,9 +255,7 @@
           "select": [
             [
               {
-                "params": [
-                  "HeapSize"
-                ],
+                "params": ["HeapSize"],
                 "type": "field"
               },
               {
@@ -290,15 +278,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "previous"
-              ],
+              "params": ["previous"],
               "type": "fill"
             }
           ],
@@ -315,9 +299,7 @@
           "select": [
             [
               {
-                "params": [
-                  "BlocksSize"
-                ],
+                "params": ["BlocksSize"],
                 "type": "field"
               },
               {
@@ -340,15 +322,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "previous"
-              ],
+              "params": ["previous"],
               "type": "fill"
             }
           ],
@@ -365,9 +343,7 @@
           "select": [
             [
               {
-                "params": [
-                  "HeapLive"
-                ],
+                "params": ["HeapLive"],
                 "type": "field"
               },
               {
@@ -467,15 +443,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "null"
-              ],
+              "params": ["null"],
               "type": "fill"
             }
           ],
@@ -490,9 +462,7 @@
           "select": [
             [
               {
-                "params": [
-                  "MemCurrent"
-                ],
+                "params": ["MemCurrent"],
                 "type": "field"
               },
               {
@@ -515,15 +485,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "null"
-              ],
+              "params": ["null"],
               "type": "fill"
             }
           ],
@@ -540,9 +506,7 @@
           "select": [
             [
               {
-                "params": [
-                  "MemNeeded"
-                ],
+                "params": ["MemNeeded"],
                 "type": "field"
               },
               {
@@ -565,15 +529,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "null"
-              ],
+              "params": ["null"],
               "type": "fill"
             }
           ],
@@ -590,9 +550,7 @@
           "select": [
             [
               {
-                "params": [
-                  "MemReturned"
-                ],
+                "params": ["MemReturned"],
                 "type": "field"
               },
               {
@@ -691,15 +649,11 @@
           "fullMetaSearch": false,
           "groupBy": [
             {
-              "params": [
-                "15s"
-              ],
+              "params": ["15s"],
               "type": "time"
             },
             {
-              "params": [
-                "null"
-              ],
+              "params": ["null"],
               "type": "fill"
             }
           ],
@@ -714,9 +668,7 @@
           "select": [
             [
               {
-                "params": [
-                  "HeapAllocated"
-                ],
+                "params": ["HeapAllocated"],
                 "type": "field"
               },
               {

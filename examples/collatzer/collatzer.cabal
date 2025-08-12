@@ -9,63 +9,70 @@ copyright:     (c) 2021 Well-Typed
 license:       BSD-3-Clause
 license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
-tested-with:
-  GHC ==9.2.8
-   || ==9.4.8
-   || ==9.6.7
-   || ==9.8.4
-   || ==9.10.2
-   || ==9.12.2
+tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
 source-repository head
   type:     git
   location: https://github.com/well-typed/eventlog-live.git
-  subdir:   collatzer
-
+  subdir:   examples/collatzer
 
 library counters
-  ghc-options:      -Wall
-  hs-source-dirs:   src-counters/
-  default-language: Haskell2010
-  exposed-modules:  GHC.Eventlog.Counters
+  ghc-options:        -Wall
+  hs-source-dirs:     src-counters/
+  default-language:   Haskell2010
+  default-extensions:
+    NamedFieldPuns
+    RecordWildCards
+
+  exposed-modules:    GHC.Eventlog.Counters
   build-depends:
     , base        >=4.13   && <5
-    , containers
-    , ghc-events  >=0.17.0
-    , stm
+    , containers  >=0.6    && <0.8
+    , ghc-events  >=0.20.0 && <0.21
+    , stm         >=2.5    && <2.6
 
 library counters-ekg
-  ghc-options:      -Wall
-  hs-source-dirs:   src-counters-ekg/
-  default-language: Haskell2010
-  exposed-modules:  GHC.Eventlog.Counters.EKG
+  ghc-options:        -Wall
+  hs-source-dirs:     src-counters-ekg/
+  default-language:   Haskell2010
+  default-extensions: RecordWildCards
+  exposed-modules:    GHC.Eventlog.Counters.EKG
   build-depends:
-    , base               >=4.13 && <5
-    , ekg-core
+    , base                >=4.13  && <5
     , collatzer:counters
-    , stm
-    , text
+    , ekg-core            >=0.1.2 && <0.2
+    , stm                 >=2.5   && <2.6
+    , text                >=1.2   && <2.2
 
 executable collatzer
-  default-language: Haskell2010
-  hs-source-dirs:   app
-  ghc-options:      -Wall -threaded
-  main-is:          Main.hs
+  default-language:   Haskell2010
+  default-extensions:
+    ApplicativeDo
+    BangPatterns
+    GADTs
+    NumericUnderscores
+    RankNTypes
+    RecordWildCards
+    TypeOperators
+
+  hs-source-dirs:     app
+  ghc-options:        -Wall -threaded
+  main-is:            Main.hs
   build-depends:
-    , base                   >=4.16.0.0  && <5
-    , bytestring
-    , concurrent-output
-    , containers
-    , ekg
-    , ekg-core
+    , base                                  >=4.16    && <5
+    , bytestring                            >=0.11    && <0.13
     , collatzer:counters
     , collatzer:counters-ekg
-    , eventlog-live
+    , concurrent-output                     >=1.10.21 && <1.11
+    , containers                            >=0.6     && <0.8
+    , ekg                                   >=0.4.1   && <0.5
+    , ekg-core                              >=0.1.2   && <0.2
+    , eventlog-live                         >=0.1.0.0 && <0.2
     , eventlog-live:eventlog-live-machines
     , eventlog-live:eventlog-live-options
-    , ghc-events             >=0.17.0
-    , machines
-    , network
-    , optparse-applicative   >=0.16.1
-    , stm
-    , text
+    , ghc-events                            >=0.20.0  && <0.21
+    , machines                              >=0.7.4   && <0.8
+    , network                               >=3.2.7   && <3.3
+    , optparse-applicative                  >=0.19.0  && <0.20
+    , stm                                   >=2.5     && <2.6
+    , text                                  >=1.2     && <2.2

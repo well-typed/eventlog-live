@@ -2,8 +2,10 @@ cabal-version: 2.2
 name:          fibber
 version:       0.1.0.0
 synopsis:      Example with an interesting call profile.
-description:   Compute the Fibonacci sequence naively.
-author:        Wen Kokke
+description:
+  An implementation of the Fibonacci function that is quite naive.
+  Taken from the Haskell Wiki.
+
 maintainer:    wen@well-typed.com
 copyright:     (c) 2025 Well-Typed
 license:       BSD-3-Clause
@@ -22,8 +24,8 @@ executable fibber
   hs-source-dirs:   app
   default-language: Haskell2010
   build-depends:
-    , base             >=4.14 && <5
-    , eventlog-socket
+    , base             >=4.14  && <5
+    , eventlog-socket  >=0.1.0 && <0.2
 
   ghc-options:
     -threaded -rtsopts

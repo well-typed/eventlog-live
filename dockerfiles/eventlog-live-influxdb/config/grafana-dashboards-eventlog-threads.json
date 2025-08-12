@@ -114,9 +114,7 @@
         {
           "groupBy": [
             {
-              "params": [
-                "evCap::tag"
-              ],
+              "params": ["evCap::tag"],
               "type": "tag"
             }
           ],
@@ -128,9 +126,7 @@
           "select": [
             [
               {
-                "params": [
-                  "state"
-                ],
+                "params": ["state"],
                 "type": "field"
               }
             ]
@@ -235,9 +231,7 @@
         {
           "groupBy": [
             {
-              "params": [
-                "threadId::tag"
-              ],
+              "params": ["threadId::tag"],
               "type": "tag"
             }
           ],
@@ -251,9 +245,7 @@
           "select": [
             [
               {
-                "params": [
-                  "state"
-                ],
+                "params": ["state"],
                 "type": "field"
               }
             ]
