@@ -1,13 +1,12 @@
 module GHC.Eventlog.Live.Options (
   eventlogSocketParser,
   heapProfBreakdownParser,
-  heapProfBreakdownEitherReader,
-  heapProfBreakdownShow,
   eventlogLogFileParser,
   batchIntervalParser,
 ) where
 
 import GHC.Eventlog.Live (EventlogSocket (..))
+import GHC.Eventlog.Live.Machines (heapProfBreakdownEitherReader)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 
@@ -36,32 +35,6 @@ heapProfBreakdownParser =
         <> O.metavar "[Tcmdyrbi]"
         <> O.help "Heap profile breakdown."
     )
-
-heapProfBreakdownEitherReader :: String -> Either String HeapProfBreakdown
-heapProfBreakdownEitherReader =
-  \case
-    "T" -> Right HeapProfBreakdownClosureType
-    "c" -> Right HeapProfBreakdownCostCentre
-    "m" -> Right HeapProfBreakdownModule
-    "d" -> Right HeapProfBreakdownClosureDescr
-    "y" -> Right HeapProfBreakdownTypeDescr
-    "e" -> Right HeapProfBreakdownEra
-    "r" -> Right HeapProfBreakdownRetainer
-    "b" -> Right HeapProfBreakdownBiography
-    "i" -> Right HeapProfBreakdownInfoTable
-    str -> Left $ "Unsupported heap profile breakdown -h" <> str
-
-heapProfBreakdownShow :: HeapProfBreakdown -> String
-heapProfBreakdownShow = ("-h" <>) . \case
-  HeapProfBreakdownClosureType -> "T"
-  HeapProfBreakdownCostCentre -> "c"
-  HeapProfBreakdownModule -> "m"
-  HeapProfBreakdownClosureDescr -> "d"
-  HeapProfBreakdownTypeDescr -> "y"
-  HeapProfBreakdownEra -> "e"
-  HeapProfBreakdownRetainer -> "r"
-  HeapProfBreakdownBiography -> "b"
-  HeapProfBreakdownInfoTable -> "i"
 
 --------------------------------------------------------------------------------
 -- Eventlog Log File
