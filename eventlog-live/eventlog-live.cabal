@@ -85,16 +85,6 @@ library eventlog-live-machines
     , transformers
     , unordered-containers
 
-library eventlog-live-lens
-  import:          language
-  visibility:      public
-  hs-source-dirs:  src-lens
-  exposed-modules: GHC.Eventlog.Live.Lens
-  build-depends:
-    , base
-    , ghc-events
-    , lens-family
-
 executable eventlog-live-influxdb
   import:         language
   main-is:        Main.hs
