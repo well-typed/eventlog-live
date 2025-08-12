@@ -18,6 +18,7 @@ services:
   eventlog-live-otelcol:
     # container_name: eventlog-live-otelcol
     image: "well-typed/eventlog-live-otelcol:0.1.0.0"
+    restart: "unless-stopped"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.eventlog-live-otelcol"
@@ -36,7 +37,7 @@ services:
   grafana:
     # container_name: grafana
     image: grafana/grafana-oss:latest
-    restart: unless-stopped
+    restart: "unless-stopped"
     ports:
       - "3000:3000"
     healthcheck:
