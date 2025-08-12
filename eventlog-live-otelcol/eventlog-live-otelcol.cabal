@@ -58,8 +58,8 @@ executable eventlog-live-otelcol
     , base                                  >=4.16  && <4.21
     , dlist                                 >=1.0   && <1.1
     , eventlog-live                         >=0.1   && <0.2
-    , eventlog-live:eventlog-live-machines
-    , eventlog-live:eventlog-live-options
+    , eventlog-live:machines
+    , eventlog-live:options
     , ghc-events                            >=0.20  && <0.21
     , grapesy                               >=1.1.0 && <1.2
     , hs-opentelemetry-otlp                 >=0.1.0 && <0.2

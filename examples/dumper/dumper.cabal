@@ -23,8 +23,8 @@ executable dumper
     , base                                  >=4.16    && <4.21
     , bytestring                            >=0.11    && <0.13
     , eventlog-live                         >=0.1.0.0 && <0.2
-    , eventlog-live:eventlog-live-machines
-    , eventlog-live:eventlog-live-options
+    , eventlog-live:machines
+    , eventlog-live:options
     , ghc-events                            >=0.20.0  && <0.21
     , machines                              >=0.7.4   && <0.8
     , network                               >=3.2.7   && <3.3

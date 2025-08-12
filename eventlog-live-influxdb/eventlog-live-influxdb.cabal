@@ -58,8 +58,8 @@ executable eventlog-live-influxdb
     , containers                            >=0.6   && <0.8
     , dlist                                 >=1.0   && <1.1
     , eventlog-live                         >=0.1   && <0.2
-    , eventlog-live:eventlog-live-machines
-    , eventlog-live:eventlog-live-options
+    , eventlog-live:machines
+    , eventlog-live:options
     , ghc-events                            >=0.20  && <0.21
     , influxdb                              >=1.9.3 && <1.10
     , lens-family                           >=2.1.3 && <2.2

@@ -55,13 +55,13 @@ library
   exposed-modules: GHC.Eventlog.Live
   build-depends:
     , base                                  >=4.16  && <4.21
-    , eventlog-live:eventlog-live-machines
+    , eventlog-live:machines
     , ghc-events                            >=0.20  && <0.21
     , machines                              >=0.7.4 && <0.8
     , network                               >=3.2.7 && <3.3
     , unliftio-core                         >=0.2.1 && <0.3
 
-library eventlog-live-options
+library options
   import:          language
   visibility:      public
   hs-source-dirs:  src-options
@@ -69,11 +69,11 @@ library eventlog-live-options
   build-depends:
     , base                                  >=4.16 && <4.21
     , eventlog-live
-    , eventlog-live:eventlog-live-machines
+    , eventlog-live:machines
     , ghc-events                            >=0.20 && <0.21
     , optparse-applicative                  >=0.19 && <0.20
 
-library eventlog-live-machines
+library machines
   import:          language
   visibility:      public
   hs-source-dirs:  src-machines
