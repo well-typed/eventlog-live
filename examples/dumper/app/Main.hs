@@ -24,33 +24,33 @@ import qualified Text.Regex.TDFA as RE
 
 main :: IO ()
 main = do
-    Options{..} <- O.execParser options
-    runWithEventlogSocket
-        batchInterval
-        Nothing
-        eventlogSocket
-        Nothing
-        $ printSink (RE.makeRegex <$> eventlogPattern)
+  Options{..} <- O.execParser options
+  runWithEventlogSocket
+    batchInterval
+    Nothing
+    eventlogSocket
+    Nothing
+    $ printSink (RE.makeRegex <$> eventlogPattern)
 
 -- | Filter entries and print them to standard output.
 printSink :: (Show a) => Maybe RE.Regex -> ProcessT IO a Void
 printSink maybePattern = repeatedly go
-  where
-    go =
-        await >>= \ev -> do
-            let evStr = show ev
-            when (maybe True (`RE.matchTest` evStr) maybePattern) . liftIO $
-                putStrLn evStr
+ where
+  go =
+    await >>= \ev -> do
+      let evStr = show ev
+      when (maybe True (`RE.matchTest` evStr) maybePattern) . liftIO $
+        putStrLn evStr
 
 -- | Connect to eventlog socket.
 connect :: EventlogSocket -> IO Handle
 connect = \case
-    EventlogSocketUnix socketName -> do
-        socket <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
-        S.connect socket (S.SockAddrUnix socketName)
-        handle <- S.socketToHandle socket IO.ReadMode
-        IO.hSetBuffering handle IO.NoBuffering
-        pure handle
+  EventlogSocketUnix socketName -> do
+    socket <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
+    S.connect socket (S.SockAddrUnix socketName)
+    handle <- S.socketToHandle socket IO.ReadMode
+    IO.hSetBuffering handle IO.NoBuffering
+    pure handle
 
 --------------------------------------------------------------------------------
 -- Options
@@ -60,21 +60,21 @@ options :: O.ParserInfo Options
 options = O.info (optionsParser O.<**> O.helper) O.idm
 
 data Options = Options
-    { eventlogSocket :: EventlogSocket
-    , batchInterval :: Int
-    , eventlogPattern :: Maybe ByteString
-    }
+  { eventlogSocket :: EventlogSocket
+  , batchInterval :: Int
+  , eventlogPattern :: Maybe ByteString
+  }
 
 optionsParser :: O.Parser Options
 optionsParser =
-    Options
-        <$> eventlogSocketParser
-        <*> batchIntervalParser
-        <*> O.optional
-            ( O.strOption
-                ( O.short 'P'
-                    <> O.long "pattern"
-                    <> O.help "Regular expression to filter events"
-                    <> O.metavar "PATTERN"
-                )
-            )
+  Options
+    <$> eventlogSocketParser
+    <*> batchIntervalParser
+    <*> O.optional
+      ( O.strOption
+          ( O.short 'P'
+              <> O.long "pattern"
+              <> O.help "Regular expression to filter events"
+              <> O.metavar "PATTERN"
+          )
+      )

@@ -22,14 +22,14 @@ import Data.Maybe
 import Foreign
 import Foreign.Marshal.Array
 import GHC.Base (
-    Double (..),
-    Int (..),
-    int2Double#,
-    quotInt,
-    uncheckedIShiftRA#,
-    (*#),
-    (+#),
-    (/##),
+  Double (..),
+  Int (..),
+  int2Double#,
+  quotInt,
+  uncheckedIShiftRA#,
+  (*#),
+  (+#),
+  (/##),
  )
 import GHC.Conc
 import GHC.Eventlog.Socket
@@ -40,26 +40,26 @@ type Reals = Ptr Double
 
 main :: IO ()
 main = do
-    eventlogSocket <-
-        fromMaybe "/tmp/ghc_eventlog.sock"
-            <$> lookupEnv "GHC_EVENTLOG_SOCKET"
-    startWait eventlogSocket
-    ns <- getArgs
-    for_ (map read ns) $ \n ->
-        allocaArray n $ \u -> allocaArray n $ \v -> do
-            forM_ [0 .. n - 1] $ \i -> pokeElemOff u i 1 >> pokeElemOff v i 0
-            powerMethod 10 n u v
-            printf "%.9f\n" =<< eigenvalue n u v 0 0 0
+  eventlogSocket <-
+    fromMaybe "/tmp/ghc_eventlog.sock"
+      <$> lookupEnv "GHC_EVENTLOG_SOCKET"
+  startWait eventlogSocket
+  ns <- getArgs
+  for_ (map read ns) $ \n ->
+    allocaArray n $ \u -> allocaArray n $ \v -> do
+      forM_ [0 .. n - 1] $ \i -> pokeElemOff u i 1 >> pokeElemOff v i 0
+      powerMethod 10 n u v
+      printf "%.9f\n" =<< eigenvalue n u v 0 0 0
 
 ------------------------------------------------------------------------
 
 eigenvalue :: Int -> Reals -> Reals -> Int -> Double -> Double -> IO Double
 eigenvalue !n !u !v !i !vBv !vv
-    | i < n = do
-        ui <- peekElemOff u i
-        vi <- peekElemOff v i
-        eigenvalue n u v (i + 1) (vBv + ui * vi) (vv + vi * vi)
-    | otherwise = return $! sqrt $! vBv / vv
+  | i < n = do
+      ui <- peekElemOff u i
+      vi <- peekElemOff v i
+      eigenvalue n u v (i + 1) (vBv + ui * vi) (vv + vi * vi)
+  | otherwise = return $! sqrt $! vBv / vv
 
 ------------------------------------------------------------------------
 
@@ -68,73 +68,73 @@ data CyclicBarrier = Cyclic !Int !(MVar (Int, [MVar ()]))
 
 await :: CyclicBarrier -> IO ()
 await (Cyclic k waitsVar) = do
-    (x, waits) <- takeMVar waitsVar
-    if x <= 1
-        then do
-            mapM_ (`putMVar` ()) waits
-            putMVar waitsVar (k, [])
-        else do
-            var <- newEmptyMVar
-            putMVar waitsVar (x - 1, var : waits)
-            takeMVar var
+  (x, waits) <- takeMVar waitsVar
+  if x <= 1
+    then do
+      mapM_ (`putMVar` ()) waits
+      putMVar waitsVar (k, [])
+    else do
+      var <- newEmptyMVar
+      putMVar waitsVar (x - 1, var : waits)
+      takeMVar var
 
 newCyclicBarrier :: Int -> IO CyclicBarrier
 newCyclicBarrier k = Cyclic k <$> newMVar (k, [])
 
 powerMethod :: Int -> Int -> Reals -> Reals -> IO ()
 powerMethod z n u v = allocaArray n $ \ !t -> do
-    let chunk = (n + numCapabilities - 1) `quotInt` numCapabilities
-    !barrier <- newCyclicBarrier $! (n + chunk - 1) `quotInt` chunk
-    let timesAtAv !s !d l r = do
-            timesAv n s t l r
-            await barrier
-            timesAtv n t d l r
-            await barrier
-    let thread !l !r = do
-            threadId <- myThreadId
-            labelThread threadId (printf "powerMethod#thread(%d,%d)" l r)
-            replicateM_ z $ do
-                timesAtAv u v l r
-                timesAtAv v u l r
-    let go l = case l + chunk of
-            r
-                | r < n -> forkIO (thread l r) >> go r
-                | otherwise -> thread l n
-    go 0
+  let chunk = (n + numCapabilities - 1) `quotInt` numCapabilities
+  !barrier <- newCyclicBarrier $! (n + chunk - 1) `quotInt` chunk
+  let timesAtAv !s !d l r = do
+        timesAv n s t l r
+        await barrier
+        timesAtv n t d l r
+        await barrier
+  let thread !l !r = do
+        threadId <- myThreadId
+        labelThread threadId (printf "powerMethod#thread(%d,%d)" l r)
+        replicateM_ z $ do
+          timesAtAv u v l r
+          timesAtAv v u l r
+  let go l = case l + chunk of
+        r
+          | r < n -> forkIO (thread l r) >> go r
+          | otherwise -> thread l n
+  go 0
 
 timesAv :: Int -> Reals -> Reals -> Int -> Int -> IO ()
 timesAv !n !u !au !l !r = go l
-  where
-    go :: Int -> IO ()
-    go !i = when (i < r) $ do
-        let avsum !j !acc
-                | j < n = do
-                    !uj <- peekElemOff u j
-                    avsum (j + 1) (acc + (aij i j * uj))
-                | otherwise = pokeElemOff au i acc >> go (i + 1)
-        avsum 0 0
+ where
+  go :: Int -> IO ()
+  go !i = when (i < r) $ do
+    let avsum !j !acc
+          | j < n = do
+              !uj <- peekElemOff u j
+              avsum (j + 1) (acc + (aij i j * uj))
+          | otherwise = pokeElemOff au i acc >> go (i + 1)
+    avsum 0 0
 
 timesAtv :: Int -> Reals -> Reals -> Int -> Int -> IO ()
 timesAtv !n !u !a !l !r = go l
-  where
-    go :: Int -> IO ()
-    go !i = when (i < r) $ do
-        let atvsum !j !acc
-                | j < n = do
-                    !uj <- peekElemOff u j
-                    atvsum (j + 1) (acc + (aij j i * uj))
-                | otherwise = pokeElemOff a i acc >> go (i + 1)
-        atvsum 0 0
+ where
+  go :: Int -> IO ()
+  go !i = when (i < r) $ do
+    let atvsum !j !acc
+          | j < n = do
+              !uj <- peekElemOff u j
+              atvsum (j + 1) (acc + (aij j i * uj))
+          | otherwise = pokeElemOff a i acc >> go (i + 1)
+    atvsum 0 0
 
 --
 -- manually unbox the inner loop:
 -- aij i j = 1 / fromIntegral ((i+j) * (i+j+1) `div` 2 + i + 1)
 --
 aij (I# i) (I# j) =
-    D#
-        ( case i +# j of
-            n ->
-                1.0##
-                    /## int2Double#
-                        (((n *# (n +# 1#)) `uncheckedIShiftRA#` 1#) +# (i +# 1#))
-        )
+  D#
+    ( case i +# j of
+        n ->
+          1.0##
+            /## int2Double#
+              (((n *# (n +# 1#)) `uncheckedIShiftRA#` 1#) +# (i +# 1#))
+    )

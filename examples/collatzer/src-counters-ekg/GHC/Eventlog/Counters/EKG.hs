@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Counters.EKG (
-    registerCounters,
+  registerCounters,
 ) where
 
 import Control.Concurrent.STM (STM, atomically, readTVar)
@@ -26,20 +26,20 @@ import qualified System.Metrics as EKG
 -}
 registerCounters :: Counters -> EKG.Store -> IO ()
 registerCounters Counters{..} ekg = do
-    registerGauge "eventlog.time" ekg $ do
-        fromIntegral <$> readTVar cntTime
+  registerGauge "eventlog.time" ekg $ do
+    fromIntegral <$> readTVar cntTime
 
-    registerGauge "eventlog.heapsize" ekg $ do
-        fromIntegral <$> readTVar cntHeapSize
+  registerGauge "eventlog.heapsize" ekg $ do
+    fromIntegral <$> readTVar cntHeapSize
 
-    registerGauge "eventlog.heaplive" ekg $ do
-        fromIntegral <$> readTVar cntHeapLive
+  registerGauge "eventlog.heaplive" ekg $ do
+    fromIntegral <$> readTVar cntHeapLive
 
-    registerCounter "eventlog.heapalloc" ekg $ do
-        fromIntegral <$> readTVar cntHeapAlloc
+  registerCounter "eventlog.heapalloc" ekg $ do
+    fromIntegral <$> readTVar cntHeapAlloc
 
-    registerGauge "eventlog.totalThreads" ekg $ do
-        fromIntegral . length <$> readTVar cntThreads
+  registerGauge "eventlog.totalThreads" ekg $ do
+    fromIntegral . length <$> readTVar cntThreads
 
 -------------------------------------------------------------------------------
 -- Helpers
@@ -47,8 +47,8 @@ registerCounters Counters{..} ekg = do
 
 registerCounter :: Text -> EKG.Store -> STM Int64 -> IO ()
 registerCounter name ekg action =
-    EKG.registerCounter name (atomically action) ekg
+  EKG.registerCounter name (atomically action) ekg
 
 registerGauge :: Text -> EKG.Store -> STM Int64 -> IO ()
 registerGauge name ekg action =
-    EKG.registerGauge name (atomically action) ekg
+  EKG.registerGauge name (atomically action) ekg

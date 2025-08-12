@@ -54,12 +54,12 @@ library
   hs-source-dirs:  src
   exposed-modules: GHC.Eventlog.Live
   build-depends:
-    , base                                  >=4.16  && <4.21
+    , base                    >=4.16  && <4.21
     , eventlog-live:machines
-    , ghc-events                            >=0.20  && <0.21
-    , machines                              >=0.7.4 && <0.8
-    , network                               >=3.2.7 && <3.3
-    , unliftio-core                         >=0.2.1 && <0.3
+    , ghc-events              >=0.20  && <0.21
+    , machines                >=0.7.4 && <0.8
+    , network                 >=3.2.7 && <3.3
+    , unliftio-core           >=0.2.1 && <0.3
 
 library options
   import:          language
@@ -67,11 +67,11 @@ library options
   hs-source-dirs:  src-options
   exposed-modules: GHC.Eventlog.Live.Options
   build-depends:
-    , base                                  >=4.16 && <4.21
+    , base                    >=4.16 && <4.21
     , eventlog-live
     , eventlog-live:machines
-    , ghc-events                            >=0.20 && <0.21
-    , optparse-applicative                  >=0.19 && <0.20
+    , ghc-events              >=0.20 && <0.21
+    , optparse-applicative    >=0.19 && <0.20
 
 library machines
   import:          language
