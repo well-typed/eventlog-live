@@ -11,14 +11,15 @@ license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
 
 executable oddball
-  main-is:          Main.hs
-  hs-source-dirs:   app
-  default-language: Haskell2010
-  ghc-options:      -threaded -rtsopts -finfo-table-map
+  main-is:            Main.hs
+  hs-source-dirs:     app
+  default-language:   Haskell2010
+  default-extensions: TypeApplications
+  ghc-options:        -threaded -rtsopts -finfo-table-map
   build-depends:
-    , base             >=4.14 && <5
-    , eventlog-socket
-    , random
+    , base             >=4.14  && <5
+    , eventlog-socket  >=0.1.0 && <0.2
+    , random           >=1.3.1 && <1.4
 
   if impl(ghc <9.4)
     ghc-options: -eventlog

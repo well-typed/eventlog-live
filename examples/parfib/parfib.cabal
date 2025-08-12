@@ -2,7 +2,11 @@ cabal-version: 2.4
 name:          parfib
 version:       0.1.0.0
 synopsis:      Example with an interesting thread profile.
-description:   Ever popular nfib, now in parallel.
+description:
+  An implementation of the Fibonnaci function using spark parallelism.
+  Taken from the GHC's @nofib@ benchmarks.
+
+maintainer:    wen@well-typed.com
 license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
 
@@ -12,9 +16,9 @@ executable parfib
   default-language: Haskell2010
   ghc-options:      -threaded -rtsopts -finfo-table-map
   build-depends:
-    , base             >=4.14 && <5
-    , eventlog-socket
-    , parallel         >=3.2  && <3.3
+    , base             >=4.14  && <5
+    , eventlog-socket  >=0.1.0 && <0.2
+    , parallel         >=3.2   && <3.3
 
   if impl(ghc <9.4)
     ghc-options: -eventlog

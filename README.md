@@ -71,7 +71,6 @@ If you wish for your application to block until the client process connects to t
 
 To enable runtime configuration of various eventlog options, you must compile your application with the `-rtsopts` GHC option.
 
-
 ```cabal
 executable my-app
   ...
@@ -89,7 +88,6 @@ executable my-app
     ghc-options: -eventlog
   ...
 ```
-
 
 The program `ekg-eventlog-influxdb` requires that your eventlog is written in binary form, which requires the `-l` RTS option.
 The heap statistics visualisation in the demo requires that your application is run with heap profiling enabled, which requires the `-hT` RTS option.

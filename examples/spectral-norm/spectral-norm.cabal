@@ -2,18 +2,26 @@ cabal-version: 2.4
 name:          spectral-norm
 version:       0.1.0.0
 synopsis:      Example with an interesting thread profile.
-description:   The Computer Language Benchmarks Game, spectral-norm.
+description:
+  An implementation of spectral-norm from The Computer Language Benchmarks Game.
+  Taken from the GHC's @nofib@ benchmarks.
+
+maintainer:    wen@well-typed.com
 license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
 
 executable spectral-norm
-  main-is:          Main.hs
-  hs-source-dirs:   app
-  default-language: Haskell2010
-  ghc-options:      -threaded -rtsopts -funbox-strict-fields -O2 -optc-O3 -fexcess-precision -optc-ffast-math -Wno-x-partial
+  main-is:            Main.hs
+  hs-source-dirs:     app
+  default-language:   Haskell2010
+  default-extensions: BangPatterns
+  ghc-options:
+    -threaded -rtsopts -funbox-strict-fields -optc-O3
+    -fexcess-precision -optc-ffast-math -Wno-x-partial
+
   build-depends:
-    , base             >=4.14 && <5
-    , eventlog-socket
+    , base             >=4.14  && <5
+    , eventlog-socket  >=0.1.0 && <0.2
 
   if impl(ghc <9.4)
     ghc-options: -eventlog

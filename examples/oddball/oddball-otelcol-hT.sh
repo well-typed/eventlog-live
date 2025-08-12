@@ -12,7 +12,7 @@ echo "Build eventlog-live-otelcol"
 cabal build eventlog-live-otelcol -v0
 
 # Install cleanup handler
-trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+trap 'trap - TERM && kill -- -$$' INT TERM EXIT
 
 # Run oddball
 echo "Start oddball"

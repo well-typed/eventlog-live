@@ -2,7 +2,6 @@
 
 # Set the eventlog socket
 export GHC_EVENTLOG_SOCKET="/tmp/fibber_eventlog.sock"
-GHC_EVENTLOG="/tmp/fibber.eventlog"
 
 # Build fibber
 echo "Build fibber"
