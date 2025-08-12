@@ -21,7 +21,7 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), MemReturnData (..), Tick, WithMeta (..), WithStartTime, batchByTick, liftTick, processBlocksSizeData, processHeapAllocatedData, processHeapLiveData, processHeapProfSampleData, processHeapSizeData, processMemReturnData, withStartTime)
+import GHC.Eventlog.Live.Machines
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 ((&), (.~), (^.))
@@ -38,7 +38,7 @@ import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qual
 import Proto.Opentelemetry.Proto.Common.V1.Common (AnyValue, InstrumentationScope, KeyValue)
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as C
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics (AggregationTemporality (..), Metric, Metric'Data (..), NumberDataPoint, NumberDataPoint'Value (NumberDataPoint'AsInt), ResourceMetrics, ScopeMetrics, Sum)
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as F
+import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as MF
 import System.IO qualified as IO
 import Text.Printf (printf)
 
@@ -58,7 +58,7 @@ main = do
           ]
         ~> mapping D.toList
         ~> asScopeMetrics
-          [ F.scope .~ eventlogLiveScope
+          [ MF.scope .~ eventlogLiveScope
           ]
         ~> asResourceMetric []
         ~> asExportMetricServiceRequest
@@ -67,6 +67,245 @@ main = do
 
 displayExceptions :: (MonadIO m, Exception e) => ProcessT m e Void
 displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . displayException
+
+--------------------------------------------------------------------------------
+-- Heap Events
+--------------------------------------------------------------------------------
+
+processHeapEvents ::
+  (MonadIO m) =>
+  Maybe HeapProfBreakdown ->
+  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
+processHeapEvents maybeHeapProfBreakdown =
+  fanout
+    [ processHeapAllocated
+    , processBlocksSize
+    , processHeapSize
+    , processHeapLive
+    , processMemReturn
+    , processHeapProfSample maybeHeapProfBreakdown
+    ]
+
+--------------------------------------------------------------------------------
+-- HeapAllocated
+
+processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList Metric)
+processHeapAllocated =
+  liftTick (processHeapAllocatedData ~> asNumberDataPoint)
+    ~> batchByTickList
+    ~> asSum
+      [ MF.aggregationTemporality .~ AGGREGATION_TEMPORALITY_DELTA
+      , MF.isMonotonic .~ True
+      ]
+    ~> asMetric
+      [ MF.name .~ "HeapAllocated"
+      , MF.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
+      , MF.unit .~ "By"
+      ]
+    ~> mapping D.singleton
+
+--------------------------------------------------------------------------------
+-- HeapSize
+
+processHeapSize :: Process (Tick (WithStartTime Event)) (DList Metric)
+processHeapSize =
+  liftTick (processHeapSizeData ~> asNumberDataPoint)
+    ~> batchByTickList
+    ~> asGauge
+    ~> asMetric
+      [ MF.name .~ "HeapSize"
+      , MF.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
+      , MF.unit .~ "By"
+      ]
+    ~> mapping D.singleton
+
+--------------------------------------------------------------------------------
+-- BlocksSize
+
+processBlocksSize :: Process (Tick (WithStartTime Event)) (DList Metric)
+processBlocksSize =
+  liftTick (processBlocksSizeData ~> asNumberDataPoint)
+    ~> batchByTickList
+    ~> asGauge
+    ~> asMetric
+      [ MF.name .~ "BlocksSize"
+      , MF.description .~ "Report the current heap size, calculated by the allocated number of blocks."
+      , MF.unit .~ "By"
+      ]
+    ~> mapping D.singleton
+
+--------------------------------------------------------------------------------
+-- HeapLive
+
+processHeapLive :: Process (Tick (WithStartTime Event)) (DList Metric)
+processHeapLive =
+  liftTick (processHeapLiveData ~> asNumberDataPoint)
+    ~> batchByTickList
+    ~> asGauge
+    ~> asMetric
+      [ MF.name .~ "HeapLive"
+      , MF.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
+      , MF.unit .~ "By"
+      ]
+    ~> mapping D.singleton
+
+--------------------------------------------------------------------------------
+-- MemReturn
+
+processMemReturn :: Process (Tick (WithStartTime Event)) (DList Metric)
+processMemReturn =
+  liftTick processMemReturnData
+    ~> batchByTickList
+    ~> fanout
+      [ mapping (fmap (toNumberDataPoint . fmap (.current)))
+          ~> asGauge
+          ~> asMetric
+            [ MF.name .~ "MemCurrent"
+            , MF.description .~ "Report the number of megablocks currently allocated."
+            , MF.unit .~ "{mblock}"
+            ]
+          ~> mapping D.singleton
+      , mapping (fmap (toNumberDataPoint . fmap (.needed)))
+          ~> asGauge
+          ~> asMetric
+            [ MF.name .~ "MemNeeded"
+            , MF.description .~ "Report the number of megablocks currently needed."
+            , MF.unit .~ "{mblock}"
+            ]
+          ~> mapping D.singleton
+      , mapping (fmap (toNumberDataPoint . fmap (.returned)))
+          ~> asGauge
+          ~> asMetric
+            [ MF.name .~ "MemReturned"
+            , MF.description .~ "Report the number of megablocks currently being returned to the OS."
+            , MF.unit .~ "{mblock}"
+            ]
+          ~> mapping D.singleton
+      ]
+
+--------------------------------------------------------------------------------
+-- HeapProfSample
+
+processHeapProfSample ::
+  (MonadIO m) =>
+  Maybe HeapProfBreakdown ->
+  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
+processHeapProfSample maybeHeapProfBreakdown =
+  liftTick (processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
+    ~> batchByTickList
+    ~> asGauge
+    ~> asMetric
+      [ MF.name .~ "HeapProfSample"
+      , MF.description .~ "Report a heap profile sample."
+      , MF.unit .~ "By"
+      ]
+    ~> mapping D.singleton
+
+--------------------------------------------------------------------------------
+-- Machines
+--------------------------------------------------------------------------------
+
+eventlogLiveScope :: InstrumentationScope
+eventlogLiveScope =
+  messageWith
+    [ C.name .~ T.pack EventlogLive.name
+    , C.version .~ T.pack (showVersion EventlogLive.version)
+    ]
+
+asExportMetricsServiceRequest :: Process [ResourceMetrics] ExportMetricsServiceRequest
+asExportMetricsServiceRequest = mapping $ (defMessage &) . (MF.resourceMetrics .~)
+
+asExportMetricServiceRequest :: Process ResourceMetrics ExportMetricsServiceRequest
+asExportMetricServiceRequest = mapping (: []) ~> asExportMetricsServiceRequest
+
+asResourceMetrics :: [ResourceMetrics -> ResourceMetrics] -> Process [ScopeMetrics] ResourceMetrics
+asResourceMetrics mod = mapping $ \metrics ->
+  messageWith ((MF.scopeMetrics .~ metrics) : mod)
+
+asResourceMetric :: [ResourceMetrics -> ResourceMetrics] -> Process ScopeMetrics ResourceMetrics
+asResourceMetric mod = mapping (: []) ~> asResourceMetrics mod
+
+asScopeMetrics :: [ScopeMetrics -> ScopeMetrics] -> Process [Metric] ScopeMetrics
+asScopeMetrics mod = mapping $ \metrics ->
+  messageWith ((MF.metrics .~ metrics) : mod)
+
+asMetric :: [Metric -> Metric] -> Process Metric'Data Metric
+asMetric mod = mapping $ \metric'data ->
+  messageWith ((MF.maybe'data' .~ Just metric'data) : mod)
+
+asGauge :: Process [NumberDataPoint] Metric'Data
+asGauge =
+  repeatedly $
+    await >>= \case
+      dataPoints
+        | null dataPoints -> pure ()
+        | otherwise -> yield . Metric'Gauge . messageWith $ [MF.dataPoints .~ dataPoints]
+
+asSum :: [Sum -> Sum] -> Process [NumberDataPoint] Metric'Data
+asSum mod =
+  repeatedly $
+    await >>= \case
+      dataPoints
+        | null dataPoints -> pure ()
+        | otherwise -> yield . Metric'Sum . messageWith $ (MF.dataPoints .~ dataPoints) : mod
+
+asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (WithMeta v) NumberDataPoint
+asNumberDataPoint = mapping toNumberDataPoint
+
+--------------------------------------------------------------------------------
+-- Interpreting metadata
+--------------------------------------------------------------------------------
+
+class IsNumberDataPoint'Value v where
+  toNumberDataPoint'Value :: v -> NumberDataPoint'Value
+
+instance IsNumberDataPoint'Value Word32 where
+  toNumberDataPoint'Value :: Word32 -> NumberDataPoint'Value
+  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
+
+-- | __Warning__: This instance may cause overflow.
+instance IsNumberDataPoint'Value Word64 where
+  toNumberDataPoint'Value :: Word64 -> NumberDataPoint'Value
+  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
+
+toNumberDataPoint :: (IsNumberDataPoint'Value v) => (WithMeta v) -> NumberDataPoint
+toNumberDataPoint i =
+  messageWith
+    [ MF.maybe'value .~ Just (toNumberDataPoint'Value i.value)
+    , MF.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+    , MF.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
+    , MF.attributes .~ mapMaybe toMaybeKeyValue i.attr
+    ]
+ where
+  toMaybeKeyValue :: Attr -> Maybe KeyValue
+  toMaybeKeyValue (k, v) = toMaybeAnyValue v <&> \v -> messageWith [C.key .~ k, C.value .~ v]
+
+  toMaybeAnyValue :: AttrValue -> Maybe AnyValue
+  toMaybeAnyValue = \case
+    AttrInt v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrInt8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrInt16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrInt32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrInt64 v -> Just $ messageWith [C.intValue .~ v]
+    AttrWord v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrWord8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrWord16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrWord32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrWord64 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+    AttrDouble v -> Just $ messageWith [C.doubleValue .~ v]
+    AttrText v -> Just $ messageWith [C.stringValue .~ v]
+    AttrNull -> Nothing
+
+--------------------------------------------------------------------------------
+-- DSL for writing messages
+
+-- | Construct a message with a list of modifications applied.
+messageWith :: (Message msg) => [msg -> msg] -> msg
+messageWith = foldr ($) defMessage
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry Collector exporter
+--------------------------------------------------------------------------------
 
 data ExportMetricsError
   = ExportMetricsError
@@ -95,237 +334,6 @@ otelcolResourceMetricsExporter conn =
 type instance G.RequestMetadata (Protobuf MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf MetricsService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf MetricsService meth) = G.NoMetadata
-
---------------------------------------------------------------------------------
--- Heap Events
---------------------------------------------------------------------------------
-
-processHeapEvents ::
-  (MonadIO m) =>
-  Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
-processHeapEvents maybeHeapProfBreakdown =
-  fanout
-    [ processHeapAllocated
-    , processBlocksSize
-    , processHeapSize
-    , processHeapLive
-    , processMemReturn
-    , processHeapProfSample maybeHeapProfBreakdown
-    ]
-
---------------------------------------------------------------------------------
--- HeapAllocated
-
-processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList Metric)
-processHeapAllocated =
-  liftTick (processHeapAllocatedData ~> asNumberDataPoint)
-    ~> batchByTick
-    ~> asSum
-      [ F.aggregationTemporality .~ AGGREGATION_TEMPORALITY_DELTA
-      , F.isMonotonic .~ True
-      ]
-    ~> asMetric
-      [ F.name .~ "HeapAllocated"
-      , F.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
-      , F.unit .~ "By"
-      ]
-    ~> mapping D.singleton
-
---------------------------------------------------------------------------------
--- HeapSize
-
-processHeapSize :: Process (Tick (WithStartTime Event)) (DList Metric)
-processHeapSize =
-  liftTick (processHeapSizeData ~> asNumberDataPoint)
-    ~> batchByTick
-    ~> asGauge
-    ~> asMetric
-      [ F.name .~ "HeapSize"
-      , F.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , F.unit .~ "By"
-      ]
-    ~> mapping D.singleton
-
---------------------------------------------------------------------------------
--- BlocksSize
-
-processBlocksSize :: Process (Tick (WithStartTime Event)) (DList Metric)
-processBlocksSize =
-  liftTick (processBlocksSizeData ~> asNumberDataPoint)
-    ~> batchByTick
-    ~> asGauge
-    ~> asMetric
-      [ F.name .~ "BlocksSize"
-      , F.description .~ "Report the current heap size, calculated by the allocated number of blocks."
-      , F.unit .~ "By"
-      ]
-    ~> mapping D.singleton
-
---------------------------------------------------------------------------------
--- HeapLive
-
-processHeapLive :: Process (Tick (WithStartTime Event)) (DList Metric)
-processHeapLive =
-  liftTick (processHeapLiveData ~> asNumberDataPoint)
-    ~> batchByTick
-    ~> asGauge
-    ~> asMetric
-      [ F.name .~ "HeapLive"
-      , F.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , F.unit .~ "By"
-      ]
-    ~> mapping D.singleton
-
---------------------------------------------------------------------------------
--- MemReturn
-
-processMemReturn :: Process (Tick (WithStartTime Event)) (DList Metric)
-processMemReturn =
-  liftTick processMemReturnData
-    ~> batchByTick
-    ~> fanout
-      [ mapping (fmap (toNumberDataPoint . fmap (.current)))
-          ~> asGauge
-          ~> asMetric
-            [ F.name .~ "MemCurrent"
-            , F.description .~ "Report the number of megablocks currently allocated."
-            , F.unit .~ "{mblock}"
-            ]
-          ~> mapping D.singleton
-      , mapping (fmap (toNumberDataPoint . fmap (.needed)))
-          ~> asGauge
-          ~> asMetric
-            [ F.name .~ "MemNeeded"
-            , F.description .~ "Report the number of megablocks currently needed."
-            , F.unit .~ "{mblock}"
-            ]
-          ~> mapping D.singleton
-      , mapping (fmap (toNumberDataPoint . fmap (.returned)))
-          ~> asGauge
-          ~> asMetric
-            [ F.name .~ "MemReturned"
-            , F.description .~ "Report the number of megablocks currently being returned to the OS."
-            , F.unit .~ "{mblock}"
-            ]
-          ~> mapping D.singleton
-      ]
-
---------------------------------------------------------------------------------
--- HeapProfSample
-
-processHeapProfSample ::
-  (MonadIO m) =>
-  Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
-processHeapProfSample maybeHeapProfBreakdown =
-  liftTick (processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
-    ~> batchByTick
-    ~> asGauge
-    ~> asMetric
-      [ F.name .~ "HeapProfSample"
-      , F.description .~ "Report a heap profile sample."
-      , F.unit .~ "By"
-      ]
-    ~> mapping D.singleton
-
---------------------------------------------------------------------------------
--- Machines
---------------------------------------------------------------------------------
-
-eventlogLiveScope :: InstrumentationScope
-eventlogLiveScope =
-  messageWith
-    [ C.name .~ T.pack EventlogLive.name
-    , C.version .~ T.pack (showVersion EventlogLive.version)
-    ]
-
-asExportMetricsServiceRequest :: Process [ResourceMetrics] ExportMetricsServiceRequest
-asExportMetricsServiceRequest = mapping $ (defMessage &) . (F.resourceMetrics .~)
-
-asExportMetricServiceRequest :: Process ResourceMetrics ExportMetricsServiceRequest
-asExportMetricServiceRequest = mapping (: []) ~> asExportMetricsServiceRequest
-
-asResourceMetrics :: [ResourceMetrics -> ResourceMetrics] -> Process [ScopeMetrics] ResourceMetrics
-asResourceMetrics mod = mapping $ \metrics ->
-  messageWith ((F.scopeMetrics .~ metrics) : mod)
-
-asResourceMetric :: [ResourceMetrics -> ResourceMetrics] -> Process ScopeMetrics ResourceMetrics
-asResourceMetric mod = mapping (: []) ~> asResourceMetrics mod
-
-asScopeMetrics :: [ScopeMetrics -> ScopeMetrics] -> Process [Metric] ScopeMetrics
-asScopeMetrics mod = mapping $ \metrics ->
-  messageWith ((F.metrics .~ metrics) : mod)
-
-asMetric :: [Metric -> Metric] -> Process Metric'Data Metric
-asMetric mod = mapping $ \metric'data ->
-  messageWith ((F.maybe'data' .~ Just metric'data) : mod)
-
-asGauge :: Process [NumberDataPoint] Metric'Data
-asGauge =
-  repeatedly $
-    await >>= \case
-      dataPoints
-        | null dataPoints -> pure ()
-        | otherwise -> yield . Metric'Gauge . messageWith $ [F.dataPoints .~ dataPoints]
-
-asSum :: [Sum -> Sum] -> Process [NumberDataPoint] Metric'Data
-asSum mod =
-  repeatedly $
-    await >>= \case
-      dataPoints
-        | null dataPoints -> pure ()
-        | otherwise -> yield . Metric'Sum . messageWith $ (F.dataPoints .~ dataPoints) : mod
-
-asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (WithMeta v) NumberDataPoint
-asNumberDataPoint = mapping toNumberDataPoint
-
-toNumberDataPoint :: (IsNumberDataPoint'Value v) => (WithMeta v) -> NumberDataPoint
-toNumberDataPoint i =
-  messageWith
-    [ F.maybe'value .~ Just (toNumberDataPoint'Value i.value)
-    , F.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , F.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
-    , F.attributes .~ mapMaybe toMaybeKeyValue i.attr
-    ]
-
-class IsNumberDataPoint'Value v where
-  toNumberDataPoint'Value :: v -> NumberDataPoint'Value
-
-instance IsNumberDataPoint'Value Word32 where
-  toNumberDataPoint'Value :: Word32 -> NumberDataPoint'Value
-  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
-
--- | __Warning__: This instance may cause overflow.
-instance IsNumberDataPoint'Value Word64 where
-  toNumberDataPoint'Value :: Word64 -> NumberDataPoint'Value
-  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
-
-toMaybeKeyValue :: Attr -> Maybe KeyValue
-toMaybeKeyValue (k, v) = toMaybeAnyValue v <&> \v -> messageWith [C.key .~ k, C.value .~ v]
-
-toMaybeAnyValue :: AttrValue -> Maybe AnyValue
-toMaybeAnyValue = \case
-  AttrInt v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrInt8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrInt16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrInt32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrInt64 v -> Just $ messageWith [C.intValue .~ v]
-  AttrWord v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrWord8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrWord16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrWord32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrWord64 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-  AttrDouble v -> Just $ messageWith [C.doubleValue .~ v]
-  AttrText v -> Just $ messageWith [C.stringValue .~ v]
-  AttrNull -> Nothing
-
---------------------------------------------------------------------------------
--- DSL for writing messages
-
--- | Construct a message with a list of modifications applied.
-messageWith :: (Message msg) => [msg -> msg] -> msg
-messageWith = foldr ($) defMessage
 
 --------------------------------------------------------------------------------
 -- Options
@@ -358,7 +366,7 @@ optionsParser =
     <*> openTelemetryCollectorOptionsParser
 
 --------------------------------------------------------------------------------
--- OpenTelemetry Collector Configuration
+-- OpenTelemetry Collector configuration
 
 data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
   { openTelemetryCollectorServer :: G.Server

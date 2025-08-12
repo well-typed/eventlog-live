@@ -36,6 +36,7 @@ module GHC.Eventlog.Live.Machines (
   -- * Ticks
   Tick (..),
   batchByTick,
+  batchByTickList,
   liftTick,
   dropTick,
   onlyTick,
@@ -58,6 +59,7 @@ import Control.Monad (forever, unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
+import Data.DList qualified as D
 import Data.Either (isLeft)
 import Data.Foldable (traverse_)
 import Data.Function (fix)
@@ -67,7 +69,7 @@ import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.List qualified as L
-import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, repeatedly, yield, (~>))
+import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, mapping, repeatedly, yield, (~>))
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Ord (comparing)
 import Data.Text (Text)
@@ -230,14 +232,20 @@ fileSinkBatch handle = dropTick ~> fileSink handle
 data Tick a = Item !a | Tick
   deriving (Eq, Functor, Foldable, Traversable, Show)
 
-batchByTick :: Process (Tick a) [a]
+batchByTick :: (Monoid a) => Process (Tick a) a
 batchByTick = construct start
  where
-  start = batch []
+  start = batch mempty
   batch acc =
     await >>= \case
-      Item a -> batch (a : acc)
-      Tick -> yield (reverse acc) >> start
+      Item a -> batch (a <> acc)
+      Tick -> yield acc >> start
+
+batchByTickList :: Process (Tick a) [a]
+batchByTickList =
+  mapping (fmap D.singleton)
+    ~> batchByTick
+    ~> mapping D.toList
 
 dropTick :: Process (Tick a) a
 dropTick =
@@ -579,7 +587,7 @@ processMemReturnData =
       i
         | MemReturn{..} <- i.value.evSpec -> do
             yield $
-              withMeta i MemReturnData {..} $
+              withMeta i MemReturnData{..} $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]

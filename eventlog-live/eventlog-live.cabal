@@ -77,6 +77,7 @@ library eventlog-live-machines
     , base
     , bytestring
     , clock
+    , dlist
     , ghc-events
     , hashable
     , machines
@@ -102,6 +103,7 @@ executable eventlog-live-influxdb
     , base
     , clock
     , containers
+    , dlist
     , eventlog-live
     , eventlog-live:eventlog-live-machines
     , eventlog-live:eventlog-live-options
