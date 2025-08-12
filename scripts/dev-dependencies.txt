@@ -6,3 +6,4 @@ ghc=9.8.4
 hlint=3.10
 prettier=3.4.1
 shellcheck=0.10.0
+protoc=29.3
