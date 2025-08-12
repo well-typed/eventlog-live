@@ -23,6 +23,7 @@ common language
     DeriveFunctor
     DeriveTraversable
     DerivingStrategies
+    FlexibleContexts
     FlexibleInstances
     GADTs
     GeneralizedNewtypeDeriving
@@ -31,11 +32,14 @@ common language
     KindSignatures
     LambdaCase
     MultiParamTypeClasses
+    NoFieldSelectors
     NumericUnderscores
     OverloadedStrings
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
+    DuplicateRecordFields
+    OverloadedRecordDot
     TupleSections
     TypeApplications
     TypeFamilies
@@ -60,6 +64,7 @@ library eventlog-live-options
   build-depends:
     , base
     , eventlog-live
+    , eventlog-live:eventlog-live-machines
     , ghc-events
     , optparse-applicative
 
@@ -73,9 +78,11 @@ library eventlog-live-machines
     , bytestring
     , clock
     , ghc-events
+    , hashable
     , machines
     , text
     , transformers
+    , unordered-containers
 
 library eventlog-live-lens
   import:          language

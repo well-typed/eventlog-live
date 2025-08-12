@@ -9,36 +9,27 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Either (isLeft)
 import Data.Functor ((<&>))
-import Data.HashMap.Strict (HashMap)
-import Data.HashMap.Strict qualified as HM
-import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.List qualified as L
-import Data.Machine (Process, ProcessT, await, construct, mapping, repeatedly, yield, (~>))
+import Data.Machine (Process, ProcessT, await, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
-import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Version (showVersion)
 import Data.Void (Void)
-import Data.Word (Word32, Word64, Word8)
+import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Lens qualified as EF
-import GHC.Eventlog.Live.Machines (Tick, batchByTick, liftTick, setStartTime)
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), MemReturnData (..), Tick, WithMeta (..), WithStartTime, batchByTick, liftTick, processBlocksSizeData, processHeapAllocatedData, processHeapLiveData, processHeapProfSampleData, processHeapSizeData, processMemReturnData, withStartTime)
 import GHC.Eventlog.Live.Options
-import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), Timestamp)
+import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 ((&), (.~), (^.))
-import Lens.Family2.Stock
-import Lens.Family2.Unchecked (lens)
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
 import Network.GRPC.Common.Protobuf qualified as G
-import Numeric (showHex)
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O
 import PackageInfo_eventlog_live qualified as EventlogLive
@@ -46,14 +37,10 @@ import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService (ExportMetr
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as MSF
 import Proto.Opentelemetry.Proto.Common.V1.Common (AnyValue, InstrumentationScope, KeyValue)
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as C
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics (AggregationTemporality (..), Gauge, Metric, Metric'Data (..), NumberDataPoint, ResourceMetrics, ScopeMetrics, Sum)
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as MF
+import Proto.Opentelemetry.Proto.Metrics.V1.Metrics (AggregationTemporality (..), Metric, Metric'Data (..), NumberDataPoint, NumberDataPoint'Value (NumberDataPoint'AsInt), ResourceMetrics, ScopeMetrics, Sum)
+import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as F
 import System.IO qualified as IO
-import Text.ParserCombinators.ReadP (ReadP, readP_to_S)
-import Text.ParserCombinators.ReadP qualified as P
-import Text.Printf (HPrintfType, hPrintf, printf)
-import Text.Read (readMaybe)
-import Text.Read.Lex (readHexP)
+import Text.Printf (printf)
 
 main :: IO ()
 main = do
@@ -65,13 +52,13 @@ main = do
       Nothing
       eventlogSocket
       maybeEventlogLogFile
-      $ liftTick (setStartTime evSpec WithContext)
+      $ liftTick withStartTime
         ~> fanout
           [ processHeapEvents maybeHeapProfBreakdown
           ]
         ~> mapping D.toList
         ~> asScopeMetrics
-          [ MF.scope .~ eventlogLiveScope
+          [ F.scope .~ eventlogLiveScope
           ]
         ~> asResourceMetric []
         ~> asExportMetricServiceRequest
@@ -116,405 +103,131 @@ type instance G.ResponseTrailingMetadata (Protobuf MetricsService meth) = G.NoMe
 processHeapEvents ::
   (MonadIO m) =>
   Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithContext Event)) (DList Metric)
+  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
 processHeapEvents maybeHeapProfBreakdown =
   fanout
-    [ process ~> mapping D.singleton
-    | process <-
-        [ processHeapAllocated
-        , processBlocksSize
-        , processHeapSize
-        , processHeapLive
-        , processMemCurrent
-        , processMemNeeded
-        , processMemReturned
-        , processHeapProfSample maybeHeapProfBreakdown
-        ]
+    [ processHeapAllocated
+    , processBlocksSize
+    , processHeapSize
+    , processHeapLive
+    , processMemReturn
+    , processHeapProfSample maybeHeapProfBreakdown
     ]
 
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocated :: Process (Tick (WithContext Event)) Metric
+processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList Metric)
 processHeapAllocated =
-  liftTick processHeapAllocatedData
+  liftTick (processHeapAllocatedData ~> asNumberDataPoint)
     ~> batchByTick
     ~> asSum
-      [ MF.aggregationTemporality .~ AGGREGATION_TEMPORALITY_DELTA
-      , MF.isMonotonic .~ True
+      [ F.aggregationTemporality .~ AGGREGATION_TEMPORALITY_DELTA
+      , F.isMonotonic .~ True
       ]
     ~> asMetric
-      [ MF.name .~ "HeapAllocated"
-      , MF.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
-      , MF.unit .~ "By"
+      [ F.name .~ "HeapAllocated"
+      , F.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
+      , F.unit .~ "By"
       ]
- where
-  processHeapAllocatedData :: Process (WithContext Event) NumberDataPoint
-  processHeapAllocatedData =
-    repeatedly $
-      await >>= \case
-        ev
-          | HeapAllocated{..} <- ev ^. value . EF.evSpec ->
-              yield $
-                intDataPointWith ev allocBytes $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
+    ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSize :: Process (Tick (WithContext Event)) Metric
+processHeapSize :: Process (Tick (WithStartTime Event)) (DList Metric)
 processHeapSize =
-  liftTick processHeapSizeData
+  liftTick (processHeapSizeData ~> asNumberDataPoint)
     ~> batchByTick
     ~> asGauge
-      []
     ~> asMetric
-      [ MF.name .~ "HeapSize"
-      , MF.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , MF.unit .~ "By"
+      [ F.name .~ "HeapSize"
+      , F.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
+      , F.unit .~ "By"
       ]
- where
-  processHeapSizeData :: Process (WithContext Event) NumberDataPoint
-  processHeapSizeData =
-    repeatedly $
-      await >>= \case
-        ev
-          | HeapSize{..} <- ev ^. value . EF.evSpec -> do
-              yield $
-                intDataPointWith ev sizeBytes $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
+    ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSize :: Process (Tick (WithContext Event)) Metric
+processBlocksSize :: Process (Tick (WithStartTime Event)) (DList Metric)
 processBlocksSize =
-  liftTick processBlocksSizeData
+  liftTick (processBlocksSizeData ~> asNumberDataPoint)
     ~> batchByTick
     ~> asGauge
-      []
     ~> asMetric
-      [ MF.name .~ "BlocksSize"
-      , MF.description .~ "Report the current heap size, calculated by the allocated number of blocks."
-      , MF.unit .~ "By"
+      [ F.name .~ "BlocksSize"
+      , F.description .~ "Report the current heap size, calculated by the allocated number of blocks."
+      , F.unit .~ "By"
       ]
- where
-  processBlocksSizeData :: Process (WithContext Event) NumberDataPoint
-  processBlocksSizeData =
-    repeatedly $
-      await >>= \case
-        ev
-          | BlocksSize{..} <- ev ^. value . EF.evSpec -> do
-              yield $
-                intDataPointWith ev blocksSize $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
+    ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLive :: Process (Tick (WithContext Event)) Metric
+processHeapLive :: Process (Tick (WithStartTime Event)) (DList Metric)
 processHeapLive =
-  liftTick processHeapLiveData
+  liftTick (processHeapLiveData ~> asNumberDataPoint)
     ~> batchByTick
     ~> asGauge
-      []
     ~> asMetric
-      [ MF.name .~ "HeapLive"
-      , MF.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , MF.unit .~ "By"
+      [ F.name .~ "HeapLive"
+      , F.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
+      , F.unit .~ "By"
       ]
- where
-  processHeapLiveData :: Process (WithContext Event) NumberDataPoint
-  processHeapLiveData =
-    repeatedly $
-      await >>= \case
-        ev
-          | HeapLive{..} <- ev ^. value . EF.evSpec -> do
-              yield $
-                intDataPointWith ev liveBytes $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
+    ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-processMemCurrent :: Process (Tick (WithContext Event)) Metric
-processMemCurrent =
-  liftTick processMemCurrentData
+processMemReturn :: Process (Tick (WithStartTime Event)) (DList Metric)
+processMemReturn =
+  liftTick processMemReturnData
     ~> batchByTick
-    ~> asGauge
-      []
-    ~> asMetric
-      [ MF.name .~ "MemCurrent"
-      , MF.description .~ "Report the number of megablocks currently allocated."
-      , MF.unit .~ "{mblock}"
+    ~> fanout
+      [ mapping (fmap (toNumberDataPoint . fmap (.current)))
+          ~> asGauge
+          ~> asMetric
+            [ F.name .~ "MemCurrent"
+            , F.description .~ "Report the number of megablocks currently allocated."
+            , F.unit .~ "{mblock}"
+            ]
+          ~> mapping D.singleton
+      , mapping (fmap (toNumberDataPoint . fmap (.needed)))
+          ~> asGauge
+          ~> asMetric
+            [ F.name .~ "MemNeeded"
+            , F.description .~ "Report the number of megablocks currently needed."
+            , F.unit .~ "{mblock}"
+            ]
+          ~> mapping D.singleton
+      , mapping (fmap (toNumberDataPoint . fmap (.returned)))
+          ~> asGauge
+          ~> asMetric
+            [ F.name .~ "MemReturned"
+            , F.description .~ "Report the number of megablocks currently being returned to the OS."
+            , F.unit .~ "{mblock}"
+            ]
+          ~> mapping D.singleton
       ]
- where
-  processMemCurrentData :: Process (WithContext Event) NumberDataPoint
-  processMemCurrentData =
-    repeatedly $
-      await >>= \case
-        ev
-          | MemReturn{..} <- ev ^. value . EF.evSpec -> do
-              yield $
-                intDataPointWith ev current $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
-
-processMemNeeded :: Process (Tick (WithContext Event)) Metric
-processMemNeeded =
-  liftTick processMemNeededData
-    ~> batchByTick
-    ~> asGauge
-      []
-    ~> asMetric
-      [ MF.name .~ "MemNeeded"
-      , MF.description .~ "Report the number of megablocks currently needed."
-      , MF.unit .~ "{mblock}"
-      ]
- where
-  processMemNeededData :: Process (WithContext Event) NumberDataPoint
-  processMemNeededData =
-    repeatedly $
-      await >>= \case
-        ev
-          | MemReturn{..} <- ev ^. value . EF.evSpec -> do
-              yield $
-                intDataPointWith ev needed $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
-
-processMemReturned :: Process (Tick (WithContext Event)) Metric
-processMemReturned =
-  liftTick processMemReturnedData
-    ~> batchByTick
-    ~> asGauge
-      []
-    ~> asMetric
-      [ MF.name .~ "MemReturned"
-      , MF.description .~ "Report the number of megablocks currently being returned to the OS."
-      , MF.unit .~ "{mblock}"
-      ]
- where
-  processMemReturnedData :: Process (WithContext Event) NumberDataPoint
-  processMemReturnedData =
-    repeatedly $
-      await >>= \case
-        ev
-          | MemReturn{..} <- ev ^. value . EF.evSpec -> do
-              yield $
-                intDataPointWith ev returned $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapCapset" ~= heapCapset
-                  ]
-          | otherwise -> pure ()
 
 --------------------------------------------------------------------------------
 -- HeapProfSample
 
-newtype InfoTablePtr = InfoTablePtr Word64
-  deriving newtype (Eq, Hashable, Ord)
-
-instance Show InfoTablePtr where
-  showsPrec :: Int -> InfoTablePtr -> ShowS
-  showsPrec _ (InfoTablePtr ptr) =
-    showString "0x" . showHex ptr
-
-readInfoTablePtr :: Text -> Maybe InfoTablePtr
-readInfoTablePtr = readMaybe . T.unpack
-
-readInfoTablePtrP :: ReadP InfoTablePtr
-readInfoTablePtrP = InfoTablePtr <$> (P.string "0x" *> readHexP)
-
-instance Read InfoTablePtr where
-  readsPrec :: Int -> ReadS InfoTablePtr
-  readsPrec _ = readP_to_S readInfoTablePtrP
-
-data InfoTable = InfoTable
-  { infoTablePtr :: InfoTablePtr
-  , infoTableName :: Text
-  , infoTableClosureDesc :: Int
-  , infoTableTyDesc :: Text
-  , infoTableLabel :: Text
-  , infoTableModule :: Text
-  , infoTableSrcLoc :: Text
-  }
-  deriving (Show)
-
-data HeapProfSampleState = HeapProfSampleState
-  { eitherShouldWarnOrHeapProfBreakdown :: Either Bool HeapProfBreakdown
-  , infoTableMap :: HashMap InfoTablePtr InfoTable
-  , heapProfSampleEraStack :: [Word64]
-  }
-
-shouldTrackInfoTableMap :: Either Bool HeapProfBreakdown -> Bool
-shouldTrackInfoTableMap (Left _shouldWarn) = True
-shouldTrackInfoTableMap (Right HeapProfBreakdownInfoTable) = True
-shouldTrackInfoTableMap _ = False
-
-isHeapProfBreakdownInfoTable :: HeapProfBreakdown -> Bool
-isHeapProfBreakdownInfoTable HeapProfBreakdownInfoTable = True
-isHeapProfBreakdownInfoTable _ = False
-
 processHeapProfSample ::
   (MonadIO m) =>
   Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithContext Event)) Metric
+  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
 processHeapProfSample maybeHeapProfBreakdown =
-  liftTick (processHeapProfSampleData maybeHeapProfBreakdown)
+  liftTick (processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
     ~> batchByTick
     ~> asGauge
-      []
     ~> asMetric
-      [ MF.name .~ "HeapProfSample"
-      , MF.description .~ "Report a heap profile sample."
-      , MF.unit .~ "By"
+      [ F.name .~ "HeapProfSample"
+      , F.description .~ "Report a heap profile sample."
+      , F.unit .~ "By"
       ]
- where
-  processHeapProfSampleData ::
-    (MonadIO m) =>
-    Maybe HeapProfBreakdown ->
-    ProcessT m (WithContext Event) NumberDataPoint
-  processHeapProfSampleData maybeHeapProfBreakdown =
-    construct $
-      go
-        HeapProfSampleState
-          { eitherShouldWarnOrHeapProfBreakdown = maybe (Left True) Right maybeHeapProfBreakdown
-          , infoTableMap = mempty
-          , heapProfSampleEraStack = mempty
-          }
-   where
-    go st@HeapProfSampleState{..} = do
-      await >>= \ev -> case ev ^. value . EF.evSpec of
-        -- Announces the heap profile breakdown, amongst other things.
-        -- This event is only emitted for code compiled with GHC >=9.14.
-        HeapProfBegin{..}
-          | isLeft eitherShouldWarnOrHeapProfBreakdown ->
-              go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
-        -- Announces the arguments with which the program was called.
-        -- This *may* include RTS options, which can be used to determine the
-        -- heap profile breakdown for code compiled with GHC <9.14.
-        ProgramArgs{..}
-          | isLeft eitherShouldWarnOrHeapProfBreakdown
-          , Just heapProfBreakdown <- findHeapProfBreakdown args ->
-              go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
-        -- Announces an info table entry.
-        InfoTableProv{..}
-          | shouldTrackInfoTableMap eitherShouldWarnOrHeapProfBreakdown -> do
-              let infoTablePtr = InfoTablePtr itInfo
-                  infoTable =
-                    InfoTable
-                      { infoTablePtr = infoTablePtr
-                      , infoTableName = itTableName
-                      , infoTableClosureDesc = itClosureDesc
-                      , infoTableTyDesc = itTyDesc
-                      , infoTableLabel = itLabel
-                      , infoTableModule = itModule
-                      , infoTableSrcLoc = itSrcLoc
-                      }
-              go st{infoTableMap = HM.insert infoTablePtr infoTable infoTableMap}
-        -- Announces the beginning of a heap profile sample.
-        HeapProfSampleBegin{..} ->
-          go st{heapProfSampleEraStack = heapProfSampleEra : heapProfSampleEraStack}
-        -- Announces the end of a heap profile sample.
-        HeapProfSampleEnd{..} ->
-          case L.uncons heapProfSampleEraStack of
-            Nothing -> do
-              liftIO $
-                warnEmptyHeapProfSampleEraStack heapProfSampleEra
-              go st
-            Just (currentEra, heapProfSampleEraStack') -> do
-              unless (currentEra == heapProfSampleEra) . liftIO $
-                warnMismatchedHeapProfSampleEraStack heapProfSampleEra currentEra
-              go st{heapProfSampleEraStack = heapProfSampleEraStack'}
-        -- Announces a heap profile sample.
-        HeapProfSampleString{..}
-          -- If there is no heap profile breakdown, issue a warning, then disable warnings.
-          | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
-              liftIO warnMissingHeapProfBreakdown
-              go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
-          -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
-          | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
-              liftIO $ warnUnsupportedHeapProfBreakdown HeapProfBreakdownBiography
-              go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
-          -- If there is a heap profile breakdown, handle it appropriately.
-          | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
-              -- If the heap profile breakdown is by info table, add the info table.
-              let maybeInfoTable
-                    | isHeapProfBreakdownInfoTable heapProfBreakdown = do
-                        !infoTablePtr <- readInfoTablePtr heapProfLabel
-                        HM.lookup infoTablePtr infoTableMap
-                    | otherwise = Nothing
-              yield $
-                intDataPointWith ev heapProfResidency $
-                  [ "evCap" ~= ev ^. value . EF.evCap
-                  , "heapProfBreakdown" ~= (heapProfBreakdownShow heapProfBreakdown)
-                  , "heapProfId" ~= heapProfId
-                  , "heapProfLabel" ~= heapProfLabel
-                  , "heapProfSampleEra" ~= (fst <$> L.uncons heapProfSampleEraStack)
-                  , "infoTableName" ~= (maybeInfoTable <&> infoTableName)
-                  , "infoTableClosureDesc" ~= (maybeInfoTable <&> infoTableClosureDesc)
-                  , "infoTableTyDesc" ~= (maybeInfoTable <&> infoTableTyDesc)
-                  , "infoTableLabel" ~= (maybeInfoTable <&> infoTableLabel)
-                  , "infoTableModule" ~= (maybeInfoTable <&> infoTableModule)
-                  , "infoTableSrcLoc" ~= (maybeInfoTable <&> infoTableSrcLoc)
-                  ]
-              go $ if isHeapProfBreakdownInfoTable heapProfBreakdown then st else st{infoTableMap = mempty}
-        _otherwise -> go st
-
-  -- NOTE: This scan is currently flawed, as it does not handle @-with-rtsopts@,
-  --       nor does it restrict its search to between @+RTS@ and @-RTS@ tags.
-  findHeapProfBreakdown :: [Text] -> Maybe HeapProfBreakdown
-  findHeapProfBreakdown = listToMaybe . mapMaybe parseHeapProfBreakdown
-   where
-    parseHeapProfBreakdown :: Text -> Maybe HeapProfBreakdown
-    parseHeapProfBreakdown arg
-      | "-h" `T.isPrefixOf` arg =
-          either (const Nothing) Just
-            . heapProfBreakdownEitherReader
-            . T.unpack
-            . T.drop 2
-            $ arg
-      | otherwise = Nothing
-
-  warnEmptyHeapProfSampleEraStack :: Word64 -> IO ()
-  warnEmptyHeapProfSampleEraStack =
-    warnf
-      "Warning: Eventlog closed era %d, but there is no current era."
-
-  warnMismatchedHeapProfSampleEraStack :: Word64 -> Word64 -> IO ()
-  warnMismatchedHeapProfSampleEraStack =
-    warnf
-      "Warning: Eventlog closed era %d, but the current era is era %d."
-
-  warnUnsupportedHeapProfBreakdown :: HeapProfBreakdown -> IO ()
-  warnUnsupportedHeapProfBreakdown heapProfBreakdown =
-    warnf
-      "Warning: Unsupported heap profile breakdown %s"
-      (heapProfBreakdownShow heapProfBreakdown)
-
-  warnMissingHeapProfBreakdown :: IO ()
-  warnMissingHeapProfBreakdown =
-    warnf
-      "Warning: Cannot infer heap profile breakdown.\n\
-      \         If your binary was compiled with a GHC version prior to 9.14,\n\
-      \         you must also pass the heap profile type to this executable.\n\
-      \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+    ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- Machines
@@ -528,33 +241,33 @@ eventlogLiveScope =
     ]
 
 asExportMetricsServiceRequest :: Process [ResourceMetrics] ExportMetricsServiceRequest
-asExportMetricsServiceRequest = mapping $ (defMessage &) . (MF.resourceMetrics .~)
+asExportMetricsServiceRequest = mapping $ (defMessage &) . (F.resourceMetrics .~)
 
 asExportMetricServiceRequest :: Process ResourceMetrics ExportMetricsServiceRequest
 asExportMetricServiceRequest = mapping (: []) ~> asExportMetricsServiceRequest
 
 asResourceMetrics :: [ResourceMetrics -> ResourceMetrics] -> Process [ScopeMetrics] ResourceMetrics
 asResourceMetrics mod = mapping $ \metrics ->
-  messageWith ((MF.scopeMetrics .~ metrics) : mod)
+  messageWith ((F.scopeMetrics .~ metrics) : mod)
 
 asResourceMetric :: [ResourceMetrics -> ResourceMetrics] -> Process ScopeMetrics ResourceMetrics
 asResourceMetric mod = mapping (: []) ~> asResourceMetrics mod
 
 asScopeMetrics :: [ScopeMetrics -> ScopeMetrics] -> Process [Metric] ScopeMetrics
 asScopeMetrics mod = mapping $ \metrics ->
-  messageWith ((MF.metrics .~ metrics) : mod)
+  messageWith ((F.metrics .~ metrics) : mod)
 
 asMetric :: [Metric -> Metric] -> Process Metric'Data Metric
 asMetric mod = mapping $ \metric'data ->
-  messageWith ((MF.maybe'data' .~ Just metric'data) : mod)
+  messageWith ((F.maybe'data' .~ Just metric'data) : mod)
 
-asGauge :: [Gauge -> Gauge] -> Process [NumberDataPoint] Metric'Data
-asGauge mod =
+asGauge :: Process [NumberDataPoint] Metric'Data
+asGauge =
   repeatedly $
     await >>= \case
       dataPoints
         | null dataPoints -> pure ()
-        | otherwise -> yield . Metric'Gauge . messageWith $ (MF.dataPoints .~ dataPoints) : mod
+        | otherwise -> yield . Metric'Gauge . messageWith $ [F.dataPoints .~ dataPoints]
 
 asSum :: [Sum -> Sum] -> Process [NumberDataPoint] Metric'Data
 asSum mod =
@@ -562,48 +275,50 @@ asSum mod =
     await >>= \case
       dataPoints
         | null dataPoints -> pure ()
-        | otherwise -> yield . Metric'Sum . messageWith $ (MF.dataPoints .~ dataPoints) : mod
+        | otherwise -> yield . Metric'Sum . messageWith $ (F.dataPoints .~ dataPoints) : mod
 
---------------------------------------------------------------------------------
--- Internal Helpers
---------------------------------------------------------------------------------
+asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (WithMeta v) NumberDataPoint
+asNumberDataPoint = mapping toNumberDataPoint
 
-warnf :: (HPrintfType r) => String -> r
-warnf = hPrintf IO.stderr
+toNumberDataPoint :: (IsNumberDataPoint'Value v) => (WithMeta v) -> NumberDataPoint
+toNumberDataPoint i =
+  messageWith
+    [ F.maybe'value .~ Just (toNumberDataPoint'Value i.value)
+    , F.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+    , F.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
+    , F.attributes .~ mapMaybe toMaybeKeyValue i.attr
+    ]
 
---------------------------------------------------------------------------------
--- Events with Context
+class IsNumberDataPoint'Value v where
+  toNumberDataPoint'Value :: v -> NumberDataPoint'Value
 
-data WithContext a = WithContext
-  { _value :: !a
-  , _startTimeUnixNano :: !(Maybe Timestamp)
-  }
-  deriving (Show)
+instance IsNumberDataPoint'Value Word32 where
+  toNumberDataPoint'Value :: Word32 -> NumberDataPoint'Value
+  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
 
-value :: Lens' (WithContext a) a
-value = lens get set
- where
-  get WithContext{..} = _value
-  set aXst st = aXst{_value = st}
+-- | __Warning__: This instance may cause overflow.
+instance IsNumberDataPoint'Value Word64 where
+  toNumberDataPoint'Value :: Word64 -> NumberDataPoint'Value
+  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
 
-maybeStartTimeUnixNano :: Lens' (WithContext a) (Maybe Timestamp)
-maybeStartTimeUnixNano = lens get set
- where
-  get WithContext{..} = _startTimeUnixNano
-  set aXst st = aXst{_startTimeUnixNano = st}
+toMaybeKeyValue :: Attr -> Maybe KeyValue
+toMaybeKeyValue (k, v) = toMaybeAnyValue v <&> \v -> messageWith [C.key .~ k, C.value .~ v]
 
-startTimeUnixNano :: Lens' (WithContext a) Timestamp
-startTimeUnixNano = lens get set
- where
-  -- TODO: issue a warning when 0 is returned.
-  get aXst = fromMaybe 0 (aXst ^. maybeStartTimeUnixNano)
-  set aXst st = aXst & maybeStartTimeUnixNano .~ Just st
-
-timeUnixNano :: Lens' (WithContext Event) Timestamp
-timeUnixNano = lens get set
- where
-  get evXst = evXst ^. value . EF.evTime + evXst ^. startTimeUnixNano
-  set evXst t = evXst & value . EF.evTime .~ t - evXst ^. startTimeUnixNano
+toMaybeAnyValue :: AttrValue -> Maybe AnyValue
+toMaybeAnyValue = \case
+  AttrInt v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrInt8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrInt16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrInt32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrInt64 v -> Just $ messageWith [C.intValue .~ v]
+  AttrWord v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrWord8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrWord16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrWord32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrWord64 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
+  AttrDouble v -> Just $ messageWith [C.doubleValue .~ v]
+  AttrText v -> Just $ messageWith [C.stringValue .~ v]
+  AttrNull -> Nothing
 
 --------------------------------------------------------------------------------
 -- DSL for writing messages
@@ -611,72 +326,6 @@ timeUnixNano = lens get set
 -- | Construct a message with a list of modifications applied.
 messageWith :: (Message msg) => [msg -> msg] -> msg
 messageWith = foldr ($) defMessage
-
--- | Construct a message with a list of modifications applied.
-intDataPointWith ::
-  (Integral i) =>
-  -- | The event with context.
-  WithContext Event ->
-  -- | The integral data point.
-  i ->
-  -- | A list of attributes.
-  [Maybe KeyValue] ->
-  NumberDataPoint
-intDataPointWith ev i attributes =
-  messageWith $
-    [ MF.asInt .~ fromIntegral i
-    , MF.timeUnixNano .~ ev ^. timeUnixNano
-    , MF.attributes .~ catMaybes attributes
-    , maybe id (MF.startTimeUnixNano .~) (ev ^. maybeStartTimeUnixNano)
-    ]
-
---------------------------------------------------------------------------------
--- DSL for writing attributes
-
-infix 7 ~=
-
-(~=) :: (ToAnyValue v) => Text -> v -> Maybe KeyValue
-k ~= v = toAnyValue v <&> \v -> defMessage & C.key .~ k & C.value .~ v
-
-class ToAnyValue v where
-  toAnyValue :: v -> Maybe AnyValue
-
-instance ToAnyValue Int64 where
-  toAnyValue :: Int64 -> Maybe AnyValue
-  toAnyValue v = Just (defMessage & C.intValue .~ v)
-
-instance ToAnyValue Int where
-  toAnyValue :: Int -> Maybe AnyValue
-  toAnyValue v = toAnyValue (fromIntegral v :: Int64)
-
-instance ToAnyValue Word8 where
-  toAnyValue :: Word8 -> Maybe AnyValue
-  toAnyValue v = toAnyValue (fromIntegral v :: Int64)
-
-instance ToAnyValue Word32 where
-  toAnyValue :: Word32 -> Maybe AnyValue
-  toAnyValue v = toAnyValue (fromIntegral v :: Int64)
-
--- | __Warning__: This instance may overflow.
-instance ToAnyValue Word64 where
-  toAnyValue :: Word64 -> Maybe AnyValue
-  toAnyValue v = toAnyValue (fromIntegral v :: Int64)
-
-instance ToAnyValue String where
-  toAnyValue :: String -> Maybe AnyValue
-  toAnyValue = toAnyValue . T.pack
-
-instance ToAnyValue Char where
-  toAnyValue :: Char -> Maybe AnyValue
-  toAnyValue = toAnyValue . T.singleton
-
-instance ToAnyValue Text where
-  toAnyValue :: Text -> Maybe AnyValue
-  toAnyValue v = Just (defMessage & C.stringValue .~ v)
-
-instance (ToAnyValue v) => ToAnyValue (Maybe v) where
-  toAnyValue :: Maybe v -> Maybe AnyValue
-  toAnyValue = (toAnyValue =<<)
 
 --------------------------------------------------------------------------------
 -- Options
