@@ -19,7 +19,7 @@ module GHC.Eventlog.Live.Machines (
 
   -- ** Events with meta information
   WithStartTime (..),
-  WithMeta (..),
+  Metric (..),
   AttrKey,
   AttrValue (..),
   Attr,
@@ -346,9 +346,12 @@ data WithStartTime a = WithStartTime
   deriving (Functor, Show)
 
 -------------------------------------------------------------------------------
--- Values with meta data
+-- Spans
 
-data WithMeta a = WithMeta
+-------------------------------------------------------------------------------
+-- Metrics
+
+data Metric a = Metric
   { value :: !a
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
@@ -356,13 +359,13 @@ data WithMeta a = WithMeta
   }
   deriving (Functor, Show)
 
-withMeta ::
+mkMetric ::
   WithStartTime Event ->
   v ->
   [Attr] ->
-  WithMeta v
-withMeta i v attr =
-  WithMeta
+  Metric v
+mkMetric i v attr =
+  Metric
     { value = v
     , maybeTimeUnixNano = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
@@ -504,14 +507,14 @@ withStartTime = construct start
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocatedData :: Process (WithStartTime Event) (WithMeta Word64)
+processHeapAllocatedData :: Process (WithStartTime Event) (Metric Word64)
 processHeapAllocatedData =
   repeatedly $
     await >>= \case
       i
         | HeapAllocated{..} <- i.value.evSpec ->
             yield $
-              withMeta i allocBytes $
+              mkMetric i allocBytes $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -520,7 +523,7 @@ processHeapAllocatedData =
 -------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSizeData :: Process (WithStartTime Event) (WithMeta Word64)
+processHeapSizeData :: Process (WithStartTime Event) (Metric Word64)
 processHeapSizeData = repeatedly go
  where
   go =
@@ -528,7 +531,7 @@ processHeapSizeData = repeatedly go
       i
         | HeapSize{..} <- i.value.evSpec -> do
             yield $
-              withMeta i sizeBytes $
+              mkMetric i sizeBytes $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -537,14 +540,14 @@ processHeapSizeData = repeatedly go
 -------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSizeData :: Process (WithStartTime Event) (WithMeta Word64)
+processBlocksSizeData :: Process (WithStartTime Event) (Metric Word64)
 processBlocksSizeData =
   repeatedly $
     await >>= \case
       i
         | BlocksSize{..} <- i.value.evSpec -> do
             yield $
-              withMeta i blocksSize $
+              mkMetric i blocksSize $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -553,14 +556,14 @@ processBlocksSizeData =
 -------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLiveData :: Process (WithStartTime Event) (WithMeta Word64)
+processHeapLiveData :: Process (WithStartTime Event) (Metric Word64)
 processHeapLiveData =
   repeatedly $
     await >>= \case
       i
         | HeapLive{..} <- i.value.evSpec -> do
             yield $
-              withMeta i liveBytes $
+              mkMetric i liveBytes $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -575,14 +578,14 @@ data MemReturnData = MemReturnData
   , returned :: !Word32
   }
 
-processMemReturnData :: Process (WithStartTime Event) (WithMeta MemReturnData)
+processMemReturnData :: Process (WithStartTime Event) (Metric MemReturnData)
 processMemReturnData =
   repeatedly $
     await >>= \case
       i
         | MemReturn{..} <- i.value.evSpec -> do
             yield $
-              withMeta i MemReturnData{..} $
+              mkMetric i MemReturnData{..} $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -633,7 +636,7 @@ isHeapProfBreakdownInfoTable _ = False
 processHeapProfSampleData ::
   (MonadIO m) =>
   Maybe HeapProfBreakdown ->
-  ProcessT m (WithStartTime Event) (WithMeta Word64)
+  ProcessT m (WithStartTime Event) (Metric Word64)
 processHeapProfSampleData maybeHeapProfBreakdown =
   construct $
     go
@@ -643,7 +646,7 @@ processHeapProfSampleData maybeHeapProfBreakdown =
         , heapProfSampleEraStack = mempty
         }
  where
-  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) (WithMeta Word64) m Void
+  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) (Metric Word64) m Void
   go st@HeapProfSampleState{..} = do
     await >>= \i -> case i.value.evSpec of
       -- Announces the heap profile breakdown, amongst other things.
@@ -706,7 +709,7 @@ processHeapProfSampleData maybeHeapProfBreakdown =
                       M.lookup infoTablePtr infoTableMap
                   | otherwise = Nothing
             yield $
-              withMeta i heapProfResidency $
+              mkMetric i heapProfResidency $
                 [ "evCap" ~= i.value.evCap
                 , "heapProfBreakdown" ~= (heapProfBreakdownShow heapProfBreakdown)
                 , "heapProfId" ~= heapProfId
