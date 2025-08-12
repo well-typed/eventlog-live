@@ -94,7 +94,7 @@ instance IsField Word64 where
   toField :: Word64 -> I.Field 'I.NonNullable
   toField = I.FieldInt . fromIntegral
 
-toLine :: (IsField v) => I.Measurement -> (WithMeta v) -> I.Line TimeSpec
+toLine :: (IsField v) => I.Measurement -> (Metric v) -> I.Line TimeSpec
 toLine measurement@(I.Measurement measurementName) i =
   I.Line measurement tagSet fieldSet timestamp
  where

@@ -33,12 +33,12 @@ import Network.GRPC.Common.Protobuf qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O
 import PackageInfo_eventlog_live qualified as EventlogLive
-import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService (ExportMetricsServiceRequest, MetricsService)
-import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as MSF
-import Proto.Opentelemetry.Proto.Common.V1.Common (AnyValue, InstrumentationScope, KeyValue)
-import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as C
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics (AggregationTemporality (..), Metric, Metric'Data (..), NumberDataPoint, NumberDataPoint'Value (NumberDataPoint'AsInt), ResourceMetrics, ScopeMetrics, Sum)
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as MF
+import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
+import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
+import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
+import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
+import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
+import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import System.IO qualified as IO
 import Text.Printf (printf)
 
@@ -58,7 +58,7 @@ main = do
           ]
         ~> mapping D.toList
         ~> asScopeMetrics
-          [ MF.scope .~ eventlogLiveScope
+          [ OM.scope .~ eventlogLiveScope
           ]
         ~> asResourceMetric []
         ~> asExportMetricServiceRequest
@@ -75,7 +75,7 @@ displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . dis
 processHeapEvents ::
   (MonadIO m) =>
   Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
+  ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapEvents maybeHeapProfBreakdown =
   fanout
     [ processHeapAllocated
@@ -89,70 +89,70 @@ processHeapEvents maybeHeapProfBreakdown =
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList Metric)
+processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapAllocated =
   liftTick (processHeapAllocatedData ~> asNumberDataPoint)
     ~> batchByTickList
     ~> asSum
-      [ MF.aggregationTemporality .~ AGGREGATION_TEMPORALITY_DELTA
-      , MF.isMonotonic .~ True
+      [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+      , OM.isMonotonic .~ True
       ]
     ~> asMetric
-      [ MF.name .~ "HeapAllocated"
-      , MF.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
-      , MF.unit .~ "By"
+      [ OM.name .~ "HeapAllocated"
+      , OM.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
+      , OM.unit .~ "By"
       ]
     ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSize :: Process (Tick (WithStartTime Event)) (DList Metric)
+processHeapSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapSize =
   liftTick (processHeapSizeData ~> asNumberDataPoint)
     ~> batchByTickList
     ~> asGauge
     ~> asMetric
-      [ MF.name .~ "HeapSize"
-      , MF.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , MF.unit .~ "By"
+      [ OM.name .~ "HeapSize"
+      , OM.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
+      , OM.unit .~ "By"
       ]
     ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSize :: Process (Tick (WithStartTime Event)) (DList Metric)
+processBlocksSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processBlocksSize =
   liftTick (processBlocksSizeData ~> asNumberDataPoint)
     ~> batchByTickList
     ~> asGauge
     ~> asMetric
-      [ MF.name .~ "BlocksSize"
-      , MF.description .~ "Report the current heap size, calculated by the allocated number of blocks."
-      , MF.unit .~ "By"
+      [ OM.name .~ "BlocksSize"
+      , OM.description .~ "Report the current heap size, calculated by the allocated number of blocks."
+      , OM.unit .~ "By"
       ]
     ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLive :: Process (Tick (WithStartTime Event)) (DList Metric)
+processHeapLive :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapLive =
   liftTick (processHeapLiveData ~> asNumberDataPoint)
     ~> batchByTickList
     ~> asGauge
     ~> asMetric
-      [ MF.name .~ "HeapLive"
-      , MF.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , MF.unit .~ "By"
+      [ OM.name .~ "HeapLive"
+      , OM.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
+      , OM.unit .~ "By"
       ]
     ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-processMemReturn :: Process (Tick (WithStartTime Event)) (DList Metric)
+processMemReturn :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processMemReturn =
   liftTick processMemReturnData
     ~> batchByTickList
@@ -160,25 +160,25 @@ processMemReturn =
       [ mapping (fmap (toNumberDataPoint . fmap (.current)))
           ~> asGauge
           ~> asMetric
-            [ MF.name .~ "MemCurrent"
-            , MF.description .~ "Report the number of megablocks currently allocated."
-            , MF.unit .~ "{mblock}"
+            [ OM.name .~ "MemCurrent"
+            , OM.description .~ "Report the number of megablocks currently allocated."
+            , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
       , mapping (fmap (toNumberDataPoint . fmap (.needed)))
           ~> asGauge
           ~> asMetric
-            [ MF.name .~ "MemNeeded"
-            , MF.description .~ "Report the number of megablocks currently needed."
-            , MF.unit .~ "{mblock}"
+            [ OM.name .~ "MemNeeded"
+            , OM.description .~ "Report the number of megablocks currently needed."
+            , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
       , mapping (fmap (toNumberDataPoint . fmap (.returned)))
           ~> asGauge
           ~> asMetric
-            [ MF.name .~ "MemReturned"
-            , MF.description .~ "Report the number of megablocks currently being returned to the OS."
-            , MF.unit .~ "{mblock}"
+            [ OM.name .~ "MemReturned"
+            , OM.description .~ "Report the number of megablocks currently being returned to the OS."
+            , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
       ]
@@ -189,15 +189,15 @@ processMemReturn =
 processHeapProfSample ::
   (MonadIO m) =>
   Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithStartTime Event)) (DList Metric)
+  ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapProfSample maybeHeapProfBreakdown =
   liftTick (processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
     ~> batchByTickList
     ~> asGauge
     ~> asMetric
-      [ MF.name .~ "HeapProfSample"
-      , MF.description .~ "Report a heap profile sample."
-      , MF.unit .~ "By"
+      [ OM.name .~ "HeapProfSample"
+      , OM.description .~ "Report a heap profile sample."
+      , OM.unit .~ "By"
       ]
     ~> mapping D.singleton
 
@@ -205,51 +205,51 @@ processHeapProfSample maybeHeapProfBreakdown =
 -- Machines
 --------------------------------------------------------------------------------
 
-eventlogLiveScope :: InstrumentationScope
+eventlogLiveScope :: OC.InstrumentationScope
 eventlogLiveScope =
   messageWith
-    [ C.name .~ T.pack EventlogLive.name
-    , C.version .~ T.pack (showVersion EventlogLive.version)
+    [ OC.name .~ T.pack EventlogLive.name
+    , OC.version .~ T.pack (showVersion EventlogLive.version)
     ]
 
-asExportMetricsServiceRequest :: Process [ResourceMetrics] ExportMetricsServiceRequest
-asExportMetricsServiceRequest = mapping $ (defMessage &) . (MF.resourceMetrics .~)
+asExportMetricsServiceRequest :: Process [OM.ResourceMetrics] OMS.ExportMetricsServiceRequest
+asExportMetricsServiceRequest = mapping $ (defMessage &) . (OM.resourceMetrics .~)
 
-asExportMetricServiceRequest :: Process ResourceMetrics ExportMetricsServiceRequest
+asExportMetricServiceRequest :: Process OM.ResourceMetrics OMS.ExportMetricsServiceRequest
 asExportMetricServiceRequest = mapping (: []) ~> asExportMetricsServiceRequest
 
-asResourceMetrics :: [ResourceMetrics -> ResourceMetrics] -> Process [ScopeMetrics] ResourceMetrics
+asResourceMetrics :: [OM.ResourceMetrics -> OM.ResourceMetrics] -> Process [OM.ScopeMetrics] OM.ResourceMetrics
 asResourceMetrics mod = mapping $ \metrics ->
-  messageWith ((MF.scopeMetrics .~ metrics) : mod)
+  messageWith ((OM.scopeMetrics .~ metrics) : mod)
 
-asResourceMetric :: [ResourceMetrics -> ResourceMetrics] -> Process ScopeMetrics ResourceMetrics
+asResourceMetric :: [OM.ResourceMetrics -> OM.ResourceMetrics] -> Process OM.ScopeMetrics OM.ResourceMetrics
 asResourceMetric mod = mapping (: []) ~> asResourceMetrics mod
 
-asScopeMetrics :: [ScopeMetrics -> ScopeMetrics] -> Process [Metric] ScopeMetrics
+asScopeMetrics :: [OM.ScopeMetrics -> OM.ScopeMetrics] -> Process [OM.Metric] OM.ScopeMetrics
 asScopeMetrics mod = mapping $ \metrics ->
-  messageWith ((MF.metrics .~ metrics) : mod)
+  messageWith ((OM.metrics .~ metrics) : mod)
 
-asMetric :: [Metric -> Metric] -> Process Metric'Data Metric
+asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
 asMetric mod = mapping $ \metric'data ->
-  messageWith ((MF.maybe'data' .~ Just metric'data) : mod)
+  messageWith ((OM.maybe'data' .~ Just metric'data) : mod)
 
-asGauge :: Process [NumberDataPoint] Metric'Data
+asGauge :: Process [OM.NumberDataPoint] OM.Metric'Data
 asGauge =
   repeatedly $
     await >>= \case
       dataPoints
         | null dataPoints -> pure ()
-        | otherwise -> yield . Metric'Gauge . messageWith $ [MF.dataPoints .~ dataPoints]
+        | otherwise -> yield . OM.Metric'Gauge . messageWith $ [OM.dataPoints .~ dataPoints]
 
-asSum :: [Sum -> Sum] -> Process [NumberDataPoint] Metric'Data
+asSum :: [OM.Sum -> OM.Sum] -> Process [OM.NumberDataPoint] OM.Metric'Data
 asSum mod =
   repeatedly $
     await >>= \case
       dataPoints
         | null dataPoints -> pure ()
-        | otherwise -> yield . Metric'Sum . messageWith $ (MF.dataPoints .~ dataPoints) : mod
+        | otherwise -> yield . OM.Metric'Sum . messageWith $ (OM.dataPoints .~ dataPoints) : mod
 
-asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (WithMeta v) NumberDataPoint
+asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (Metric v) OM.NumberDataPoint
 asNumberDataPoint = mapping toNumberDataPoint
 
 --------------------------------------------------------------------------------
@@ -257,43 +257,48 @@ asNumberDataPoint = mapping toNumberDataPoint
 --------------------------------------------------------------------------------
 
 class IsNumberDataPoint'Value v where
-  toNumberDataPoint'Value :: v -> NumberDataPoint'Value
+  toNumberDataPoint'Value :: v -> OM.NumberDataPoint'Value
 
 instance IsNumberDataPoint'Value Word32 where
-  toNumberDataPoint'Value :: Word32 -> NumberDataPoint'Value
-  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
+  toNumberDataPoint'Value :: Word32 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
 
 -- | __Warning__: This instance may cause overflow.
 instance IsNumberDataPoint'Value Word64 where
-  toNumberDataPoint'Value :: Word64 -> NumberDataPoint'Value
-  toNumberDataPoint'Value = NumberDataPoint'AsInt . fromIntegral
+  toNumberDataPoint'Value :: Word64 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
 
-toNumberDataPoint :: (IsNumberDataPoint'Value v) => (WithMeta v) -> NumberDataPoint
+toNumberDataPoint :: (IsNumberDataPoint'Value v) => (Metric v) -> OM.NumberDataPoint
 toNumberDataPoint i =
   messageWith
-    [ MF.maybe'value .~ Just (toNumberDataPoint'Value i.value)
-    , MF.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , MF.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
-    , MF.attributes .~ mapMaybe toMaybeKeyValue i.attr
+    [ OM.maybe'value .~ Just (toNumberDataPoint'Value i.value)
+    , OM.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+    , OM.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
+    , OM.attributes .~ mapMaybe toMaybeKeyValue i.attr
     ]
  where
-  toMaybeKeyValue :: Attr -> Maybe KeyValue
-  toMaybeKeyValue (k, v) = toMaybeAnyValue v <&> \v -> messageWith [C.key .~ k, C.value .~ v]
+  toMaybeKeyValue :: Attr -> Maybe OC.KeyValue
+  toMaybeKeyValue (k, v) =
+    toMaybeAnyValue v <&> \v ->
+      messageWith
+        [ OC.key .~ k
+        , OC.value .~ v
+        ]
 
-  toMaybeAnyValue :: AttrValue -> Maybe AnyValue
+  toMaybeAnyValue :: AttrValue -> Maybe OC.AnyValue
   toMaybeAnyValue = \case
-    AttrInt v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrInt8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrInt16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrInt32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrInt64 v -> Just $ messageWith [C.intValue .~ v]
-    AttrWord v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrWord8 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrWord16 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrWord32 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrWord64 v -> Just $ messageWith [C.intValue .~ fromIntegral v]
-    AttrDouble v -> Just $ messageWith [C.doubleValue .~ v]
-    AttrText v -> Just $ messageWith [C.stringValue .~ v]
+    AttrInt v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrInt8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrInt16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrInt32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrInt64 v -> Just $ messageWith [OC.intValue .~ v]
+    AttrWord v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrWord8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrWord16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrWord32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrWord64 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+    AttrDouble v -> Just $ messageWith [OC.doubleValue .~ v]
+    AttrText v -> Just $ messageWith [OC.stringValue .~ v]
     AttrNull -> Nothing
 
 --------------------------------------------------------------------------------
@@ -319,21 +324,21 @@ instance Exception ExportMetricsError where
   displayException ExportMetricsError{..} =
     printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
 
-otelcolResourceMetricsExporter :: G.Connection -> ProcessT IO ExportMetricsServiceRequest ExportMetricsError
+otelcolResourceMetricsExporter :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest ExportMetricsError
 otelcolResourceMetricsExporter conn =
   repeatedly $
     await >>= \exportMetricsServiceRequest -> do
-      G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf MetricsService "export")) (G.Proto exportMetricsServiceRequest))
-      unless (resp ^. MSF.partialSuccess . MSF.rejectedDataPoints == 0) $ do
+      G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest))
+      unless (resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0) $ do
         yield
           ExportMetricsError
-            { rejectedDataPoints = resp ^. MSF.partialSuccess . MSF.rejectedDataPoints
-            , errorMessage = resp ^. MSF.partialSuccess . MSF.errorMessage
+            { rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
+            , errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage
             }
 
-type instance G.RequestMetadata (Protobuf MetricsService meth) = G.NoMetadata
-type instance G.ResponseInitialMetadata (Protobuf MetricsService meth) = G.NoMetadata
-type instance G.ResponseTrailingMetadata (Protobuf MetricsService meth) = G.NoMetadata
+type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
+type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
+type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 
 --------------------------------------------------------------------------------
 -- Options
