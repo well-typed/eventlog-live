@@ -17,7 +17,7 @@ services:
 
   eventlog-live-influxdb:
     # container_name: eventlog-live-influxdb
-    image: "well-typed/eventlog-live-example-eventlog-live-influxdb:0.1.0.0"
+    image: "well-typed/eventlog-live-influxdb:0.1.0.0"
     restart: "unless-stopped"
     build:
       context: "../.."
