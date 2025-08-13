@@ -10,7 +10,7 @@ The following is a screenshow of Grafana which shows live heap profiling statist
 
 ![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](assets/eventlog-live-otelcol.png)
 
-To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then navigate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Heap Stats_.
+To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then navigate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Heap_.
 
 ```sh
 docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose.yml up --build
@@ -18,10 +18,26 @@ docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose.yml up --buil
 
 This [Docker Compose](https://docs.docker.com/compose/) configuration builds and runs a number of Docker containers:
 
-- [`oddball`](dockerfiles/Dockerfile.oddball) for the example program.
-- [`ekg-eventlog-influxdb`](dockerfiles/Dockerfile.ekg-eventlog-influxdb) for the program that forwards the eventlog profiling data from `oddball` to the InfluxDB database.
-- [`influxdb`](https://github.com/influxdata/influxdata-docker/blob/063caa0d729da41b70760c8f7362345f1bb79779/influxdb/1.8/Dockerfile) for the InfluxDB database.
-- [`grafana`](https://hub.docker.com/r/grafana/grafana/) for the Grafana instance.
+- [`oddball`](dockerfiles/Dockerfile.oddball)
+
+  The `oddball` example program, which repeatedly generates and sums large quantities of random numbers.
+
+- [`eventlog-live-otelcol`](dockerfiles/Dockerfile.eventlog-live-otelcol)
+
+  The `eventlog-live-otelcol` program, which streams eventlog data from `oddball` to the
+  OpenTelemetry Collector.
+
+- [`otel/opentelemetry-collector-contrib`](https://hub.docker.com/r/otel/opentelemetry-collector-contrib)
+
+  The OpenTelemetry Collector, which streams the data to Prometheus.
+
+- [`prom/prometheus`](https://hub.docker.com/r/prom/prometheus)
+
+  The Prometheus metric processor and database, which acts as a datasource for Grafana.
+
+- [`grafana/grafana-oss`](https://hub.docker.com/r/grafana/grafana-oss)
+
+  The Grafana instance, which visualises the eventlog data.
 
 ## Getting Started
 
@@ -126,7 +142,7 @@ To visualise the profiling data of your instrumented application, you must conne
 The Docker Compose configuration in [`dockerfiles/eventlog-live-otelcol/docker-compose-external.yml`](dockerfiles/eventlog-live-otelcol/docker-compose-external.yml) sets up the same infrastructure used in the demo without the example program.
 To use it, follow these steps:
 
-1.  Start the Grafana container:
+1.  Start the containers with the OpenTelemetry Collector, Prometheus, and Grafana:
 
     ```sh
     docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose-external.yaml up --build -d
