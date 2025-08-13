@@ -36,3 +36,17 @@ services:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
       - 9090:9090
+
+  jaeger:
+    # container_name: jaeger
+    image: jaegertracing/jaeger
+    command:
+      - "--config=/etc/jaeger/config.yaml"
+    volumes:
+      - "./config/jaeger.yaml:/etc/jaeger/config.yaml"
+    environment:
+      - "OTEL_ENABLED=true"
+    ports:
+      - "14317:14317" # OTLP gRPC receiver
+      - "14318:14318" # OTLP HTTP receiver
+      - "16686:16686"
