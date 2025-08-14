@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module GHC.Eventlog.Live.Machines (
   -- * Eventlog source
@@ -17,10 +18,15 @@ module GHC.Eventlog.Live.Machines (
   -- * Event processing
 
   -- ** Start time
+  WithStartTime (..),
+  tryGetTimeUnixNano,
   withStartTime,
 
-  -- ** Events with meta information
-  WithStartTime (..),
+  -- ** Spans
+  ThreadSpan (..),
+  processThreadEventsTick,
+
+  -- ** Metrics
   Metric (..),
   AttrKey,
   AttrValue (..),
@@ -63,7 +69,7 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
 import Data.DList qualified as D
 import Data.Either (isLeft)
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Function (fix)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
@@ -79,7 +85,7 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Clock (getMonotonicTimeNSec)
-import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), Timestamp)
+import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), ThreadId, ThreadStopStatus (..), Timestamp)
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import Numeric (showHex)
 import System.Clock qualified as Clock
@@ -347,8 +353,106 @@ data WithStartTime a = WithStartTime
   }
   deriving (Functor, Show)
 
+tryGetTimeUnixNano :: WithStartTime Event -> Maybe Timestamp
+tryGetTimeUnixNano i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
+
 -------------------------------------------------------------------------------
 -- Spans
+
+data ThreadState
+  = Running
+  | Queued
+  | Migrating
+  | Finished
+  deriving (Eq, Show)
+
+data ThreadSpanStart
+  = ThreadSpanStart
+  { spanId :: Word64
+  , startTimeUnixNano :: !Timestamp
+  , threadState :: !ThreadState
+  }
+  deriving (Show)
+
+data ThreadSpan
+  = ThreadSpan
+  { spanId :: Word64
+  , thread :: !ThreadId
+  , threadState :: !ThreadState
+  , startTimeUnixNano :: !Timestamp
+  , endTimeUnixNano :: !Timestamp
+  }
+  deriving (Show)
+
+data ThreadStates = ThreadStates
+  { threadStates :: HashMap ThreadId ThreadSpanStart
+  , nextSpanId :: Word64
+  }
+  deriving (Show)
+
+-- TODO: use `nextSpanId`
+processThreadEventsTick :: Process (Tick (WithStartTime Event)) (Tick ThreadSpan)
+processThreadEventsTick = construct $ go ThreadStates{threadStates = mempty, nextSpanId = 1}
+ where
+  go st =
+    await >>= \case
+      Item i -> case i.value.evSpec of
+        -- Marks the creation of a Haskell thread.
+        CreateThread{} ->
+          go =<< moveTo st i Queued
+        -- The indicated thread has started running.
+        RunThread{} ->
+          go =<< moveTo st i Running
+        -- The indicated thread has stopped running,
+        -- for the reason given by the status field.
+        StopThread{..} -> case status of
+          ThreadFinished ->
+            go =<< moveTo st i Finished
+          _otherwise ->
+            go =<< moveTo st i Queued
+        -- The indicated thread has been migrated to a new capability.
+        MigrateThread{} ->
+          go =<< moveTo st i Migrating
+        -- The indicated thread has been woken up on another capability.
+        WakeupThread{} ->
+          go =<< moveTo st i Queued
+        _otherwise -> go st
+      Tick -> do
+        yield Tick
+        -- TODO: Decorate ticks with times, then issue spans for each thread
+        --       that is not Finished, and reset the starting time of the span.
+        go st
+
+newtype PlanTWriter w k o m a = PlanTWriter {unPlanTWriter :: PlanT k o m (w, a)}
+
+instance Functor (PlanTWriter w k o m) where
+  fmap :: (a -> b) -> PlanTWriter w k o m a -> PlanTWriter w k o m b
+  fmap f (PlanTWriter m) = PlanTWriter (fmap (fmap f) m)
+
+{- |
+Transition the `ThreadStates` to the target thread state, and
+end any current thread span and `yield` the resulting `ThreadSpan`.
+
+__Warning__: This function is partial and only defined for events with a `thread` field.
+-}
+moveTo ::
+  ThreadStates ->
+  WithStartTime Event ->
+  ThreadState ->
+  PlanT k (Tick ThreadSpan) m ThreadStates
+moveTo st i threadState
+  | thread <- i.value.evSpec.thread
+  , Just timeUnixNano <- tryGetTimeUnixNano i = do
+      let moveTo' :: Maybe ThreadSpanStart -> PlanTWriter Word64 k (Tick ThreadSpan) m (Maybe ThreadSpanStart)
+          moveTo' maybeThreadSpanStart = PlanTWriter $ do
+            -- End the current thread span, if any:
+            for_ maybeThreadSpanStart $ \ThreadSpanStart{..} ->
+              yield . Item $ ThreadSpan{endTimeUnixNano = timeUnixNano, ..}
+            -- Start a new thread span:
+            pure (st.nextSpanId + 1, Just ThreadSpanStart{startTimeUnixNano = timeUnixNano, spanId = st.nextSpanId, ..})
+      (nextSpanId', threadStates') <- (.unPlanTWriter) $ M.alterF moveTo' thread st.threadStates
+      pure st{threadStates = threadStates', nextSpanId = nextSpanId'}
+  | otherwise = pure st
 
 -------------------------------------------------------------------------------
 -- Metrics
@@ -369,7 +473,7 @@ mkMetric ::
 mkMetric i v attr =
   Metric
     { value = v
-    , maybeTimeUnixNano = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
+    , maybeTimeUnixNano = tryGetTimeUnixNano i
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
     , attr = attr
     }
