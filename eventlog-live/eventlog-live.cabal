@@ -39,6 +39,7 @@ common language
     KindSignatures
     LambdaCase
     MultiParamTypeClasses
+    NamedFieldPuns
     NoFieldSelectors
     NumericUnderscores
     OverloadedRecordDot
