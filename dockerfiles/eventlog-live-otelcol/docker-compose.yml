@@ -53,6 +53,7 @@ services:
   otelcol:
     # container_name: otelcol
     image: otel/opentelemetry-collector-contrib:latest
+    restart: "unless-stopped"
     command:
       - "--config=/etc/otelcol/config.yaml"
     volumes:
@@ -65,20 +66,22 @@ services:
   prometheus:
     # container_name: prometheus
     image: prom/prometheus:latest
+    restart: "unless-stopped"
     command:
       - "--config.file=/etc/prometheus/prometheus.yaml"
     volumes:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
-      - "9090:9090"
+      - "9090:9090" # Prometheus
 
   jaeger:
     # container_name: jaeger
     image: jaegertracing/jaeger
+    restart: "unless-stopped"
     ports:
       - "14317:4317" # OTLP gRPC receiver
       - "14318:4318" # OTLP HTTP receiver
-      - "16686:16686"
+      - "16686:16686" # Jaeger
 
 volumes:
   ghc_eventlog_socket:
