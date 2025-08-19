@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module GHC.Eventlog.Live.Machines (
   -- * Eventlog source
@@ -17,10 +18,20 @@ module GHC.Eventlog.Live.Machines (
   -- * Event processing
 
   -- ** Start time
+  WithStartTime (..),
+  tryGetTimeUnixNano,
   withStartTime,
 
-  -- ** Events with meta information
-  WithStartTime (..),
+  -- ** Thread labels
+  ThreadLabel (..),
+  processThreadLabels,
+
+  -- ** Thread State Spans
+  ThreadState (..),
+  ThreadStateSpan (..),
+  processThreadStateSpans,
+
+  -- ** Metrics
   Metric (..),
   AttrKey,
   AttrValue (..),
@@ -38,12 +49,15 @@ module GHC.Eventlog.Live.Machines (
   -- * Ticks
   Tick (..),
   batchByTick,
+  batchListToTick,
   batchByTickList,
   liftTick,
   dropTick,
   onlyTick,
 
   -- * Event sorting
+  sortByBatch,
+  sortByBatchTick,
   sortEventsUpTo,
   handleOutOfOrderEvents,
 
@@ -61,10 +75,11 @@ import Control.Monad (forever, unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
+import Data.Char (isSpace)
 import Data.DList qualified as D
 import Data.Either (isLeft)
-import Data.Foldable (traverse_)
-import Data.Function (fix)
+import Data.Foldable (for_, traverse_)
+import Data.Function (fix, on)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
@@ -74,12 +89,14 @@ import Data.List qualified as L
 import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, mapping, repeatedly, yield, (~>))
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Ord (comparing)
+import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Clock (getMonotonicTimeNSec)
-import GHC.RTS.Events (Event (..), EventInfo (..), HeapProfBreakdown (..), Timestamp)
+import GHC.RTS.Events (Event (..), EventInfo, HeapProfBreakdown (..), ThreadId, ThreadStopStatus (..), Timestamp)
+import GHC.RTS.Events qualified as E
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import Numeric (showHex)
 import System.Clock qualified as Clock
@@ -88,6 +105,7 @@ import System.IO qualified as IO
 import System.IO.Error (isEOFError)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.ParserCombinators.ReadP qualified as P
+import Text.Printf (printf)
 import Text.Printf qualified as IO
 import Text.Read (readMaybe)
 import Text.Read.Lex (readHexP)
@@ -242,6 +260,11 @@ batchByTick = construct start
       Item a -> batch (a <> acc)
       Tick -> yield acc >> start
 
+batchListToTick :: Process [a] (Tick a)
+batchListToTick = repeatedly go
+ where
+  go = await >>= \xs -> for_ xs (yield . Item) >> yield Tick
+
 batchByTickList :: Process (Tick a) [a]
 batchByTickList =
   mapping (fmap D.singleton)
@@ -266,6 +289,7 @@ onlyTick =
 -- Lift a machine to a machine that passes on ticks unchanged
 
 {- |
+Lift a machine to a machine that passes on ticks unchanged.
 
 Constructs the following machine:
 
@@ -339,7 +363,7 @@ instance Exception DecodeError
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
--- Values with start time
+-- Start time
 
 data WithStartTime a = WithStartTime
   { value :: !a
@@ -347,8 +371,33 @@ data WithStartTime a = WithStartTime
   }
   deriving (Functor, Show)
 
--------------------------------------------------------------------------------
--- Spans
+tryGetTimeUnixNano :: WithStartTime Event -> Maybe Timestamp
+tryGetTimeUnixNano i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
+
+{- |
+Uses the provided getter and setter to set an absolute timestamp for every
+event issued /after/ the `WallClockTime` event. The provided setter should
+/get/ the old relative timestamp and should /set/ the new absolute timestamp.
+
+This machine swallows the first and only `WallClockTime` event.
+-}
+withStartTime :: Process Event (WithStartTime Event)
+withStartTime = construct start
+ where
+  start =
+    await >>= \case
+      ev
+        -- The `WallClockTime` event announces the wall-clock time at which the
+        -- process was started.
+        | E.WallClockTime{..} <- ev.evSpec -> do
+            -- This will start overflowing on Sunday, 21 July 2554 23:34:33, UTC.
+            let !startTimeNs = sec * 1_000_000_000 + fromIntegral nsec
+            -- We do not re-emit the `WallClockTime` event.
+            continue startTimeNs
+        | otherwise ->
+            yield (WithStartTime ev Nothing) >> start
+  continue startTimeNs =
+    mappingPlan (\ev -> WithStartTime ev (Just startTimeNs))
 
 -------------------------------------------------------------------------------
 -- Metrics
@@ -369,10 +418,13 @@ mkMetric ::
 mkMetric i v attr =
   Metric
     { value = v
-    , maybeTimeUnixNano = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
+    , maybeTimeUnixNano = tryGetTimeUnixNano i
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
     , attr = attr
     }
+
+-------------------------------------------------------------------------------
+-- Attributes
 
 type AttrKey =
   Text
@@ -395,6 +447,11 @@ data AttrValue
 
 class IsAttrValue v where
   toAttrValue :: v -> AttrValue
+
+instance IsAttrValue AttrValue where
+  toAttrValue :: AttrValue -> AttrValue
+  toAttrValue = id
+  {-# INLINE toAttrValue #-}
 
 instance IsAttrValue Int where
   toAttrValue :: Int -> AttrValue
@@ -476,31 +533,235 @@ k ~= v = (ak, av)
 {-# INLINE (~=) #-}
 
 -------------------------------------------------------------------------------
--- Start time
+-- Thread events
+-------------------------------------------------------------------------------
 
-{- | Uses the provided getter and setter to set an absolute timestamp for every
-  event issued /after/ the `WallClockTime` event. The provided setter should
-  /get/ the old relative timestamp and should /set/ the new absolute timestamp.
+-------------------------------------------------------------------------------
+-- Thread Labels
 
-  This machine swallows the first and only `WallClockTime` event.
--}
-withStartTime :: Process Event (WithStartTime Event)
-withStartTime = construct start
+data ThreadLabel
+  = ThreadLabel
+  { thread :: !ThreadId
+  , threadlabel :: !Text
+  , startTimeUnixNano :: !Timestamp
+  }
+
+processThreadLabels :: Process (WithStartTime Event) ThreadLabel
+processThreadLabels = repeatedly go
  where
-  start =
-    await >>= \case
-      ev
-        -- The `WallClockTime` event announces the wall-clock time at which the
-        -- process was started.
-        | WallClockTime{..} <- ev.evSpec -> do
-            -- This will start overflowing on Sunday, 21 July 2554 23:34:33, UTC.
-            let !startTimeNs = sec * 1_000_000_000 + fromIntegral nsec
-            -- We do not re-emit the `WallClockTime` event.
-            continue startTimeNs
-        | otherwise ->
-            yield (WithStartTime ev Nothing) >> start
-  continue startTimeNs =
-    mappingPlan (\ev -> WithStartTime ev (Just startTimeNs))
+  go =
+    await >>= \i -> case i.value.evSpec of
+      E.ThreadLabel{..}
+        | Just startTimeUnixNano <- tryGetTimeUnixNano i ->
+            yield ThreadLabel{..}
+      _otherwise -> pure ()
+
+-------------------------------------------------------------------------------
+-- Thread State Spans
+
+data ThreadState
+  = Running
+  | Blocked
+  | Finished
+  deriving (Eq, Show)
+
+data ThreadStateSpan
+  = ThreadStateSpan
+  { spanId :: Word64
+  , thread :: !ThreadId
+  , threadState :: !ThreadState
+  , startTimeUnixNano :: !Timestamp
+  , endTimeUnixNano :: !Timestamp
+  , attr :: [Attr]
+  }
+  deriving (Show)
+
+data ThreadStateSpanStart
+  = ThreadStateSpanStart
+  { spanId :: Word64
+  , startTimeUnixNano :: !Timestamp
+  , threadState :: !ThreadState
+  , prevEvSpec :: !EventInfo
+  , attr :: [Attr]
+  }
+  deriving (Show)
+
+data ThreadStates = ThreadStates
+  { threadStates :: HashMap ThreadId ThreadStateSpanStart
+  , nextSpanId :: Word64
+  }
+  deriving (Show)
+
+processThreadStateSpans ::
+  (MonadIO m) =>
+  ProcessT m (WithStartTime Event) ThreadStateSpan
+processThreadStateSpans = construct $ go ThreadStates{threadStates = mempty, nextSpanId = 1}
+ where
+  go st =
+    await >>= \i -> case i.value.evSpec of
+      -- Marks the creation of a Haskell thread.
+      E.CreateThread{} ->
+        go =<< transitionTo st i Blocked
+      -- The indicated thread has started running.
+      E.RunThread{} ->
+        go =<< transitionTo st i Running
+      -- The indicated thread has stopped running,
+      -- for the reason given by the status field.
+      E.StopThread{status} -> case status of
+        ThreadFinished ->
+          go =<< transitionTo st i Finished
+        _otherwise ->
+          go =<< transitionTo st i Blocked
+      -- The indicated thread has been migrated to a new capability.
+      E.MigrateThread{} ->
+        go =<< transitionTo st i Blocked
+      _otherwise -> go st
+
+{- |
+Internal helper. Combines the planning `Functor` @`PlanT` k o m@ with the writer `Functor` @(w,)@.
+-}
+newtype PlanTWriter w k o m a = PlanTWriter {unPlanTWriter :: PlanT k o m (w, a)}
+
+instance Functor (PlanTWriter w k o m) where
+  fmap :: (a -> b) -> PlanTWriter w k o m a -> PlanTWriter w k o m b
+  fmap f (PlanTWriter m) = PlanTWriter (fmap (fmap f) m)
+  {-# INLINE fmap #-}
+
+{- |
+Transition the `ThreadStates` to the target thread state, and
+end any current thread span and `yield` the resulting `ThreadStateSpan`.
+
+__Warning__: This function is partial and only defined for events with a `thread` field.
+-}
+transitionTo ::
+  (MonadIO m) =>
+  ThreadStates ->
+  WithStartTime Event ->
+  ThreadState ->
+  PlanT k ThreadStateSpan m ThreadStates
+transitionTo st i threadState
+  | thread <- i.value.evSpec.thread
+  , Just timeUnixNano <- tryGetTimeUnixNano i = do
+      let
+        transitionTo' maybeThreadStateSpanStart = PlanTWriter $ do
+          -- End the current thread span, if any:
+          for_ maybeThreadStateSpanStart $ \ThreadStateSpanStart{..} ->
+            yield ThreadStateSpan{endTimeUnixNano = timeUnixNano, ..}
+          -- Validate the thread state transition:
+          let threadStateTransition =
+                ThreadStateTransition
+                  { maybePrevEvSpec = (.prevEvSpec) <$> maybeThreadStateSpanStart
+                  , maybeStartTimeUnixNano = (.startTimeUnixNano) <$> maybeThreadStateSpanStart
+                  , maybeStartState = (.threadState) <$> maybeThreadStateSpanStart
+                  , evSpec = i.value.evSpec
+                  , endTimeUnixNano = timeUnixNano
+                  , endState = threadState
+                  }
+          unless (isValidThreadStateTransition threadStateTransition) . liftIO $
+            warnf "Warning: Invalid thread state transition:\n\n  %s\n" $
+              show threadStateTransition
+
+          -- Start a new thread span:
+          let threadSpanStart =
+                ThreadStateSpanStart
+                  { startTimeUnixNano = timeUnixNano
+                  , spanId = st.nextSpanId
+                  , prevEvSpec = i.value.evSpec
+                  , attr =
+                      [ "evCap" ~= i.value.evCap
+                      , threadEventAttr i.value.evSpec
+                      , stopThreadStatusAttr i.value.evSpec
+                      ]
+                  , ..
+                  }
+          pure (succ st.nextSpanId, Just threadSpanStart)
+      (nextSpanId', threadStates') <- (.unPlanTWriter) $ M.alterF transitionTo' thread st.threadStates
+      pure st{threadStates = threadStates', nextSpanId = nextSpanId'}
+  | otherwise = pure st
+
+{- |
+Internal helper. Create an attribute that holds the threading event name.
+
+__Warning:__
+This works by truncating the `String` produced by `show`.
+Hence, it will work for _any_ `EventInfo`, not just for threading events.
+-}
+threadEventAttr :: EventInfo -> Attr
+threadEventAttr i =
+  "event" ~= takeWhile (not . isSpace) (show i)
+
+{- |
+Internal helper. Create an attribute that holds the `ThreadStopStatus` or null.
+-}
+stopThreadStatusAttr :: EventInfo -> Attr
+stopThreadStatusAttr = \case
+  E.StopThread{status} -> "status" ~= show status
+  _otherwise -> "status" ~= AttrNull
+
+-------------------------------------------------------------------------------
+-- Thread State Transition Validation
+
+{- |
+Type that represents transitions between thread states.
+For validation purposes only.
+-}
+data ThreadStateTransition
+  = ThreadStateTransition
+  { maybePrevEvSpec :: !(Maybe EventInfo)
+  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  , maybeStartState :: !(Maybe ThreadState)
+  , evSpec :: !EventInfo
+  , endTimeUnixNano :: !Timestamp
+  , endState :: !ThreadState
+  }
+
+instance Show ThreadStateTransition where
+  show :: ThreadStateTransition -> String
+  show ThreadStateTransition{..} =
+    printf
+      "[ %s ]-- %s --[ %s ]--> %s\n"
+      (maybe "Nothing" (("Just " <>) . showLabel) maybePrevEvSpec)
+      (show (maybeStartTimeUnixNano, maybeStartState))
+      (showLabel evSpec)
+      (show (endTimeUnixNano, endState))
+   where
+    showLabel :: EventInfo -> String
+    showLabel E.StopThread{..} = printf "StopThread{%s}" (show status)
+    showLabel evSpec = takeWhile (not . isSpace) . show $ evSpec
+
+{- |
+Validate a thread state transition. Validation check that:
+
+* The first event precedes the second event.
+* The transition follows the model.
+-}
+isValidThreadStateTransition :: ThreadStateTransition -> Bool
+isValidThreadStateTransition ThreadStateTransition{..} =
+  isValidState maybeStartState evSpec endState && isValidTime maybeStartTimeUnixNano endTimeUnixNano
+ where
+  isValidState :: Maybe ThreadState -> EventInfo -> ThreadState -> Bool
+  isValidState Nothing E.CreateThread{} Blocked = True
+  isValidState (Just Blocked) E.RunThread{} Running = True
+  isValidState (Just Running) E.StopThread{status} Finished = isThreadFinished status
+  isValidState (Just Running) E.StopThread{status} Blocked = not (isThreadFinished status)
+  isValidState (Just Blocked) E.MigrateThread{} Blocked = True
+  -- These ones are weird, but observed in practice:
+  isValidState (Just Finished) E.RunThread{} Running = True
+  isValidState (Just Running) E.RunThread{} Running = True
+  isValidState (Just Blocked) E.StopThread{status} Finished = isThreadFinished status
+  isValidState (Just Blocked) E.StopThread{status} Blocked = not (isThreadFinished status)
+  -- These ones occur whenever an initial segment of the eventlog is dropped:
+  isValidState Nothing _ _ = True
+  isValidState _ _ _ = False
+
+  isValidTime :: Maybe Timestamp -> Timestamp -> Bool
+  isValidTime maybeStartTime endTime
+    | Just startTime <- maybeStartTime = startTime <= endTime
+    | otherwise = True
+
+  isThreadFinished :: ThreadStopStatus -> Bool
+  isThreadFinished ThreadFinished = True
+  isThreadFinished _ = False
 
 -------------------------------------------------------------------------------
 -- Heap events
@@ -514,7 +775,7 @@ processHeapAllocatedData =
   repeatedly $
     await >>= \case
       i
-        | HeapAllocated{..} <- i.value.evSpec ->
+        | E.HeapAllocated{..} <- i.value.evSpec ->
             yield $
               mkMetric i allocBytes $
                 [ "evCap" ~= i.value.evCap
@@ -531,7 +792,7 @@ processHeapSizeData = repeatedly go
   go =
     await >>= \case
       i
-        | HeapSize{..} <- i.value.evSpec -> do
+        | E.HeapSize{..} <- i.value.evSpec -> do
             yield $
               mkMetric i sizeBytes $
                 [ "evCap" ~= i.value.evCap
@@ -547,7 +808,7 @@ processBlocksSizeData =
   repeatedly $
     await >>= \case
       i
-        | BlocksSize{..} <- i.value.evSpec -> do
+        | E.BlocksSize{..} <- i.value.evSpec -> do
             yield $
               mkMetric i blocksSize $
                 [ "evCap" ~= i.value.evCap
@@ -563,7 +824,7 @@ processHeapLiveData =
   repeatedly $
     await >>= \case
       i
-        | HeapLive{..} <- i.value.evSpec -> do
+        | E.HeapLive{..} <- i.value.evSpec -> do
             yield $
               mkMetric i liveBytes $
                 [ "evCap" ~= i.value.evCap
@@ -585,7 +846,7 @@ processMemReturnData =
   repeatedly $
     await >>= \case
       i
-        | MemReturn{..} <- i.value.evSpec -> do
+        | E.MemReturn{..} <- i.value.evSpec -> do
             yield $
               mkMetric i MemReturnData{..} $
                 [ "evCap" ~= i.value.evCap
@@ -653,18 +914,18 @@ processHeapProfSampleData maybeHeapProfBreakdown =
     await >>= \i -> case i.value.evSpec of
       -- Announces the heap profile breakdown, amongst other things.
       -- This event is only emitted for code compiled with GHC >=9.14.
-      HeapProfBegin{..}
+      E.HeapProfBegin{..}
         | isLeft eitherShouldWarnOrHeapProfBreakdown ->
             go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
       -- Announces the arguments with which the program was called.
       -- This *may* include RTS options, which can be used to determine the
       -- heap profile breakdown for code compiled with GHC <9.14.
-      ProgramArgs{..}
+      E.ProgramArgs{..}
         | isLeft eitherShouldWarnOrHeapProfBreakdown
         , Just heapProfBreakdown <- findHeapProfBreakdown args ->
             go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
       -- Announces an info table entry.
-      InfoTableProv{..}
+      E.InfoTableProv{..}
         | shouldTrackInfoTableMap eitherShouldWarnOrHeapProfBreakdown -> do
             let infoTablePtr = InfoTablePtr itInfo
                 infoTable =
@@ -679,10 +940,10 @@ processHeapProfSampleData maybeHeapProfBreakdown =
                     }
             go st{infoTableMap = M.insert infoTablePtr infoTable infoTableMap}
       -- Announces the beginning of a heap profile sample.
-      HeapProfSampleBegin{..} ->
+      E.HeapProfSampleBegin{..} ->
         go st{heapProfSampleEraStack = heapProfSampleEra : heapProfSampleEraStack}
       -- Announces the end of a heap profile sample.
-      HeapProfSampleEnd{..} ->
+      E.HeapProfSampleEnd{..} ->
         case L.uncons heapProfSampleEraStack of
           Nothing -> do
             liftIO $
@@ -693,7 +954,7 @@ processHeapProfSampleData maybeHeapProfBreakdown =
               warnMismatchedHeapProfSampleEraStack heapProfSampleEra currentEra
             go st{heapProfSampleEraStack = heapProfSampleEraStack'}
       -- Announces a heap profile sample.
-      HeapProfSampleString{..}
+      E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
         | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
             liftIO warnMissingHeapProfBreakdown
@@ -797,10 +1058,51 @@ warnMissingHeapProfBreakdown =
 -- Event stream sorting
 -------------------------------------------------------------------------------
 
+{-
+Reorder events respecting ticks.
+
+This function caches two batches worth of events, sorts them together,
+and then yields only those events whose timestamp is less than or equal
+to the maximum of the first batch.
+-}
+sortByBatch :: (a -> Timestamp) -> Process [a] [a]
+sortByBatch timestamp = construct $ go mempty
+ where
+  go old =
+    await >>= \case
+      new
+        | null old -> go (sortByTime new)
+        | otherwise -> yield before >> go after
+       where
+        -- NOTE: use of partial @maximum@ is guarded by the check @null old@.
+        cutoff = getMax (foldMap (Max . timestamp) old)
+        sorted = joinByTime old (sortByTime new)
+        (before, after) = L.partition ((<= cutoff) . timestamp) sorted
+
+  -- compByTime :: a -> a -> Ordering
+  compByTime = compare `on` timestamp
+
+  -- sortByTime :: [a] -> [a]
+  sortByTime = L.sortBy compByTime
+
+  -- joinByTime :: [a] -> [a] -> [a]
+  joinByTime = go
+   where
+    go [] ys = ys
+    go xs [] = xs
+    go (x : xs) (y : ys) = case compByTime x y of
+      LT -> x : go xs (y : ys)
+      _ -> y : go (x : xs) ys
+
+sortByBatchTick :: (a -> Timestamp) -> Process (Tick a) (Tick a)
+sortByBatchTick timestamp =
+  mapping (fmap (: [])) ~> batchByTick ~> sortByBatch timestamp ~> batchListToTick
+
 -------------------------------------------------------------------------------
 -- Sorting the eventlog event stream
 
-{- | Buffer and reorder 'Event's to hopefully achieve
+{- |
+Buffer and reorder 'Event's to hopefully achieve
 monotonic, causal stream of 'Event's.
 -}
 sortEventsUpTo ::
@@ -909,7 +1211,7 @@ delimit = construct . go
     e <- await
     case evSpec e of
       -- on marker step the moore machine.
-      UserMarker m -> do
+      E.UserMarker m -> do
         let mm'@(Moore s' _) = next m
         -- if current or next state is open (== True), emit the marker.
         when (s || s') $ yield e
