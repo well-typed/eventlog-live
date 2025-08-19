@@ -46,29 +46,25 @@
           "mappings": [
             {
               "options": {
+                "Blocked": {
+                  "color": "blue",
+                  "index": 1
+                },
+                "Finished": {
+                  "color": "transparent",
+                  "index": 2
+                },
                 "GCRunning": {
-                  "color": "purple",
+                  "color": "blue",
                   "index": 3
                 },
                 "GCStopped": {
                   "color": "transparent",
                   "index": 4
                 },
-                "ThreadFinal": {
-                  "color": "transparent",
-                  "index": 5
-                },
-                "ThreadQueued": {
-                  "color": "orange",
-                  "index": 1
-                },
-                "ThreadRunning": {
+                "Running": {
                   "color": "green",
                   "index": 0
-                },
-                "ThreadStopped": {
-                  "color": "red",
-                  "index": 2
                 }
               },
               "type": "value"
@@ -87,8 +83,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 9,
+        "w": 24,
         "x": 0,
         "y": 0
       },
@@ -109,7 +105,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.0-16711121739",
+      "pluginVersion": "12.2.0-17027759091",
       "targets": [
         {
           "groupBy": [
@@ -118,7 +114,7 @@
               "type": "tag"
             }
           ],
-          "measurement": "Capability",
+          "measurement": "ThreadState",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "A",
@@ -131,7 +127,19 @@
               }
             ]
           ],
-          "tags": []
+          "tags": [
+            {
+              "key": "event::tag",
+              "operator": "=",
+              "value": "RunThread"
+            },
+            {
+              "condition": "OR",
+              "key": "event::tag",
+              "operator": "=",
+              "value": "StopThread"
+            }
+          ]
         }
       ],
       "title": "Activity by Capacity",
@@ -143,7 +151,7 @@
         {
           "id": "renameByRegex",
           "options": {
-            "regex": "Capability\\.state { evCap: (\\d+) }",
+            "regex": "ThreadState\\.state { evCap: (\\d+) }",
             "renamePattern": "$1"
           }
         }
@@ -175,17 +183,17 @@
           "mappings": [
             {
               "options": {
-                "ThreadQueued": {
-                  "color": "orange",
+                "Blocked": {
+                  "color": "blue",
                   "index": 1
                 },
-                "ThreadRunning": {
+                "Finished": {
+                  "color": "transparent",
+                  "index": 2
+                },
+                "Running": {
                   "color": "green",
                   "index": 0
-                },
-                "ThreadStopped": {
-                  "color": "red",
-                  "index": 2
                 }
               },
               "type": "value"
@@ -204,10 +212,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 16,
+        "w": 18,
         "x": 0,
-        "y": 8
+        "y": 9
       },
       "id": 2,
       "options": {
@@ -226,16 +234,16 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.0-16711121739",
+      "pluginVersion": "12.2.0-17027759091",
       "targets": [
         {
           "groupBy": [
             {
-              "params": ["threadId::tag"],
+              "params": ["thread::tag"],
               "type": "tag"
             }
           ],
-          "measurement": "Capability",
+          "measurement": "ThreadState",
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT \"threadState\" FROM \"ThreadState\" WHERE $timeFilter GROUP BY \"threadId\"::tag",
@@ -249,19 +257,6 @@
                 "type": "field"
               }
             ]
-          ],
-          "tags": [
-            {
-              "key": "state::field",
-              "operator": "!=",
-              "value": "GCRunning"
-            },
-            {
-              "condition": "AND",
-              "key": "state::field",
-              "operator": "!=",
-              "value": "GCStopped"
-            }
           ]
         }
       ],
@@ -278,12 +273,238 @@
         {
           "id": "renameByRegex",
           "options": {
-            "regex": "Capability\\.state { threadId: (\\d+) }",
+            "regex": "ThreadState\\.state { thread: (\\d+) }",
             "renamePattern": "$1"
           }
         }
       ],
       "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "thread"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 6,
+        "x": 18,
+        "y": 9
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "12.2.0-17027759091",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": ["thread::tag"],
+              "type": "tag"
+            }
+          ],
+          "measurement": "ThreadLabel",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["label"],
+                "type": "field"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "ThreadLabel",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "ThreadLabel\\.label { thread: (\\d+) }",
+            "renamePattern": "$1"
+          }
+        },
+        {
+          "id": "concatenate",
+          "options": {
+            "frameNameLabel": "frame",
+            "frameNameMode": "drop"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "11",
+                "12",
+                "13",
+                "14",
+                "15",
+                "16",
+                "17",
+                "18",
+                "19",
+                "20",
+                "21",
+                "22",
+                "23",
+                "24",
+                "25",
+                "26",
+                "27",
+                "28",
+                "29",
+                "30",
+                "31",
+                "32",
+                "33",
+                "34",
+                "35",
+                "36",
+                "37",
+                "38",
+                "39",
+                "40",
+                "41",
+                "42",
+                "43",
+                "44",
+                "45",
+                "46",
+                "47",
+                "48",
+                "49",
+                "50",
+                "51",
+                "52",
+                "53",
+                "54",
+                "55",
+                "56",
+                "57",
+                "58",
+                "59",
+                "60",
+                "61",
+                "62",
+                "63",
+                "64",
+                "65",
+                "66",
+                "67",
+                "68",
+                "69",
+                "70",
+                "71",
+                "72",
+                "73",
+                "74",
+                "75",
+                "76",
+                "77",
+                "78",
+                "79",
+                "80",
+                "81",
+                "82",
+                "83",
+                "84",
+                "85",
+                "86",
+                "87",
+                "88",
+                "89",
+                "90",
+                "91",
+                "92",
+                "93",
+                "94",
+                "95",
+                "Time"
+              ]
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "labelsToFields": true,
+            "reducers": ["lastNotNull"]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Field": true
+            },
+            "includeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Field": "",
+              "Last *": "label",
+              "thread": ""
+            }
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "preload": false,
