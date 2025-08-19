@@ -15,6 +15,10 @@ exporters:
     endpoint: "jaeger:14317"
     tls:
       insecure: true
+  otlp/tempo:
+    endpoint: "tempo:24317"
+    tls:
+      insecure: true
   prometheus:
     endpoint: "0.0.0.0:9090"
 
@@ -22,7 +26,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [debug, otlp/jaeger]
+      exporters: [debug, otlp/jaeger, otlp/tempo]
     metrics:
       receivers: [otlp]
       exporters: [debug, prometheus]

@@ -78,5 +78,16 @@ services:
       - "14318:4318" # OTLP HTTP receiver
       - "16686:16686" # Jaeger
 
+  tempo:
+    # container_name: tempo
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - "./config/tempo.yaml:/etc/tempo.yaml"
+    ports:
+      - "3200:3200" # Tempo
+      - "24317:24317" # OTLP gRPC receiver
+      - "24318:24318" # OTLP HTTP receiver
+
 volumes:
   ghc_eventlog_socket:
