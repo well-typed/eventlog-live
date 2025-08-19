@@ -18,7 +18,6 @@ services:
   eventlog-live-otelcol:
     # container_name: eventlog-live-otelcol
     image: "well-typed/eventlog-live-otelcol:0.1.0.0"
-    restart: "unless-stopped"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.eventlog-live-otelcol"
@@ -37,7 +36,6 @@ services:
   grafana:
     # container_name: grafana
     image: grafana/grafana-oss:latest
-    restart: "unless-stopped"
     ports:
       - "3000:3000"
     healthcheck:
@@ -70,7 +68,7 @@ services:
     volumes:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
-      - "9090:9090"
+      - "9090:9090" # Prometheus
 
   jaeger:
     # container_name: jaeger
@@ -78,7 +76,7 @@ services:
     ports:
       - "14317:4317" # OTLP gRPC receiver
       - "14318:4318" # OTLP HTTP receiver
-      - "16686:16686"
+      - "16686:16686" # Jaeger
 
 volumes:
   ghc_eventlog_socket:
