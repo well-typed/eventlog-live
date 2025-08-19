@@ -56,6 +56,7 @@ executable eventlog-live-otelcol
   autogen-modules: PackageInfo_eventlog_live_otelcol
   build-depends:
     , base                    >=4.16  && <4.21
+    , bytestring              >=0.11  && <0.13
     , dlist                   >=1.0   && <1.1
     , eventlog-live           >=0.1   && <0.2
     , eventlog-live:machines
