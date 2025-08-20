@@ -22,6 +22,9 @@ module GHC.Eventlog.Live.Machines (
   tryGetTimeUnixNano,
   withStartTime,
 
+  -- ** Capability Usage
+  processCapabilityUsage,
+
   -- ** Thread labels
   ThreadLabel (..),
   processThreadLabels,
@@ -535,6 +538,24 @@ k ~= v = (ak, av)
 -------------------------------------------------------------------------------
 -- Thread events
 -------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+-- Capability Usage
+
+processCapabilityUsage :: Process (WithStartTime Event) (Metric Double)
+processCapabilityUsage = repeatedly go
+ where
+  go =
+    await >>= \i -> case i.value.evSpec of
+      E.RunThread{} ->
+        yield . mkMetric i 1.0 $
+          [ "evCap" ~= i.value.evCap
+          ]
+      E.StopThread{} ->
+        yield . mkMetric i 0.0 $
+          [ "evCap" ~= i.value.evCap
+          ]
+      _otherwise -> pure ()
 
 -------------------------------------------------------------------------------
 -- Thread Labels
