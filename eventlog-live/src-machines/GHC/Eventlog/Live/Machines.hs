@@ -547,13 +547,25 @@ processCapabilityUsage = repeatedly go
  where
   go =
     await >>= \i -> case i.value.evSpec of
-      E.RunThread{} ->
+      E.RunThread{thread} ->
         yield . mkMetric i 1.0 $
           [ "evCap" ~= i.value.evCap
+          , "thread" ~= thread
           ]
-      E.StopThread{} ->
+      E.StopThread{thread} ->
         yield . mkMetric i 0.0 $
           [ "evCap" ~= i.value.evCap
+          , "thread" ~= thread
+          ]
+      E.StartGC{} ->
+        yield . mkMetric i 1.0 $
+          [ "evCap" ~= i.value.evCap
+          , "thread" ~= ("GC" :: Text)
+          ]
+      E.EndGC{} ->
+        yield . mkMetric i 0.0 $
+          [ "evCap" ~= i.value.evCap
+          , "thread" ~= ("GC" :: Text)
           ]
       _otherwise -> pure ()
 
