@@ -64,7 +64,9 @@ processThreadEvents ::
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processThreadEvents =
   fanout
-    [ mapping (D.singleton . fromThreadLabel)
+    [ mapping (D.singleton . fromMetric "CapabilityUsage")
+        <~ processCapabilityUsage
+    , mapping (D.singleton . fromThreadLabel)
         <~ processThreadLabels
     , mapping (D.singleton . fromThreadStateSpan)
         <~ processThreadStateSpans
@@ -115,6 +117,10 @@ instance IsField String where
 instance IsField Text where
   toField :: Text -> I.Field 'I.NonNullable
   toField = I.FieldString
+
+instance IsField Double where
+  toField :: Double -> I.Field 'I.NonNullable
+  toField = I.FieldFloat
 
 instance IsField Word32 where
   toField :: Word32 -> I.Field 'I.NonNullable
