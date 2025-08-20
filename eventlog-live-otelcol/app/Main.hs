@@ -25,7 +25,8 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, WithStartTime (..))
+import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import Lens.Family2 ((&), (.~), (^.))
@@ -61,9 +62,12 @@ main = do
       Nothing
       eventlogSocket
       maybeEventlogLogFile
-      $ liftTick withStartTime
+      $ ELM.liftTick ELM.withStartTime
         ~> fanout
-          [ processHeapEvents maybeHeapProfBreakdown
+          [ fanout
+              [ processHeapEvents maybeHeapProfBreakdown
+              , processCapabilityUsage
+              ]
               ~> mapping D.toList
               ~> asScopeMetrics
                 [ OM.scope .~ eventlogLiveScope
@@ -72,7 +76,7 @@ main = do
               ~> asExportMetricServiceRequest
               ~> otelcolResourceMetricsExporter conn
               ~> displayExceptions
-          , processThreadEvents
+          , processThreadStateSpans
               ~> asScopeSpans
                 [ OT.scope .~ eventlogLiveScope
                 ]
@@ -94,13 +98,26 @@ displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . dis
 -- Thread Events
 --------------------------------------------------------------------------------
 
-processThreadEvents ::
+processCapabilityUsage ::
+  Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processCapabilityUsage =
+  ELM.liftTick (ELM.processCapabilityUsage ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
+    ~> asGauge
+    ~> asMetric
+      [ OM.name .~ "CapabilityUsage"
+      , OM.description .~ "Report the usage by capability."
+      , OM.unit .~ "10^0"
+      ]
+    ~> mapping D.singleton
+
+processThreadStateSpans ::
   (MonadIO m) =>
   ProcessT m (Tick (WithStartTime Event)) [OT.Span]
-processThreadEvents =
-  sortByBatchTick (.value.evTime)
-    ~> liftTick (processThreadStateSpans ~> asSpan)
-    ~> batchByTickList
+processThreadStateSpans =
+  ELM.sortByBatchTick (.value.evTime)
+    ~> ELM.liftTick (ELM.processThreadStateSpans ~> asSpan)
+    ~> ELM.batchByTickList
 
 --------------------------------------------------------------------------------
 -- Heap Events
@@ -125,8 +142,8 @@ processHeapEvents maybeHeapProfBreakdown =
 
 processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapAllocated =
-  liftTick (processHeapAllocatedData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapAllocatedData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asSum
       [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
       , OM.isMonotonic .~ True
@@ -143,8 +160,8 @@ processHeapAllocated =
 
 processHeapSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapSize =
-  liftTick (processHeapSizeData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapSizeData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapSize"
@@ -158,8 +175,8 @@ processHeapSize =
 
 processBlocksSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processBlocksSize =
-  liftTick (processBlocksSizeData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processBlocksSizeData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "BlocksSize"
@@ -173,8 +190,8 @@ processBlocksSize =
 
 processHeapLive :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapLive =
-  liftTick (processHeapLiveData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapLiveData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapLive"
@@ -188,8 +205,8 @@ processHeapLive =
 
 processMemReturn :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processMemReturn =
-  liftTick processMemReturnData
-    ~> batchByTickList
+  ELM.liftTick ELM.processMemReturnData
+    ~> ELM.batchByTickList
     ~> fanout
       [ mapping (fmap (toNumberDataPoint . fmap (.current)))
           ~> asGauge
@@ -225,8 +242,8 @@ processHeapProfSample ::
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapProfSample maybeHeapProfBreakdown =
-  liftTick (processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapProfSample"
@@ -342,6 +359,10 @@ toTraceId thread =
 
 class IsNumberDataPoint'Value v where
   toNumberDataPoint'Value :: v -> OM.NumberDataPoint'Value
+
+instance IsNumberDataPoint'Value Double where
+  toNumberDataPoint'Value :: Double -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble
 
 instance IsNumberDataPoint'Value Word32 where
   toNumberDataPoint'Value :: Word32 -> OM.NumberDataPoint'Value
