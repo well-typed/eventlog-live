@@ -99,7 +99,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "disableTextWrap": false,
@@ -194,9 +194,9 @@
           "sort": "none"
         },
         "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.1.0",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "datasource": {
@@ -205,10 +205,10 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "HeapSize_bytes",
+          "expr": "avg(HeapSize_bytes)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
-          "legendFormat": "{{__name__}}",
+          "legendFormat": "HeapSize",
           "range": true,
           "refId": "HeapSize",
           "useBackend": false
@@ -220,12 +220,12 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "BlocksSize_bytes",
+          "expr": "avg(BlocksSize_bytes)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{__name__}}",
+          "legendFormat": "BlocksSize",
           "range": true,
           "refId": "BlockSize",
           "useBackend": false
@@ -237,12 +237,12 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "HeapLive_bytes",
+          "expr": "avg(HeapLive_bytes)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{__name__}}",
+          "legendFormat": "HeapLive",
           "range": true,
           "refId": "HeapLive",
           "useBackend": false
@@ -324,17 +324,17 @@
           "sort": "none"
         },
         "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.1.0",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "MemCurrent",
+          "expr": "avg(MemCurrent)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
-          "legendFormat": "{{__name__}}",
+          "legendFormat": "MemCurrent",
           "range": true,
           "refId": "MemReturn_current",
           "useBackend": false
@@ -346,12 +346,12 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "MemNeeded",
+          "expr": "avg(MemNeeded)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{__name__}}",
+          "legendFormat": "MemNeeded",
           "range": true,
           "refId": "MemReturn_needed",
           "useBackend": false
@@ -363,12 +363,12 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "MemReturned",
+          "expr": "avg(MemReturned)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{__name__}}",
+          "legendFormat": "MemReturned",
           "range": true,
           "refId": "MemReturn_returned",
           "useBackend": false
@@ -449,17 +449,17 @@
           "sort": "none"
         },
         "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.1.0",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "delta(HeapAllocated_bytes_total[$__interval])",
+          "expr": "avg(delta(HeapAllocated_bytes_total[$__interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
-          "legendFormat": "HeapAllocated_bytes_delta",
+          "legendFormat": "HeapAllocated",
           "range": true,
           "refId": "HeapAllocated_bytes_delta",
           "useBackend": false

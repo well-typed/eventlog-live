@@ -99,7 +99,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.0-16711121739",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "disableTextWrap": false,
@@ -143,6 +143,15 @@
         }
       ],
       "title": "HeapProfSample",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^HeapProfSample\\.mean { heapProfLabel: (.*) }$",
+            "renamePattern": "$1"
+          }
+        }
+      ],
       "type": "timeseries"
     },
     {
@@ -223,7 +232,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.2.0-16711121739",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "datasource": {
@@ -434,7 +443,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.2.0-16711121739",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "disableTextWrap": false,
@@ -640,7 +649,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.2.0-16711121739",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "disableTextWrap": false,
