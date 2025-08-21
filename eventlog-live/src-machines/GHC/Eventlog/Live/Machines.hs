@@ -21,9 +21,14 @@ module GHC.Eventlog.Live.Machines (
   WithStartTime (..),
   tryGetTimeUnixNano,
   withStartTime,
+  dropStartTime,
 
   -- ** Capability Usage
-  processCapabilityUsage,
+  CapabilityUser (..),
+  prettyCapabilityUser,
+  CapabilityUsageSpan (..),
+  metricFromCapabilityUsageSpan,
+  processCapabilityUsageSpans,
 
   -- ** Thread labels
   ThreadLabel (..),
@@ -31,7 +36,9 @@ module GHC.Eventlog.Live.Machines (
 
   -- ** Thread State Spans
   ThreadState (..),
+  prettyThreadState,
   ThreadStateSpan (..),
+  metricFromThreadStateSpan,
   processThreadStateSpans,
 
   -- ** Metrics
@@ -133,9 +140,9 @@ sourceHandleWait ::
   -- | The eventlog socket handle.
   Handle ->
   MachineT m k (Tick BS.ByteString)
-sourceHandleWait timeoutMs chunkSizeBytes handle =
+sourceHandleWait timeoutMilli chunkSizeBytes handle =
   construct $ fix $ \loop -> do
-    ready <- liftIO $ hWaitForInput' handle timeoutMs
+    ready <- liftIO $ hWaitForInput' handle timeoutMilli
     case ready of
       Ready -> do
         bs <- liftIO $ BS.hGetSome handle chunkSizeBytes
@@ -162,21 +169,21 @@ sourceHandleBatch ::
 sourceHandleBatch batchIntervalMs chunkSizeBytes handle = construct start
  where
   start = do
-    startTimeMs <- liftIO getMonotonicTimeMs
+    startTimeMs <- liftIO getMonotonicTimeMilli
     batch startTimeMs
   batch startTimeMs = waitForInput
    where
-    getRemainingTimeMs = do
-      currentTimeMs <- liftIO getMonotonicTimeMs
-      pure $ (startTimeMs + batchIntervalMs) - currentTimeMs
+    getRemainingTimeMilli = do
+      currentTimeMilli <- liftIO getMonotonicTimeMilli
+      pure $ (startTimeMs + batchIntervalMs) - currentTimeMilli
     waitForInput = do
-      remainingTimeMs <- getRemainingTimeMs
-      if remainingTimeMs <= 0
+      remainingTimeMilli <- getRemainingTimeMilli
+      if remainingTimeMilli <= 0
         then do
           yield Tick
           start
         else do
-          ready <- liftIO (hWaitForInput' handle remainingTimeMs)
+          ready <- liftIO (hWaitForInput' handle remainingTimeMilli)
           case ready of
             Ready -> do
               chunk <- liftIO $ BS.hGetSome handle chunkSizeBytes
@@ -195,8 +202,8 @@ defaultChunkSizeBytes = 4096
 Internal helper.
 Return monotonic time in milliseconds, since some unspecified starting point
 -}
-getMonotonicTimeMs :: IO Int
-getMonotonicTimeMs = nanoToMilli <$> getMonotonicTimeNSec
+getMonotonicTimeMilli :: IO Int
+getMonotonicTimeMilli = nanoToMilli <$> getMonotonicTimeNSec
 
 {- |
 Internal helper.
@@ -210,8 +217,8 @@ nanoToMilli = fromIntegral . (`div` 1_000_000)
 data Ready = Ready | NotReady | EOF
 
 hWaitForInput' :: Handle -> Int -> IO Ready
-hWaitForInput' handle timeoutMs =
-  catch (boolToReady <$> hWaitForInput handle timeoutMs) handleEOFError
+hWaitForInput' handle timeoutMilli =
+  catch (boolToReady <$> hWaitForInput handle timeoutMilli) handleEOFError
  where
   boolToReady True = Ready
   boolToReady False = NotReady
@@ -368,12 +375,19 @@ instance Exception DecodeError
 -------------------------------------------------------------------------------
 -- Start time
 
+{- |
+Data decorated with a start time in nanoseconds since the Unix epoch.
+-}
 data WithStartTime a = WithStartTime
   { value :: !a
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
   }
   deriving (Functor, Show)
 
+{- |
+If the event has a start time, return `Just` the time of the event in number of
+nanoseconds since the Unix epoch. Otherwise, return `Nothing`.
+-}
 tryGetTimeUnixNano :: WithStartTime Event -> Maybe Timestamp
 tryGetTimeUnixNano i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
 
@@ -402,6 +416,9 @@ withStartTime = construct start
   continue startTimeNs =
     mappingPlan (\ev -> WithStartTime ev (Just startTimeNs))
 
+dropStartTime :: Process (WithStartTime a) a
+dropStartTime = mapping (.value)
+
 -------------------------------------------------------------------------------
 -- Metrics
 
@@ -413,12 +430,12 @@ data Metric a = Metric
   }
   deriving (Functor, Show)
 
-mkMetric ::
+metric ::
   WithStartTime Event ->
   v ->
   [Attr] ->
   Metric v
-mkMetric i v attr =
+metric i v attr =
   Metric
     { value = v
     , maybeTimeUnixNano = tryGetTimeUnixNano i
@@ -539,35 +556,218 @@ k ~= v = (ak, av)
 -- Thread events
 -------------------------------------------------------------------------------
 
+-- processProductivity ::
+--   (MonadIO m) =>
+--   ProcessT m (WithStartTime Event) (Metric Double)
+-- processProductivity = construct $ go CapabilityUsages{capUsagesMap = mempty}
+--  where
+--   go st@CapabilityUsages{..} =
+--     await >>= \case
+--       i
+--         | Just evCap <- i.value.evCap
+--         , Just startTimeUnixNano <- tryGetTimeUnixNano i -> case i.value.evSpec of
+--             -- Register the start of a `MutatorThread` running on the capability
+--             E.RunThread{thread} -> do
+--               let startCapabilityUsage maybeCapabilityUsageStart = do
+--                     warnIfCapabilityUsageStarted (MutatorThread thread) maybeCapabilityUsageStart
+--                     pure . Just $ CapabilityUsageStart{capUser = MutatorThread thread, ..}
+--               capUsagesMap' <- M.alterF startCapabilityUsage evCap capUsagesMap
+--               go st{capUsagesMap = capUsagesMap'}
+--             -- Register the end of a `MutatorThread` running on the capability
+--             E.StopThread{thread} -> do
+--               _
+--             -- Register the start of a `GCThread` running on the capability.
+--             E.StartGC{} -> do
+--               let startCapabilityUsage maybeCapabilityUsageStart = do
+--                     warnIfCapabilityUsageStarted GCThread maybeCapabilityUsageStart
+--                     pure . Just $ CapabilityUsageStart{capUser = GCThread, ..}
+--               capUsagesMap' <- M.alterF startCapabilityUsage evCap capUsagesMap
+--               go st{capUsagesMap = capUsagesMap'}
+--             -- Register the end of a `MutatorThread` running on the capability.
+--             E.EndGC{} -> do
+--               _
+--             _otherwise -> go st
+--         | otherwise -> go st
+
 -------------------------------------------------------------------------------
 -- Capability Usage
 
-processCapabilityUsage :: Process (WithStartTime Event) (Metric Double)
-processCapabilityUsage = repeatedly go
+{- |
+A span representing the usage of a capability.
+-}
+data CapabilityUsageSpan = CapabilityUsageSpan
+  { spanId :: !Word64
+  , cap :: !Int
+  , capUser :: !CapabilityUser
+  , startTimeUnixNano :: !Timestamp
+  , endTimeUnixNano :: !Timestamp
+  }
+
+{- |
+The user of a capability. Either a mutator thread or a garbage collection thread.
+-}
+data CapabilityUser
+  = MutatorThread !ThreadId
+  | GCThread
+  deriving (Eq, Show)
+
+{- |
+Pretty-print a `CapabilityUser` as either the thread ID or "GC".
+-}
+prettyCapabilityUser :: CapabilityUser -> Text
+prettyCapabilityUser = \case
+  MutatorThread thread -> T.pack . show $ thread
+  GCThread -> "GC"
+
+{- |
+Convert a `CapabilityUsageSpan` to a `Metric`.
+-}
+metricFromCapabilityUsageSpan :: Process (WithStartTime CapabilityUsageSpan) (Metric Double)
+metricFromCapabilityUsageSpan = repeatedly go
  where
   go =
-    await >>= \i -> case i.value.evSpec of
-      E.RunThread{thread} ->
-        yield . mkMetric i 1.0 $
-          [ "evCap" ~= i.value.evCap
-          , "thread" ~= thread
-          ]
-      E.StopThread{thread} ->
-        yield . mkMetric i 0.0 $
-          [ "evCap" ~= i.value.evCap
-          , "thread" ~= thread
-          ]
-      E.StartGC{} ->
-        yield . mkMetric i 1.0 $
-          [ "evCap" ~= i.value.evCap
-          , "thread" ~= ("GC" :: Text)
-          ]
-      E.EndGC{} ->
-        yield . mkMetric i 0.0 $
-          [ "evCap" ~= i.value.evCap
-          , "thread" ~= ("GC" :: Text)
-          ]
-      _otherwise -> pure ()
+    await >>= \i -> do
+      let CapabilityUsageSpan{..} = i.value
+      -- Start event
+      yield
+        Metric
+          { value = 1.0
+          , maybeTimeUnixNano = Just startTimeUnixNano
+          , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
+          , attr = ["evCap" ~= cap, "thread" ~= prettyCapabilityUser capUser]
+          }
+      -- End event
+      yield
+        Metric
+          { value = 0.0
+          , maybeTimeUnixNano = Just endTimeUnixNano
+          , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
+          , attr = ["evCap" ~= cap, "thread" ~= prettyCapabilityUser capUser]
+          }
+
+{-
+Internal helper. Partial `CapabilityUsageSpan` used in `CapabilityUsages`.
+-}
+data CapabilityUsageStart = CapabilityUsageStart
+  { startTimeUnixNano :: !Timestamp
+  , capUser :: !CapabilityUser
+  }
+
+{-
+Internal helper. State used by `processCapabilityUsageSpans`.
+-}
+data CapabilityUsages = CapabilityUsages
+  { capUsagesMap :: HashMap Int CapabilityUsageStart
+  , nextSpanId :: Word64
+  }
+
+{- |
+Process thread events and yield capability usage spans.
+-}
+processCapabilityUsageSpans ::
+  (MonadIO m) =>
+  ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
+processCapabilityUsageSpans = construct $ go CapabilityUsages{capUsagesMap = mempty, nextSpanId = 1}
+ where
+  go st@CapabilityUsages{..} =
+    await >>= \case
+      i
+        | Just cap <- i.value.evCap -> case i.value.evSpec of
+            -- Register the start of a `MutatorThread` running on the capability
+            E.RunThread{thread} -> do
+              let startCapabilityUsage' = startCapabilityUsage i cap (MutatorThread thread)
+              capUsagesMap' <- M.alterF startCapabilityUsage' cap capUsagesMap
+              go st{capUsagesMap = capUsagesMap'}
+            -- Register the end of a `MutatorThread` running on the capability
+            E.StopThread{thread} -> do
+              let stopCapabilityUsage' = stopCapabilityUsage i cap nextSpanId (MutatorThread thread)
+              (nextSpanId', capUsagesMap') <- (.unPlanTWriter) $ M.alterF stopCapabilityUsage' cap capUsagesMap
+              go st{capUsagesMap = capUsagesMap', nextSpanId = nextSpanId'}
+            -- Register the start of a `GCThread` running on the capability.
+            E.StartGC{} -> do
+              let startCapabilityUsage' = startCapabilityUsage i cap GCThread
+              capUsagesMap' <- M.alterF startCapabilityUsage' cap capUsagesMap
+              go st{capUsagesMap = capUsagesMap'}
+            -- Register the end of a `MutatorThread` running on the capability.
+            E.EndGC{} -> do
+              let stopCapabilityUsage' = stopCapabilityUsage i cap nextSpanId GCThread
+              (nextSpanId', capUsagesMap') <- (.unPlanTWriter) $ M.alterF stopCapabilityUsage' cap capUsagesMap
+              go st{capUsagesMap = capUsagesMap', nextSpanId = nextSpanId'}
+            _otherwise -> go st
+        | otherwise -> go st
+
+{- |
+Internal helper. Process a capability usage start event.
+-}
+startCapabilityUsage ::
+  (MonadIO m) =>
+  WithStartTime Event ->
+  Int ->
+  CapabilityUser ->
+  Maybe CapabilityUsageStart ->
+  PlanT k i m (Maybe CapabilityUsageStart)
+startCapabilityUsage i cap capUser maybeCapabilityUsageStart = do
+  -- If a usage was already open, issue a warning...
+  sequence_ $ do
+    capabilityUsageStart <- maybeCapabilityUsageStart
+    pure . liftIO $
+      warnf
+        "Warning: Received %s event for capability %d, but previous event for that capability was %s."
+        (showCapabilityUserAsStartEvent capUser)
+        cap
+        (showCapabilityUserAsStartEvent capabilityUsageStart.capUser)
+  -- Either way, return the new usage...
+  pure $ do
+    startTimeUnixNano <- tryGetTimeUnixNano i
+    pure CapabilityUsageStart{..}
+
+{- |
+Internal helper. Process a capability usage stop event.
+-}
+stopCapabilityUsage ::
+  (MonadIO m) =>
+  WithStartTime Event ->
+  Int ->
+  Word64 ->
+  CapabilityUser ->
+  Maybe CapabilityUsageStart ->
+  PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe x)
+stopCapabilityUsage i cap nextSpanId endCapUser = \case
+  Just CapabilityUsageStart{..}
+    -- If the currently open span matches, yield a usage span...
+    | capUser == endCapUser
+    , Just endTimeUnixNano <- tryGetTimeUnixNano i -> PlanTWriter $ do
+        yield . (<$ i) $
+          CapabilityUsageSpan
+            { spanId = nextSpanId
+            , ..
+            }
+        pure (succ nextSpanId, Nothing)
+    -- If the currently open span does not match, emit a warning...
+    | otherwise -> PlanTWriter $ do
+        liftIO $
+          warnf
+            "Warning: Received %s event for capability %s, but previous event for that capability was %s."
+            (showCapabilityUserAsStartEvent endCapUser)
+            cap
+            (showCapabilityUserAsStartEvent capUser)
+        pure (nextSpanId, Nothing)
+  -- If there is no currently open span, emit a warning...
+  Nothing -> PlanTWriter $ do
+    liftIO $
+      warnf
+        "Warning: Received %s event for capability %s, but there was no previous event for that capability."
+        (showCapabilityUserAsStartEvent endCapUser)
+        cap
+    pure (nextSpanId, Nothing)
+
+{- |
+Internal helper. Show the original `EventInfo` constructor name from which a `CapabilityUser` was derived.
+-}
+showCapabilityUserAsStartEvent :: CapabilityUser -> String
+showCapabilityUserAsStartEvent = \case
+  MutatorThread thread -> printf "RunThread{%d}" thread
+  GCThread -> "StartGC"
 
 -------------------------------------------------------------------------------
 -- Thread Labels
@@ -592,42 +792,104 @@ processThreadLabels = repeatedly go
 -------------------------------------------------------------------------------
 -- Thread State Spans
 
+{- |
+The execution states of a mutator thread.
+-}
 data ThreadState
   = Running
   | Blocked
   | Finished
   deriving (Eq, Show)
 
+{- |
+Pretty-print a thread state as "Running", "Blocked", or "Finished".
+-}
+prettyThreadState :: ThreadState -> Text
+prettyThreadState = T.pack . show
+
+{- |
+A span representing the state of a mutator thread.
+-}
 data ThreadStateSpan
   = ThreadStateSpan
-  { spanId :: Word64
+  { spanId :: !Word64
   , thread :: !ThreadId
   , threadState :: !ThreadState
   , startTimeUnixNano :: !Timestamp
   , endTimeUnixNano :: !Timestamp
-  , attr :: [Attr]
+  , cap :: !Int
+  , event :: !Text
+  , status :: !(Maybe Text)
   }
   deriving (Show)
 
+{-
+Internal helper. Partial `ThreadStateSpan` used in `ThreadStates`.
+-}
 data ThreadStateSpanStart
   = ThreadStateSpanStart
   { spanId :: Word64
   , startTimeUnixNano :: !Timestamp
   , threadState :: !ThreadState
   , prevEvSpec :: !EventInfo
-  , attr :: [Attr]
+  , cap :: !Int
+  , event :: !Text
+  , status :: !(Maybe Text)
   }
   deriving (Show)
 
+{-
+Internal helper. State used by `processThreadStateSpans`.
+-}
 data ThreadStates = ThreadStates
   { threadStates :: HashMap ThreadId ThreadStateSpanStart
   , nextSpanId :: Word64
   }
   deriving (Show)
 
+{- |
+Convert a `ThreadStateSpan` to a `Metric`.
+-}
+metricFromThreadStateSpan ::
+  (MonadIO m) =>
+  ProcessT m (WithStartTime ThreadStateSpan) (Metric Double)
+metricFromThreadStateSpan = repeatedly go
+ where
+  go =
+    await >>= \i -> do
+      let ThreadStateSpan{..} = i.value
+      case threadState of
+        Running ->
+          yield
+            Metric
+              { value = 1.0
+              , maybeTimeUnixNano = Just startTimeUnixNano
+              , maybeStartTimeUnixNano = Just startTimeUnixNano
+              , attr = ["endTimeUnixNano" ~= endTimeUnixNano, "evCap" ~= cap, "event" ~= event, "status" ~= status, "thread" ~= thread]
+              }
+        Blocked ->
+          yield
+            Metric
+              { value = 0.0
+              , maybeTimeUnixNano = Just endTimeUnixNano
+              , maybeStartTimeUnixNano = Just startTimeUnixNano
+              , attr = ["endTimeUnixNano" ~= endTimeUnixNano, "evCap" ~= cap, "event" ~= event, "status" ~= status, "thread" ~= thread]
+              }
+        Finished ->
+          yield
+            Metric
+              { value = -1.0
+              , maybeTimeUnixNano = Just endTimeUnixNano
+              , maybeStartTimeUnixNano = Just startTimeUnixNano
+              , attr = ["endTimeUnixNano" ~= endTimeUnixNano, "evCap" ~= cap, "event" ~= event, "status" ~= status, "thread" ~= thread]
+              }
+
+{- |
+Process thread events and yield thread state spans.
+-}
 processThreadStateSpans ::
   (MonadIO m) =>
-  ProcessT m (WithStartTime Event) ThreadStateSpan
+  ProcessT m (WithStartTime Event) (WithStartTime ThreadStateSpan)
 processThreadStateSpans = construct $ go ThreadStates{threadStates = mempty, nextSpanId = 1}
  where
   go st =
@@ -651,16 +913,6 @@ processThreadStateSpans = construct $ go ThreadStates{threadStates = mempty, nex
       _otherwise -> go st
 
 {- |
-Internal helper. Combines the planning `Functor` @`PlanT` k o m@ with the writer `Functor` @(w,)@.
--}
-newtype PlanTWriter w k o m a = PlanTWriter {unPlanTWriter :: PlanT k o m (w, a)}
-
-instance Functor (PlanTWriter w k o m) where
-  fmap :: (a -> b) -> PlanTWriter w k o m a -> PlanTWriter w k o m b
-  fmap f (PlanTWriter m) = PlanTWriter (fmap (fmap f) m)
-  {-# INLINE fmap #-}
-
-{- |
 Transition the `ThreadStates` to the target thread state, and
 end any current thread span and `yield` the resulting `ThreadStateSpan`.
 
@@ -671,15 +923,20 @@ transitionTo ::
   ThreadStates ->
   WithStartTime Event ->
   ThreadState ->
-  PlanT k ThreadStateSpan m ThreadStates
-transitionTo st i threadState
+  PlanT k (WithStartTime ThreadStateSpan) m ThreadStates
+transitionTo st i targetThreadState
   | thread <- i.value.evSpec.thread
+  , Just cap <- i.value.evCap
   , Just timeUnixNano <- tryGetTimeUnixNano i = do
       let
         transitionTo' maybeThreadStateSpanStart = PlanTWriter $ do
           -- End the current thread span, if any:
           for_ maybeThreadStateSpanStart $ \ThreadStateSpanStart{..} ->
-            yield ThreadStateSpan{endTimeUnixNano = timeUnixNano, ..}
+            yield . (<$ i) $
+              ThreadStateSpan
+                { endTimeUnixNano = timeUnixNano
+                , ..
+                }
           -- Validate the thread state transition:
           let threadStateTransition =
                 ThreadStateTransition
@@ -688,26 +945,43 @@ transitionTo st i threadState
                   , maybeStartState = (.threadState) <$> maybeThreadStateSpanStart
                   , evSpec = i.value.evSpec
                   , endTimeUnixNano = timeUnixNano
-                  , endState = threadState
+                  , endState = targetThreadState
                   }
           unless (isValidThreadStateTransition threadStateTransition) . liftIO $
             warnf "Warning: Invalid thread state transition:\n\n  %s\n" $
               show threadStateTransition
 
-          -- Start a new thread span:
-          let threadSpanStart =
-                ThreadStateSpanStart
-                  { startTimeUnixNano = timeUnixNano
-                  , spanId = st.nextSpanId
-                  , prevEvSpec = i.value.evSpec
-                  , attr =
-                      [ "evCap" ~= i.value.evCap
-                      , threadEventAttr i.value.evSpec
-                      , stopThreadStatusAttr i.value.evSpec
-                      ]
+          -- If the target thread state is "Finished"...
+          if targetThreadState == Finished
+            then do
+              -- ...immediately yield a zero-width span...
+              yield . (<$ i) $
+                ThreadStateSpan
+                  { spanId = st.nextSpanId
+                  , thread = thread
+                  , threadState = targetThreadState
+                  , startTimeUnixNano = timeUnixNano
+                  , endTimeUnixNano = timeUnixNano
+                  , event = eventFromEventInfo i.value.evSpec
+                  , status = statusFromEventInfo i.value.evSpec
                   , ..
                   }
-          pure (succ st.nextSpanId, Just threadSpanStart)
+              -- ...and delete the thread state from the thread state map.
+              pure (succ st.nextSpanId, Nothing)
+            else do
+              --- Otherwise, start a new thread span...
+              let threadSpanStart =
+                    ThreadStateSpanStart
+                      { startTimeUnixNano = timeUnixNano
+                      , spanId = st.nextSpanId
+                      , prevEvSpec = i.value.evSpec
+                      , event = eventFromEventInfo i.value.evSpec
+                      , status = statusFromEventInfo i.value.evSpec
+                      , threadState = targetThreadState
+                      , ..
+                      }
+              -- ...and update the thread state from the thread state map.
+              pure (succ st.nextSpanId, Just threadSpanStart)
       (nextSpanId', threadStates') <- (.unPlanTWriter) $ M.alterF transitionTo' thread st.threadStates
       pure st{threadStates = threadStates', nextSpanId = nextSpanId'}
   | otherwise = pure st
@@ -719,17 +993,16 @@ __Warning:__
 This works by truncating the `String` produced by `show`.
 Hence, it will work for _any_ `EventInfo`, not just for threading events.
 -}
-threadEventAttr :: EventInfo -> Attr
-threadEventAttr i =
-  "event" ~= takeWhile (not . isSpace) (show i)
+eventFromEventInfo :: EventInfo -> Text
+eventFromEventInfo = T.pack . takeWhile (not . isSpace) . show
 
 {- |
 Internal helper. Create an attribute that holds the `ThreadStopStatus` or null.
 -}
-stopThreadStatusAttr :: EventInfo -> Attr
-stopThreadStatusAttr = \case
-  E.StopThread{status} -> "status" ~= show status
-  _otherwise -> "status" ~= AttrNull
+statusFromEventInfo :: EventInfo -> Maybe Text
+statusFromEventInfo = \case
+  E.StopThread{status} -> Just . T.pack . show $ status
+  _otherwise -> Nothing
 
 -------------------------------------------------------------------------------
 -- Thread State Transition Validation
@@ -781,6 +1054,7 @@ isValidThreadStateTransition ThreadStateTransition{..} =
   -- These ones are weird, but observed in practice:
   isValidState (Just Finished) E.RunThread{} Running = True
   isValidState (Just Running) E.RunThread{} Running = True
+  isValidState (Just Blocked) E.CreateThread{} Blocked = True
   isValidState (Just Blocked) E.StopThread{status} Finished = isThreadFinished status
   isValidState (Just Blocked) E.StopThread{status} Blocked = not (isThreadFinished status)
   -- These ones occur whenever an initial segment of the eventlog is dropped:
@@ -810,7 +1084,7 @@ processHeapAllocatedData =
       i
         | E.HeapAllocated{..} <- i.value.evSpec ->
             yield $
-              mkMetric i allocBytes $
+              metric i allocBytes $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -827,7 +1101,7 @@ processHeapSizeData = repeatedly go
       i
         | E.HeapSize{..} <- i.value.evSpec -> do
             yield $
-              mkMetric i sizeBytes $
+              metric i sizeBytes $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -843,7 +1117,7 @@ processBlocksSizeData =
       i
         | E.BlocksSize{..} <- i.value.evSpec -> do
             yield $
-              mkMetric i blocksSize $
+              metric i blocksSize $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -859,7 +1133,7 @@ processHeapLiveData =
       i
         | E.HeapLive{..} <- i.value.evSpec -> do
             yield $
-              mkMetric i liveBytes $
+              metric i liveBytes $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -881,7 +1155,7 @@ processMemReturnData =
       i
         | E.MemReturn{..} <- i.value.evSpec -> do
             yield $
-              mkMetric i MemReturnData{..} $
+              metric i MemReturnData{..} $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
                 ]
@@ -1005,7 +1279,7 @@ processHeapProfSampleData maybeHeapProfBreakdown =
                       M.lookup infoTablePtr infoTableMap
                   | otherwise = Nothing
             yield $
-              mkMetric i heapProfResidency $
+              metric i heapProfResidency $
                 [ "evCap" ~= i.value.evCap
                 , "heapProfBreakdown" ~= heapProfBreakdownShow heapProfBreakdown
                 , "heapProfId" ~= heapProfId
@@ -1259,8 +1533,24 @@ delimit = construct . go
 -- Internal Helpers
 -------------------------------------------------------------------------------
 
+{- |
+Internal helper. Variant of `mapping` for plans.
+-}
 mappingPlan :: (a -> b) -> PlanT (Is a) b m a
 mappingPlan f = forever (await >>= \a -> yield (f a))
 
+{- |
+Internal helper. Variant of `IO.printf` to print warnings. Combines `IO.hPrintf` with `IO.stderr`.
+-}
 warnf :: (IO.HPrintfType r) => String -> r
 warnf = IO.hPrintf IO.stderr
+
+{- |
+Internal helper. Combines the planning `Functor` @`PlanT` k o m@ with the writer `Functor` @(w,)@.
+-}
+newtype PlanTWriter w k o m a = PlanTWriter {unPlanTWriter :: PlanT k o m (w, a)}
+
+instance Functor (PlanTWriter w k o m) where
+  fmap :: (a -> b) -> PlanTWriter w k o m a -> PlanTWriter w k o m b
+  fmap f (PlanTWriter m) = PlanTWriter (fmap (fmap f) m)
+  {-# INLINE fmap #-}

@@ -32,231 +32,6 @@
             "mode": "thresholds"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "fieldMinMax": true,
-          "mappings": [],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "red",
-                "value": 0
-              },
-              {
-                "color": "#EAB839",
-                "value": 25
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 75
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 5,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "orientation": "auto",
-        "showValue": "never",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 100
-      },
-      "pluginVersion": "12.2.0-17027759091",
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": ["$__interval"],
-              "type": "time"
-            },
-            {
-              "params": ["evCap::tag"],
-              "type": "tag"
-            }
-          ],
-          "measurement": "CapabilityUsage",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": ["CapabilityUsage"],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "last"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "title": "CapabilityUsage",
-      "transformations": [
-        {
-          "id": "concatenate",
-          "options": {}
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "CapabilityUsage\\.last { evCap: (\\d+) }",
-            "renamePattern": "$1"
-          }
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "CapabilityUsage\\.last { evCap: 0 } · Time|\\d"
-            }
-          }
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "CapabilityUsage\\.last { evCap: 0 } · Time",
-            "renamePattern": "Time"
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "Total",
-            "mode": "reduceRow",
-            "reduce": {
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "Count",
-            "mode": "reduceRow",
-            "reduce": {
-              "reducer": "count"
-            }
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "NumCapabilities",
-            "binary": {
-              "left": {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Count"
-                }
-              },
-              "operator": "-",
-              "right": {
-                "matcher": {
-                  "id": "byName",
-                  "options": "2"
-                }
-              }
-            },
-            "mode": "binary",
-            "reduce": {
-              "reducer": "sum"
-            }
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "CapabilityUsage",
-            "binary": {
-              "left": {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Total"
-                }
-              },
-              "operator": "/",
-              "right": {
-                "matcher": {
-                  "id": "byName",
-                  "options": "NumCapabilities"
-                }
-              }
-            },
-            "mode": "binary",
-            "reduce": {
-              "reducer": "sum"
-            },
-            "replaceFields": true
-          }
-        }
-      ],
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
             "axisPlacement": "auto",
             "fillOpacity": 70,
             "hideFrom": {
@@ -264,25 +39,37 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": 1000,
+            "insertNulls": 1,
             "lineWidth": 0,
             "spanNulls": true
           },
-          "mappings": [],
+          "mappings": [
+            {
+              "options": {
+                "GC": {
+                  "color": "purple",
+                  "index": 1
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "pattern": "\\d+",
+                "result": {
+                  "color": "green",
+                  "index": 0
+                }
+              },
+              "type": "regex"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "transparent",
                 "value": 0
-              },
-              {
-                "color": "blue",
-                "value": 0
-              },
-              {
-                "color": "green",
-                "value": 1
               }
             ]
           }
@@ -293,7 +80,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 0
       },
       "id": 3,
       "options": {
@@ -312,7 +99,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.0-17027759091",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "datasource": {
@@ -321,11 +108,7 @@
           },
           "groupBy": [
             {
-              "params": ["$__interval"],
-              "type": "time"
-            },
-            {
-              "params": ["evCap::tag"],
+              "params": ["capability::tag"],
               "type": "tag"
             }
           ],
@@ -338,12 +121,8 @@
           "select": [
             [
               {
-                "params": ["CapabilityUsage"],
+                "params": ["user"],
                 "type": "field"
-              },
-              {
-                "params": [],
-                "type": "last"
               }
             ]
           ],
@@ -353,29 +132,10 @@
       "title": "Activity by Capacity",
       "transformations": [
         {
-          "id": "concatenate",
-          "options": {}
-        },
-        {
           "id": "renameByRegex",
           "options": {
-            "regex": "CapabilityUsage\\.last { evCap: (\\d+) }",
+            "regex": "CapabilityUsage\\.user { capability: (\\d+) }",
             "renamePattern": "$1"
-          }
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "CapabilityUsage\\.last { evCap: 0 } · Time|\\d"
-            }
-          }
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "CapabilityUsage\\.last { evCap: 0 } · Time",
-            "renamePattern": "Time"
           }
         }
       ],
@@ -438,7 +198,7 @@
         "h": 16,
         "w": 18,
         "x": 0,
-        "y": 14
+        "y": 9
       },
       "id": 2,
       "options": {
@@ -457,7 +217,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.0-17027759091",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "groupBy": [
@@ -476,27 +236,20 @@
           "select": [
             [
               {
-                "params": ["state"],
+                "params": ["label"],
                 "type": "field"
               }
             ]
-          ]
+          ],
+          "tags": []
         }
       ],
       "title": "Activity per Thread",
       "transformations": [
         {
-          "id": "timeSeriesTable",
-          "options": {
-            "A": {
-              "stat": "lastNotNull"
-            }
-          }
-        },
-        {
           "id": "renameByRegex",
           "options": {
-            "regex": "ThreadState\\.state { thread: (\\d+) }",
+            "regex": "ThreadState\\.label { thread: (\\d+) }",
             "renamePattern": "$1"
           }
         }
@@ -554,7 +307,7 @@
         "h": 16,
         "w": 6,
         "x": 18,
-        "y": 14
+        "y": 9
       },
       "id": 4,
       "options": {
@@ -568,7 +321,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "12.2.0-17027759091",
+      "pluginVersion": "12.1.1",
       "targets": [
         {
           "groupBy": [

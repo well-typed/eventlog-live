@@ -64,11 +64,11 @@ processThreadEvents ::
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processThreadEvents =
   fanout
-    [ mapping (D.singleton . fromMetric "CapabilityUsage")
-        <~ processCapabilityUsage
+    [ mapping (D.singleton . fromSpan . (.value))
+        <~ processCapabilityUsageSpans
     , mapping (D.singleton . fromThreadLabel)
         <~ processThreadLabels
-    , mapping (D.singleton . fromThreadStateSpan)
+    , mapping (D.singleton . fromSpan . (.value))
         <~ processThreadStateSpans
     ]
 
@@ -107,6 +107,41 @@ processHeapEvents maybeHeapProfBreakdown =
 -- Interpreting metadata
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+-- Interpreting spans
+
+class IsSpan v where
+  fromSpan :: v -> I.Line TimeSpec
+
+--------------------------------------------------------------------------------
+-- Interpret capability usage spans
+
+instance IsSpan CapabilityUsageSpan where
+  fromSpan :: CapabilityUsageSpan -> I.Line TimeSpec
+  fromSpan i =
+    I.Line "CapabilityUsage" tagSet fieldSet timestamp
+   where
+    capability = I.Key . T.pack . show $ i.cap
+    tagSet = M.singleton "capability" capability
+    fieldSet = M.singleton "user" (toField . prettyCapabilityUser $ i.capUser)
+    timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
+
+--------------------------------------------------------------------------------
+-- Interpret thread state spans
+
+instance IsSpan ThreadStateSpan where
+  fromSpan :: ThreadStateSpan -> I.Line TimeSpec
+  fromSpan i =
+    I.Line "ThreadState" tagSet fieldSet timestamp
+   where
+    thread = I.Key . T.pack . show $ i.thread
+    tagSet = M.singleton "thread" thread
+    fieldSet = M.singleton "label" (toField . prettyThreadState $ i.threadState)
+    timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
+
+--------------------------------------------------------------------------------
+-- Interpreting attributes
+
 class IsField v where
   toField :: v -> I.Field 'I.NonNullable
 
@@ -138,19 +173,6 @@ fromThreadLabel i =
   thread = I.Key . T.pack . show $ i.thread
   tagSet = M.singleton "thread" thread
   fieldSet = M.singleton "label" (toField . show $ i.threadlabel)
-  timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
-
-fromThreadStateSpan :: ThreadStateSpan -> I.Line TimeSpec
-fromThreadStateSpan i =
-  I.Line "ThreadState" tagSet fieldSet timestamp
- where
-  thread = I.Key . T.pack . show $ i.thread
-  tagSet = M.fromList (("thread", thread) : mapMaybe (\(k, v) -> (I.Key k,) <$> fromAttrValue v) i.attr)
-  fieldSet =
-    M.fromList
-      [ ("state", toField . show $ i.threadState)
-      , ("endTimeUnixNano", toField i.endTimeUnixNano)
-      ]
   timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
 
 fromMetric :: (IsField v) => I.Measurement -> Metric v -> I.Line TimeSpec
