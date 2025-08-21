@@ -55,41 +55,44 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
+  let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
-  G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-    runWithEventlogSocket
-      batchInterval
-      Nothing
-      eventlogSocket
-      maybeEventlogLogFile
-      $ ELM.liftTick ELM.withStartTime
-        ~> fanout
-          [ fanout
-              [ processHeapEvents maybeHeapProfBreakdown
-              , processCapabilityUsage
-              ]
-              ~> mapping D.toList
-              ~> asScopeMetrics
-                [ OM.scope .~ eventlogLiveScope
-                ]
-              ~> asResourceMetric []
-              ~> asExportMetricServiceRequest
-              ~> otelcolResourceMetricsExporter conn
-              ~> displayExceptions
-          , processThreadStateSpans
-              ~> asScopeSpans
-                [ OT.scope .~ eventlogLiveScope
-                ]
-              ~> asResourceSpan
-                [ OT.resource
-                    .~ messageWith
-                      [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                      ]
-                ]
-              ~> asExportTraceServiceRequest
-              ~> otelcolResourceSpansExporter conn
-              ~> displayExceptions
+  -- Construct the metrics pipeline
+  let metricsPipelineWith conn =
+        fanout
+          [ processHeapEvents maybeHeapProfBreakdown
+          , processCapabilityUsage
           ]
+          ~> mapping D.toList
+          ~> asScopeMetrics
+            [ OM.scope .~ eventlogLiveScope
+            ]
+          ~> asResourceMetric []
+          ~> asExportMetricServiceRequest
+          ~> otelcolResourceMetricsExporter conn
+          ~> displayExceptions
+  -- Construct the traces pipelin
+  let tracesPipelineWith conn =
+        processThreadStateSpans
+          ~> asScopeSpans
+            [ OT.scope .~ eventlogLiveScope
+            ]
+          ~> asResourceSpan
+            [ OT.resource
+                .~ messageWith
+                  [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                  ]
+            ]
+          ~> asExportTraceServiceRequest
+          ~> otelcolResourceSpansExporter conn
+          ~> displayExceptions
+  -- Run all requested pipelines in parallel
+  let pipelinesFor conn =
+        [metricsPipelineWith conn | exportMetrics]
+          <> [tracesPipelineWith conn | exportTraces]
+  G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
+    runWithEventlogSocket batchInterval Nothing eventlogSocket maybeEventlogLogFile $
+      ELM.liftTick ELM.withStartTime ~> fanout (pipelinesFor conn)
 
 displayExceptions :: (MonadIO m, Exception e) => ProcessT m e Void
 displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . displayException
@@ -528,8 +531,9 @@ serviceNameParser =
 --------------------------------------------------------------------------------
 -- OpenTelemetry Collector configuration
 
-newtype OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
+data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
   { openTelemetryCollectorServer :: G.Server
+  , openTelemetryExporterOptions :: OpenTelemetryExporterOptions
   }
 
 openTelemetryCollectorOptionsParser :: O.Parser OpenTelemetryCollectorOptions
@@ -537,6 +541,31 @@ openTelemetryCollectorOptionsParser =
   O.parserOptionGroup "OpenTelemetry Collector Server Options" $
     OpenTelemetryCollectorOptions
       <$> otelcolServerParser
+      <*> otelcolExporterOptionsParsers
+
+data OpenTelemetryExporterOptions = OpenTelemetryExporterOptions
+  { exportMetrics :: Bool
+  , exportTraces :: Bool
+  }
+
+otelcolExporterOptionsParsers :: O.Parser OpenTelemetryExporterOptions
+otelcolExporterOptionsParsers =
+  OpenTelemetryExporterOptions
+    <$> exportMetricsParser
+    <*> exportTracesParser
+ where
+  exportMetricsParser =
+    -- flipped from O.switch to match negated semantics
+    O.flag True False . mconcat $
+      [ O.long "otelcol-no-metrics"
+      , O.help "Disable metrics exporter."
+      ]
+  exportTracesParser =
+    -- flipped from O.switch to match negated semantics
+    O.flag True False . mconcat $
+      [ O.long "otelcol-no-traces"
+      , O.help "Disable traces exporter."
+      ]
 
 otelcolServerParser :: O.Parser G.Server
 otelcolServerParser =
