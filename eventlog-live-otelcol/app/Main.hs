@@ -25,7 +25,7 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, WithStartTime (..))
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, WithStartTime (..))
 import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
@@ -59,10 +59,7 @@ main = do
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
   -- Construct the metrics pipeline
   let metricsPipelineWith conn =
-        fanout
-          [ processHeapEvents maybeHeapProfBreakdown
-          , processCapabilityUsage
-          ]
+        processHeapEvents maybeHeapProfBreakdown
           ~> mapping D.toList
           ~> asScopeMetrics
             [ OM.scope .~ eventlogLiveScope
@@ -73,7 +70,10 @@ main = do
           ~> displayExceptions
   -- Construct the traces pipelin
   let tracesPipelineWith conn =
-        processThreadStateSpans
+        fanout
+          [ processCapabilityUsageSpans
+          , processThreadStateSpans
+          ]
           ~> asScopeSpans
             [ OT.scope .~ eventlogLiveScope
             ]
@@ -101,25 +101,19 @@ displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . dis
 -- Thread Events
 --------------------------------------------------------------------------------
 
-processCapabilityUsage ::
-  Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processCapabilityUsage =
-  ELM.liftTick (ELM.processCapabilityUsage ~> asNumberDataPoint)
+processCapabilityUsageSpans ::
+  (MonadIO m) =>
+  ProcessT m (Tick (WithStartTime Event)) [OT.Span]
+processCapabilityUsageSpans =
+  ELM.liftTick (ELM.processCapabilityUsageSpans ~> ELM.dropStartTime ~> asSpan)
     ~> ELM.batchByTickList
-    ~> asGauge
-    ~> asMetric
-      [ OM.name .~ "CapabilityUsage"
-      , OM.description .~ "Report the usage by capability."
-      , OM.unit .~ "10^0"
-      ]
-    ~> mapping D.singleton
 
 processThreadStateSpans ::
   (MonadIO m) =>
   ProcessT m (Tick (WithStartTime Event)) [OT.Span]
 processThreadStateSpans =
   ELM.sortByBatchTick (.value.evTime)
-    ~> ELM.liftTick (ELM.processThreadStateSpans ~> asSpan)
+    ~> ELM.liftTick (ELM.processThreadStateSpans ~> ELM.dropStartTime ~> asSpan)
     ~> ELM.batchByTickList
 
 --------------------------------------------------------------------------------
@@ -300,7 +294,7 @@ asScopeMetrics :: [OM.ScopeMetrics -> OM.ScopeMetrics] -> Process [OM.Metric] OM
 asScopeMetrics mod = mapping $ \metrics ->
   messageWith ((OM.metrics .~ metrics) : mod)
 
-asSpan :: Process ThreadStateSpan OT.Span
+asSpan :: (IsSpan v) => Process v OT.Span
 asSpan = mapping toSpan
 
 asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
@@ -333,27 +327,60 @@ asNumberDataPoint = mapping toNumberDataPoint
 --------------------------------------------------------------------------------
 -- Interpret spans
 
-toSpan :: ThreadStateSpan -> OT.Span
-toSpan ThreadStateSpan{..} =
-  messageWith
-    [ OT.traceId .~ toTraceId thread
-    , OT.spanId .~ toSpanId spanId
-    , OT.name .~ T.pack (show threadState)
-    , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-    , OT.startTimeUnixNano .~ startTimeUnixNano
-    , OT.endTimeUnixNano .~ endTimeUnixNano
-    , OT.status
-        .~ messageWith
-          [ OT.code .~ OT.Status'STATUS_CODE_OK
-          ]
-    ]
+class IsSpan v where
+  toSpan :: v -> OT.Span
 
-toSpanId :: Word64 -> ByteString
-toSpanId = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
+--------------------------------------------------------------------------------
+-- Interpret capability usage spans
+
+instance IsSpan CapabilityUsageSpan where
+  toSpan :: CapabilityUsageSpan -> OT.Span
+  toSpan CapabilityUsageSpan{..} =
+    messageWith
+      [ OT.traceId .~ traceIdFromCapability cap
+      , OT.spanId .~ spanIdFromWord64 spanId
+      , OT.name .~ ELM.prettyCapabilityUser capUser
+      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+      , OT.startTimeUnixNano .~ startTimeUnixNano
+      , OT.endTimeUnixNano .~ endTimeUnixNano
+      , OT.status
+          .~ messageWith
+            [ OT.code .~ OT.Status'STATUS_CODE_OK
+            ]
+      ]
+
+traceIdFromCapability :: Int -> ByteString
+traceIdFromCapability cap =
+  BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.int64BE $
+    [0, fromIntegral cap]
+
+--------------------------------------------------------------------------------
+-- Interpret thread state spans
+
+instance IsSpan ThreadStateSpan where
+  toSpan :: ThreadStateSpan -> OT.Span
+  toSpan ThreadStateSpan{..} =
+    messageWith
+      [ OT.traceId .~ traceIdFromThreadId thread
+      , OT.spanId .~ spanIdFromWord64 spanId
+      , OT.name .~ ELM.prettyThreadState threadState
+      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+      , OT.startTimeUnixNano .~ startTimeUnixNano
+      , OT.endTimeUnixNano .~ endTimeUnixNano
+      , OT.status
+          .~ messageWith
+            [ OT.code .~ OT.Status'STATUS_CODE_OK
+            ]
+      ]
+
+spanIdFromWord64 :: Word64 -> ByteString
+spanIdFromWord64 = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
 
 -- TODO: use a hash function
-toTraceId :: ThreadId -> ByteString
-toTraceId thread =
+-- TODO: prepend PID, if possible?
+-- TODO: prepend globally unique ID, from command-line arguments?
+traceIdFromThreadId :: ThreadId -> ByteString
+traceIdFromThreadId thread =
   BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.word32BE $
     [0, 0, 0, thread]
 
