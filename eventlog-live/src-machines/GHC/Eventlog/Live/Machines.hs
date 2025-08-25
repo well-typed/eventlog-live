@@ -27,6 +27,7 @@ module GHC.Eventlog.Live.Machines (
   CapabilityUser (..),
   prettyCapabilityUser,
   CapabilityUsageSpan (..),
+  processCapabilityUsage,
   metricFromCapabilityUsageSpan,
   processCapabilityUsageSpans,
 
@@ -81,7 +82,7 @@ module GHC.Eventlog.Live.Machines (
 ) where
 
 import Control.Exception (Exception, catch, throwIO)
-import Control.Monad (forever, unless, when)
+import Control.Monad (forever, unless, when, (<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
@@ -93,11 +94,11 @@ import Data.Function (fix, on)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
-import Data.Hashable (Hashable)
+import Data.Hashable (Hashable (..), hashUsing)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.List qualified as L
 import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, mapping, repeatedly, yield, (~>))
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Ord (comparing)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
@@ -559,9 +560,9 @@ k ~= v = (ak, av)
 -- processProductivity ::
 --   (MonadIO m) =>
 --   ProcessT m (WithStartTime Event) (Metric Double)
--- processProductivity = construct $ go CapabilityUsages{capUsagesMap = mempty}
+-- processProductivity = construct $ go CapabilityUsageSpanStarts{capUsageSpanStartsMap = mempty}
 --  where
---   go st@CapabilityUsages{..} =
+--   go st@CapabilityUsageSpanStarts{..} =
 --     await >>= \case
 --       i
 --         | Just evCap <- i.value.evCap
@@ -571,8 +572,8 @@ k ~= v = (ak, av)
 --               let startCapabilityUsage maybeCapabilityUsageStart = do
 --                     warnIfCapabilityUsageStarted (MutatorThread thread) maybeCapabilityUsageStart
 --                     pure . Just $ CapabilityUsageStart{capUser = MutatorThread thread, ..}
---               capUsagesMap' <- M.alterF startCapabilityUsage evCap capUsagesMap
---               go st{capUsagesMap = capUsagesMap'}
+--               capUsageSpanStartsMap' <- M.alterF startCapabilityUsage evCap capUsageSpanStartsMap
+--               go st{capUsageSpanStartsMap = capUsageSpanStartsMap'}
 --             -- Register the end of a `MutatorThread` running on the capability
 --             E.StopThread{thread} -> do
 --               _
@@ -581,8 +582,8 @@ k ~= v = (ak, av)
 --               let startCapabilityUsage maybeCapabilityUsageStart = do
 --                     warnIfCapabilityUsageStarted GCThread maybeCapabilityUsageStart
 --                     pure . Just $ CapabilityUsageStart{capUser = GCThread, ..}
---               capUsagesMap' <- M.alterF startCapabilityUsage evCap capUsagesMap
---               go st{capUsagesMap = capUsagesMap'}
+--               capUsageSpanStartsMap' <- M.alterF startCapabilityUsage evCap capUsageSpanStartsMap
+--               go st{capUsageSpanStartsMap = capUsageSpanStartsMap'}
 --             -- Register the end of a `MutatorThread` running on the capability.
 --             E.EndGC{} -> do
 --               _
@@ -591,6 +592,101 @@ k ~= v = (ak, av)
 
 -------------------------------------------------------------------------------
 -- Capability Usage
+
+newtype CapabilityUsages = CapabilityUsages
+  { capUsageMap :: HashMap (Maybe CapabilityUser) Word64
+  }
+  deriving newtype (Monoid, Semigroup)
+
+newtype CapabilityUsageSpans = CapabilityUsageSpans
+  { capUsageSpanMap :: HashMap Int (CapabilityUsageSpan, CapabilityUsages)
+  }
+
+processCapabilityUsage ::
+  Process (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
+processCapabilityUsage = construct $ go CapabilityUsageSpans{capUsageSpanMap = mempty}
+ where
+  go st =
+    await >>= \i -> do
+      let updateCapabilityUsage' = updateCapabilityUsage i
+      capUsageSpanMap' <- M.alterF updateCapabilityUsage' i.value.cap st.capUsageSpanMap
+      go st{capUsageSpanMap = capUsageSpanMap'}
+
+{- |
+Internal helper. Update the capability usage counts.
+-}
+updateCapabilityUsage ::
+  forall k m.
+  WithStartTime CapabilityUsageSpan ->
+  Maybe (CapabilityUsageSpan, CapabilityUsages) ->
+  PlanT k (Metric Timestamp) m (Maybe (CapabilityUsageSpan, CapabilityUsages))
+updateCapabilityUsage i maybeCapabilityUsage = do
+  -- Calculate idle duration since previous span.
+  let maybeIdleDurationDelta
+        -- If there is a previous span...
+        | Just (capabilityUsageSpan, _capabilityUsages) <- maybeCapabilityUsage
+        , capabilityUsageSpan.endTimeUnixNano < i.value.startTimeUnixNano =
+            -- ...return the time between the end of that span and the start of the new span.
+            Just (i.value.startTimeUnixNano - capabilityUsageSpan.endTimeUnixNano)
+        -- If there is no previous span...
+        | Nothing <- maybeCapabilityUsage
+        , Just startTimeUnixNano <- i.maybeStartTimeUnixNano
+        , startTimeUnixNano < i.value.startTimeUnixNano =
+            -- ...return the time between the start of the process and the start of the new span.
+            Just (i.value.startTimeUnixNano - startTimeUnixNano)
+        -- Otherwise, return nothing.
+        | otherwise = Nothing
+
+  -- Calculate active duraction for new span.
+  let activeDuractionDelta =
+        i.value.endTimeUnixNano - i.value.startTimeUnixNano
+
+  -- Update the idle duration.
+  let alterFIdleDuration = M.alterF alterFIdleDuration' Nothing
+       where
+        alterFIdleDuration' :: Maybe Timestamp -> PlanT k (Metric Timestamp) m (Maybe Timestamp)
+        alterFIdleDuration' maybeIdleDuration
+          | newIdleDuration == 0 = pure Nothing
+          | otherwise = do
+              yield
+                Metric
+                  { value = newIdleDuration
+                  , maybeTimeUnixNano = Just i.value.startTimeUnixNano
+                  , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
+                  , attr = ["capability" ~= i.value.cap, "user" ~= ("IDLE" :: Text)]
+                  }
+              pure $ Just newIdleDuration
+         where
+          newIdleDuration = addIdleDurationDelta oldIdleDuration
+          oldIdleDuration = fromMaybe 0 maybeIdleDuration
+          addIdleDurationDelta = maybe id (+) maybeIdleDurationDelta
+
+  -- Alter the active duration.
+  let alterFActiveDuration = M.alterF alterFActiveDuration' (Just i.value.capUser)
+       where
+        alterFActiveDuration' :: Maybe Timestamp -> PlanT k (Metric Timestamp) m (Maybe Timestamp)
+        alterFActiveDuration' maybeActiveDuration
+          | newActiveDuration == 0 = pure Nothing
+          | otherwise = do
+              yield
+                Metric
+                  { value = newActiveDuration
+                  , maybeTimeUnixNano = Just i.value.startTimeUnixNano
+                  , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
+                  , attr = ["capability" ~= i.value.cap, "user" ~= prettyCapabilityUser i.value.capUser]
+                  }
+              pure $ Just newActiveDuration
+         where
+          newActiveDuration = activeDuractionDelta + oldActiveDuration
+          oldActiveDuration = fromMaybe 0 maybeActiveDuration
+
+  -- Update the capability usage map.
+  capUsageMap' <-
+    alterFActiveDuration <=< alterFIdleDuration . (.capUsageMap) $
+      maybe mempty snd maybeCapabilityUsage
+
+  -- Return the updated state.
+  pure $ Just (i.value, CapabilityUsages{capUsageMap = capUsageMap'})
 
 {- |
 A span representing the usage of a capability.
@@ -609,7 +705,16 @@ The user of a capability. Either a mutator thread or a garbage collection thread
 data CapabilityUser
   = MutatorThread !ThreadId
   | GCThread
-  deriving (Eq, Show)
+  deriving stock (Eq, Show)
+
+toMutatorThreadId :: CapabilityUser -> Maybe ThreadId
+toMutatorThreadId = \case
+  MutatorThread thread -> Just thread
+  GCThread -> Nothing
+
+instance Hashable CapabilityUser where
+  hashWithSalt :: Int -> CapabilityUser -> Int
+  hashWithSalt = hashUsing toMutatorThreadId
 
 {- |
 Pretty-print a `CapabilityUser` as either the thread ID or "GC".
@@ -646,7 +751,7 @@ metricFromCapabilityUsageSpan = repeatedly go
           }
 
 {-
-Internal helper. Partial `CapabilityUsageSpan` used in `CapabilityUsages`.
+Internal helper. Partial `CapabilityUsageSpan` used in `CapabilityUsageSpanStarts`.
 -}
 data CapabilityUsageStart = CapabilityUsageStart
   { startTimeUnixNano :: !Timestamp
@@ -656,8 +761,8 @@ data CapabilityUsageStart = CapabilityUsageStart
 {-
 Internal helper. State used by `processCapabilityUsageSpans`.
 -}
-data CapabilityUsages = CapabilityUsages
-  { capUsagesMap :: HashMap Int CapabilityUsageStart
+data CapabilityUsageSpanStarts = CapabilityUsageSpanStarts
+  { capUsageSpanStartsMap :: HashMap Int CapabilityUsageStart
   , nextSpanId :: Word64
   }
 
@@ -665,34 +770,35 @@ data CapabilityUsages = CapabilityUsages
 Process thread events and yield capability usage spans.
 -}
 processCapabilityUsageSpans ::
+  forall m.
   (MonadIO m) =>
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
-processCapabilityUsageSpans = construct $ go CapabilityUsages{capUsagesMap = mempty, nextSpanId = 1}
+processCapabilityUsageSpans = construct $ go CapabilityUsageSpanStarts{capUsageSpanStartsMap = mempty, nextSpanId = 1}
  where
-  go st@CapabilityUsages{..} =
+  go st@CapabilityUsageSpanStarts{..} =
     await >>= \case
       i
         | Just cap <- i.value.evCap -> case i.value.evSpec of
             -- Register the start of a `MutatorThread` running on the capability
             E.RunThread{thread} -> do
               let startCapabilityUsage' = startCapabilityUsage i cap (MutatorThread thread)
-              capUsagesMap' <- M.alterF startCapabilityUsage' cap capUsagesMap
-              go st{capUsagesMap = capUsagesMap'}
+              capUsageSpanStartsMap' <- M.alterF startCapabilityUsage' cap capUsageSpanStartsMap
+              go st{capUsageSpanStartsMap = capUsageSpanStartsMap'}
             -- Register the end of a `MutatorThread` running on the capability
             E.StopThread{thread} -> do
               let stopCapabilityUsage' = stopCapabilityUsage i cap nextSpanId (MutatorThread thread)
-              (nextSpanId', capUsagesMap') <- (.unPlanTWriter) $ M.alterF stopCapabilityUsage' cap capUsagesMap
-              go st{capUsagesMap = capUsagesMap', nextSpanId = nextSpanId'}
+              (nextSpanId', capUsageSpanStartsMap') <- (.unPlanTWriter) $ M.alterF stopCapabilityUsage' cap capUsageSpanStartsMap
+              go st{capUsageSpanStartsMap = capUsageSpanStartsMap', nextSpanId = nextSpanId'}
             -- Register the start of a `GCThread` running on the capability.
             E.StartGC{} -> do
               let startCapabilityUsage' = startCapabilityUsage i cap GCThread
-              capUsagesMap' <- M.alterF startCapabilityUsage' cap capUsagesMap
-              go st{capUsagesMap = capUsagesMap'}
+              capUsageSpanStartsMap' <- M.alterF startCapabilityUsage' cap capUsageSpanStartsMap
+              go st{capUsageSpanStartsMap = capUsageSpanStartsMap'}
             -- Register the end of a `MutatorThread` running on the capability.
             E.EndGC{} -> do
               let stopCapabilityUsage' = stopCapabilityUsage i cap nextSpanId GCThread
-              (nextSpanId', capUsagesMap') <- (.unPlanTWriter) $ M.alterF stopCapabilityUsage' cap capUsagesMap
-              go st{capUsagesMap = capUsagesMap', nextSpanId = nextSpanId'}
+              (nextSpanId', capUsageSpanStartsMap') <- (.unPlanTWriter) $ M.alterF stopCapabilityUsage' cap capUsageSpanStartsMap
+              go st{capUsageSpanStartsMap = capUsageSpanStartsMap', nextSpanId = nextSpanId'}
             _otherwise -> go st
         | otherwise -> go st
 
