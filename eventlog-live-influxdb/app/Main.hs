@@ -15,6 +15,8 @@ import Data.Machine.Type (repeatedly)
 import Data.Map.Strict qualified as M
 import Data.Maybe (mapMaybe)
 import Data.String (IsString (..))
+import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import Database.InfluxDB.Line qualified as I (Line (..))
@@ -37,7 +39,12 @@ main = do
   Options{..} <- O.execParser optionsInfo
   let toInfluxDB =
         liftTick withStartTime
-          ~> liftTick (processHeapEvents maybeHeapProfBreakdown)
+          ~> liftTick
+            ( fanout
+                [ processThreadEvents
+                , processHeapEvents maybeHeapProfBreakdown
+                ]
+            )
           ~> batchByTick
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
@@ -49,6 +56,23 @@ main = do
     toInfluxDB
 
 --------------------------------------------------------------------------------
+-- Thread events
+--------------------------------------------------------------------------------
+
+processThreadEvents ::
+  (MonadIO m) =>
+  ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
+processThreadEvents =
+  fanout
+    [ mapping (D.singleton . fromSpan . (.value))
+        <~ processCapabilityUsageSpans
+    , mapping (D.singleton . fromThreadLabel)
+        <~ processThreadLabels
+    , mapping (D.singleton . fromSpan . (.value))
+        <~ processThreadStateSpans
+    ]
+
+--------------------------------------------------------------------------------
 -- Heap events
 --------------------------------------------------------------------------------
 
@@ -58,24 +82,24 @@ processHeapEvents ::
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processHeapEvents maybeHeapProfBreakdown =
   fanout
-    [ mapping (D.singleton . toLine "HeapAllocated")
+    [ mapping (D.singleton . fromMetric "HeapAllocated")
         <~ processHeapAllocatedData
-    , mapping (D.singleton . toLine "HeapSize")
+    , mapping (D.singleton . fromMetric "HeapSize")
         <~ processHeapSizeData
-    , mapping (D.singleton . toLine "BlocksSize")
+    , mapping (D.singleton . fromMetric "BlocksSize")
         <~ processBlocksSizeData
-    , mapping (D.singleton . toLine "HeapLive")
+    , mapping (D.singleton . fromMetric "HeapLive")
         <~ processHeapLiveData
     , mapping
         ( \i ->
             D.fromList
-              [ toLine "MemCurrent" ((.current) <$> i)
-              , toLine "MemNeeded" ((.needed) <$> i)
-              , toLine "MemReturned" ((.returned) <$> i)
+              [ fromMetric "MemCurrent" ((.current) <$> i)
+              , fromMetric "MemNeeded" ((.needed) <$> i)
+              , fromMetric "MemReturned" ((.returned) <$> i)
               ]
         )
         <~ processMemReturnData
-    , mapping (D.singleton . toLine "HeapProfSample")
+    , mapping (D.singleton . fromMetric "HeapProfSample")
         <~ processHeapProfSampleData maybeHeapProfBreakdown
     ]
 
@@ -83,8 +107,55 @@ processHeapEvents maybeHeapProfBreakdown =
 -- Interpreting metadata
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+-- Interpreting spans
+
+class IsSpan v where
+  fromSpan :: v -> I.Line TimeSpec
+
+--------------------------------------------------------------------------------
+-- Interpret capability usage spans
+
+instance IsSpan CapabilityUsageSpan where
+  fromSpan :: CapabilityUsageSpan -> I.Line TimeSpec
+  fromSpan i =
+    I.Line "CapabilityUsage" tagSet fieldSet timestamp
+   where
+    capability = I.Key . T.pack . show $ i.cap
+    tagSet = M.singleton "capability" capability
+    fieldSet = M.singleton "user" (toField . prettyCapabilityUser $ i.capUser)
+    timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
+
+--------------------------------------------------------------------------------
+-- Interpret thread state spans
+
+instance IsSpan ThreadStateSpan where
+  fromSpan :: ThreadStateSpan -> I.Line TimeSpec
+  fromSpan i =
+    I.Line "ThreadState" tagSet fieldSet timestamp
+   where
+    thread = I.Key . T.pack . show $ i.thread
+    tagSet = M.singleton "thread" thread
+    fieldSet = M.singleton "label" (toField . prettyThreadState $ i.threadState)
+    timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
+
+--------------------------------------------------------------------------------
+-- Interpreting attributes
+
 class IsField v where
   toField :: v -> I.Field 'I.NonNullable
+
+instance IsField String where
+  toField :: String -> I.Field 'I.NonNullable
+  toField = toField . T.pack
+
+instance IsField Text where
+  toField :: Text -> I.Field 'I.NonNullable
+  toField = I.FieldString
+
+instance IsField Double where
+  toField :: Double -> I.Field 'I.NonNullable
+  toField = I.FieldFloat
 
 instance IsField Word32 where
   toField :: Word32 -> I.Field 'I.NonNullable
@@ -95,29 +166,38 @@ instance IsField Word64 where
   toField :: Word64 -> I.Field 'I.NonNullable
   toField = I.FieldInt . fromIntegral
 
-toLine :: (IsField v) => I.Measurement -> Metric v -> I.Line TimeSpec
-toLine measurement@(I.Measurement measurementName) i =
+fromThreadLabel :: ThreadLabel -> I.Line TimeSpec
+fromThreadLabel i =
+  I.Line "ThreadLabel" tagSet fieldSet timestamp
+ where
+  thread = I.Key . T.pack . show $ i.thread
+  tagSet = M.singleton "thread" thread
+  fieldSet = M.singleton "label" (toField . show $ i.threadlabel)
+  timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
+
+fromMetric :: (IsField v) => I.Measurement -> Metric v -> I.Line TimeSpec
+fromMetric measurement@(I.Measurement measurementName) i =
   I.Line measurement tagSet fieldSet timestamp
  where
-  tagSet = M.fromList (mapMaybe (\(k, v) -> (I.Key k,) <$> toMaybeTag v) i.attr)
+  tagSet = M.fromList (mapMaybe (\(k, v) -> (I.Key k,) <$> fromAttrValue v) i.attr)
   fieldSet = M.singleton (I.Key measurementName) (toField i.value)
   timestamp = fromNanoSecs . toInteger <$> i.maybeTimeUnixNano
 
-  toMaybeTag :: AttrValue -> Maybe I.Key
-  toMaybeTag = \case
-    AttrInt v -> Just . fromString . show $ v
-    AttrInt8 v -> Just . fromString . show $ v
-    AttrInt16 v -> Just . fromString . show $ v
-    AttrInt32 v -> Just . fromString . show $ v
-    AttrInt64 v -> Just . fromString . show $ v
-    AttrWord v -> Just . fromString . show $ v
-    AttrWord8 v -> Just . fromString . show $ v
-    AttrWord16 v -> Just . fromString . show $ v
-    AttrWord32 v -> Just . fromString . show $ v
-    AttrWord64 v -> Just . fromString . show $ v
-    AttrDouble v -> Just . fromString . show $ v
-    AttrText v -> Just . I.Key $ v
-    AttrNull -> Nothing
+fromAttrValue :: AttrValue -> Maybe I.Key
+fromAttrValue = \case
+  AttrInt v -> Just . fromString . show $ v
+  AttrInt8 v -> Just . fromString . show $ v
+  AttrInt16 v -> Just . fromString . show $ v
+  AttrInt32 v -> Just . fromString . show $ v
+  AttrInt64 v -> Just . fromString . show $ v
+  AttrWord v -> Just . fromString . show $ v
+  AttrWord8 v -> Just . fromString . show $ v
+  AttrWord16 v -> Just . fromString . show $ v
+  AttrWord32 v -> Just . fromString . show $ v
+  AttrWord64 v -> Just . fromString . show $ v
+  AttrDouble v -> Just . fromString . show $ v
+  AttrText v -> Just . I.Key $ v
+  AttrNull -> Nothing
 
 --------------------------------------------------------------------------------
 -- InfluxDB Batch Writer

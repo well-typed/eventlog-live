@@ -2,7 +2,6 @@ services:
   grafana:
     # container_name: grafana
     image: grafana/grafana-oss:latest
-    restart: "unless-stopped"
     ports:
       - "3000:3000"
     healthcheck:
@@ -18,6 +17,13 @@ services:
   otelcol:
     # container_name: otelcol
     image: otel/opentelemetry-collector-contrib:latest
+    depends_on:
+      prometheus:
+        condition: "service_started"
+      jaeger:
+        condition: "service_started"
+      tempo:
+        condition: "service_started"
     command:
       - "--config=/etc/otelcol/config.yaml"
     volumes:
@@ -35,4 +41,29 @@ services:
     volumes:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
-      - 9090:9090
+      - "9090:9090" # Prometheus
+
+  jaeger:
+    # container_name: jaeger
+    image: jaegertracing/jaeger:latest
+    command:
+      - "--config=/etc/jaeger/config.yaml"
+    volumes:
+      - "./config/jaeger.yaml:/etc/jaeger/config.yaml"
+    environment:
+      - "OTEL_ENABLED=true"
+    ports:
+      - "14317:14317" # OTLP gRPC receiver
+      - "14318:14318" # OTLP HTTP receiver
+      - "16686:16686" # Jaeger
+
+  tempo:
+    # container_name: tempo
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - "./config/tempo.yaml:/etc/tempo.yaml"
+    ports:
+      - "24317:24317" # OTLP gRPC receiver
+      - "24318:24318" # OTLP HTTP receiver
+      - "3200:3200" # Tempo

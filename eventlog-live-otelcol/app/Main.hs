@@ -8,6 +8,9 @@ import Control.Applicative (asum)
 import Control.Exception (Exception (..))
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+import Data.ByteString.Builder qualified as BSB
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Functor ((<&>))
@@ -22,9 +25,10 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, WithStartTime (..))
+import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
-import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
+import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import Lens.Family2 ((&), (.~), (^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -36,10 +40,14 @@ import Options.Applicative.Extra qualified as O
 import PackageInfo_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
+import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
+import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
+import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
+import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import System.IO qualified as IO
 import Text.Printf (printf)
 
@@ -47,27 +55,66 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
+  let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
+  let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
+  -- Construct the metrics pipeline
+  let metricsPipelineWith conn =
+        processHeapEvents maybeHeapProfBreakdown
+          ~> mapping D.toList
+          ~> asScopeMetrics
+            [ OM.scope .~ eventlogLiveScope
+            ]
+          ~> asResourceMetric []
+          ~> asExportMetricServiceRequest
+          ~> otelcolResourceMetricsExporter conn
+          ~> displayExceptions
+  -- Construct the traces pipelin
+  let tracesPipelineWith conn =
+        fanout
+          [ processCapabilityUsageSpans
+          , processThreadStateSpans
+          ]
+          ~> asScopeSpans
+            [ OT.scope .~ eventlogLiveScope
+            ]
+          ~> asResourceSpan
+            [ OT.resource
+                .~ messageWith
+                  [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                  ]
+            ]
+          ~> asExportTraceServiceRequest
+          ~> otelcolResourceSpansExporter conn
+          ~> displayExceptions
+  -- Run all requested pipelines in parallel
+  let pipelinesFor conn =
+        [metricsPipelineWith conn | exportMetrics]
+          <> [tracesPipelineWith conn | exportTraces]
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-    runWithEventlogSocket
-      batchInterval
-      Nothing
-      eventlogSocket
-      maybeEventlogLogFile
-      $ liftTick withStartTime
-        ~> fanout
-          [ processHeapEvents maybeHeapProfBreakdown
-          ]
-        ~> mapping D.toList
-        ~> asScopeMetrics
-          [ OM.scope .~ eventlogLiveScope
-          ]
-        ~> asResourceMetric []
-        ~> asExportMetricServiceRequest
-        ~> otelcolResourceMetricsExporter conn
-        ~> displayExceptions
+    runWithEventlogSocket batchInterval Nothing eventlogSocket maybeEventlogLogFile $
+      ELM.liftTick ELM.withStartTime ~> fanout (pipelinesFor conn)
 
 displayExceptions :: (MonadIO m, Exception e) => ProcessT m e Void
 displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . displayException
+
+--------------------------------------------------------------------------------
+-- Thread Events
+--------------------------------------------------------------------------------
+
+processCapabilityUsageSpans ::
+  (MonadIO m) =>
+  ProcessT m (Tick (WithStartTime Event)) [OT.Span]
+processCapabilityUsageSpans =
+  ELM.liftTick (ELM.processCapabilityUsageSpans ~> ELM.dropStartTime ~> asSpan)
+    ~> ELM.batchByTickList
+
+processThreadStateSpans ::
+  (MonadIO m) =>
+  ProcessT m (Tick (WithStartTime Event)) [OT.Span]
+processThreadStateSpans =
+  ELM.sortByBatchTick (.value.evTime)
+    ~> ELM.liftTick (ELM.processThreadStateSpans ~> ELM.dropStartTime ~> asSpan)
+    ~> ELM.batchByTickList
 
 --------------------------------------------------------------------------------
 -- Heap Events
@@ -92,8 +139,8 @@ processHeapEvents maybeHeapProfBreakdown =
 
 processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapAllocated =
-  liftTick (processHeapAllocatedData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapAllocatedData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asSum
       [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
       , OM.isMonotonic .~ True
@@ -110,8 +157,8 @@ processHeapAllocated =
 
 processHeapSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapSize =
-  liftTick (processHeapSizeData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapSizeData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapSize"
@@ -125,8 +172,8 @@ processHeapSize =
 
 processBlocksSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processBlocksSize =
-  liftTick (processBlocksSizeData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processBlocksSizeData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "BlocksSize"
@@ -140,8 +187,8 @@ processBlocksSize =
 
 processHeapLive :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapLive =
-  liftTick (processHeapLiveData ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapLiveData ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapLive"
@@ -155,8 +202,8 @@ processHeapLive =
 
 processMemReturn :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processMemReturn =
-  liftTick processMemReturnData
-    ~> batchByTickList
+  ELM.liftTick ELM.processMemReturnData
+    ~> ELM.batchByTickList
     ~> fanout
       [ mapping (fmap (toNumberDataPoint . fmap (.current)))
           ~> asGauge
@@ -178,7 +225,7 @@ processMemReturn =
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemReturned"
-            , OM.description .~ "Report the number of megablocks currently being returned to the OS."
+            , OM.description .~ "Report the number of megablocks currently being returned to the OT."
             , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
@@ -192,8 +239,8 @@ processHeapProfSample ::
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapProfSample maybeHeapProfBreakdown =
-  liftTick (processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
-    ~> batchByTickList
+  ELM.liftTick (ELM.processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
+    ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapProfSample"
@@ -216,19 +263,39 @@ eventlogLiveScope =
 asExportMetricsServiceRequest :: Process [OM.ResourceMetrics] OMS.ExportMetricsServiceRequest
 asExportMetricsServiceRequest = mapping $ (defMessage &) . (OM.resourceMetrics .~)
 
+asExportTracesServiceRequest :: Process [OT.ResourceSpans] OTS.ExportTraceServiceRequest
+asExportTracesServiceRequest = mapping $ (defMessage &) . (OTS.resourceSpans .~)
+
 asExportMetricServiceRequest :: Process OM.ResourceMetrics OMS.ExportMetricsServiceRequest
 asExportMetricServiceRequest = mapping (: []) ~> asExportMetricsServiceRequest
 
+asExportTraceServiceRequest :: Process OT.ResourceSpans OTS.ExportTraceServiceRequest
+asExportTraceServiceRequest = mapping (: []) ~> asExportTracesServiceRequest
+
 asResourceMetrics :: [OM.ResourceMetrics -> OM.ResourceMetrics] -> Process [OM.ScopeMetrics] OM.ResourceMetrics
-asResourceMetrics mod = mapping $ \metrics ->
-  messageWith ((OM.scopeMetrics .~ metrics) : mod)
+asResourceMetrics mod = mapping $ \scopeMetrics ->
+  messageWith ((OM.scopeMetrics .~ scopeMetrics) : mod)
+
+asResourceSpans :: [OT.ResourceSpans -> OT.ResourceSpans] -> Process [OT.ScopeSpans] OT.ResourceSpans
+asResourceSpans mod = mapping $ \scopeSpans ->
+  messageWith ((OT.scopeSpans .~ scopeSpans) : mod)
+
+asResourceSpan :: [OT.ResourceSpans -> OT.ResourceSpans] -> Process OT.ScopeSpans OT.ResourceSpans
+asResourceSpan mod = mapping (: []) ~> asResourceSpans mod
 
 asResourceMetric :: [OM.ResourceMetrics -> OM.ResourceMetrics] -> Process OM.ScopeMetrics OM.ResourceMetrics
 asResourceMetric mod = mapping (: []) ~> asResourceMetrics mod
 
+asScopeSpans :: [OT.ScopeSpans -> OT.ScopeSpans] -> Process [OT.Span] OT.ScopeSpans
+asScopeSpans mod = mapping $ \spans ->
+  messageWith ((OT.spans .~ spans) : mod)
+
 asScopeMetrics :: [OM.ScopeMetrics -> OM.ScopeMetrics] -> Process [OM.Metric] OM.ScopeMetrics
 asScopeMetrics mod = mapping $ \metrics ->
   messageWith ((OM.metrics .~ metrics) : mod)
+
+asSpan :: (IsSpan v) => Process v OT.Span
+asSpan = mapping toSpan
 
 asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
 asMetric mod = mapping $ \metric'data ->
@@ -254,11 +321,78 @@ asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (Metric v) OM.Number
 asNumberDataPoint = mapping toNumberDataPoint
 
 --------------------------------------------------------------------------------
--- Interpreting metadata
+-- Interpret data
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- Interpret spans
+
+class IsSpan v where
+  toSpan :: v -> OT.Span
+
+--------------------------------------------------------------------------------
+-- Interpret capability usage spans
+
+instance IsSpan CapabilityUsageSpan where
+  toSpan :: CapabilityUsageSpan -> OT.Span
+  toSpan CapabilityUsageSpan{..} =
+    messageWith
+      [ OT.traceId .~ traceIdFromCapability cap
+      , OT.spanId .~ spanIdFromWord64 spanId
+      , OT.name .~ ELM.prettyCapabilityUser capUser
+      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+      , OT.startTimeUnixNano .~ startTimeUnixNano
+      , OT.endTimeUnixNano .~ endTimeUnixNano
+      , OT.status
+          .~ messageWith
+            [ OT.code .~ OT.Status'STATUS_CODE_OK
+            ]
+      ]
+
+traceIdFromCapability :: Int -> ByteString
+traceIdFromCapability cap =
+  BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.int64BE $
+    [0, fromIntegral cap]
+
+--------------------------------------------------------------------------------
+-- Interpret thread state spans
+
+instance IsSpan ThreadStateSpan where
+  toSpan :: ThreadStateSpan -> OT.Span
+  toSpan ThreadStateSpan{..} =
+    messageWith
+      [ OT.traceId .~ traceIdFromThreadId thread
+      , OT.spanId .~ spanIdFromWord64 spanId
+      , OT.name .~ ELM.prettyThreadState threadState
+      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+      , OT.startTimeUnixNano .~ startTimeUnixNano
+      , OT.endTimeUnixNano .~ endTimeUnixNano
+      , OT.status
+          .~ messageWith
+            [ OT.code .~ OT.Status'STATUS_CODE_OK
+            ]
+      ]
+
+spanIdFromWord64 :: Word64 -> ByteString
+spanIdFromWord64 = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
+
+-- TODO: use a hash function
+-- TODO: prepend PID, if possible?
+-- TODO: prepend globally unique ID, from command-line arguments?
+traceIdFromThreadId :: ThreadId -> ByteString
+traceIdFromThreadId thread =
+  BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.word32BE $
+    [0, 0, 0, thread]
+
+--------------------------------------------------------------------------------
+-- Interpret metrics
 
 class IsNumberDataPoint'Value v where
   toNumberDataPoint'Value :: v -> OM.NumberDataPoint'Value
+
+instance IsNumberDataPoint'Value Double where
+  toNumberDataPoint'Value :: Double -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble
 
 instance IsNumberDataPoint'Value Word32 where
   toNumberDataPoint'Value :: Word32 -> OM.NumberDataPoint'Value
@@ -277,30 +411,30 @@ toNumberDataPoint i =
     , OM.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
     , OM.attributes .~ mapMaybe toMaybeKeyValue i.attr
     ]
- where
-  toMaybeKeyValue :: Attr -> Maybe OC.KeyValue
-  toMaybeKeyValue (k, v) =
-    toMaybeAnyValue v <&> \v ->
-      messageWith
-        [ OC.key .~ k
-        , OC.value .~ v
-        ]
 
-  toMaybeAnyValue :: AttrValue -> Maybe OC.AnyValue
-  toMaybeAnyValue = \case
-    AttrInt v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrInt8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrInt16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrInt32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrInt64 v -> Just $ messageWith [OC.intValue .~ v]
-    AttrWord v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrWord8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrWord16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrWord32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrWord64 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-    AttrDouble v -> Just $ messageWith [OC.doubleValue .~ v]
-    AttrText v -> Just $ messageWith [OC.stringValue .~ v]
-    AttrNull -> Nothing
+toMaybeKeyValue :: Attr -> Maybe OC.KeyValue
+toMaybeKeyValue (k, v) =
+  toMaybeAnyValue v <&> \v ->
+    messageWith
+      [ OC.key .~ k
+      , OC.value .~ v
+      ]
+
+toMaybeAnyValue :: AttrValue -> Maybe OC.AnyValue
+toMaybeAnyValue = \case
+  AttrInt v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrInt8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrInt16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrInt32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrInt64 v -> Just $ messageWith [OC.intValue .~ v]
+  AttrWord v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrWord8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrWord16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrWord32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrWord64 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
+  AttrDouble v -> Just $ messageWith [OC.doubleValue .~ v]
+  AttrText v -> Just $ messageWith [OC.stringValue .~ v]
+  AttrNull -> Nothing
 
 --------------------------------------------------------------------------------
 -- DSL for writing messages
@@ -310,8 +444,42 @@ messageWith :: (Message msg) => [msg -> msg] -> msg
 messageWith = foldr ($) defMessage
 
 --------------------------------------------------------------------------------
--- OpenTelemetry Collector exporter
+-- OpenTelemetry Collector exporters
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry Collector Trace Exporter
+
+data ExportSpansError
+  = ExportSpansError
+  { rejectedSpans :: Int64
+  , errorMessage :: Text
+  }
+  deriving (Show)
+
+instance Exception ExportSpansError where
+  displayException :: ExportSpansError -> String
+  displayException ExportSpansError{..} =
+    printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedSpans errorMessage
+
+otelcolResourceSpansExporter :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest ExportSpansError
+otelcolResourceSpansExporter conn =
+  repeatedly $
+    await >>= \exportTraceServiceRequest -> do
+      G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest))
+      unless (resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0) $ do
+        yield
+          ExportSpansError
+            { rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
+            , errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage
+            }
+
+type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
+type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
+type instance G.ResponseTrailingMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry Collector Metrics Exporter
 
 data ExportMetricsError
   = ExportMetricsError
@@ -358,6 +526,7 @@ data Options = Options
   { batchInterval :: Int
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
+  , maybeServiceName :: Maybe ServiceName
   , eventlogSocket :: EventlogSocket
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   }
@@ -368,14 +537,30 @@ optionsParser =
     <$> batchIntervalParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
+    <*> O.optional serviceNameParser
     <*> eventlogSocketParser
     <*> openTelemetryCollectorOptionsParser
 
 --------------------------------------------------------------------------------
+-- Service Name
+
+newtype ServiceName = ServiceName {serviceName :: Text}
+
+serviceNameParser :: O.Parser ServiceName
+serviceNameParser =
+  ServiceName
+    <$> O.strOption
+      ( O.long "service-name"
+          <> O.metavar "STRING"
+          <> O.help "The name of the profiled service."
+      )
+
+--------------------------------------------------------------------------------
 -- OpenTelemetry Collector configuration
 
-newtype OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
+data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
   { openTelemetryCollectorServer :: G.Server
+  , openTelemetryExporterOptions :: OpenTelemetryExporterOptions
   }
 
 openTelemetryCollectorOptionsParser :: O.Parser OpenTelemetryCollectorOptions
@@ -383,6 +568,31 @@ openTelemetryCollectorOptionsParser =
   O.parserOptionGroup "OpenTelemetry Collector Server Options" $
     OpenTelemetryCollectorOptions
       <$> otelcolServerParser
+      <*> otelcolExporterOptionsParsers
+
+data OpenTelemetryExporterOptions = OpenTelemetryExporterOptions
+  { exportMetrics :: Bool
+  , exportTraces :: Bool
+  }
+
+otelcolExporterOptionsParsers :: O.Parser OpenTelemetryExporterOptions
+otelcolExporterOptionsParsers =
+  OpenTelemetryExporterOptions
+    <$> exportMetricsParser
+    <*> exportTracesParser
+ where
+  exportMetricsParser =
+    -- flipped from O.switch to match negated semantics
+    O.flag True False . mconcat $
+      [ O.long "otelcol-no-metrics"
+      , O.help "Disable metrics exporter."
+      ]
+  exportTracesParser =
+    -- flipped from O.switch to match negated semantics
+    O.flag True False . mconcat $
+      [ O.long "otelcol-no-traces"
+      , O.help "Disable traces exporter."
+      ]
 
 otelcolServerParser :: O.Parser G.Server
 otelcolServerParser =
@@ -402,7 +612,7 @@ otelcolAddressParser =
   G.Address
     <$> O.strOption
       ( O.long "otelcol-host"
-          <> O.metavar "HOST"
+          <> O.metavar "HOTT"
           <> O.help "Server hostname."
       )
     <*> O.option
@@ -415,7 +625,7 @@ otelcolAddressParser =
     <*> O.optional
       ( O.strOption
           ( O.long "otelcol-authority"
-              <> O.metavar "HOST"
+              <> O.metavar "HOTT"
               <> O.help "Server authority."
           )
       )
