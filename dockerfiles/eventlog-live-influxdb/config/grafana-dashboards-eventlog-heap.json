@@ -102,6 +102,7 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
+          "alias": "$tag_heapProfLabel",
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
@@ -143,15 +144,6 @@
         }
       ],
       "title": "HeapProfSample",
-      "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "^HeapProfSample\\.mean { heapProfLabel: (.*) }$",
-            "renamePattern": "$1"
-          }
-        }
-      ],
       "type": "timeseries"
     },
     {
@@ -235,6 +227,7 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
+          "alias": "HeapSize",
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
@@ -277,6 +270,7 @@
           "useBackend": false
         },
         {
+          "alias": "BlocksSize",
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
@@ -321,6 +315,7 @@
           "useBackend": false
         },
         {
+          "alias": "HeapLive",
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
@@ -446,6 +441,7 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
+          "alias": "MemCurrent",
           "disableTextWrap": false,
           "editorMode": "builder",
           "expr": "MemCurrent",
@@ -484,6 +480,7 @@
           "useBackend": false
         },
         {
+          "alias": "MemNeeded",
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
@@ -528,6 +525,7 @@
           "useBackend": false
         },
         {
+          "alias": "MemReturned",
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
@@ -652,6 +650,7 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
+          "alias": "HeapAllocated",
           "disableTextWrap": false,
           "editorMode": "builder",
           "expr": "delta(HeapAllocated_bytes_total[$__interval])",
