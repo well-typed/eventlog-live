@@ -732,9 +732,9 @@ processCapabilityUsageSpans = construct $ go CapabilityUsageSpanStarts{capUsageS
         | Just cap <- i.value.evCap -> case i.value.evSpec of
             -- Register the start of a `MutatorThread` running on the capability
             E.RunThread{thread} -> do
-              let startCapabilityUsage' = startCapabilityUsage i cap (MutatorThread thread)
-              capUsageSpanStartsMap' <- M.alterF startCapabilityUsage' cap capUsageSpanStartsMap
-              go st{capUsageSpanStartsMap = capUsageSpanStartsMap'}
+              let startCapabilityUsage' = startCapabilityUsage i cap nextSpanId (MutatorThread thread)
+              (nextSpanId', capUsageSpanStartsMap') <- (.unPlanTWriter) $ M.alterF startCapabilityUsage' cap capUsageSpanStartsMap
+              go st{capUsageSpanStartsMap = capUsageSpanStartsMap', nextSpanId = nextSpanId'}
             -- Register the end of a `MutatorThread` running on the capability
             E.StopThread{thread} -> do
               let stopCapabilityUsage' = stopCapabilityUsage i cap nextSpanId (MutatorThread thread)
@@ -742,9 +742,9 @@ processCapabilityUsageSpans = construct $ go CapabilityUsageSpanStarts{capUsageS
               go st{capUsageSpanStartsMap = capUsageSpanStartsMap', nextSpanId = nextSpanId'}
             -- Register the start of a `GCThread` running on the capability.
             E.StartGC{} -> do
-              let startCapabilityUsage' = startCapabilityUsage i cap GCThread
-              capUsageSpanStartsMap' <- M.alterF startCapabilityUsage' cap capUsageSpanStartsMap
-              go st{capUsageSpanStartsMap = capUsageSpanStartsMap'}
+              let startCapabilityUsage' = startCapabilityUsage i cap nextSpanId GCThread
+              (nextSpanId', capUsageSpanStartsMap') <- (.unPlanTWriter) $ M.alterF startCapabilityUsage' cap capUsageSpanStartsMap
+              go st{capUsageSpanStartsMap = capUsageSpanStartsMap', nextSpanId = nextSpanId'}
             -- Register the end of a `MutatorThread` running on the capability.
             E.EndGC{} -> do
               let stopCapabilityUsage' = stopCapabilityUsage i cap nextSpanId GCThread
@@ -760,23 +760,40 @@ startCapabilityUsage ::
   (MonadIO m) =>
   WithStartTime Event ->
   Int ->
+  Word64 ->
   CapabilityUser ->
   Maybe CapabilityUsageStart ->
-  PlanT k i m (Maybe CapabilityUsageStart)
-startCapabilityUsage i cap capUser maybeCapabilityUsageStart = do
-  -- If a usage was already open, issue a warning...
-  sequence_ $ do
-    capabilityUsageStart <- maybeCapabilityUsageStart
-    pure . liftIO $
-      warnf
-        "Warning: Received %s event for capability %d, but previous event for that capability was %s.\n"
-        (showCapabilityUserAsStartEvent capUser)
-        cap
-        (showCapabilityUserAsStartEvent capabilityUsageStart.capUser)
-  -- Either way, return the new usage...
-  pure $ do
-    startTimeUnixNano <- tryGetTimeUnixNano i
-    pure CapabilityUsageStart{..}
+  PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe CapabilityUsageStart)
+startCapabilityUsage i cap nextSpanId capUser maybeCapabilityUsageStart
+  -- If the event has a start time...
+  | Just startTimeUnixNano <- tryGetTimeUnixNano i = PlanTWriter $ case maybeCapabilityUsageStart of
+      -- ...and an old usage is currently open...
+      Just capabilityUsageStart
+        -- ...and the old usage is from a different user, then...
+        | capUser /= capabilityUsageStart.capUser -> do
+            -- ...close the old usage, and...
+            (nextSpanId', _) <- (.unPlanTWriter) $ stopCapabilityUsage i cap nextSpanId capUser maybeCapabilityUsageStart
+            -- ...return the new usage.
+            pure . (nextSpanId',) . Just $ CapabilityUsageStart{..}
+        -- ...and the old usage is from the same user, then...
+        | otherwise -> do
+            -- ...ignore the new usage, and...
+            -- ...return the old usage.
+            pure . (nextSpanId,) . Just $ capabilityUsageStart
+      -- If no old usage is currently open, then...
+      Nothing -> do
+        -- ...return the new usage.
+        pure . (nextSpanId,) . Just $ CapabilityUsageStart{..}
+  -- If the event has no start time, then...
+  | otherwise = PlanTWriter $ do
+      -- ...emit a warning...
+      liftIO $
+        warnf
+          "Warning: Received %s event for capability %d, but without an associated start time."
+          (showCapabilityUserAsStartEvent capUser)
+          cap
+      -- ...and return the old usage, if any.
+      pure (nextSpanId, maybeCapabilityUsageStart)
 
 {- |
 Internal helper. Process a capability usage stop event.
@@ -788,35 +805,49 @@ stopCapabilityUsage ::
   Word64 ->
   CapabilityUser ->
   Maybe CapabilityUsageStart ->
-  PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe x)
-stopCapabilityUsage i cap nextSpanId endCapUser = \case
-  Just CapabilityUsageStart{..}
-    -- If the currently open span matches, yield a usage span...
-    | capUser == endCapUser
-    , Just endTimeUnixNano <- tryGetTimeUnixNano i -> PlanTWriter $ do
-        yield . (<$ i) $
-          CapabilityUsageSpan
-            { spanId = nextSpanId
-            , ..
-            }
-        pure (succ nextSpanId, Nothing)
-    -- If the currently open span does not match, emit a warning...
-    | otherwise -> PlanTWriter $ do
+  PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe CapabilityUsageStart)
+stopCapabilityUsage i cap nextSpanId endCapUser
+  -- If the event has a start time...
+  | Just endTimeUnixNano <- tryGetTimeUnixNano i = \case
+      -- ...and an old usage is currently open...
+      Just CapabilityUsageStart{..}
+        -- ...and it is for the same user, then...
+        | capUser == endCapUser -> PlanTWriter $ do
+            -- ...yield a usage span, and...
+            yield . (<$ i) $ CapabilityUsageSpan{spanId = nextSpanId, ..}
+            -- ...remove the old usage.
+            pure (succ nextSpanId, Nothing)
+        -- ...and it is for a different user, then...
+        | otherwise -> PlanTWriter $ do
+            -- ...emit a warning, and...
+            liftIO $
+              warnf
+                "Warning: Received %s event for capability %d, but previous event for that capability was %s.\n"
+                (showCapabilityUserAsStopEvent endCapUser)
+                cap
+                (showCapabilityUserAsStartEvent capUser)
+            -- ...remove the old usage.
+            pure (nextSpanId, Nothing)
+      -- ...and no old usage is currently open, then...
+      Nothing -> PlanTWriter $ do
+        -- ...emit a warning, and...
         liftIO $
           warnf
-            "Warning: Received %s event for capability %d, but previous event for that capability was %s.\n"
-            (showCapabilityUserAsStartEvent endCapUser)
+            "Warning: Received %s event for capability %d, but there was no previous event for that capability.\n"
+            (showCapabilityUserAsStopEvent endCapUser)
             cap
-            (showCapabilityUserAsStartEvent capUser)
+        -- ...remove the old usage.
         pure (nextSpanId, Nothing)
-  -- If there is no currently open span, emit a warning...
-  Nothing -> PlanTWriter $ do
-    liftIO $
-      warnf
-        "Warning: Received %s event for capability %d, but there was no previous event for that capability.\n"
-        (showCapabilityUserAsStartEvent endCapUser)
-        cap
-    pure (nextSpanId, Nothing)
+  -- If the event has no start time, then...
+  | otherwise = \maybeCapabilityUsageStart -> PlanTWriter $ do
+      -- ...emit a warning...
+      liftIO $
+        warnf
+          "Warning: Received %s event for capability %d, but without an associated start time."
+          (showCapabilityUserAsStopEvent endCapUser)
+          cap
+      -- ...and return the old usage, if any.
+      pure (nextSpanId, maybeCapabilityUsageStart)
 
 {- |
 Internal helper. Show the original `EventInfo` constructor name from which a `CapabilityUser` was derived.
@@ -825,6 +856,14 @@ showCapabilityUserAsStartEvent :: CapabilityUser -> String
 showCapabilityUserAsStartEvent = \case
   MutatorThread thread -> printf "RunThread{%d}" thread
   GCThread -> "StartGC"
+
+{- |
+Internal helper. Show the original `EventInfo` constructor name from which a `CapabilityUser` was derived.
+-}
+showCapabilityUserAsStopEvent :: CapabilityUser -> String
+showCapabilityUserAsStopEvent = \case
+  MutatorThread thread -> printf "StopThread{%d}" thread
+  GCThread -> "EndGC"
 
 -------------------------------------------------------------------------------
 -- Thread Labels
