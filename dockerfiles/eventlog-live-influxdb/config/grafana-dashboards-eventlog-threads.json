@@ -75,7 +75,7 @@
           "alias": "$tag_category",
           "groupBy": [
             {
-              "params": ["1s"],
+              "params": ["50ms"],
               "type": "time"
             },
             {
@@ -103,12 +103,18 @@
                 "type": "sum"
               },
               {
-                "params": [10],
+                "params": [20],
                 "type": "moving_average"
               }
             ]
           ],
-          "tags": []
+          "tags": [
+            {
+              "key": "category::tag",
+              "operator": "!=",
+              "value": "IDLE"
+            }
+          ]
         }
       ],
       "title": "Productivity",
@@ -278,7 +284,7 @@
           "alias": "$tag_category",
           "groupBy": [
             {
-              "params": ["1s"],
+              "params": ["50ms"],
               "type": "time"
             },
             {
@@ -306,7 +312,7 @@
                 "type": "sum"
               },
               {
-                "params": [10],
+                "params": [20],
                 "type": "moving_average"
               }
             ]
@@ -524,7 +530,7 @@
           "tags": []
         }
       ],
-      "title": "Activity per Thread",
+      "title": "Activity by Thread",
       "type": "state-timeline"
     },
     {
