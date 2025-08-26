@@ -64,12 +64,15 @@ processThreadEvents ::
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processThreadEvents =
   fanout
-    [ mapping (D.singleton . fromSpan . (.value))
-        <~ processCapabilityUsageSpans
-    , mapping (D.singleton . fromThreadLabel)
-        <~ processThreadLabels
-    , mapping (D.singleton . fromSpan . (.value))
-        <~ processThreadStateSpans
+    [ processCapabilityUsageSpans
+        ~> fanout
+          [ mapping (D.singleton . fromSpan . (.value))
+          , processCapabilityUsage ~> mapping (D.singleton . fromMetric "CapabilityUsage")
+          ]
+    , processThreadLabels
+        ~> mapping (D.singleton . fromThreadLabel)
+    , processThreadStateSpans
+        ~> mapping (D.singleton . fromSpan . (.value))
     ]
 
 --------------------------------------------------------------------------------
@@ -119,11 +122,15 @@ class IsSpan v where
 instance IsSpan CapabilityUsageSpan where
   fromSpan :: CapabilityUsageSpan -> I.Line TimeSpec
   fromSpan i =
-    I.Line "CapabilityUsage" tagSet fieldSet timestamp
+    I.Line "CapabilityUsageSpan" tagSet fieldSet timestamp
    where
     capability = I.Key . T.pack . show $ i.cap
     tagSet = M.singleton "capability" capability
-    fieldSet = M.singleton "user" (toField . prettyCapabilityUser $ i.capUser)
+    fieldSet =
+      M.fromList
+        [ ("user", toField . prettyCapabilityUser $ i.capUser)
+        , ("category", toField . prettyCapabilityUserAsCategory . Just $ i.capUser)
+        ]
     timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
 
 --------------------------------------------------------------------------------
@@ -132,7 +139,7 @@ instance IsSpan CapabilityUsageSpan where
 instance IsSpan ThreadStateSpan where
   fromSpan :: ThreadStateSpan -> I.Line TimeSpec
   fromSpan i =
-    I.Line "ThreadState" tagSet fieldSet timestamp
+    I.Line "ThreadStateSpan" tagSet fieldSet timestamp
    where
     thread = I.Key . T.pack . show $ i.thread
     tagSet = M.singleton "thread" thread
