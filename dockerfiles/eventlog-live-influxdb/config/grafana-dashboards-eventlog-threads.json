@@ -31,6 +31,303 @@
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "alias": "$tag_category",
+          "groupBy": [
+            {
+              "params": ["1s"],
+              "type": "time"
+            },
+            {
+              "params": ["category::tag"],
+              "type": "tag"
+            },
+            {
+              "params": ["0"],
+              "type": "fill"
+            }
+          ],
+          "measurement": "CapabilityUsage",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["CapabilityUsage"],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              },
+              {
+                "params": [10],
+                "type": "moving_average"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Productivity",
+      "transformations": [
+        {
+          "id": "concatenate",
+          "options": {
+            "frameNameLabel": "frame",
+            "frameNameMode": "field"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "IDLE · Time": true,
+              "MUTATOR · Time": true
+            },
+            "includeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "GC · Time": "Time"
+            }
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "TOTAL",
+            "binary": {
+              "left": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "MUTATOR"
+                }
+              },
+              "operator": "/",
+              "right": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "IDLE"
+                }
+              }
+            },
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [],
+              "reducer": "sum"
+            },
+            "window": {
+              "reducer": "mean",
+              "windowAlignment": "trailing",
+              "windowSize": 0.1,
+              "windowSizeMode": "percentage"
+            }
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Productivity",
+            "binary": {
+              "left": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "MUTATOR"
+                }
+              },
+              "operator": "/",
+              "right": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "TOTAL"
+                }
+              }
+            },
+            "mode": "binary",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "replaceFields": true
+          }
+        }
+      ],
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "percent"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "ns"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 20,
+        "x": 4,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "alias": "$tag_category",
+          "groupBy": [
+            {
+              "params": ["1s"],
+              "type": "time"
+            },
+            {
+              "params": ["category::tag"],
+              "type": "tag"
+            },
+            {
+              "params": ["0"],
+              "type": "fill"
+            }
+          ],
+          "measurement": "CapabilityUsage",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["CapabilityUsage"],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              },
+              {
+                "params": [10],
+                "type": "moving_average"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Productivity",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisPlacement": "auto",
             "fillOpacity": 70,
@@ -47,21 +344,11 @@
             {
               "options": {
                 "GC": {
-                  "color": "purple",
-                  "index": 1
-                }
-              },
-              "type": "value"
-            },
-            {
-              "options": {
-                "pattern": "\\d+",
-                "result": {
-                  "color": "green",
+                  "color": "transparent",
                   "index": 0
                 }
               },
-              "type": "regex"
+              "type": "value"
             }
           ],
           "thresholds": {
@@ -80,7 +367,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 8
       },
       "id": 3,
       "options": {
@@ -102,6 +389,7 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
+          "alias": "$tag_capability",
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
@@ -113,7 +401,7 @@
             }
           ],
           "hide": false,
-          "measurement": "CapabilityUsage",
+          "measurement": "CapabilityUsageSpan",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "B",
@@ -130,15 +418,6 @@
         }
       ],
       "title": "Activity by Capacity",
-      "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "CapabilityUsage\\.user { capability: (\\d+) }",
-            "renamePattern": "$1"
-          }
-        }
-      ],
       "type": "state-timeline"
     },
     {
@@ -198,7 +477,7 @@
         "h": 16,
         "w": 18,
         "x": 0,
-        "y": 9
+        "y": 17
       },
       "id": 2,
       "options": {
@@ -220,13 +499,14 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
+          "alias": "$tag_thread",
           "groupBy": [
             {
               "params": ["thread::tag"],
               "type": "tag"
             }
           ],
-          "measurement": "ThreadState",
+          "measurement": "ThreadStateSpan",
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT \"threadState\" FROM \"ThreadState\" WHERE $timeFilter GROUP BY \"threadId\"::tag",
@@ -245,15 +525,6 @@
         }
       ],
       "title": "Activity per Thread",
-      "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "ThreadState\\.label { thread: (\\d+) }",
-            "renamePattern": "$1"
-          }
-        }
-      ],
       "type": "state-timeline"
     },
     {
@@ -307,7 +578,7 @@
         "h": 16,
         "w": 6,
         "x": 18,
-        "y": 9
+        "y": 17
       },
       "id": 4,
       "options": {
