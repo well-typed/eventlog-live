@@ -804,7 +804,7 @@ stopCapabilityUsage i cap nextSpanId endCapUser = \case
     | otherwise -> PlanTWriter $ do
         liftIO $
           warnf
-            "Warning: Received %s event for capability %s, but previous event for that capability was %s."
+            "Warning: Received %s event for capability %d, but previous event for that capability was %s."
             (showCapabilityUserAsStartEvent endCapUser)
             cap
             (showCapabilityUserAsStartEvent capUser)
@@ -813,7 +813,7 @@ stopCapabilityUsage i cap nextSpanId endCapUser = \case
   Nothing -> PlanTWriter $ do
     liftIO $
       warnf
-        "Warning: Received %s event for capability %s, but there was no previous event for that capability."
+        "Warning: Received %s event for capability %d, but there was no previous event for that capability."
         (showCapabilityUserAsStartEvent endCapUser)
         cap
     pure (nextSpanId, Nothing)
