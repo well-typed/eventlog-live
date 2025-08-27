@@ -68,7 +68,7 @@ processThreadEvents =
     [ processCapabilityUsageSpans
         ~> fanout
           [ mapping (D.singleton . fromSpan . (.value))
-          , processCapabilityUsage ~> mapping (D.singleton . fromMetric "CapabilityUsage")
+          , processCapabilityUsageMetrics ~> mapping (D.singleton . fromMetric "CapabilityUsage")
           ]
     , processThreadLabels
         ~> mapping (D.singleton . fromThreadLabel)
