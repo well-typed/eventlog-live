@@ -32,6 +32,9 @@ module GHC.Eventlog.Live.Machines (
   metricFromCapabilityUsageSpan,
   processCapabilityUsageSpans,
 
+  -- ** Thread Events
+  isThreadEvent,
+
   -- ** Thread labels
   ThreadLabel (..),
   processThreadLabels,
@@ -557,6 +560,17 @@ k ~= v = (ak, av)
 -------------------------------------------------------------------------------
 -- Thread events
 -------------------------------------------------------------------------------
+
+isThreadEvent :: EventInfo -> Bool
+isThreadEvent = \case
+  E.CreateThread{} -> True
+  E.EndGC{} -> True
+  E.MigrateThread{} -> True
+  E.RunThread{} -> True
+  E.StartGC{} -> True
+  E.StopThread{} -> True
+  E.ThreadLabel{} -> True
+  _otherwise -> False
 
 -------------------------------------------------------------------------------
 -- Capability Usage
