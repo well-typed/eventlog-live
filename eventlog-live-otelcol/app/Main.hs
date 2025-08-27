@@ -205,7 +205,7 @@ processMemReturn =
   ELM.liftTick ELM.processMemReturnData
     ~> ELM.batchByTickList
     ~> fanout
-      [ mapping (fmap (toNumberDataPoint . fmap (.current)))
+      [ ELM.liftBatch (asMemCurrent ~> asNumberDataPoint)
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemCurrent"
@@ -213,7 +213,7 @@ processMemReturn =
             , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
-      , mapping (fmap (toNumberDataPoint . fmap (.needed)))
+      , ELM.liftBatch (asMemNeeded ~> asNumberDataPoint)
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemNeeded"
@@ -221,7 +221,7 @@ processMemReturn =
             , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
-      , mapping (fmap (toNumberDataPoint . fmap (.returned)))
+      , ELM.liftBatch (asMemReturned ~> asNumberDataPoint)
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemReturned"
@@ -230,6 +230,15 @@ processMemReturn =
             ]
           ~> mapping D.singleton
       ]
+
+asMemCurrent :: Process (Metric MemReturnData) (Metric Word32)
+asMemCurrent = mapping (fmap (.current))
+
+asMemNeeded :: Process (Metric MemReturnData) (Metric Word32)
+asMemNeeded = mapping (fmap (.needed))
+
+asMemReturned :: Process (Metric MemReturnData) (Metric Word32)
+asMemReturned = mapping (fmap (.returned))
 
 --------------------------------------------------------------------------------
 -- HeapProfSample
