@@ -28,7 +28,7 @@ module GHC.Eventlog.Live.Machines (
   prettyCapabilityUser,
   prettyCapabilityUserAsCategory,
   CapabilityUsageSpan (..),
-  processCapabilityUsage,
+  processCapabilityUsageMetrics,
   metricFromCapabilityUsageSpan,
   processCapabilityUsageSpans,
 
@@ -565,9 +565,9 @@ newtype CapabilityUsageSpans = CapabilityUsageSpans
   { capUsageSpanMap :: HashMap Int CapabilityUsageSpan
   }
 
-processCapabilityUsage ::
+processCapabilityUsageMetrics ::
   Process (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
-processCapabilityUsage = construct $ go CapabilityUsageSpans{capUsageSpanMap = mempty}
+processCapabilityUsageMetrics = construct $ go CapabilityUsageSpans{capUsageSpanMap = mempty}
  where
   go st =
     await >>= \i -> do
