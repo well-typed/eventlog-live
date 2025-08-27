@@ -69,6 +69,7 @@ module GHC.Eventlog.Live.Machines (
   liftTick,
   dropTick,
   onlyTick,
+  liftBatch,
 
   -- * Event sorting
   sortByBatch,
@@ -339,6 +340,51 @@ liftTick m =
             Item a -> liftTick (onNext a)
           onStop' :: ProcessT m (Tick a) (Tick b)
           onStop' = liftTick onStop
+
+{- |
+Lift a machine that processes @a@s into @b@s to a machine that processes batches of @a@s into batches of @b@s.
+-}
+liftBatch ::
+  forall m a b.
+  (Monad m) =>
+  ProcessT m a b ->
+  ProcessT m [a] [b]
+liftBatch = MachineT . running [] []
+ where
+  -- The parent machine is running the child machine with the current batch.
+  running :: [a] -> [b] -> ProcessT m a b -> m (Step (Is [a]) [b] (ProcessT m [a] [b]))
+  running as bs m =
+    runMachineT m >>= \case
+      Stop ->
+        pure Stop
+      Yield b k ->
+        running as (b : bs) k
+      Await (onNext :: t -> ProcessT m a b) Refl onStop ->
+        pure $ Yield (reverse bs) $ MachineT $ awaiting as onNext onStop
+
+  -- The parent machine is awaiting new input.
+  awaiting :: [a] -> (a -> ProcessT m a b) -> ProcessT m a b -> m (Step (Is [a]) [b] (ProcessT m [a] [b]))
+  awaiting (a : as) onNext _onStop = running as [] $ onNext a
+  awaiting [] onNext onStop = pure $ Await onNext' Refl onStop'
+   where
+    onNext' :: [a] -> ProcessT m [a] [b]
+    onNext' as = MachineT $ awaiting as onNext onStop
+    onStop' :: ProcessT m [a] [b]
+    onStop' = exhausting onStop
+
+  -- The parent machine is exhausting the child machine to gather its output.
+  exhausting :: ProcessT m a b -> ProcessT m x [b]
+  exhausting = MachineT . go []
+   where
+    go :: [b] -> ProcessT m a b -> m (Step (Is x) [b] (ProcessT m x [b]))
+    go bs m =
+      runMachineT m >>= \case
+        Stop ->
+          pure Stop
+        Yield b k ->
+          go (b : bs) k
+        Await _onNext _Refl onStop ->
+          pure $ Yield (reverse bs) $ MachineT $ go [] onStop
 
 -------------------------------------------------------------------------------
 -- Decoding
