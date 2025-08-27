@@ -13,9 +13,11 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as BSB
 import Data.DList (DList)
 import Data.DList qualified as D
+import Data.Either (partitionEithers)
+import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.Int (Int64)
-import Data.Machine (Process, ProcessT, await, mapping, repeatedly, yield, (~>))
+import Data.Machine (Process, ProcessT, await, filtered, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
@@ -57,67 +59,86 @@ main = do
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
   let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
-  -- Construct the metrics pipeline
-  let metricsPipelineWith conn =
-        processHeapEvents maybeHeapProfBreakdown
-          ~> mapping D.toList
-          ~> asScopeMetrics
-            [ OM.scope .~ eventlogLiveScope
-            ]
-          ~> asResourceMetric []
-          ~> asExportMetricServiceRequest
-          ~> otelcolResourceMetricsExporter conn
-          ~> displayExceptions
-  -- Construct the traces pipelin
-  let tracesPipelineWith conn =
-        fanout
-          [ processCapabilityUsageSpans
-          , processThreadStateSpans
-          ]
-          ~> asScopeSpans
-            [ OT.scope .~ eventlogLiveScope
-            ]
-          ~> asResourceSpan
-            [ OT.resource
-                .~ messageWith
-                  [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                  ]
-            ]
-          ~> asExportTraceServiceRequest
-          ~> otelcolResourceSpansExporter conn
-          ~> displayExceptions
-  -- Run all requested pipelines in parallel
-  let pipelinesFor conn =
-        [metricsPipelineWith conn | exportMetrics]
-          <> [tracesPipelineWith conn | exportTraces]
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
     runWithEventlogSocket batchInterval Nothing eventlogSocket maybeEventlogLogFile $
-      ELM.liftTick ELM.withStartTime ~> fanout (pipelinesFor conn)
+      ELM.liftTick ELM.withStartTime
+        ~> fanout
+          [ processHeapEvents maybeHeapProfBreakdown
+              ~> mapping (fmap Left)
+          , processThreadEvents
+          ]
+        ~> mapping (partitionEithers . D.toList)
+        ~> fanout
+          [ filtered (const exportMetrics)
+              ~> mapping fst
+              ~> asScopeMetrics
+                [ OM.scope .~ eventlogLiveScope
+                ]
+              ~> asResourceMetric []
+              ~> asExportMetricServiceRequest
+              ~> exportResourceMetrics conn
+              ~> displayExceptions
+          , filtered (const exportTraces)
+              ~> mapping snd
+              ~> asScopeSpans
+                [ OT.scope .~ eventlogLiveScope
+                ]
+              ~> asResourceSpan
+                [ OT.resource
+                    .~ messageWith
+                      [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                      ]
+                ]
+              ~> asExportTraceServiceRequest
+              ~> exportResourceSpans conn
+              ~> displayExceptions
+          ]
 
 displayExceptions :: (MonadIO m, Exception e) => ProcessT m e Void
 displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . displayException
 
 --------------------------------------------------------------------------------
--- Thread Events
+-- processThreadEvents
 --------------------------------------------------------------------------------
 
-processCapabilityUsageSpans ::
+processThreadEvents ::
   (MonadIO m) =>
-  ProcessT m (Tick (WithStartTime Event)) [OT.Span]
-processCapabilityUsageSpans =
-  ELM.liftTick (ELM.processCapabilityUsageSpans ~> ELM.dropStartTime ~> asSpan)
-    ~> ELM.batchByTickList
+  ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
+processThreadEvents =
+  filtered isThreadEvent
+    ~> ELM.sortByBatchTick (.value.evTime)
+    ~> fanout
+      [ ELM.liftTick ELM.processCapabilityUsageSpans
+          ~> fanout
+            [ ELM.liftTick (ELM.processCapabilityUsageMetrics ~> asNumberDataPoint)
+                ~> ELM.batchByTickList
+                ~> asSum
+                  [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+                  , OM.isMonotonic .~ True
+                  ]
+                ~> asMetric
+                  [ OM.name .~ "CapabilityUsage"
+                  , OM.description .~ "Report the duration of each capability usage span."
+                  , OM.unit .~ "ns"
+                  ]
+                ~> mapping Left
+                ~> mapping D.singleton
+            , ELM.liftTick
+                ( ELM.dropStartTime
+                    ~> asSpan
+                    ~> mapping (D.singleton . Right)
+                )
+                ~> ELM.batchByTick
+            ]
+      ]
 
-processThreadStateSpans ::
-  (MonadIO m) =>
-  ProcessT m (Tick (WithStartTime Event)) [OT.Span]
-processThreadStateSpans =
-  ELM.sortByBatchTick (.value.evTime)
-    ~> ELM.liftTick (ELM.processThreadStateSpans ~> ELM.dropStartTime ~> asSpan)
-    ~> ELM.batchByTickList
+isThreadEvent :: Tick (WithStartTime Event) -> Bool
+isThreadEvent = \case
+  ELM.Item i -> ELM.isThreadEvent i.value.evSpec
+  ELM.Tick -> False
 
 --------------------------------------------------------------------------------
--- Heap Events
+-- processHeapEvents
 --------------------------------------------------------------------------------
 
 processHeapEvents ::
@@ -307,8 +328,10 @@ asSpan :: (IsSpan v) => Process v OT.Span
 asSpan = mapping toSpan
 
 asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
-asMetric mod = mapping $ \metric'data ->
-  messageWith ((OM.maybe'data' .~ Just metric'data) : mod)
+asMetric mod = mapping $ toMetric mod
+
+toMetric :: [OM.Metric -> OM.Metric] -> OM.Metric'Data -> OM.Metric
+toMetric mod metric'data = messageWith ((OM.maybe'data' .~ Just metric'data) : mod)
 
 asGauge :: Process [OM.NumberDataPoint] OM.Metric'Data
 asGauge =
@@ -319,12 +342,12 @@ asGauge =
         | otherwise -> yield . OM.Metric'Gauge . messageWith $ [OM.dataPoints .~ dataPoints]
 
 asSum :: [OM.Sum -> OM.Sum] -> Process [OM.NumberDataPoint] OM.Metric'Data
-asSum mod =
-  repeatedly $
-    await >>= \case
-      dataPoints
-        | null dataPoints -> pure ()
-        | otherwise -> yield . OM.Metric'Sum . messageWith $ (OM.dataPoints .~ dataPoints) : mod
+asSum mod = repeatedly $ await >>= \dataPoints -> for_ (toSum mod dataPoints) yield
+
+toSum :: [OM.Sum -> OM.Sum] -> [OM.NumberDataPoint] -> Maybe OM.Metric'Data
+toSum mod dataPoints
+  | null dataPoints = Nothing
+  | otherwise = Just . OM.Metric'Sum . messageWith $ (OM.dataPoints .~ dataPoints) : mod
 
 asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (Metric v) OM.NumberDataPoint
 asNumberDataPoint = mapping toNumberDataPoint
@@ -471,8 +494,8 @@ instance Exception ExportSpansError where
   displayException ExportSpansError{..} =
     printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedSpans errorMessage
 
-otelcolResourceSpansExporter :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest ExportSpansError
-otelcolResourceSpansExporter conn =
+exportResourceSpans :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest ExportSpansError
+exportResourceSpans conn =
   repeatedly $
     await >>= \exportTraceServiceRequest -> do
       G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest))
@@ -502,8 +525,8 @@ instance Exception ExportMetricsError where
   displayException ExportMetricsError{..} =
     printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
 
-otelcolResourceMetricsExporter :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest ExportMetricsError
-otelcolResourceMetricsExporter conn =
+exportResourceMetrics :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest ExportMetricsError
+exportResourceMetrics conn =
   repeatedly $
     await >>= \exportMetricsServiceRequest -> do
       G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest))
