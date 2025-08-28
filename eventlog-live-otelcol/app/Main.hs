@@ -105,8 +105,7 @@ processThreadEvents ::
   (MonadIO m) =>
   ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
 processThreadEvents =
-  filtered isThreadEvent
-    ~> ELM.sortByBatchTick (.value.evTime)
+  ELM.sortByBatchTick (.value.evTime)
     ~> fanout
       [ ELM.liftTick ELM.processCapabilityUsageSpans
           ~> fanout

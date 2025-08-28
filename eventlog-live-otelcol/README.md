@@ -96,10 +96,8 @@ stateDiagram-v2
 
     withStartTime                                       --> processThreadEvents                             : Tick (WithStartTime Event)
     state processThreadEvents {
-        processThreadEvents'filtered'isThreadEvent                                                          : filtered isThreadEvent
-        [*]                                             --> processThreadEvents'filtered'isThreadEvent
         processThreadEvents'batchByTick                                                                     : batchByTick
-        processThreadEvents'filtered'isThreadEvent      --> processThreadEvents'batchByTick                 : Tick (WithStartTime Event)
+        [*]                                             --> processThreadEvents'batchByTick
         processThreadEvents'sortByBatch                                                                     : sortByBatch
         processThreadEvents'batchByTick                 --> processThreadEvents'sortByBatch                 : [WithStartTime Event]
         processThreadEvents'sortByBatch                 --> processCapabilityUsageSpans                     : [WithStartTime Event]
