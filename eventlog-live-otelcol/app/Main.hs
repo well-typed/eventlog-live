@@ -27,7 +27,7 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, WithStartTime (..))
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, Verbosity, WithStartTime (..))
 import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
@@ -63,9 +63,9 @@ main = do
     runWithEventlogSocket batchInterval Nothing eventlogSocket maybeEventlogLogFile $
       ELM.liftTick ELM.withStartTime
         ~> fanout
-          [ processHeapEvents maybeHeapProfBreakdown
+          [ processHeapEvents verbosity maybeHeapProfBreakdown
               ~> mapping (fmap Left)
-          , processThreadEvents
+          , processThreadEvents verbosity
           ]
         ~> mapping (partitionEithers . D.toList)
         ~> fanout
@@ -103,11 +103,12 @@ displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . dis
 
 processThreadEvents ::
   (MonadIO m) =>
+  Verbosity ->
   ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
-processThreadEvents =
+processThreadEvents verbosity =
   ELM.sortByBatchTick (.value.evTime)
     ~> fanout
-      [ ELM.liftTick ELM.processCapabilityUsageSpans
+      [ ELM.liftTick (ELM.processCapabilityUsageSpans verbosity)
           ~> fanout
             [ ELM.liftTick (ELM.processCapabilityUsageMetrics ~> asNumberDataPoint)
                 ~> ELM.batchByTickList
@@ -131,10 +132,10 @@ processThreadEvents =
             ]
       ]
 
-isThreadEvent :: Tick (WithStartTime Event) -> Bool
-isThreadEvent = \case
-  ELM.Item i -> ELM.isThreadEvent i.value.evSpec
-  ELM.Tick -> False
+-- isThreadEvent :: Tick (WithStartTime Event) -> Bool
+-- isThreadEvent = \case
+--   ELM.Item i -> ELM.isThreadEvent i.value.evSpec
+--   ELM.Tick -> False
 
 --------------------------------------------------------------------------------
 -- processHeapEvents
@@ -142,16 +143,17 @@ isThreadEvent = \case
 
 processHeapEvents ::
   (MonadIO m) =>
+  Verbosity ->
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapEvents maybeHeapProfBreakdown =
+processHeapEvents verbosity maybeHeapProfBreakdown =
   fanout
     [ processHeapAllocated
     , processBlocksSize
     , processHeapSize
     , processHeapLive
     , processMemReturn
-    , processHeapProfSample maybeHeapProfBreakdown
+    , processHeapProfSample verbosity maybeHeapProfBreakdown
     ]
 
 --------------------------------------------------------------------------------
@@ -265,10 +267,11 @@ asMemReturned = mapping (fmap (.returned))
 
 processHeapProfSample ::
   (MonadIO m) =>
+  Verbosity ->
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapProfSample maybeHeapProfBreakdown =
-  ELM.liftTick (ELM.processHeapProfSampleData maybeHeapProfBreakdown ~> asNumberDataPoint)
+processHeapProfSample verbosity maybeHeapProfBreakdown =
+  ELM.liftTick (ELM.processHeapProfSampleData verbosity maybeHeapProfBreakdown ~> asNumberDataPoint)
     ~> ELM.batchByTickList
     ~> asGauge
     ~> asMetric
@@ -559,6 +562,7 @@ data Options = Options
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
   , eventlogSocket :: EventlogSocket
+  , verbosity :: Verbosity
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   }
 
@@ -570,6 +574,7 @@ optionsParser =
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
     <*> eventlogSocketParser
+    <*> verbosityParser
     <*> openTelemetryCollectorOptionsParser
 
 --------------------------------------------------------------------------------
