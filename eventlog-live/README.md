@@ -1,3 +1,37 @@
+## Capability Usage Analysis
+
+The capability usage analysis combines the GC span and mutator span analyses.
+It classifies any time not covered by either a GC span or a mutator span as idle time.
+
+### GC Span Analysis
+
+The GC span analysis produces GC spans and follows this finite-state automaton:
+
+```mermaid
+stateDiagram-v2
+  Idle --> Idle : EndGC
+  Idle --> GC   : StartGC
+  GC   --> Idle : EndGC
+  GC   --> GC   : StartGC
+```
+
+The transition from `GC` to `Idle` yields a GC span.
+
+### Mutator Span Analysis
+
+The mutator span analysis produces mutator spans and follows this finite-state automaton:
+
+```mermaid
+stateDiagram-v2
+  Idle       --> Idle       : StopThread[X]
+  Idle       --> Mutator[X] : RunThread[X]
+  Mutator[X] --> Idle       : StopThread[X]
+  Mutator[X] --> Mutator[X] : RunThread[X]
+```
+
+The transition from `Mutator[X]` to `Idle` yields a mutator span.
+While in the `Mutator[X]` state, any `RunThread[Y]` or `StopThread[Y]` events result in an error. Furthermore, when a `StopThread[X]` event with the `ThreadFinished` status is processed, the thread `X` is added to a set of finished threads, and any further `RunThread[X]` events for that thread are ignored. This is done because the GHC RTS frequently emits a `RunThread[X]` event immediately after a `StopThread[X]` event with the `ThreadFinished` status.
+
 ## Thread State Analysis
 
 ```mermaid
