@@ -42,8 +42,8 @@ main = do
           ~> sortByBatchTick (.value.evTime)
           ~> liftTick
             ( fanout
-                [ processThreadEvents
-                , processHeapEvents maybeHeapProfBreakdown
+                [ processThreadEvents verbosity
+                , processHeapEvents verbosity maybeHeapProfBreakdown
                 ]
             )
           ~> batchByTick
@@ -62,17 +62,18 @@ main = do
 
 processThreadEvents ::
   (MonadIO m) =>
+  Verbosity ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
-processThreadEvents =
+processThreadEvents verbosity =
   fanout
-    [ processCapabilityUsageSpans
+    [ processCapabilityUsageSpans verbosity
         ~> fanout
           [ mapping (D.singleton . fromSpan . (.value))
           , processCapabilityUsageMetrics ~> mapping (D.singleton . fromMetric "CapabilityUsage")
           ]
     , processThreadLabels
         ~> mapping (D.singleton . fromThreadLabel)
-    , processThreadStateSpans
+    , processThreadStateSpans verbosity
         ~> mapping (D.singleton . fromSpan . (.value))
     ]
 
@@ -82,9 +83,10 @@ processThreadEvents =
 
 processHeapEvents ::
   (MonadIO m) =>
+  Verbosity ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
-processHeapEvents maybeHeapProfBreakdown =
+processHeapEvents verbosity maybeHeapProfBreakdown =
   fanout
     [ mapping (D.singleton . fromMetric "HeapAllocated")
         <~ processHeapAllocatedData
@@ -104,7 +106,7 @@ processHeapEvents maybeHeapProfBreakdown =
         )
         <~ processMemReturnData
     , mapping (D.singleton . fromMetric "HeapProfSample")
-        <~ processHeapProfSampleData maybeHeapProfBreakdown
+        <~ processHeapProfSampleData verbosity maybeHeapProfBreakdown
     ]
 
 --------------------------------------------------------------------------------
@@ -231,6 +233,7 @@ data Options = Options
   , batchInterval :: Int
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
+  , verbosity :: Verbosity
   , influxDBWriteParams :: I.WriteParams
   }
 
@@ -241,6 +244,7 @@ optionsParser =
     <*> batchIntervalParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
+    <*> verbosityParser
     <*> influxDBWriteParamsParser
 
 --------------------------------------------------------------------------------
