@@ -84,6 +84,12 @@ module GHC.Eventlog.Live.Machines (
   -- * Heap profile breakdown
   heapProfBreakdownEitherReader,
   heapProfBreakdownShow,
+
+  -- * Verbosity
+  Verbosity,
+  verbosityQuiet,
+  verbosityError,
+  verbosityWarning,
 ) where
 
 import Control.Exception (Exception, catch, throwIO)
@@ -108,6 +114,7 @@ import Data.Ord (comparing)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.IO qualified as TIO
 import Data.Void (Void)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Clock (getMonotonicTimeNSec)
@@ -122,7 +129,6 @@ import System.IO.Error (isEOFError)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Printf (printf)
-import Text.Printf qualified as IO
 import Text.Read (readMaybe)
 import Text.Read.Lex (readHexP)
 
@@ -783,8 +789,10 @@ Process thread events and yield capability usage spans.
 processCapabilityUsageSpans ::
   forall m.
   (MonadIO m) =>
+  Verbosity ->
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
-processCapabilityUsageSpans = construct $ go CapabilityUsageSpanStarts{capUsageSpanStartsMap = mempty, nextSpanId = 1}
+processCapabilityUsageSpans verbosityThreshold =
+  construct $ go CapabilityUsageSpanStarts{capUsageSpanStartsMap = mempty, nextSpanId = 1}
  where
   go st@CapabilityUsageSpanStarts{..} =
     await >>= \case
@@ -813,101 +821,108 @@ processCapabilityUsageSpans = construct $ go CapabilityUsageSpanStarts{capUsageS
             _otherwise -> go st
         | otherwise -> go st
 
-{- |
-Internal helper. Process a capability usage start event.
--}
-startCapabilityUsage ::
-  (MonadIO m) =>
-  WithStartTime Event ->
-  Int ->
-  Word64 ->
-  CapabilityUser ->
-  Maybe CapabilityUsageStart ->
-  PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe CapabilityUsageStart)
-startCapabilityUsage i cap nextSpanId capUser maybeCapabilityUsageStart
-  -- If the event has a start time...
-  | Just startTimeUnixNano <- tryGetTimeUnixNano i = PlanTWriter $ case maybeCapabilityUsageStart of
-      -- ...and an old usage is currently open...
-      Just capabilityUsageStart
-        -- ...and the old usage is from a different user, then...
-        | capUser /= capabilityUsageStart.capUser -> do
-            -- ...close the old usage, and...
-            (nextSpanId', _) <- (.unPlanTWriter) $ stopCapabilityUsage i cap nextSpanId capUser maybeCapabilityUsageStart
-            -- ...return the new usage.
-            pure . (nextSpanId',) . Just $ CapabilityUsageStart{..}
-        -- ...and the old usage is from the same user, then...
-        | otherwise -> do
-            -- ...ignore the new usage, and...
-            -- ...return the old usage.
-            pure . (nextSpanId,) . Just $ capabilityUsageStart
-      -- If no old usage is currently open, then...
-      Nothing -> do
-        -- ...return the new usage.
-        pure . (nextSpanId,) . Just $ CapabilityUsageStart{..}
-  -- If the event has no start time, then...
-  | otherwise = PlanTWriter $ do
-      -- ...emit a warning...
-      liftIO $
-        warnf
-          "Warning: Received %s event for capability %d, but without an associated start time."
-          (showCapabilityUserAsStartEvent capUser)
-          cap
-      -- ...and return the old usage, if any.
-      pure (nextSpanId, maybeCapabilityUsageStart)
-
-{- |
-Internal helper. Process a capability usage stop event.
--}
-stopCapabilityUsage ::
-  (MonadIO m) =>
-  WithStartTime Event ->
-  Int ->
-  Word64 ->
-  CapabilityUser ->
-  Maybe CapabilityUsageStart ->
-  PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe CapabilityUsageStart)
-stopCapabilityUsage i cap nextSpanId endCapUser
-  -- If the event has a start time...
-  | Just endTimeUnixNano <- tryGetTimeUnixNano i = \case
-      -- ...and an old usage is currently open...
-      Just CapabilityUsageStart{..}
-        -- ...and it is for the same user, then...
-        | capUser == endCapUser -> PlanTWriter $ do
-            -- ...yield a usage span, and...
-            yield . (<$ i) $ CapabilityUsageSpan{spanId = nextSpanId, ..}
-            -- ...remove the old usage.
-            pure (succ nextSpanId, Nothing)
-        -- ...and it is for a different user, then...
-        | otherwise -> PlanTWriter $ do
-            -- ...emit a warning, and...
-            liftIO $
-              warnf
-                "Warning: Received %s event for capability %d, but previous event for that capability was %s.\n"
-                (showCapabilityUserAsStopEvent endCapUser)
-                cap
-                (showCapabilityUserAsStartEvent capUser)
-            -- ...remove the old usage.
-            pure (nextSpanId, Nothing)
-      -- ...and no old usage is currently open, then...
-      Nothing -> PlanTWriter $ do
-        -- ...emit a warning, and...
-        liftIO $
-          warnf
-            "Warning: Received %s event for capability %d, but there was no previous event for that capability.\n"
-            (showCapabilityUserAsStopEvent endCapUser)
+  -- Internal helper. Process a capability usage start event.
+  startCapabilityUsage ::
+    WithStartTime Event ->
+    Int ->
+    Word64 ->
+    CapabilityUser ->
+    Maybe CapabilityUsageStart ->
+    PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe CapabilityUsageStart)
+  startCapabilityUsage i cap nextSpanId capUser maybeCapabilityUsageStart
+    -- If the event has a start time...
+    | Just startTimeUnixNano <- tryGetTimeUnixNano i = PlanTWriter $ case maybeCapabilityUsageStart of
+        -- ...and an old usage is currently open...
+        Just capabilityUsageStart
+          -- ...and the new usage predates the old usage, then...
+          | startTimeUnixNano < capabilityUsageStart.startTimeUnixNano -> do
+              -- ...emit a warning, and...
+              liftIO . logError verbosityThreshold "processCapabilityUsageSpans" . T.pack $
+                printf
+                  "Capability %d: received %s event which predates the previous %s event."
+                  cap
+                  (showCapabilityUserAsStartEvent capUser)
+                  (showCapabilityUserAsStopEvent capabilityUsageStart.capUser)
+              -- ...close the new usage, and...
+              -- TOOO:
+              -- ...return the old usage.
+              pure . (nextSpanId,) . Just $ capabilityUsageStart
+          -- ...and the old usage is from a different user, then...
+          | capUser /= capabilityUsageStart.capUser -> do
+              -- ...close the old usage, and...
+              (nextSpanId', _) <- (.unPlanTWriter) $ stopCapabilityUsage i cap nextSpanId capUser maybeCapabilityUsageStart
+              -- ...return the new usage.
+              pure . (nextSpanId',) . Just $ CapabilityUsageStart{..}
+          -- ...and the old usage is from the same user, then...
+          | otherwise -> do
+              -- ...ignore the new usage, and...
+              -- ...return the old usage.
+              pure . (nextSpanId,) . Just $ capabilityUsageStart
+        -- If no old usage is currently open, then...
+        Nothing -> do
+          -- ...return the new usage.
+          pure . (nextSpanId,) . Just $ CapabilityUsageStart{..}
+    -- If the event has no start time, then...
+    | otherwise = PlanTWriter $ do
+        -- ...emit a warning...
+        liftIO . logWarning verbosityThreshold "processCapabilityUsageSpans" . T.pack $
+          printf
+            "Capability %d: received %s event, but without an associated start time."
             cap
-        -- ...remove the old usage.
-        pure (nextSpanId, Nothing)
-  -- If the event has no start time, then...
-  | otherwise = \maybeCapabilityUsageStart -> PlanTWriter $ do
-      -- ...emit a warning...
-      liftIO $
-        warnf
-          "Warning: Received %s event for capability %d, but without an associated start time."
-          (showCapabilityUserAsStopEvent endCapUser)
-          cap
-      -- ...and return the old usage, if any.
-      pure (nextSpanId, maybeCapabilityUsageStart)
+            (showCapabilityUserAsStartEvent capUser)
+        -- ...and return the old usage, if any.
+        pure (nextSpanId, maybeCapabilityUsageStart)
+
+  -- Internal helper. Process a capability usage stop event.
+  stopCapabilityUsage ::
+    WithStartTime Event ->
+    Int ->
+    Word64 ->
+    CapabilityUser ->
+    Maybe CapabilityUsageStart ->
+    PlanTWriter Word64 k (WithStartTime CapabilityUsageSpan) m (Maybe CapabilityUsageStart)
+  stopCapabilityUsage i cap nextSpanId endCapUser
+    -- If the event has a start time...
+    | Just endTimeUnixNano <- tryGetTimeUnixNano i = \case
+        -- ...and an old usage is currently open...
+        Just CapabilityUsageStart{..}
+          -- ...and it is for the same user, then...
+          | capUser == endCapUser -> PlanTWriter $ do
+              -- ...yield a usage span, and...
+              yield . (<$ i) $ CapabilityUsageSpan{spanId = nextSpanId, ..}
+              -- ...remove the old usage.
+              pure (succ nextSpanId, Nothing)
+          -- ...and it is for a different user, then...
+          | otherwise -> PlanTWriter $ do
+              -- ...emit a warning, and...
+              liftIO . logWarning verbosityThreshold "processCapabilityUsageSpans" . T.pack $
+                printf
+                  "Capability %d: received %s event, but previous event was %s."
+                  cap
+                  (showCapabilityUserAsStopEvent endCapUser)
+                  (showCapabilityUserAsStartEvent capUser)
+              -- ...remove the old usage.
+              pure (nextSpanId, Nothing)
+        -- ...and no old usage is currently open, then...
+        Nothing -> PlanTWriter $ do
+          -- ...emit a warning, and...
+          liftIO . logWarning verbosityThreshold "processCapabilityUsageSpans" . T.pack $
+            printf
+              "Capability %d: received %s, but there was no previous event."
+              cap
+              (showCapabilityUserAsStopEvent endCapUser)
+          -- ...remove the old usage.
+          pure (nextSpanId, Nothing)
+    -- If the event has no start time, then...
+    | otherwise = \maybeCapabilityUsageStart -> PlanTWriter $ do
+        -- ...emit a warning...
+        liftIO . logError verbosityThreshold "processCapabilityUsageSpans" . T.pack $
+          printf
+            "Capability %d: received %s, but without an associated start time."
+            cap
+            (showCapabilityUserAsStopEvent endCapUser)
+        -- ...and return the old usage, if any.
+        pure (nextSpanId, maybeCapabilityUsageStart)
 
 {- |
 Internal helper. Show the original `EventInfo` constructor name from which a `CapabilityUser` was derived.
@@ -1045,8 +1060,10 @@ Process thread events and yield thread state spans.
 -}
 processThreadStateSpans ::
   (MonadIO m) =>
+  Verbosity ->
   ProcessT m (WithStartTime Event) (WithStartTime ThreadStateSpan)
-processThreadStateSpans = construct $ go ThreadStates{threadStates = mempty, nextSpanId = 1}
+processThreadStateSpans verbosityThreshold =
+  construct $ go ThreadStates{threadStates = mempty, nextSpanId = 1}
  where
   go st =
     await >>= \i -> case i.value.evSpec of
@@ -1068,79 +1085,79 @@ processThreadStateSpans = construct $ go ThreadStates{threadStates = mempty, nex
         go =<< transitionTo st i Blocked
       _otherwise -> go st
 
-{- |
-Transition the `ThreadStates` to the target thread state, and
-end any current thread span and `yield` the resulting `ThreadStateSpan`.
-
-__Warning__: This function is partial and only defined for events with a `thread` field.
--}
-transitionTo ::
-  (MonadIO m) =>
-  ThreadStates ->
-  WithStartTime Event ->
-  ThreadState ->
-  PlanT k (WithStartTime ThreadStateSpan) m ThreadStates
-transitionTo st i targetThreadState
-  | thread <- i.value.evSpec.thread
-  , Just cap <- i.value.evCap
-  , Just timeUnixNano <- tryGetTimeUnixNano i = do
-      let
-        transitionTo' maybeThreadStateSpanStart = PlanTWriter $ do
-          -- End the current thread span, if any:
-          for_ maybeThreadStateSpanStart $ \ThreadStateSpanStart{..} ->
-            yield . (<$ i) $
-              ThreadStateSpan
-                { endTimeUnixNano = timeUnixNano
-                , ..
-                }
-          -- Validate the thread state transition:
-          let threadStateTransition =
-                ThreadStateTransition
-                  { maybePrevEvSpec = (.prevEvSpec) <$> maybeThreadStateSpanStart
-                  , maybeStartTimeUnixNano = (.startTimeUnixNano) <$> maybeThreadStateSpanStart
-                  , maybeStartState = (.threadState) <$> maybeThreadStateSpanStart
-                  , evSpec = i.value.evSpec
-                  , endTimeUnixNano = timeUnixNano
-                  , endState = targetThreadState
-                  }
-          unless (isValidThreadStateTransition threadStateTransition) . liftIO $
-            warnf "Warning: Invalid thread state transition:\n\n  %s\n" $
-              show threadStateTransition
-
-          -- If the target thread state is "Finished"...
-          if targetThreadState == Finished
-            then do
-              -- ...immediately yield a zero-width span...
+  -- Transition the `ThreadStates` to the target thread state, and
+  -- end any current thread span and `yield` the resulting `ThreadStateSpan`.
+  --
+  -- __Warning__: This function is partial and only defined for events with a `thread` field.
+  transitionTo ::
+    (MonadIO m) =>
+    ThreadStates ->
+    WithStartTime Event ->
+    ThreadState ->
+    PlanT k (WithStartTime ThreadStateSpan) m ThreadStates
+  transitionTo st i targetThreadState
+    | thread <- i.value.evSpec.thread
+    , Just cap <- i.value.evCap
+    , Just timeUnixNano <- tryGetTimeUnixNano i = do
+        let
+          transitionTo' maybeThreadStateSpanStart = PlanTWriter $ do
+            -- End the current thread span, if any:
+            for_ maybeThreadStateSpanStart $ \ThreadStateSpanStart{..} ->
               yield . (<$ i) $
                 ThreadStateSpan
-                  { spanId = st.nextSpanId
-                  , thread = thread
-                  , threadState = targetThreadState
-                  , startTimeUnixNano = timeUnixNano
-                  , endTimeUnixNano = timeUnixNano
-                  , event = eventFromEventInfo i.value.evSpec
-                  , status = statusFromEventInfo i.value.evSpec
+                  { endTimeUnixNano = timeUnixNano
                   , ..
                   }
-              -- ...and delete the thread state from the thread state map.
-              pure (succ st.nextSpanId, Nothing)
-            else do
-              --- Otherwise, start a new thread span...
-              let threadSpanStart =
-                    ThreadStateSpanStart
-                      { startTimeUnixNano = timeUnixNano
-                      , spanId = st.nextSpanId
-                      , prevEvSpec = i.value.evSpec
-                      , event = eventFromEventInfo i.value.evSpec
-                      , status = statusFromEventInfo i.value.evSpec
-                      , threadState = targetThreadState
-                      , ..
-                      }
-              -- ...and update the thread state from the thread state map.
-              pure (succ st.nextSpanId, Just threadSpanStart)
-      (nextSpanId', threadStates') <- (.unPlanTWriter) $ M.alterF transitionTo' thread st.threadStates
-      pure st{threadStates = threadStates', nextSpanId = nextSpanId'}
-  | otherwise = pure st
+            -- Validate the thread state transition:
+            let threadStateTransition =
+                  ThreadStateTransition
+                    { maybePrevEvSpec = (.prevEvSpec) <$> maybeThreadStateSpanStart
+                    , maybeStartTimeUnixNano = (.startTimeUnixNano) <$> maybeThreadStateSpanStart
+                    , maybeStartState = (.threadState) <$> maybeThreadStateSpanStart
+                    , evSpec = i.value.evSpec
+                    , endTimeUnixNano = timeUnixNano
+                    , endState = targetThreadState
+                    }
+            unless (isValidThreadStateTransition threadStateTransition) . liftIO $
+              logWarning verbosityThreshold "processThreadStateSpans" . T.pack $
+                printf
+                  "Invalid thread state transition:\n\n  %s"
+                  (show threadStateTransition)
+
+            -- If the target thread state is "Finished"...
+            if targetThreadState == Finished
+              then do
+                -- ...immediately yield a zero-width span...
+                yield . (<$ i) $
+                  ThreadStateSpan
+                    { spanId = st.nextSpanId
+                    , thread = thread
+                    , threadState = targetThreadState
+                    , startTimeUnixNano = timeUnixNano
+                    , endTimeUnixNano = timeUnixNano
+                    , event = eventFromEventInfo i.value.evSpec
+                    , status = statusFromEventInfo i.value.evSpec
+                    , ..
+                    }
+                -- ...and delete the thread state from the thread state map.
+                pure (succ st.nextSpanId, Nothing)
+              else do
+                --- Otherwise, start a new thread span...
+                let threadSpanStart =
+                      ThreadStateSpanStart
+                        { startTimeUnixNano = timeUnixNano
+                        , spanId = st.nextSpanId
+                        , prevEvSpec = i.value.evSpec
+                        , event = eventFromEventInfo i.value.evSpec
+                        , status = statusFromEventInfo i.value.evSpec
+                        , threadState = targetThreadState
+                        , ..
+                        }
+                -- ...and update the thread state from the thread state map.
+                pure (succ st.nextSpanId, Just threadSpanStart)
+        (nextSpanId', threadStates') <- (.unPlanTWriter) $ M.alterF transitionTo' thread st.threadStates
+        pure st{threadStates = threadStates', nextSpanId = nextSpanId'}
+    | otherwise = pure st
 
 {- |
 Internal helper. Create an attribute that holds the threading event name.
@@ -1181,7 +1198,7 @@ instance Show ThreadStateTransition where
   show :: ThreadStateTransition -> String
   show ThreadStateTransition{..} =
     printf
-      "[ %s ]-- %s --[ %s ]--> %s\n"
+      "[ %s ]-- %s --[ %s ]--> %s"
       (maybe "Nothing" (("Just " <>) . showLabel) maybePrevEvSpec)
       (show (maybeStartTimeUnixNano, maybeStartState))
       (showLabel evSpec)
@@ -1361,9 +1378,10 @@ isHeapProfBreakdownInfoTable _ = False
 
 processHeapProfSampleData ::
   (MonadIO m) =>
+  Verbosity ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) (Metric Word64)
-processHeapProfSampleData maybeHeapProfBreakdown =
+processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
@@ -1409,22 +1427,35 @@ processHeapProfSampleData maybeHeapProfBreakdown =
       E.HeapProfSampleEnd{..} ->
         case L.uncons heapProfSampleEraStack of
           Nothing -> do
-            liftIO $
-              warnEmptyHeapProfSampleEraStack heapProfSampleEra
+            liftIO . logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+              printf
+                "Eventlog closed era %d, but there is no current era."
+                heapProfSampleEra
             go st
           Just (currentEra, heapProfSampleEraStack') -> do
-            unless (currentEra == heapProfSampleEra) . liftIO $
-              warnMismatchedHeapProfSampleEraStack heapProfSampleEra currentEra
+            unless (currentEra == heapProfSampleEra) $
+              liftIO . logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+                printf
+                  "Eventlog closed era %d, but the current era is era %d."
+                  heapProfSampleEra
+                  currentEra
             go st{heapProfSampleEraStack = heapProfSampleEraStack'}
       -- Announces a heap profile sample.
       E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
         | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
-            liftIO warnMissingHeapProfBreakdown
+            liftIO . logWarning verbosityThreshold "processHeapProfSampleData" $
+              "Cannot infer heap profile breakdown.\n\
+              \         If your binary was compiled with a GHC version prior to 9.14,\n\
+              \         you must also pass the heap profile type to this executable.\n\
+              \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
-            liftIO $ warnUnsupportedHeapProfBreakdown HeapProfBreakdownBiography
+            liftIO . logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+              printf
+                "Unsupported heap profile breakdown %s"
+                (heapProfBreakdownShow HeapProfBreakdownBiography)
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
@@ -1492,30 +1523,6 @@ findHeapProfBreakdown = listToMaybe . mapMaybe parseHeapProfBreakdown
           . T.drop 2
           $ arg
     | otherwise = Nothing
-
-warnEmptyHeapProfSampleEraStack :: Word64 -> IO ()
-warnEmptyHeapProfSampleEraStack =
-  warnf
-    "Warning: Eventlog closed era %d, but there is no current era."
-
-warnMismatchedHeapProfSampleEraStack :: Word64 -> Word64 -> IO ()
-warnMismatchedHeapProfSampleEraStack =
-  warnf
-    "Warning: Eventlog closed era %d, but the current era is era %d."
-
-warnUnsupportedHeapProfBreakdown :: HeapProfBreakdown -> IO ()
-warnUnsupportedHeapProfBreakdown heapProfBreakdown =
-  warnf
-    "Warning: Unsupported heap profile breakdown %s"
-    (heapProfBreakdownShow heapProfBreakdown)
-
-warnMissingHeapProfBreakdown :: IO ()
-warnMissingHeapProfBreakdown =
-  warnf
-    "Warning: Cannot infer heap profile breakdown.\n\
-    \         If your binary was compiled with a GHC version prior to 9.14,\n\
-    \         you must also pass the heap profile type to this executable.\n\
-    \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
 
 -------------------------------------------------------------------------------
 -- Event stream sorting
@@ -1686,6 +1693,31 @@ delimit = construct . go
         go mm
 
 -------------------------------------------------------------------------------
+-- Verbosity
+-------------------------------------------------------------------------------
+
+data Verbosity
+  = VerbosityWarning
+  | VerbosityError
+  | VerbosityQuiet
+  deriving (Eq, Ord)
+
+showVerbosity :: Verbosity -> Text
+showVerbosity = \case
+  VerbosityWarning -> "Warning"
+  VerbosityError -> "Error"
+  VerbosityQuiet -> "Quiet"
+
+verbosityQuiet :: Verbosity
+verbosityQuiet = VerbosityQuiet
+
+verbosityError :: Verbosity
+verbosityError = VerbosityError
+
+verbosityWarning :: Verbosity
+verbosityWarning = VerbosityWarning
+
+-------------------------------------------------------------------------------
 -- Internal Helpers
 -------------------------------------------------------------------------------
 
@@ -1696,10 +1728,31 @@ mappingPlan :: (a -> b) -> PlanT (Is a) b m a
 mappingPlan f = forever (await >>= \a -> yield (f a))
 
 {- |
-Internal helper. Variant of `IO.printf` to print warnings. Combines `IO.hPrintf` with `IO.stderr`.
+Internal helper. Denotes the source of a log message.
 -}
-warnf :: (IO.HPrintfType r) => String -> r
-warnf = IO.hPrintf IO.stderr
+type LogSource = Text
+
+{- |
+Internal helper. Log messages to `IO.stderr`.
+Only prints a message if its verbosity level is above the verbosity threshold.
+-}
+logMessage :: Verbosity -> Verbosity -> LogSource -> Text -> IO ()
+logMessage verbosityLevel verbosityThreshold logSource msg
+  | verbosityLevel >= verbosityThreshold =
+      TIO.hPutStrLn IO.stderr . mconcat $ [logSource, ": ", showVerbosity verbosityLevel, ": ", msg]
+  | otherwise = pure ()
+
+{- |
+Internal helper. Log errors to `IO.stderr`.
+-}
+logError :: Verbosity -> LogSource -> Text -> IO ()
+logError = logMessage VerbosityError
+
+{- |
+Internal helper. Log warnings to `IO.stderr`.
+-}
+logWarning :: Verbosity -> LogSource -> Text -> IO ()
+logWarning = logMessage VerbosityWarning
 
 {- |
 Internal helper. Combines the planning `Functor` @`PlanT` k o m@ with the writer `Functor` @(w,)@.
