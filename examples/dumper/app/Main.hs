@@ -10,8 +10,10 @@ import Data.Machine.Type (MachineT, repeatedly)
 import Data.Void (Void)
 import Data.Word (Word64)
 import GHC.Eventlog.Live
+import GHC.Eventlog.Live.Machines (sortByBatchTick)
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event)
+import qualified GHC.RTS.Events as E
 import qualified Network.Socket as S
 import qualified Options.Applicative as O
 import System.IO (Handle)
@@ -25,12 +27,9 @@ import qualified Text.Regex.TDFA as RE
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  runWithEventlogSocket
-    batchInterval
-    Nothing
-    eventlogSocket
-    Nothing
-    $ printSink (RE.makeRegex <$> eventlogPattern)
+  runWithEventlogSocket batchInterval Nothing eventlogSocket Nothing $
+    sortByBatchTick E.evTime
+      ~> printSink (RE.makeRegex <$> eventlogPattern)
 
 -- | Filter entries and print them to standard output.
 printSink :: (Show a) => Maybe RE.Regex -> ProcessT IO a Void
