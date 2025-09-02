@@ -69,7 +69,8 @@ processThreadEvents verbosity =
     [ processCapabilityUsageSpans verbosity
         ~> fanout
           [ mapping (D.singleton . fromSpan . (.value))
-          , processCapabilityUsageMetrics ~> mapping (D.singleton . fromMetric "CapabilityUsage")
+          , processCapabilityUsageMetrics
+              ~> mapping (D.singleton . fromMetric "CapabilityUsage")
           ]
     , processThreadLabels
         ~> mapping (D.singleton . fromThreadLabel)
@@ -116,30 +117,37 @@ processHeapEvents verbosity maybeHeapProfBreakdown =
 --------------------------------------------------------------------------------
 -- Interpreting spans
 
-class IsSpan v where
+class FromSpan v where
   fromSpan :: v -> I.Line TimeSpec
 
 --------------------------------------------------------------------------------
 -- Interpret capability usage spans
 
-instance IsSpan CapabilityUsageSpan where
+instance FromSpan CapabilityUsageSpan where
   fromSpan :: CapabilityUsageSpan -> I.Line TimeSpec
   fromSpan i =
     I.Line "CapabilityUsageSpan" tagSet fieldSet timestamp
    where
-    capability = I.Key . T.pack . show $ i.cap
-    tagSet = M.singleton "capability" capability
+    toTag :: (Show a) => a -> I.Key
+    toTag = I.Key . T.pack . show
+    tagSet =
+      M.fromList
+        [ ("capability", toTag $ either (.cap) (.cap) i)
+        ]
     fieldSet =
       M.fromList
-        [ ("user", toField . prettyCapabilityUser $ i.capUser)
-        , ("category", toField . prettyCapabilityUserAsCategory . Just $ i.capUser)
+        [ ("duration", toField $ duration i)
+        , ("category", toField $ showCategory user)
+        , ("user", toField $ show user)
         ]
+     where
+      user = capabilityUser i
     timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
 
 --------------------------------------------------------------------------------
 -- Interpret thread state spans
 
-instance IsSpan ThreadStateSpan where
+instance FromSpan ThreadStateSpan where
   fromSpan :: ThreadStateSpan -> I.Line TimeSpec
   fromSpan i =
     I.Line "ThreadStateSpan" tagSet fieldSet timestamp
