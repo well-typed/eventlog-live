@@ -74,7 +74,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(CapabilityUsage_nanoseconds_total{category!=\"IDLE\"}[$__interval]))",
+          "expr": "sum by(category) (avg_over_time(CapabilityUsage_nanoseconds_total{category!=\"Idle\"}[$__interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -88,7 +88,7 @@
         {
           "id": "calculateField",
           "options": {
-            "alias": "Total",
+            "alias": "",
             "mode": "reduceRow",
             "reduce": {
               "reducer": "sum"
@@ -103,7 +103,7 @@
               "left": {
                 "matcher": {
                   "id": "byName",
-                  "options": "MUTATOR"
+                  "options": "Mutator"
                 }
               },
               "operator": "/",
@@ -304,5 +304,5 @@
   "timezone": "browser",
   "title": "Eventlog Threads",
   "uid": "829714bd-4958-480b-8112-570534d481a8",
-  "version": 2
+  "version": 1
 }
