@@ -45,7 +45,7 @@ module GHC.Eventlog.Live.Machines (
   CapabilityUsageSpan,
   CapabilityUser (..),
   capabilityUser,
-  showCategory,
+  showCapabilityUserCategory,
   processCapabilityUsageSpans,
   processCapabilityUsageSpans',
 
@@ -65,9 +65,10 @@ module GHC.Eventlog.Live.Machines (
 
   -- ** Thread State Spans
   ThreadState (..),
-  prettyThreadState,
+  showThreadStateCategory,
+  threadStateStatus,
+  threadStateCap,
   ThreadStateSpan (..),
-  metricFromThreadStateSpan,
   processThreadStateSpans,
 
   -- ** Heap events
@@ -144,7 +145,7 @@ import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, Process
 import Data.Machine.Fanout (fanout)
 import Data.Machine.Mealy (unfoldMealy)
 import Data.Machine.Process (Automaton (..))
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isNothing, listToMaybe, mapMaybe)
 import Data.Ord (comparing)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
@@ -344,7 +345,7 @@ processCapabilityUsageMetrics =
             { value = duration j.value
             , maybeTimeUnixNano = Just j.value.startTimeUnixNano
             , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-            , attr = ["cap" ~= cap, "category" ~= showCategory user, "user" ~= user]
+            , attr = ["cap" ~= cap, "category" ~= showCapabilityUserCategory user, "user" ~= user]
             }
         go (Just j.value)
 
@@ -367,8 +368,8 @@ capabilityUser = either (const GC) (Mutator . (.thread))
 {- |
 Show the category of a `CapabilityUser` as either @"GC"@ or @"Mutator"@.
 -}
-showCategory :: CapabilityUser -> Text
-showCategory = \case
+showCapabilityUserCategory :: CapabilityUser -> Text
+showCapabilityUserCategory = \case
   GC{} -> "GC"
   Mutator{} -> "Mutator"
 
@@ -770,16 +771,37 @@ processThreadLabels = repeatedly go
 The execution states of a mutator thread.
 -}
 data ThreadState
-  = Running
-  | Blocked
+  = Running {cap :: !Int}
+  | Blocked {status :: !ThreadStopStatus}
   | Finished
-  deriving (Eq, Show)
+  deriving (Show)
 
 {- |
 Pretty-print a thread state as "Running", "Blocked", or "Finished".
 -}
-prettyThreadState :: ThreadState -> Text
-prettyThreadState = T.pack . show
+showThreadStateCategory :: ThreadState -> Text
+showThreadStateCategory = \case
+  Running{} -> "Running"
+  Blocked{} -> "Blocked"
+  Finished{} -> "Finished"
+
+{- |
+Get the `ThreadState` `status`, if the `ThreadState` is `Blocked`.
+-}
+threadStateStatus :: ThreadState -> Maybe ThreadStopStatus
+threadStateStatus = \case
+  Running{} -> Nothing
+  Blocked{status} -> Just status
+  Finished{} -> Nothing
+
+{- |
+Get the `ThreadState` `cap`, if the `ThreadState` is `Running`.
+-}
+threadStateCap :: ThreadState -> Maybe Int
+threadStateCap = \case
+  Running{cap} -> Just cap
+  Blocked{} -> Nothing
+  Finished{} -> Nothing
 
 {- |
 A span representing the state of a mutator thread.
@@ -790,256 +812,160 @@ data ThreadStateSpan
   , threadState :: !ThreadState
   , startTimeUnixNano :: !Timestamp
   , endTimeUnixNano :: !Timestamp
-  , cap :: !Int
-  , event :: !Text
-  , status :: !(Maybe Text)
-  }
-  deriving (Show)
-
-{-
-Internal helper. Partial `ThreadStateSpan` used in `ThreadStates`.
--}
-data ThreadStateSpanStart
-  = ThreadStateSpanStart
-  { startTimeUnixNano :: !Timestamp
-  , threadState :: !ThreadState
-  , prevEvSpec :: !EventInfo
-  , cap :: !Int
-  , event :: !Text
-  , status :: !(Maybe Text)
-  }
-  deriving (Show)
-
-{-
-Internal helper. State used by `processThreadStateSpans`.
--}
-newtype ThreadStates = ThreadStates
-  { threadStates :: HashMap ThreadId ThreadStateSpanStart
   }
   deriving (Show)
 
 {- |
-Convert a `ThreadStateSpan` to a `Metric`.
--}
-metricFromThreadStateSpan ::
-  (MonadIO m) =>
-  ProcessT m (WithStartTime ThreadStateSpan) (Metric Double)
-metricFromThreadStateSpan = repeatedly go
- where
-  go =
-    await >>= \i -> do
-      let ThreadStateSpan{..} = i.value
-      case threadState of
-        Running ->
-          yield
-            Metric
-              { value = 1.0
-              , maybeTimeUnixNano = Just startTimeUnixNano
-              , maybeStartTimeUnixNano = Just startTimeUnixNano
-              , attr = ["endTimeUnixNano" ~= endTimeUnixNano, "evCap" ~= cap, "event" ~= event, "status" ~= status, "thread" ~= thread]
-              }
-        Blocked ->
-          yield
-            Metric
-              { value = 0.0
-              , maybeTimeUnixNano = Just endTimeUnixNano
-              , maybeStartTimeUnixNano = Just startTimeUnixNano
-              , attr = ["endTimeUnixNano" ~= endTimeUnixNano, "evCap" ~= cap, "event" ~= event, "status" ~= status, "thread" ~= thread]
-              }
-        Finished ->
-          yield
-            Metric
-              { value = -1.0
-              , maybeTimeUnixNano = Just endTimeUnixNano
-              , maybeStartTimeUnixNano = Just startTimeUnixNano
-              , attr = ["endTimeUnixNano" ~= endTimeUnixNano, "evCap" ~= cap, "event" ~= event, "status" ~= status, "thread" ~= thread]
-              }
+This machine processes `E.RunThread` and `E.StopThread` events to produce
+`ThreadStateSpan` values that represent segments of time where a thread is
+running, blocked, or finished.
 
-{- |
-Process thread events and yield thread state spans.
+This processor uses the following finite-state automaton:
+
+@
+      ┌─(StopThread)─┐
+      │              ↓
+    ┌→[   Blocked    ]─┐
+    │                  │
+(StopThread)       (RunThread)
+    │                  │
+    └─[   Running    ]←┘
+      ↑              │
+      └─(RunThread)──┘
+@
+
+The transitions from @Blocked@ to @Blocked@, @Blocked@ to @Running@, and
+@Running@ to @Running@ yield a `ThreadStateSpan`. There are additional
+transitions (not pictured) from either state to the final `Finished` state
+with a `E.StopThread` event with the `ThreadFinished` status.
 -}
 processThreadStateSpans ::
   (MonadIO m) =>
   Verbosity ->
-  ProcessT m (WithStartTime Event) (WithStartTime ThreadStateSpan)
-processThreadStateSpans verbosityThreshold =
-  construct $ go ThreadStates{threadStates = mempty}
+  ProcessT m (WithStartTime Event) ThreadStateSpan
+processThreadStateSpans =
+  processThreadStateSpans' tryGetTimeUnixNano withStartTime'consume
+
+{- |
+Generalised version of `processThreadStateSpans` that can be adapted to work
+on arbitrary types using a getter and a lens.
+-}
+processThreadStateSpans' ::
+  forall m s t.
+  (MonadIO m) =>
+  (s -> Maybe Timestamp) ->
+  Lens s t Event ThreadStateSpan ->
+  Verbosity ->
+  ProcessT m s t
+processThreadStateSpans' timeUnixNano value verbosity =
+  liftRouter measure spawn
  where
-  go st =
-    await >>= \i -> case i.value.evSpec of
-      -- Marks the creation of a Haskell thread.
-      E.CreateThread{} ->
-        go =<< transitionTo st i Blocked
-      -- The indicated thread has started running.
-      E.RunThread{} ->
-        go =<< transitionTo st i Running
-      -- The indicated thread has stopped running,
-      -- for the reason given by the status field.
-      E.StopThread{status} -> case status of
-        ThreadFinished ->
-          go =<< transitionTo st i Finished
-        _otherwise ->
-          go =<< transitionTo st i Blocked
-      -- The indicated thread has been migrated to a new capability.
-      E.MigrateThread{} ->
-        go =<< transitionTo st i Blocked
-      _otherwise -> go st
+  getEventTime i = (i ^. value).evTime
+  getEventInfo i = (i ^. value).evSpec
+  getEventCap i = (i ^. value).evCap
 
-  -- Transition the `ThreadStates` to the target thread state, and
-  -- end any current thread span and `yield` the resulting `ThreadStateSpan`.
-  --
-  -- __Warning__: This function is partial and only defined for events with a `thread` field.
-  transitionTo ::
-    (MonadIO m) =>
-    ThreadStates ->
-    WithStartTime Event ->
-    ThreadState ->
-    PlanT k (WithStartTime ThreadStateSpan) m ThreadStates
-  transitionTo st i targetThreadState
-    | thread <- i.value.evSpec.thread
-    , Just cap <- i.value.evCap
-    , Just timeUnixNano <- tryGetTimeUnixNano i = do
-        let
-          transitionTo' maybeThreadStateSpanStart = do
-            -- End the current thread span, if any:
-            for_ maybeThreadStateSpanStart $ \ThreadStateSpanStart{..} ->
-              yield . (<$ i) $
-                ThreadStateSpan
-                  { endTimeUnixNano = timeUnixNano
-                  , ..
-                  }
-            -- Validate the thread state transition:
-            let threadStateTransition =
-                  ThreadStateTransition
-                    { maybePrevEvSpec = (.prevEvSpec) <$> maybeThreadStateSpanStart
-                    , maybeStartTimeUnixNano = (.startTimeUnixNano) <$> maybeThreadStateSpanStart
-                    , maybeStartState = (.threadState) <$> maybeThreadStateSpanStart
-                    , evSpec = i.value.evSpec
-                    , endTimeUnixNano = timeUnixNano
-                    , endState = targetThreadState
-                    }
-            unless (isValidThreadStateTransition threadStateTransition) . liftIO $
-              logWarning verbosityThreshold "processThreadStateSpans" . T.pack $
-                printf
-                  "Invalid thread state transition:\n\n  %s"
-                  (show threadStateTransition)
+  measure :: s -> Maybe ThreadId
+  measure i = case getEventInfo i of
+    E.RunThread{thread} -> Just thread
+    E.StopThread{thread} -> Just thread
+    _otherwise -> Nothing
 
-            -- If the target thread state is "Finished"...
-            if targetThreadState == Finished
-              then do
-                -- ...immediately yield a zero-width span...
-                yield . (<$ i) $
-                  ThreadStateSpan
-                    { thread = thread
-                    , threadState = targetThreadState
-                    , startTimeUnixNano = timeUnixNano
-                    , endTimeUnixNano = timeUnixNano
-                    , event = eventFromEventInfo i.value.evSpec
-                    , status = statusFromEventInfo i.value.evSpec
-                    , ..
-                    }
-                -- ...and delete the thread state from the thread state map.
-                pure Nothing
-              else do
-                --- Otherwise, start a new thread span...
-                let threadSpanStart =
-                      ThreadStateSpanStart
-                        { startTimeUnixNano = timeUnixNano
-                        , prevEvSpec = i.value.evSpec
-                        , event = eventFromEventInfo i.value.evSpec
-                        , status = statusFromEventInfo i.value.evSpec
-                        , threadState = targetThreadState
-                        , ..
-                        }
-                -- ...and update the thread state from the thread state map.
-                pure $ Just threadSpanStart
-        threadStates' <- M.alterF transitionTo' thread st.threadStates
-        pure st{threadStates = threadStates'}
-    | otherwise = pure st
-
-{- |
-Internal helper. Create an attribute that holds the threading event name.
-
-__Warning:__
-This works by truncating the `String` produced by `show`.
-Hence, it will work for _any_ `EventInfo`, not just for threading events.
--}
-eventFromEventInfo :: EventInfo -> Text
-eventFromEventInfo = T.pack . takeWhile (not . isSpace) . show
-
-{- |
-Internal helper. Create an attribute that holds the `ThreadStopStatus` or null.
--}
-statusFromEventInfo :: EventInfo -> Maybe Text
-statusFromEventInfo = \case
-  E.StopThread{status} -> Just . T.pack . show $ status
-  _otherwise -> Nothing
-
--------------------------------------------------------------------------------
--- Thread State Transition Validation
-
-{- |
-Type that represents transitions between thread states.
-For validation purposes only.
--}
-data ThreadStateTransition
-  = ThreadStateTransition
-  { maybePrevEvSpec :: !(Maybe EventInfo)
-  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
-  , maybeStartState :: !(Maybe ThreadState)
-  , evSpec :: !EventInfo
-  , endTimeUnixNano :: !Timestamp
-  , endState :: !ThreadState
-  }
-
-instance Show ThreadStateTransition where
-  show :: ThreadStateTransition -> String
-  show ThreadStateTransition{..} =
-    printf
-      "[ %s ]-- %s --[ %s ]--> %s"
-      (maybe "Nothing" (("Just " <>) . showLabel) maybePrevEvSpec)
-      (show (maybeStartTimeUnixNano, maybeStartState))
-      (showLabel evSpec)
-      (show (endTimeUnixNano, endState))
+  spawn :: ThreadId -> ProcessT m s t
+  spawn thread = construct $ go Nothing
    where
-    showLabel :: EventInfo -> String
-    showLabel E.StopThread{..} = printf "StopThread{%s}" (show status)
-    showLabel evSpec = takeWhile (not . isSpace) . show $ evSpec
-
-{- |
-Validate a thread state transition. Validation check that:
-
-* The first event precedes the second event.
-* The transition follows the model.
--}
-isValidThreadStateTransition :: ThreadStateTransition -> Bool
-isValidThreadStateTransition ThreadStateTransition{..} =
-  isValidState maybeStartState evSpec endState && isValidTime maybeStartTimeUnixNano endTimeUnixNano
- where
-  isValidState :: Maybe ThreadState -> EventInfo -> ThreadState -> Bool
-  isValidState Nothing E.CreateThread{} Blocked = True
-  isValidState (Just Blocked) E.RunThread{} Running = True
-  isValidState (Just Running) E.StopThread{status} Finished = isThreadFinished status
-  isValidState (Just Running) E.StopThread{status} Blocked = not (isThreadFinished status)
-  isValidState (Just Blocked) E.MigrateThread{} Blocked = True
-  -- These ones are weird, but observed in practice:
-  isValidState (Just Finished) E.RunThread{} Running = True
-  isValidState (Just Running) E.RunThread{} Running = True
-  isValidState (Just Blocked) E.CreateThread{} Blocked = True
-  isValidState (Just Blocked) E.StopThread{status} Finished = isThreadFinished status
-  isValidState (Just Blocked) E.StopThread{status} Blocked = not (isThreadFinished status)
-  -- These ones occur whenever an initial segment of the eventlog is dropped:
-  isValidState Nothing _ _ = True
-  isValidState _ _ _ = False
-
-  isValidTime :: Maybe Timestamp -> Timestamp -> Bool
-  isValidTime maybeStartTime endTime
-    | Just startTime <- maybeStartTime = startTime <= endTime
-    | otherwise = True
-
-  isThreadFinished :: ThreadStopStatus -> Bool
-  isThreadFinished ThreadFinished = True
-  isThreadFinished _ = False
+    go :: Maybe s -> PlanT (Is s) t m Void
+    go mi =
+      await >>= \case
+        j
+          -- If the previous event was a `E.StopThread` event, and...
+          | Just E.StopThread{status} <- getEventInfo <$> mi
+          , --- ...it has the `ThreadFinished` status, then...
+            isThreadFinished status ->
+              -- ...ignore the current event.
+              go mi
+          --
+          -- If the current event is a `E.RunThread` event, and...
+          | E.RunThread{} <- getEventInfo j
+          , -- ...the previous event was a `E.StopThread` event, then...
+            Just E.StopThread{status} <- getEventInfo <$> mi
+          , -- ...gather the end time of the previous event, and...
+            Just startTimeUnixNano <- timeUnixNano =<< mi
+          , -- ...gather the start time of the current event, and...
+            Just endTimeUnixNano <- timeUnixNano j -> do
+              -- ...yield a thread state span, and...
+              yield . flip (set value) j $
+                ThreadStateSpan{threadState = Blocked status, ..}
+              go (Just j)
+          --
+          -- If the current event is a `E.RunThread` event, and...
+          | E.RunThread{} <- getEventInfo j
+          , -- ...the previous event was a `E.RunThread` event, then...
+            Just E.RunThread{} <- getEventInfo <$> mi -> do
+              -- ...keep the oldest event.
+              go (Just $ maybe j (minBy getEventTime j) mi)
+          --
+          -- If the current event is a `E.RunThread` event, and...
+          | E.RunThread{} <- getEventInfo j
+          , -- ...there is no previous event, then...
+            isNothing mi ->
+              -- ...keep the current event.
+              --
+              -- The reason for the additional `isNothing` test is because,
+              -- otherwise, this case might silently swallow any `E.StopThread`
+              -- events for which `timeUnixNano` gives `Nothing`.
+              -- By excluding these, they are forwarded to the catch-all case.
+              go (Just j)
+          --
+          -- If the current event is a `E.StopThread` event, and...
+          | E.StopThread{} <- getEventInfo j
+          , -- ...the previous event was a `E.StopThread` event, then...
+            Just E.StopThread{status} <- getEventInfo <$> mi
+          , -- ...gather the end time of the previous event, and...
+            Just startTimeUnixNano <- timeUnixNano =<< mi
+          , -- ...gather the start time of the current event, and...
+            Just endTimeUnixNano <- timeUnixNano j -> do
+              -- ...yield a thread state span, and...
+              yield . flip (set value) j $
+                ThreadStateSpan{threadState = Blocked status, ..}
+              -- ...keep the current event.
+              --
+              -- This causes us to adopt every `E.StopThread` event, until
+              -- we hit a `E.StopThread` event with the `ThreadFinished`, at
+              -- which point the first clause will cause us to stick with it.
+              go (Just j)
+          --
+          -- If the current event is a `E.StopThread` event, and...
+          | E.StopThread{} <- getEventInfo j
+          , -- ...the previous event was a `E.RunThread` event, then...
+            Just E.RunThread{} <- getEventInfo <$> mi
+          , -- ...gather the capability of the `E.RunThread` event, and...
+            Just cap <- getEventCap =<< mi
+          , -- ...gather the end time of the previous event, and...
+            Just startTimeUnixNano <- timeUnixNano =<< mi
+          , -- ...gather the start time of the current event, and...
+            Just endTimeUnixNano <- timeUnixNano j -> do
+              -- ...yield a thread state span, and...
+              yield . flip (set value) j $
+                ThreadStateSpan{threadState = Running cap, ..}
+              -- ...keep the current event.
+              go (Just j)
+          --
+          -- If the current event is any other event, then...
+          | otherwise -> do
+              -- ...emit an error, and...
+              liftIO . logError verbosity "processThreadStateSpans" . T.pack $
+                printf
+                  "Thread %d: Unexpected event %s"
+                  thread
+                  (showEventInfo (getEventInfo j))
+              --
+              -- This case may trigger for any event that isn't `E.RunThread`
+              -- or `E.StopThread` and for any `E.StopThread` event that comes
+              -- before the first `E.RunThread` event. It may also trigger for
+              -- any event for which `timeUnixNano` returns `Nothing`.
+              --
+              -- ...ignore it.
+              go mi
 
 -------------------------------------------------------------------------------
 -- Heap events
@@ -1921,6 +1847,7 @@ Internal helper. Determine the duration of a span.
 {-# SPECIALIZE duration :: CapabilityUsageSpan -> Timestamp #-}
 {-# SPECIALIZE duration :: GCSpan -> Timestamp #-}
 {-# SPECIALIZE duration :: MutatorSpan -> Timestamp #-}
+{-# SPECIALIZE duration :: ThreadStateSpan -> Timestamp #-}
 duration :: (IsSpan s) => s -> Timestamp
 duration s = if s.startTimeUnixNano < s.endTimeUnixNano then s.endTimeUnixNano - s.startTimeUnixNano else 0
 
