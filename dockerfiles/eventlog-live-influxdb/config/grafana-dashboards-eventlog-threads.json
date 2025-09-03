@@ -112,7 +112,7 @@
             {
               "key": "category::tag",
               "operator": "!=",
-              "value": "IDLE"
+              "value": "Idle"
             }
           ]
         }
@@ -143,7 +143,7 @@
         {
           "id": "calculateField",
           "options": {
-            "alias": "TOTAL",
+            "alias": "Total",
             "binary": {
               "left": {
                 "matcher": {
@@ -180,14 +180,14 @@
               "left": {
                 "matcher": {
                   "id": "byName",
-                  "options": "MUTATOR"
+                  "options": "Mutator"
                 }
               },
               "operator": "/",
               "right": {
                 "matcher": {
                   "id": "byName",
-                  "options": "TOTAL"
+                  "options": "Total"
                 }
               }
             },
