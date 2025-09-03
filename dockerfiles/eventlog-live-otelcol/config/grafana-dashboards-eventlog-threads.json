@@ -23,8 +23,8 @@
   "panels": [
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
       },
       "fieldConfig": {
         "defaults": {
@@ -51,11 +51,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 0
       },
-      "id": 3,
+      "id": 6,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -72,26 +72,103 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(CapabilityUsage_nanoseconds_total{category!=\"Idle\"}[$__interval]))",
-          "fullMetaSearch": false,
-          "includeNullMetadata": true,
-          "legendFormat": "__auto",
-          "range": true,
+          "alias": "$tag_category",
+          "groupBy": [
+            {
+              "params": ["50ms"],
+              "type": "time"
+            },
+            {
+              "params": ["category::tag"],
+              "type": "tag"
+            },
+            {
+              "params": ["0"],
+              "type": "fill"
+            }
+          ],
+          "measurement": "CapabilityUsage",
+          "orderByTime": "ASC",
+          "policy": "default",
           "refId": "A",
-          "useBackend": false
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["CapabilityUsage"],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              },
+              {
+                "params": [20],
+                "type": "moving_average"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "category::tag",
+              "operator": "!=",
+              "value": "Idle"
+            }
+          ]
         }
       ],
       "title": "Productivity",
       "transformations": [
         {
+          "id": "concatenate",
+          "options": {
+            "frameNameLabel": "frame",
+            "frameNameMode": "field"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "IDLE · Time": true,
+              "MUTATOR · Time": true
+            },
+            "includeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "GC · Time": "Time"
+            }
+          }
+        },
+        {
           "id": "calculateField",
           "options": {
-            "alias": "",
+            "alias": "Total",
+            "binary": {
+              "left": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "MUTATOR"
+                }
+              },
+              "operator": "/",
+              "right": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "IDLE"
+                }
+              }
+            },
             "mode": "reduceRow",
             "reduce": {
+              "include": [],
               "reducer": "sum"
+            },
+            "window": {
+              "reducer": "mean",
+              "windowAlignment": "trailing",
+              "windowSize": 0.1,
+              "windowSizeMode": "percentage"
             }
           }
         },
@@ -126,8 +203,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
       },
       "fieldConfig": {
         "defaults": {
@@ -183,11 +260,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 18,
-        "x": 6,
+        "w": 20,
+        "x": 4,
         "y": 0
       },
-      "id": 2,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [],
@@ -204,20 +281,43 @@
       "pluginVersion": "12.1.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(CapabilityUsage_nanoseconds_total[$__interval]))",
-          "fullMetaSearch": false,
-          "includeNullMetadata": true,
-          "instant": false,
-          "legendFormat": "__auto",
-          "range": true,
+          "alias": "$tag_category",
+          "groupBy": [
+            {
+              "params": ["50ms"],
+              "type": "time"
+            },
+            {
+              "params": ["category::tag"],
+              "type": "tag"
+            },
+            {
+              "params": ["0"],
+              "type": "fill"
+            }
+          ],
+          "measurement": "CapabilityUsage",
+          "orderByTime": "ASC",
+          "policy": "default",
           "refId": "A",
-          "useBackend": false
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["CapabilityUsage"],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              },
+              {
+                "params": [20],
+                "type": "moving_average"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "title": "Productivity",
@@ -225,8 +325,218 @@
     },
     {
       "datasource": {
-        "type": "jaeger",
-        "uid": "PC9A941E8F2E49454"
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 1,
+            "lineWidth": 0,
+            "spanNulls": true
+          },
+          "mappings": [
+            {
+              "options": {
+                "GC": {
+                  "color": "transparent",
+                  "index": 0
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "never",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "alias": "$tag_capability",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "groupBy": [
+            {
+              "params": ["capability::tag"],
+              "type": "tag"
+            }
+          ],
+          "hide": false,
+          "measurement": "CapabilityUsageSpan",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["user"],
+                "type": "field"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Activity by Capacity",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 1000,
+            "lineWidth": 0,
+            "spanNulls": true
+          },
+          "mappings": [
+            {
+              "options": {
+                "Blocked": {
+                  "color": "blue",
+                  "index": 1
+                },
+                "Finished": {
+                  "color": "transparent",
+                  "index": 2
+                },
+                "Running": {
+                  "color": "green",
+                  "index": 0
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 18,
+        "x": 0,
+        "y": 17
+      },
+      "id": 2,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "never",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "alias": "$tag_thread",
+          "groupBy": [
+            {
+              "params": ["thread::tag"],
+              "type": "tag"
+            }
+          ],
+          "measurement": "ThreadStateSpan",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT \"threadState\" FROM \"ThreadState\" WHERE $timeFilter GROUP BY \"threadId\"::tag",
+          "rawQuery": false,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["category"],
+                "type": "field"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Activity by Thread",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
       },
       "fieldConfig": {
         "defaults": {
@@ -255,13 +565,26 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "thread"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 18,
-        "x": 6,
-        "y": 8
+        "h": 16,
+        "w": 6,
+        "x": 18,
+        "y": 17
       },
       "id": 4,
       "options": {
@@ -272,37 +595,185 @@
           "reducer": ["sum"],
           "show": false
         },
-        "showHeader": true
+        "showHeader": true,
+        "sortBy": []
       },
       "pluginVersion": "12.1.1",
       "targets": [
         {
-          "datasource": {
-            "type": "jaeger",
-            "uid": "PC9A941E8F2E49454"
-          },
-          "queryType": "search",
+          "groupBy": [
+            {
+              "params": ["thread::tag"],
+              "type": "tag"
+            }
+          ],
+          "measurement": "ThreadLabel",
+          "orderByTime": "ASC",
+          "policy": "default",
           "refId": "A",
-          "service": "spectral-norm"
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": ["label"],
+                "type": "field"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
-      "title": "Traces",
+      "title": "ThreadLabel",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "ThreadLabel\\.label { thread: (\\d+) }",
+            "renamePattern": "$1"
+          }
+        },
+        {
+          "id": "concatenate",
+          "options": {
+            "frameNameLabel": "frame",
+            "frameNameMode": "drop"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "11",
+                "12",
+                "13",
+                "14",
+                "15",
+                "16",
+                "17",
+                "18",
+                "19",
+                "20",
+                "21",
+                "22",
+                "23",
+                "24",
+                "25",
+                "26",
+                "27",
+                "28",
+                "29",
+                "30",
+                "31",
+                "32",
+                "33",
+                "34",
+                "35",
+                "36",
+                "37",
+                "38",
+                "39",
+                "40",
+                "41",
+                "42",
+                "43",
+                "44",
+                "45",
+                "46",
+                "47",
+                "48",
+                "49",
+                "50",
+                "51",
+                "52",
+                "53",
+                "54",
+                "55",
+                "56",
+                "57",
+                "58",
+                "59",
+                "60",
+                "61",
+                "62",
+                "63",
+                "64",
+                "65",
+                "66",
+                "67",
+                "68",
+                "69",
+                "70",
+                "71",
+                "72",
+                "73",
+                "74",
+                "75",
+                "76",
+                "77",
+                "78",
+                "79",
+                "80",
+                "81",
+                "82",
+                "83",
+                "84",
+                "85",
+                "86",
+                "87",
+                "88",
+                "89",
+                "90",
+                "91",
+                "92",
+                "93",
+                "94",
+                "95",
+                "Time"
+              ]
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "labelsToFields": true,
+            "reducers": ["lastNotNull"]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Field": true
+            },
+            "includeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Field": "",
+              "Last *": "label",
+              "thread": ""
+            }
+          }
+        }
+      ],
       "type": "table"
     }
   ],
   "preload": false,
+  "refresh": "",
   "schemaVersion": 41,
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "2025-08-28T13:31:26.650Z",
-    "to": "2025-08-28T13:37:19.577Z"
+    "from": "now-5m",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Eventlog Threads",
-  "uid": "829714bd-4958-480b-8112-570534d481a8",
+  "uid": "aa8c5f9f-b641-493d-bbe2-31e1b4ea71ed",
   "version": 1
 }
