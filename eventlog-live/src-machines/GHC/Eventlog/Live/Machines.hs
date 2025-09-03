@@ -732,11 +732,20 @@ processMutatorSpans' timeUnixNano value verbosity =
     is :: ThreadId -> Maybe ThreadId -> Bool
     is thread = (Just thread ==)
 
+{- |
+Internal helper.
+Check whether a `ThreadStopStatus` is equal to `ThreadFinished`.
+This is needed because `ThreadStopStatus` does not define an `Eq` instance.
+-}
 isThreadFinished :: ThreadStopStatus -> Bool
 isThreadFinished = \case
   ThreadFinished -> True
   _otherwise -> False
 
+{- |
+Internal helper.
+Show `EventInfo` in a condensed format suitable for logging.
+-}
 showEventInfo :: EventInfo -> String
 showEventInfo = \case
   E.RunThread{thread} -> printf "RunThread{%d}" thread
@@ -749,6 +758,9 @@ showEventInfo = \case
 -------------------------------------------------------------------------------
 -- Thread Labels
 
+{- |
+A `ThreadLabel` value
+-}
 data ThreadLabel
   = ThreadLabel
   { thread :: !ThreadId
@@ -756,6 +768,9 @@ data ThreadLabel
   , startTimeUnixNano :: !Timestamp
   }
 
+{- |
+This machine processes `E.ThreadLabel` events and yields `ThreadLabel` values.
+-}
 processThreadLabels :: Process (WithStartTime Event) ThreadLabel
 processThreadLabels = repeatedly go
  where

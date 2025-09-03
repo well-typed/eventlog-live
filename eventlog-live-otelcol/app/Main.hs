@@ -27,7 +27,7 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan (..), MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, Verbosity, WithStartTime (..))
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan, MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, Verbosity, WithStartTime (..))
 import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
@@ -131,11 +131,6 @@ processThreadEvents verbosity =
                 ~> ELM.batchByTick
             ]
       ]
-
--- isThreadEvent :: Tick (WithStartTime Event) -> Bool
--- isThreadEvent = \case
---   ELM.Item i -> ELM.isThreadEvent i.value.evSpec
---   ELM.Tick -> False
 
 --------------------------------------------------------------------------------
 -- processHeapEvents
@@ -326,9 +321,6 @@ asScopeMetrics :: [OM.ScopeMetrics -> OM.ScopeMetrics] -> Process [OM.Metric] OM
 asScopeMetrics mod = mapping $ \metrics ->
   messageWith ((OM.metrics .~ metrics) : mod)
 
-asSpan :: (IsSpan v) => Process v OT.Span
-asSpan = mapping toSpan
-
 asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
 asMetric mod = mapping $ toMetric mod
 
@@ -361,54 +353,61 @@ asNumberDataPoint = mapping toNumberDataPoint
 --------------------------------------------------------------------------------
 -- Interpret spans
 
-class IsSpan v where
-  toSpan :: v -> OT.Span
+class AsSpan v where
+  asSpan :: Process v OT.Span
+
+spanIdStream :: ELM.Stream ByteString
+spanIdStream = go 0 where go n = ELM.Cons (mkSpanId n) (go $ succ n)
+
+mkSpanId :: Word64 -> ByteString
+mkSpanId = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
 
 --------------------------------------------------------------------------------
 -- Interpret capability usage spans
 
-instance IsSpan CapabilityUsageSpan where
-  toSpan :: CapabilityUsageSpan -> OT.Span
-  toSpan CapabilityUsageSpan{..} =
-    messageWith
-      [ OT.traceId .~ traceIdFromCapability cap
-      , OT.spanId .~ spanIdFromWord64 spanId
-      , OT.name .~ ELM.prettyCapabilityUser capUser
-      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-      , OT.startTimeUnixNano .~ startTimeUnixNano
-      , OT.endTimeUnixNano .~ endTimeUnixNano
-      , OT.status
-          .~ messageWith
-            [ OT.code .~ OT.Status'STATUS_CODE_OK
-            ]
-      ]
+instance AsSpan CapabilityUsageSpan where
+  asSpan :: Process CapabilityUsageSpan OT.Span
+  asSpan = mapping toSpan ~> ELM.supplier spanIdStream
+   where
+    toSpan i spanId =
+      messageWith
+        [ OT.traceId .~ traceIdFromCapability i.cap
+        , OT.spanId .~ spanId
+        , OT.name .~ (T.pack . show . ELM.capabilityUser $ i)
+        , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+        , OT.startTimeUnixNano .~ i.startTimeUnixNano
+        , OT.endTimeUnixNano .~ i.endTimeUnixNano
+        , OT.status
+            .~ messageWith
+              [ OT.code .~ OT.Status'STATUS_CODE_OK
+              ]
+        ]
 
 traceIdFromCapability :: Int -> ByteString
-traceIdFromCapability cap =
+traceIdFromCapability i =
   BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.int64BE $
-    [0, fromIntegral cap]
+    [0, fromIntegral i]
 
 --------------------------------------------------------------------------------
 -- Interpret thread state spans
 
-instance IsSpan ThreadStateSpan where
-  toSpan :: ThreadStateSpan -> OT.Span
-  toSpan ThreadStateSpan{..} =
-    messageWith
-      [ OT.traceId .~ traceIdFromThreadId thread
-      , OT.spanId .~ spanIdFromWord64 spanId
-      , OT.name .~ ELM.prettyThreadState threadState
-      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-      , OT.startTimeUnixNano .~ startTimeUnixNano
-      , OT.endTimeUnixNano .~ endTimeUnixNano
-      , OT.status
-          .~ messageWith
-            [ OT.code .~ OT.Status'STATUS_CODE_OK
-            ]
-      ]
-
-spanIdFromWord64 :: Word64 -> ByteString
-spanIdFromWord64 = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
+instance AsSpan ThreadStateSpan where
+  asSpan :: Process ThreadStateSpan OT.Span
+  asSpan = mapping toSpan ~> ELM.supplier spanIdStream
+   where
+    toSpan ThreadStateSpan{..} spanId =
+      messageWith
+        [ OT.traceId .~ traceIdFromThreadId thread
+        , OT.spanId .~ spanId
+        , OT.name .~ ELM.prettyThreadState threadState
+        , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+        , OT.startTimeUnixNano .~ startTimeUnixNano
+        , OT.endTimeUnixNano .~ endTimeUnixNano
+        , OT.status
+            .~ messageWith
+              [ OT.code .~ OT.Status'STATUS_CODE_OK
+              ]
+        ]
 
 -- TODO: use a hash function
 -- TODO: prepend PID, if possible?
