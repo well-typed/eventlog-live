@@ -444,7 +444,7 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": 1000,
+            "insertNulls": 50,
             "lineWidth": 0,
             "spanNulls": true
           },
@@ -522,7 +522,7 @@
           "select": [
             [
               {
-                "params": ["label"],
+                "params": ["category"],
                 "type": "field"
               }
             ]
