@@ -399,7 +399,7 @@ instance AsSpan ThreadStateSpan where
       messageWith
         [ OT.traceId .~ traceIdFromThreadId thread
         , OT.spanId .~ spanId
-        , OT.name .~ ELM.prettyThreadState threadState
+        , OT.name .~ ELM.showThreadStateCategory threadState
         , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
         , OT.startTimeUnixNano .~ startTimeUnixNano
         , OT.endTimeUnixNano .~ endTimeUnixNano
