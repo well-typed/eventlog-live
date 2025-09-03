@@ -59,9 +59,6 @@ module GHC.Eventlog.Live.Machines (
   processMutatorSpans,
   processMutatorSpans',
 
-  -- ** Thread Events
-  isThreadEvent,
-
   -- ** Thread labels
   ThreadLabel (..),
   processThreadLabels,
@@ -303,21 +300,6 @@ supplier :: Stream s -> Process (s -> a) a
 supplier supply =
   auto $
     unfoldMealy (\(Cons x xs) f -> (f x, xs)) supply
-
--------------------------------------------------------------------------------
--- Thread events
--------------------------------------------------------------------------------
-
-isThreadEvent :: EventInfo -> Bool
-isThreadEvent = \case
-  E.CreateThread{} -> True
-  E.EndGC{} -> True
-  E.MigrateThread{} -> True
-  E.RunThread{} -> True
-  E.StartGC{} -> True
-  E.StopThread{} -> True
-  E.ThreadLabel{} -> True
-  _otherwise -> False
 
 -------------------------------------------------------------------------------
 -- Capability Usage
