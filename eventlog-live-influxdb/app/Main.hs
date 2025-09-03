@@ -13,7 +13,7 @@ import Data.Machine.Plan (await)
 import Data.Machine.Process (ProcessT, (~>))
 import Data.Machine.Type (repeatedly)
 import Data.Map.Strict qualified as M
-import Data.Maybe (mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -75,7 +75,7 @@ processThreadEvents verbosity =
     , processThreadLabels
         ~> mapping (D.singleton . fromThreadLabel)
     , processThreadStateSpans verbosity
-        ~> mapping (D.singleton . fromSpan . (.value))
+        ~> mapping (D.singleton . fromSpan)
     ]
 
 --------------------------------------------------------------------------------
@@ -120,6 +120,9 @@ processHeapEvents verbosity maybeHeapProfBreakdown =
 class FromSpan v where
   fromSpan :: v -> I.Line TimeSpec
 
+toTag :: (Show a) => a -> I.Key
+toTag = I.Key . T.pack . show
+
 --------------------------------------------------------------------------------
 -- Interpret capability usage spans
 
@@ -128,16 +131,14 @@ instance FromSpan CapabilityUsageSpan where
   fromSpan i =
     I.Line "CapabilityUsageSpan" tagSet fieldSet timestamp
    where
-    toTag :: (Show a) => a -> I.Key
-    toTag = I.Key . T.pack . show
     tagSet =
       M.fromList
-        [ ("capability", toTag $ either (.cap) (.cap) i)
+        [ ("capability", toTag i.cap)
         ]
     fieldSet =
       M.fromList
         [ ("duration", toField $ duration i)
-        , ("category", toField $ showCategory user)
+        , ("category", toField $ showCapabilityUserCategory user)
         , ("user", toField $ show user)
         ]
      where
@@ -152,9 +153,17 @@ instance FromSpan ThreadStateSpan where
   fromSpan i =
     I.Line "ThreadStateSpan" tagSet fieldSet timestamp
    where
-    thread = I.Key . T.pack . show $ i.thread
-    tagSet = M.singleton "thread" thread
-    fieldSet = M.singleton "label" (toField . prettyThreadState $ i.threadState)
+    tagSet =
+      M.fromList
+        [ ("thread", toTag i.thread)
+        ]
+    fieldSet =
+      M.fromList . catMaybes $
+        [ Just ("duration", toField $ duration i)
+        , Just ("category", toField $ showThreadStateCategory i.threadState)
+        , ("capability",) . toField <$> threadStateCap i.threadState
+        , ("status",) . toField . show <$> threadStateStatus i.threadState
+        ]
     timestamp = Just . fromNanoSecs . toInteger $ i.startTimeUnixNano
 
 --------------------------------------------------------------------------------
@@ -170,6 +179,10 @@ instance IsField String where
 instance IsField Text where
   toField :: Text -> I.Field 'I.NonNullable
   toField = I.FieldString
+
+instance IsField Int where
+  toField :: Int -> I.Field 'I.NonNullable
+  toField = I.FieldInt . fromIntegral
 
 instance IsField Double where
   toField :: Double -> I.Field 'I.NonNullable
