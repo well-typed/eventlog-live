@@ -133,6 +133,12 @@ processThreadEvents verbosity =
                 )
                 ~> ELM.batchByTick
             ]
+      , ELM.liftTick
+          ( ELM.processThreadStateSpans verbosity
+              ~> asSpan
+              ~> mapping (D.singleton . Right)
+          )
+          ~> ELM.batchByTick
       ]
 
 --------------------------------------------------------------------------------
@@ -382,7 +388,7 @@ instance AsSpan CapabilityUsageSpan where
     messageWith
       [ OT.traceId .~ traceIdFromCapability i.cap
       , OT.spanId .~ spanId
-      , OT.name .~ "CapabilityUsageSpan"
+      , OT.name .~ ELM.showCapabilityUserCategory user
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
@@ -390,7 +396,6 @@ instance AsSpan CapabilityUsageSpan where
           .~ mapMaybe
             toMaybeKeyValue
             [ "capability" ~= i.cap
-            , "category" ~= ELM.showCapabilityUserCategory user
             , "user" ~= user
             ]
       , OT.status
@@ -411,14 +416,20 @@ traceIdFromCapability i =
 
 instance AsSpan ThreadStateSpan where
   toSpan :: ThreadStateSpan -> ByteString -> OT.Span
-  toSpan ThreadStateSpan{..} spanId =
+  toSpan i spanId =
     messageWith
-      [ OT.traceId .~ traceIdFromThreadId thread
+      [ OT.traceId .~ traceIdFromThreadId i.thread
       , OT.spanId .~ spanId
-      , OT.name .~ "ThreadStateSpan" -- ELM.showThreadStateCategory threadState
+      , OT.name .~ ELM.showThreadStateCategory i.threadState
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-      , OT.startTimeUnixNano .~ startTimeUnixNano
-      , OT.endTimeUnixNano .~ endTimeUnixNano
+      , OT.startTimeUnixNano .~ i.startTimeUnixNano
+      , OT.endTimeUnixNano .~ i.endTimeUnixNano
+      , OT.attributes
+          .~ mapMaybe
+            toMaybeKeyValue
+            [ "capability" ~= ELM.threadStateCap i.threadState
+            , "status" ~= (show <$> ELM.threadStateStatus i.threadState)
+            ]
       , OT.status
           .~ messageWith
             [ OT.code .~ OT.Status'STATUS_CODE_OK
