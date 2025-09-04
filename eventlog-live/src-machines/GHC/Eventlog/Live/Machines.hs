@@ -120,9 +120,10 @@ module GHC.Eventlog.Live.Machines (
   duration,
 
   -- ** Attributes
+  Attr,
   AttrKey,
   AttrValue (..),
-  Attr,
+  (~=),
 ) where
 
 import Control.Exception (Exception, catch, throwIO)
