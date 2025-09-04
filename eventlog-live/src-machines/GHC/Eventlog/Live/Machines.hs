@@ -1561,6 +1561,8 @@ Constructs the following machine:
   [ a ] ──(if measure == ..)─( ProcessT m a b )─ [ b ]
     └─────(if measure == kN)─( ProcessT m a b )────┘
 @
+
+__Warning:__ The router does not currently garbage-collect terminated child processors.
 -}
 liftRouter ::
   forall m k a b.
