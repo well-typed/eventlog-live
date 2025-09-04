@@ -27,7 +27,7 @@ import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live (EventlogSocket, runWithEventlogSocket)
-import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan, MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, Verbosity, WithStartTime (..))
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan, MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, Verbosity, WithStartTime (..), (~=))
 import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
@@ -96,6 +96,9 @@ main = do
 
 displayExceptions :: (MonadIO m, Exception e) => ProcessT m e Void
 displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . displayException
+
+-- dumpBatch :: (MonadIO m, Show a) => ProcessT m [a] [a]
+-- dumpBatch = traversing (\as -> for_ as (liftIO . print) >> pure as)
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
@@ -355,6 +358,14 @@ asNumberDataPoint = mapping toNumberDataPoint
 
 class AsSpan v where
   asSpan :: Process v OT.Span
+  asSpan = mapping toSpan ~> ELM.supplier spanIdStream
+
+  toSpan ::
+    -- | The input value.
+    v ->
+    -- | A fresh span ID.
+    ByteString ->
+    OT.Span
 
 spanIdStream :: ELM.Stream ByteString
 spanIdStream = go 0 where go n = ELM.Cons (mkSpanId n) (go $ succ n)
@@ -366,22 +377,29 @@ mkSpanId = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
 -- Interpret capability usage spans
 
 instance AsSpan CapabilityUsageSpan where
-  asSpan :: Process CapabilityUsageSpan OT.Span
-  asSpan = mapping toSpan ~> ELM.supplier spanIdStream
+  toSpan :: CapabilityUsageSpan -> ByteString -> OT.Span
+  toSpan i spanId =
+    messageWith
+      [ OT.traceId .~ traceIdFromCapability i.cap
+      , OT.spanId .~ spanId
+      , OT.name .~ "CapabilityUsageSpan"
+      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+      , OT.startTimeUnixNano .~ i.startTimeUnixNano
+      , OT.endTimeUnixNano .~ i.endTimeUnixNano
+      , OT.attributes
+          .~ mapMaybe
+            toMaybeKeyValue
+            [ "capability" ~= i.cap
+            , "category" ~= ELM.showCapabilityUserCategory user
+            , "user" ~= user
+            ]
+      , OT.status
+          .~ messageWith
+            [ OT.code .~ OT.Status'STATUS_CODE_OK
+            ]
+      ]
    where
-    toSpan i spanId =
-      messageWith
-        [ OT.traceId .~ traceIdFromCapability i.cap
-        , OT.spanId .~ spanId
-        , OT.name .~ (T.pack . show . ELM.capabilityUser $ i)
-        , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-        , OT.startTimeUnixNano .~ i.startTimeUnixNano
-        , OT.endTimeUnixNano .~ i.endTimeUnixNano
-        , OT.status
-            .~ messageWith
-              [ OT.code .~ OT.Status'STATUS_CODE_OK
-              ]
-        ]
+    user = ELM.capabilityUser i
 
 traceIdFromCapability :: Int -> ByteString
 traceIdFromCapability i =
@@ -392,22 +410,20 @@ traceIdFromCapability i =
 -- Interpret thread state spans
 
 instance AsSpan ThreadStateSpan where
-  asSpan :: Process ThreadStateSpan OT.Span
-  asSpan = mapping toSpan ~> ELM.supplier spanIdStream
-   where
-    toSpan ThreadStateSpan{..} spanId =
-      messageWith
-        [ OT.traceId .~ traceIdFromThreadId thread
-        , OT.spanId .~ spanId
-        , OT.name .~ ELM.showThreadStateCategory threadState
-        , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-        , OT.startTimeUnixNano .~ startTimeUnixNano
-        , OT.endTimeUnixNano .~ endTimeUnixNano
-        , OT.status
-            .~ messageWith
-              [ OT.code .~ OT.Status'STATUS_CODE_OK
-              ]
-        ]
+  toSpan :: ThreadStateSpan -> ByteString -> OT.Span
+  toSpan ThreadStateSpan{..} spanId =
+    messageWith
+      [ OT.traceId .~ traceIdFromThreadId thread
+      , OT.spanId .~ spanId
+      , OT.name .~ "ThreadStateSpan" -- ELM.showThreadStateCategory threadState
+      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
+      , OT.startTimeUnixNano .~ startTimeUnixNano
+      , OT.endTimeUnixNano .~ endTimeUnixNano
+      , OT.status
+          .~ messageWith
+            [ OT.code .~ OT.Status'STATUS_CODE_OK
+            ]
+      ]
 
 -- TODO: use a hash function
 -- TODO: prepend PID, if possible?
