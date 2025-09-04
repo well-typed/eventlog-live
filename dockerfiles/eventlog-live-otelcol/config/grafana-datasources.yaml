@@ -8,3 +8,7 @@ datasources:
     type: jaeger
     access: proxy
     url: http://jaeger:16686
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
