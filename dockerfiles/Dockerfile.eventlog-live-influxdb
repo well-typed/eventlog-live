@@ -13,6 +13,7 @@ COPY --parents \
   "./eventlog-live-influxdb/app/Main.hs" \
   "./eventlog-live-influxdb/eventlog-live-influxdb.cabal" \
   "./eventlog-live-influxdb/LICENSE" \
+  "./eventlog-live/assets/eventlog-live-otelcol.png" \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
   "./eventlog-live/src/GHC/Eventlog/Live.hs" \

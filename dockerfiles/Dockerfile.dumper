@@ -14,6 +14,7 @@ ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
+  "./eventlog-live/assets/eventlog-live-otelcol.png" \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
   "./eventlog-live/src/GHC/Eventlog/Live.hs" \
