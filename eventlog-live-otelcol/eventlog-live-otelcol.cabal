@@ -48,10 +48,10 @@ common language
     TypeApplications
     TypeFamilies
 
-executable eventlog-live-otelcol
+library
   import:          language
-  main-is:         Main.hs
-  hs-source-dirs:  app
+  hs-source-dirs:  src
+  exposed-modules: GHC.Eventlog.Live.Otelcol
   other-modules:   PackageInfo_eventlog_live_otelcol
   autogen-modules: PackageInfo_eventlog_live_otelcol
   build-depends:
@@ -69,3 +69,9 @@ executable eventlog-live-otelcol
     , optparse-applicative    >=0.19  && <0.20
     , proto-lens              >=0.7.1 && <0.8
     , text                    >=1.2   && <2.2
+
+executable eventlog-live-otelcol
+  import:         language
+  main-is:        Main.hs
+  hs-source-dirs: app
+  build-depends:  eventlog-live-otelcol
