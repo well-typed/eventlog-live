@@ -1,0 +1,38 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  otlp:
+    endpoint: "api.honeycomb.io:443" # US instance
+    #endpoint: "api.eu1.honeycomb.io:443" # EU instance
+    headers:
+      "x-honeycomb-team": "YOUR_HONEYCOMB_TEAM"
+  otlp/metrics:
+    endpoint: "api.honeycomb.io:443" # US instance
+    #endpoint: "api.eu1.honeycomb.io:443" # EU instance
+    headers:
+      "x-honeycomb-team": "YOUR_HONEYCOMB_TEAM"
+      "x-honeycomb-dataset": "YOUR_HONEYCOMB_DATASET"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/metrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]
