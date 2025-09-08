@@ -70,6 +70,19 @@ library
     , proto-lens              >=0.7.1 && <0.8
     , text                    >=1.2   && <2.2
 
+library hs-opentelemetry-api-compat
+  import:          language
+  visibility:      private
+  hs-source-dirs:  src-compat
+  exposed-modules: OpenTelemetry.Trace.Compat
+  build-depends:
+    , base                    >=4.16  && <4.21
+    , bytestring              >=0.11  && <0.13
+    , eventlog-live:machines
+    , hs-opentelemetry-api    >=0.2   && <0.3
+    , hs-opentelemetry-sdk    >=0.1   && <0.2
+    , proto-lens              >=0.7.1 && <0.8
+
 executable eventlog-live-otelcol
   import:         language
   main-is:        Main.hs
