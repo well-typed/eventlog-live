@@ -11,6 +11,7 @@ FROM haskell:9.10-slim-bullseye AS build
 WORKDIR "/eventlog-live"
 COPY --parents \
   "./eventlog-live-influxdb/app/Main.hs" \
+  "./eventlog-live-influxdb/src/GHC/Eventlog/Live/InfluxDB.hs" \
   "./eventlog-live-influxdb/eventlog-live-influxdb.cabal" \
   "./eventlog-live-influxdb/LICENSE" \
   "./eventlog-live/assets/eventlog-live-otelcol.png" \
