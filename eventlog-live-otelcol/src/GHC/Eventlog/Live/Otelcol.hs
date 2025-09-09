@@ -11,15 +11,15 @@ import Control.Exception (Exception (..))
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
-import Data.ByteString qualified as BS
-import Data.ByteString.Builder qualified as BSB
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Either (partitionEithers)
 import Data.Foldable (for_)
 import Data.Functor ((<&>))
+import Data.HashMap.Strict qualified as M
+import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Machine (Process, ProcessT, await, filtered, mapping, repeatedly, yield, (~>))
+import Data.Machine (Process, ProcessT, await, construct, filtered, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
@@ -53,6 +53,7 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import System.IO qualified as IO
+import System.Random (StdGen, initStdGen, uniformByteString)
 import Text.Printf (printf)
 
 main :: IO ()
@@ -365,30 +366,58 @@ asNumberDataPoint = mapping toNumberDataPoint
 -- Interpret spans
 
 class AsSpan v where
-  asSpan :: Process v OT.Span
-  asSpan = mapping toSpan ~> ELM.supplier spanIdStream
+  type Key v
+
+  default asSpan :: (MonadIO m, Hashable (Key v)) => ProcessT m v OT.Span
+  asSpan :: (MonadIO m) => ProcessT m v OT.Span
+  asSpan = construct $ go (mempty, Nothing)
+   where
+    -- go :: (HashMap (Key v) ByteString, Maybe StdGen) -> PlanT (Is v) OT.Span m Void
+    go (traceIds, maybeGen) = do
+      -- Ensure the StdGen is initialised
+      gen0 <- maybe (liftIO initStdGen) pure maybeGen
+      -- Receive the next value
+      i <- await
+      -- Ensure the next value has a trace ID
+      let ensureTraceId :: Maybe ByteString -> ((ByteString, StdGen), Maybe ByteString)
+          ensureTraceId = wrap . maybe (uniformByteString 16 gen0) (,gen0)
+           where
+            wrap out@(traceId, _gen) = (out, Just traceId)
+      let ((traceId, gen1), traceIds') = M.alterF ensureTraceId (toKey i) traceIds
+      -- Ensure the next value has a span ID
+      let (spanId, gen2) = uniformByteString 8 gen1
+      -- Yield a span
+      yield $ toSpan i traceId spanId
+      -- Continue
+      go (traceIds', Just gen2)
+
+  toKey ::
+    -- | The input value.
+    v ->
+    Key v
 
   toSpan ::
     -- | The input value.
     v ->
-    -- | A fresh span ID.
+    -- | The trace ID.
+    ByteString ->
+    -- | The span ID.
     ByteString ->
     OT.Span
-
-spanIdStream :: ELM.Stream ByteString
-spanIdStream = go 0 where go n = ELM.Cons (mkSpanId n) (go $ succ n)
-
-mkSpanId :: Word64 -> ByteString
-mkSpanId = BS.toStrict . BSB.toLazyByteString . BSB.word64BE
 
 --------------------------------------------------------------------------------
 -- Interpret capability usage spans
 
 instance AsSpan CapabilityUsageSpan where
-  toSpan :: CapabilityUsageSpan -> ByteString -> OT.Span
-  toSpan i spanId =
+  type Key CapabilityUsageSpan = Int
+
+  toKey :: CapabilityUsageSpan -> Int
+  toKey = (.cap)
+
+  toSpan :: CapabilityUsageSpan -> ByteString -> ByteString -> OT.Span
+  toSpan i traceId spanId =
     messageWith
-      [ OT.traceId .~ traceIdFromCapability i.cap
+      [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
       , OT.name .~ ELM.showCapabilityUserCategory user
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
@@ -408,19 +437,19 @@ instance AsSpan CapabilityUsageSpan where
    where
     user = ELM.capabilityUser i
 
-traceIdFromCapability :: Int -> ByteString
-traceIdFromCapability i =
-  BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.int64BE $
-    [0, fromIntegral i]
-
 --------------------------------------------------------------------------------
 -- Interpret thread state spans
 
 instance AsSpan ThreadStateSpan where
-  toSpan :: ThreadStateSpan -> ByteString -> OT.Span
-  toSpan i spanId =
+  type Key ThreadStateSpan = ThreadId
+
+  toKey :: ThreadStateSpan -> ThreadId
+  toKey = (.thread)
+
+  toSpan :: ThreadStateSpan -> ByteString -> ByteString -> OT.Span
+  toSpan i traceId spanId =
     messageWith
-      [ OT.traceId .~ traceIdFromThreadId i.thread
+      [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
       , OT.name .~ ELM.showThreadStateCategory i.threadState
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
@@ -437,14 +466,6 @@ instance AsSpan ThreadStateSpan where
             [ OT.code .~ OT.Status'STATUS_CODE_OK
             ]
       ]
-
--- TODO: use a hash function
--- TODO: prepend PID, if possible?
--- TODO: prepend globally unique ID, from command-line arguments?
-traceIdFromThreadId :: ThreadId -> ByteString
-traceIdFromThreadId thread =
-  BS.toStrict . BSB.toLazyByteString . mconcat . fmap BSB.word32BE $
-    [0, 0, 0, thread]
 
 --------------------------------------------------------------------------------
 -- Interpret metrics
