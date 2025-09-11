@@ -15,7 +15,8 @@ echo
 
 # Run fibber
 echo "Run fibber"
-cabal run fibber -v0 -- 44 &
+FIBBER_BIN=$(cabal list-bin exe:fibber -v0 --project-file=cabal.project.profiling | head -n1)
+"${FIBBER_BIN}" 44 +RTS -l -hT --eventlog-flush-interval=1 -RTS >/dev/null &
 FIBBER_PID=$!
 echo
 
