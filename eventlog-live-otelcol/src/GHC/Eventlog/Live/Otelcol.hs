@@ -7,14 +7,13 @@ module GHC.Eventlog.Live.Otelcol (
 ) where
 
 import Control.Applicative (asum)
-import Control.Exception (Exception (..))
-import Control.Monad (unless)
+import Control.Exception (Exception (..), catch)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Either (partitionEithers)
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
@@ -80,7 +79,8 @@ main = do
               ~> asResourceMetric []
               ~> asExportMetricServiceRequest
               ~> exportResourceMetrics conn
-              ~> displayExceptions
+              ~> mapping (either displayException displayException)
+              ~> errorWriter
           , filtered (const exportTraces)
               ~> mapping snd
               ~> asScopeSpans
@@ -94,11 +94,12 @@ main = do
                 ]
               ~> asExportTraceServiceRequest
               ~> exportResourceSpans conn
-              ~> displayExceptions
+              ~> mapping (either displayException displayException)
+              ~> errorWriter
           ]
 
-displayExceptions :: (MonadIO m, Exception e) => ProcessT m e Void
-displayExceptions = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr . displayException
+errorWriter :: (MonadIO m) => ProcessT m String Void
+errorWriter = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr
 
 -- dumpBatch :: (MonadIO m, Show a) => ProcessT m [a] [a]
 -- dumpBatch = traversing (\as -> for_ as (liftIO . print) >> pure as)
@@ -533,29 +534,40 @@ messageWith = foldr ($) defMessage
 --------------------------------------------------------------------------------
 -- OpenTelemetry Collector Trace Exporter
 
-data ExportSpansError
-  = ExportSpansError
+data ExportTraceError
+  = ExportTraceError
   { rejectedSpans :: Int64
   , errorMessage :: Text
   }
   deriving (Show)
 
-instance Exception ExportSpansError where
-  displayException :: ExportSpansError -> String
-  displayException ExportSpansError{..} =
+instance Exception ExportTraceError where
+  displayException :: ExportTraceError -> String
+  displayException ExportTraceError{..} =
     printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedSpans errorMessage
 
-exportResourceSpans :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest ExportSpansError
+sendResourceSpans :: G.Connection -> OTS.ExportTraceServiceRequest -> IO (Maybe (Either G.GrpcError ExportTraceError))
+sendResourceSpans conn exportTraceServiceRequest =
+  fmap (fmap Right) doGrpc `catch` handleGrpcError
+ where
+  doGrpc :: IO (Maybe ExportTraceError)
+  doGrpc = do
+    G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest) >>= \case
+      G.Proto resp
+        | resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0 -> pure Nothing
+        | otherwise -> pure $ Just ExportTraceError{..}
+       where
+        rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
+        errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage
+  handleGrpcError :: G.GrpcError -> IO (Maybe (Either G.GrpcError ExportTraceError))
+  handleGrpcError = pure . pure . Left
+
+exportResourceSpans :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest (Either G.GrpcError ExportTraceError)
 exportResourceSpans conn =
   repeatedly $
-    await >>= \exportTraceServiceRequest -> do
-      G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest))
-      unless (resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0) $ do
-        yield
-          ExportSpansError
-            { rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
-            , errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage
-            }
+    await >>= \exportTraceServiceRequest ->
+      liftIO (sendResourceSpans conn exportTraceServiceRequest)
+        >>= traverse_ yield
 
 type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
@@ -576,17 +588,28 @@ instance Exception ExportMetricsError where
   displayException ExportMetricsError{..} =
     printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
 
-exportResourceMetrics :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest ExportMetricsError
+sendResourceMetrics :: G.Connection -> OMS.ExportMetricsServiceRequest -> IO (Maybe (Either G.GrpcError ExportMetricsError))
+sendResourceMetrics conn exportMetricsServiceRequest =
+  fmap (fmap Right) doGrpc `catch` handleGrpcError
+ where
+  doGrpc :: IO (Maybe ExportMetricsError)
+  doGrpc = do
+    G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest) >>= \case
+      G.Proto resp
+        | resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0 -> pure Nothing
+        | otherwise -> pure $ Just ExportMetricsError{..}
+       where
+        rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
+        errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage
+  handleGrpcError :: G.GrpcError -> IO (Maybe (Either G.GrpcError ExportMetricsError))
+  handleGrpcError = pure . pure . Left
+
+exportResourceMetrics :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest (Either G.GrpcError ExportMetricsError)
 exportResourceMetrics conn =
   repeatedly $
-    await >>= \exportMetricsServiceRequest -> do
-      G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest))
-      unless (resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0) $ do
-        yield
-          ExportMetricsError
-            { rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-            , errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage
-            }
+    await >>= \exportMetricsServiceRequest ->
+      liftIO (sendResourceMetrics conn exportMetricsServiceRequest)
+        >>= traverse_ yield
 
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
