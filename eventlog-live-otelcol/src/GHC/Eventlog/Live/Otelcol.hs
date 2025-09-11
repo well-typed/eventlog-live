@@ -366,10 +366,27 @@ asNumberDataPoint = mapping toNumberDataPoint
 -- Interpret spans
 
 class AsSpan v where
+  -- | The `Key` type is used to index a `HashMap` in the default definition of `asSpan`.
   type Key v
 
-  default asSpan :: (MonadIO m, Hashable (Key v)) => ProcessT m v OT.Span
+  -- | The `toKey` function extracts a `Key` from the input value.
+  toKey ::
+    -- | The input value.
+    v ->
+    Key v
+
+  toSpan ::
+    -- | The input value.
+    v ->
+    -- | The trace ID.
+    ByteString ->
+    -- | The span ID.
+    ByteString ->
+    OT.Span
+
+  -- | The `asSpan` machine processes values @v@ into OpenTelemetry spans `OT.Span`.
   asSpan :: (MonadIO m) => ProcessT m v OT.Span
+  default asSpan :: (MonadIO m, Hashable (Key v)) => ProcessT m v OT.Span
   asSpan = construct $ go (mempty, Nothing)
    where
     -- go :: (HashMap (Key v) ByteString, Maybe StdGen) -> PlanT (Is v) OT.Span m Void
@@ -390,20 +407,6 @@ class AsSpan v where
       yield $ toSpan i traceId spanId
       -- Continue
       go (traceIds', Just gen2)
-
-  toKey ::
-    -- | The input value.
-    v ->
-    Key v
-
-  toSpan ::
-    -- | The input value.
-    v ->
-    -- | The trace ID.
-    ByteString ->
-    -- | The span ID.
-    ByteString ->
-    OT.Span
 
 --------------------------------------------------------------------------------
 -- Interpret capability usage spans
