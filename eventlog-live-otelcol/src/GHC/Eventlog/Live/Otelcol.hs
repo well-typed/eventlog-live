@@ -6,15 +6,18 @@ module GHC.Eventlog.Live.Otelcol (
   main,
 ) where
 
-import Control.Applicative (asum)
+import Control.Applicative (Alternative (..), asum)
 import Control.Exception (Exception (..))
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Bifunctor (Bifunctor (..))
+import Data.Bitraversable (Bitraversable (bitraverse))
 import Data.ByteString (ByteString)
+import Data.ByteString.Lazy qualified as BSL
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Either (partitionEithers)
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
@@ -25,6 +28,8 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Vector (Vector)
+import Data.Vector qualified as V
 import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
@@ -33,12 +38,14 @@ import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan, Me
 import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
-import Lens.Family2 ((&), (.~), (^.))
+import GHC.Records (HasField (..))
+import Lens.Family2 (Lens', (&), (.~), (^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
 import Network.GRPC.Common.Protobuf qualified as G
+import Network.GRPC.Spec qualified as GS
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O
 import PackageInfo_eventlog_live_otelcol qualified as EventlogLive
@@ -579,11 +586,17 @@ instance Exception ExportMetricsError where
   displayException ExportMetricsError{..} =
     printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
 
+sendResourceMetrics :: G.Connection -> OMS.ExportMetricsServiceRequest -> IO OMS.ExportMetricsServiceResponse
+sendResourceMetrics conn req = do
+  G.Proto resp <- G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto req)
+  pure resp
+
 exportResourceMetrics :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest ExportMetricsError
-exportResourceMetrics conn =
-  repeatedly $
+exportResourceMetrics conn = repeatedly go
+ where
+  go =
     await >>= \exportMetricsServiceRequest -> do
-      G.Proto resp <- liftIO (G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest))
+      resp <- liftIO $ sendResourceMetrics conn exportMetricsServiceRequest
       unless (resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0) $ do
         yield
           ExportMetricsError
@@ -594,6 +607,142 @@ exportResourceMetrics conn =
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
+
+--------------------------------------------------------------------------------
+-- Sized Message Splitter
+
+{- |
+This machine splits its inputs until they are smaller than the given
+maximum size, or passes them on unsplit if they are unsplittable.
+-}
+splitUntilSmallerThan :: (Sizeable a b, Split a) => Int64 -> Process a b
+splitUntilSmallerThan maxSizeBytes =
+  repeatedly $
+    await >>= \a ->
+      maybeSplitUntilSmallerThan maxSizeBytes a
+        & maybe (yield (toSized a)) (traverse_ yield)
+
+maybeSplitUntilSmallerThan :: (Sizeable a b, Split a) => Int64 -> a -> Maybe [b]
+maybeSplitUntilSmallerThan maxSizeBytes = fmap D.toList . go
+ where
+  go a
+    | sizeBytes b <= maxSizeBytes = Just . D.singleton $ b
+    | otherwise = maybeSplit a >>= bitraverse go go <&> uncurry (<>)
+   where
+    b = toSized a
+
+--------------------------------------------------------------------------------
+-- Sized Messages
+
+class Sized a where
+  sizeBytes :: a -> Int64
+
+instance Sized BSL.ByteString where
+  sizeBytes :: BSL.ByteString -> Int64
+  sizeBytes = BSL.length
+
+class (Sized b) => Sizeable a b | a -> b where
+  toSized :: a -> b
+
+instance Sizeable OMS.ExportMetricsServiceRequest BSL.ByteString where
+  toSized :: OMS.ExportMetricsServiceRequest -> BSL.ByteString
+  toSized = GS.rpcSerializeInput (G.Proxy @(GS.Protobuf OMS.MetricsService "export")) . G.Proto
+
+instance Sizeable OTS.ExportTraceServiceRequest BSL.ByteString where
+  toSized :: OTS.ExportTraceServiceRequest -> BSL.ByteString
+  toSized = GS.rpcSerializeInput (G.Proxy @(GS.Protobuf OTS.TraceService "export")) . G.Proto
+
+--------------------------------------------------------------------------------
+-- Splitting Message
+
+class Split a where
+  maybeSplit :: a -> Maybe (a, a)
+
+both :: (a -> b) -> (a, a) -> (b, b)
+both f = bimap f f
+
+maybeSplitBy :: (Split a) => Lens' s a -> s -> Maybe (s, s)
+maybeSplitBy = maybeSplitBy' maybeSplit
+
+maybeSplitBy' :: (a -> Maybe (a, a)) -> Lens' s a -> s -> Maybe (s, s)
+maybeSplitBy' splitter fld s = fmap (both (flip (fld .~) s)) $ splitter $ s ^. fld
+
+maybeSplitEach :: (Split a) => [a] -> Maybe ([a], [a])
+maybeSplitEach = maybeSplitEach' maybeSplit
+
+maybeSplitEach' :: (a -> Maybe (a, a)) -> [a] -> Maybe ([a], [a])
+maybeSplitEach' splitter as
+  | null as2 = Nothing
+  | otherwise = Just (as2, as1)
+ where
+  (as2, as1) = first D.toList (traverse splitWriter as)
+  splitWriter a = maybe (D.empty, a) (first D.singleton) (splitter a)
+
+instance (Split a) => Split (Maybe a) where
+  maybeSplit :: Maybe a -> Maybe (Maybe a, Maybe a)
+  maybeSplit = maybe Nothing (fmap (both Just) . maybeSplit)
+
+instance Split (Vector a) where
+  maybeSplit :: Vector a -> Maybe (Vector a, Vector a)
+  maybeSplit v
+    | V.length v <= 1 = Nothing
+    | otherwise = Just (V.splitAt (V.length v `div` 2) v)
+
+instance Split OM.Gauge where
+  maybeSplit :: OM.Gauge -> Maybe (OM.Gauge, OM.Gauge)
+  maybeSplit = maybeSplitBy OM.vec'dataPoints
+
+instance Split OM.Sum where
+  maybeSplit :: OM.Sum -> Maybe (OM.Sum, OM.Sum)
+  maybeSplit = maybeSplitBy OM.vec'dataPoints
+
+instance Split OM.Histogram where
+  maybeSplit :: OM.Histogram -> Maybe (OM.Histogram, OM.Histogram)
+  maybeSplit = maybeSplitBy OM.vec'dataPoints
+
+instance Split OM.ExponentialHistogram where
+  maybeSplit :: OM.ExponentialHistogram -> Maybe (OM.ExponentialHistogram, OM.ExponentialHistogram)
+  maybeSplit = maybeSplitBy OM.vec'dataPoints
+
+instance Split OM.Summary where
+  maybeSplit :: OM.Summary -> Maybe (OM.Summary, OM.Summary)
+  maybeSplit = maybeSplitBy OM.vec'dataPoints
+
+instance Split OM.Metric'Data where
+  maybeSplit :: OM.Metric'Data -> Maybe (OM.Metric'Data, OM.Metric'Data)
+  maybeSplit = \case
+    OM.Metric'Gauge gauge ->
+      both OM.Metric'Gauge <$> maybeSplit gauge
+    OM.Metric'Sum sum ->
+      both OM.Metric'Sum <$> maybeSplit sum
+    OM.Metric'Histogram histogram ->
+      both OM.Metric'Histogram <$> maybeSplit histogram
+    OM.Metric'ExponentialHistogram exponentialhistogram ->
+      both OM.Metric'ExponentialHistogram <$> maybeSplit exponentialhistogram
+    OM.Metric'Summary summary ->
+      both OM.Metric'Summary <$> maybeSplit summary
+
+instance Split OM.Metric where
+  maybeSplit :: OM.Metric -> Maybe (OM.Metric, OM.Metric)
+  maybeSplit = maybeSplitBy OM.maybe'data'
+
+instance Split OM.ScopeMetrics where
+  maybeSplit :: OM.ScopeMetrics -> Maybe (OM.ScopeMetrics, OM.ScopeMetrics)
+  maybeSplit scopeMetrics =
+    maybeSplitBy OM.vec'metrics scopeMetrics
+      <|> maybeSplitBy' maybeSplitEach OM.metrics scopeMetrics
+
+instance Split OM.ResourceMetrics where
+  maybeSplit :: OM.ResourceMetrics -> Maybe (OM.ResourceMetrics, OM.ResourceMetrics)
+  maybeSplit resourceMetrics =
+    maybeSplitBy OM.vec'scopeMetrics resourceMetrics
+      <|> maybeSplitBy' maybeSplitEach OM.scopeMetrics resourceMetrics
+
+instance Split OMS.ExportMetricsServiceRequest where
+  maybeSplit :: OMS.ExportMetricsServiceRequest -> Maybe (OMS.ExportMetricsServiceRequest, OMS.ExportMetricsServiceRequest)
+  maybeSplit exportMetricsServiceRequest =
+    maybeSplitBy OM.vec'resourceMetrics exportMetricsServiceRequest
+      <|> maybeSplitBy' maybeSplitEach OM.resourceMetrics exportMetricsServiceRequest
 
 --------------------------------------------------------------------------------
 -- Options
@@ -661,6 +810,7 @@ openTelemetryCollectorOptionsParser =
 data OpenTelemetryExporterOptions = OpenTelemetryExporterOptions
   { exportMetrics :: Bool
   , exportTraces :: Bool
+  , maxRecvMsgSize :: MaxRecvMsgSize
   }
 
 otelcolExporterOptionsParsers :: O.Parser OpenTelemetryExporterOptions
@@ -668,6 +818,7 @@ otelcolExporterOptionsParsers =
   OpenTelemetryExporterOptions
     <$> exportMetricsParser
     <*> exportTracesParser
+    <*> maxRecvMsgSizeParser
  where
   exportMetricsParser =
     -- flipped from O.switch to match negated semantics
@@ -681,6 +832,22 @@ otelcolExporterOptionsParsers =
       [ O.long "otelcol-no-traces"
       , O.help "Disable traces exporter."
       ]
+
+newtype MaxRecvMsgSize = MaxRecvMsgSize {mebibytes :: Int64}
+
+instance HasField "bytes" MaxRecvMsgSize Int64 where
+  getField :: MaxRecvMsgSize -> Int64
+  getField maxRecvMsgSize = (2 ^ (20 :: Int64)) * maxRecvMsgSize.mebibytes
+
+maxRecvMsgSizeParser :: O.Parser MaxRecvMsgSize
+maxRecvMsgSizeParser =
+  MaxRecvMsgSize
+    <$> O.option
+      O.auto
+      ( O.long "otelcol-max-recv-msg-size-mib"
+          <> O.help "The maximum message size in MiB."
+          <> O.value 4
+      )
 
 otelcolServerParser :: O.Parser G.Server
 otelcolServerParser =
