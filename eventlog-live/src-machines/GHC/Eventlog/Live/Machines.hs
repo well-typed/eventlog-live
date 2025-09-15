@@ -56,6 +56,8 @@ module GHC.Eventlog.Live.Machines (
 
   -- *** Mutator Spans
   MutatorSpan (..),
+  asMutatorSpans,
+  asMutatorSpans',
   processMutatorSpans,
   processMutatorSpans',
 
@@ -614,13 +616,42 @@ processMutatorSpans' ::
   Verbosity ->
   ProcessT m s t
 processMutatorSpans' timeUnixNano value verbosity =
-  processThreadStateSpans' timeUnixNano (apLens fromThreadStateSpan value) verbosity ~> asParts
+  processThreadStateSpans' timeUnixNano (apLens threadStateSpanToMutatorSpan value) verbosity ~> asParts
+
+{- |
+This machine converts any `Running` `ThreadStateSpan` to a `MutatorSpan`.
+-}
+asMutatorSpans ::
+  forall m.
+  (MonadIO m) =>
+  ProcessT m ThreadStateSpan MutatorSpan
+asMutatorSpans = asMutatorSpans' id
+
+{- |
+Generalised version of `asMutatorSpans` that can be adapted to work on
+arbitrary types using a getter and a lens.
+-}
+asMutatorSpans' ::
+  forall m s t.
+  (MonadIO m) =>
+  Lens s t ThreadStateSpan MutatorSpan ->
+  ProcessT m s t
+asMutatorSpans' value = repeatedly go
  where
-  fromThreadStateSpan :: ThreadStateSpan -> Maybe MutatorSpan
-  fromThreadStateSpan ThreadStateSpan{..} =
-    case threadState of
-      Running{..} -> Just MutatorSpan{..}
-      _otherwise -> Nothing
+  go =
+    await >>= \s -> do
+      let threadStateSpan = s ^. value
+      let maybeMutatorSpan = threadStateSpanToMutatorSpan threadStateSpan
+      for_ maybeMutatorSpan $ yield . flip (set value) s
+
+{- |
+Convert the `Running` `ThreadStateSpan` to `Just` a `MutatorSpan`.
+-}
+threadStateSpanToMutatorSpan :: ThreadStateSpan -> Maybe MutatorSpan
+threadStateSpanToMutatorSpan ThreadStateSpan{..} =
+  case threadState of
+    Running{..} -> Just MutatorSpan{..}
+    _otherwise -> Nothing
 
 {- |
 Adapt a @`Lens` s t a b@ into a @`Lens` s (f t) a c@ with a function @c -> f b@.
