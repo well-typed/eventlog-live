@@ -19,8 +19,7 @@ module GHC.Eventlog.Live.Machines (
 
   -- ** Start time
   WithStartTime (..),
-  withStartTime'value,
-  withStartTime'consume,
+  setWithStartTime'value,
   tryGetTimeUnixNano,
   withStartTime,
   withStartTime',
@@ -161,8 +160,6 @@ import GHC.RTS.Events (Event (..), EventInfo, HeapProfBreakdown (..), ThreadId, 
 import GHC.RTS.Events qualified as E
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import GHC.Records (HasField (..))
-import Lens.Family2 (Lens, set, (^.))
-import Lens.Family2.Unchecked (lens)
 import Numeric (showHex)
 import System.Clock qualified as Clock
 import System.IO (Handle, hWaitForInput)
@@ -191,16 +188,10 @@ data WithStartTime a = WithStartTime
   deriving (Functor, Show)
 
 {- |
-Lens for the `value` within a `WithStartTime`
+Setter for the `value` within a `WithStartTime`
 -}
-withStartTime'value :: Lens (WithStartTime a) (WithStartTime b) a b
-withStartTime'value f (WithStartTime a t) = (`WithStartTime` t) <$> f a
-
-{- |
-Variant of `withStartTime'value` that drops the start time.
--}
-withStartTime'consume :: Lens (WithStartTime a) b a b
-withStartTime'consume f (WithStartTime a _t) = f a
+setWithStartTime'value :: WithStartTime a -> b -> WithStartTime b
+setWithStartTime'value (WithStartTime _a t) b = WithStartTime b t
 
 {- |
 If the event has a start time, return `Just` the time of the event in
@@ -395,7 +386,7 @@ processCapabilityUsageSpans ::
   Verbosity ->
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
 processCapabilityUsageSpans verbosity =
-  processCapabilityUsageSpans' tryGetTimeUnixNano withStartTime'value withStartTime'value verbosity
+  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value verbosity
     ~> mapping (either (fmap Left) (fmap Right))
 
 {- |
@@ -406,11 +397,12 @@ processCapabilityUsageSpans' ::
   forall m s t1 t2.
   (MonadIO m) =>
   (s -> Maybe Timestamp) ->
-  Lens s t1 Event GCSpan ->
-  Lens s t2 Event MutatorSpan ->
+  (s -> Event) ->
+  (s -> GCSpan -> t1) ->
+  (s -> MutatorSpan -> t2) ->
   Verbosity ->
   ProcessT m s (Either t1 t2)
-processCapabilityUsageSpans' timeUnixNano value1 value2 verbosity =
+processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan verbosity =
   -- NOTE:
   -- Combining this fanout with an `Either` is risky, because it
   -- has the potential to lose information if both `processGCSpans`
@@ -418,9 +410,9 @@ processCapabilityUsageSpans' timeUnixNano value1 value2 verbosity =
   -- However, this shouldn't ever happen, since the two processors
   -- process disjoint sets of events.
   fanout
-    [ processGCSpans' timeUnixNano value1 verbosity
+    [ processGCSpans' timeUnixNano getEvent setGCSpan verbosity
         ~> mapping Left
-    , processMutatorSpans' timeUnixNano value2 verbosity
+    , processMutatorSpans' timeUnixNano getEvent setMutatorSpan verbosity
         ~> mapping Right
     ]
 
@@ -464,7 +456,7 @@ processGCSpans ::
   Verbosity ->
   ProcessT m (WithStartTime Event) (WithStartTime GCSpan)
 processGCSpans =
-  processGCSpans' tryGetTimeUnixNano withStartTime'value
+  processGCSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
 
 {- |
 Generalised version of `processGCSpans` that can be adapted to work on
@@ -474,15 +466,20 @@ processGCSpans' ::
   forall m s t.
   (MonadIO m) =>
   (s -> Maybe Timestamp) ->
-  Lens s t Event GCSpan ->
+  (s -> Event) ->
+  (s -> GCSpan -> t) ->
   Verbosity ->
   ProcessT m s t
-processGCSpans' timeUnixNano value verbosity =
+processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
   liftRouter measure spawn
  where
+  getEventTime = (.evTime) . getEvent
+  getEventInfo = (.evSpec) . getEvent
+  getEventCap = (.evCap) . getEvent
+
   measure :: s -> Maybe Int
   measure i
-    | accept (i ^. value).evSpec = (i ^. value).evCap
+    | accept (getEventInfo i) = getEventCap i
     | otherwise = Nothing
    where
     accept E.StartGC{} = True
@@ -498,16 +495,16 @@ processGCSpans' timeUnixNano value verbosity =
     go :: Maybe s -> PlanT (Is s) t m Void
     go mi =
       -- We start by awaiting the next event "j"...
-      await >>= \j -> case (j ^. value).evSpec of
+      await >>= \j -> case getEventInfo j of
         -- If the next event is a `RunThread` event, and...
         E.StartGC{} -> case mi of
           Just i
             -- If the previous event was a `StartGC` event, then...
-            | E.StartGC{} <- (i ^. value).evSpec ->
+            | E.StartGC{} <- getEventInfo i ->
                 -- ...continue with the oldest event.
-                go (Just $ minBy ((.evTime) . (^. value)) i j)
+                go (Just $ minBy getEventTime i j)
             -- If the previous event was a `EndGC` event, then...
-            | E.EndGC{} <- (i ^. value).evSpec ->
+            | E.EndGC{} <- getEventInfo i ->
                 -- ...continue with the current event.
                 go (Just j)
             -- If the previous event was any other event, then...
@@ -517,8 +514,8 @@ processGCSpans' timeUnixNano value verbosity =
                   printf
                     "Capability %d: Unsupported trace %s --> %s"
                     cap
-                    (showEventInfo (i ^. value).evSpec)
-                    (showEventInfo (j ^. value).evSpec)
+                    (showEventInfo (getEventInfo i))
+                    (showEventInfo (getEventInfo j))
                 -- ...continue with the previous event.
                 go (Just i)
           -- If there was no previous event, then...
@@ -529,17 +526,17 @@ processGCSpans' timeUnixNano value verbosity =
         E.EndGC{} -> case mi of
           Just i
             -- If the previous event was a `StartGC` event, then...
-            | E.StartGC{} <- (i ^. value).evSpec
+            | E.StartGC{} <- getEventInfo i
             , Just startTimeUnixNano <- timeUnixNano i
             , Just endTimeUnixNano <- timeUnixNano j -> do
                 -- ...yield a GC span, and...
-                yield . flip (set value) j $ GCSpan{..}
+                yield . setGCSpan j $ GCSpan{..}
                 -- ...continue with the current event.
                 go (Just j)
             -- If the previous event was a `EndGC` event, then...
-            | E.EndGC{} <- (i ^. value).evSpec ->
+            | E.EndGC{} <- getEventInfo i ->
                 -- ...continue with the oldest event.
-                go (Just $ minBy ((.evTime) . (^. value)) i j)
+                go (Just $ minBy getEventTime i j)
           -- If there was no previous event or it was any other event, then...
           _otherwise -> do
             -- ...emit an error, and...
@@ -547,8 +544,8 @@ processGCSpans' timeUnixNano value verbosity =
               printf
                 "Capability %d: Unsupported trace %s --> %s"
                 cap
-                (maybe "?" (showEventInfo . (.evSpec) . (^. value)) mi)
-                (showEventInfo (j ^. value).evSpec)
+                (maybe "?" (showEventInfo . getEventInfo) mi)
+                (showEventInfo (getEventInfo j))
             -- ...continue with the previous event.
             go mi
         -- If the next event is any other event, ignore it.
@@ -602,7 +599,7 @@ processMutatorSpans ::
   Verbosity ->
   ProcessT m (WithStartTime Event) (WithStartTime MutatorSpan)
 processMutatorSpans =
-  processMutatorSpans' tryGetTimeUnixNano withStartTime'value
+  processMutatorSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
 
 {- |
 Generalised version of `processMutatorSpans` that can be adapted to work on
@@ -612,11 +609,16 @@ processMutatorSpans' ::
   forall m s t.
   (MonadIO m) =>
   (s -> Maybe Timestamp) ->
-  Lens s t Event MutatorSpan ->
+  (s -> Event) ->
+  (s -> MutatorSpan -> t) ->
   Verbosity ->
   ProcessT m s t
-processMutatorSpans' timeUnixNano value verbosity =
-  processThreadStateSpans' timeUnixNano (apLens threadStateSpanToMutatorSpan value) verbosity ~> asParts
+processMutatorSpans' timeUnixNano getEvent setMutatorSpan verbosity =
+  processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity ~> asParts
+ where
+  setThreadStateSpan :: s -> ThreadStateSpan -> Maybe t
+  setThreadStateSpan s threadStateSpan =
+    setMutatorSpan s <$> threadStateSpanToMutatorSpan threadStateSpan
 
 {- |
 This machine converts any `Running` `ThreadStateSpan` to a `MutatorSpan`.
@@ -625,7 +627,7 @@ asMutatorSpans ::
   forall m.
   (MonadIO m) =>
   ProcessT m ThreadStateSpan MutatorSpan
-asMutatorSpans = asMutatorSpans' id
+asMutatorSpans = asMutatorSpans' id (const id)
 
 {- |
 Generalised version of `asMutatorSpans` that can be adapted to work on
@@ -634,15 +636,16 @@ arbitrary types using a getter and a lens.
 asMutatorSpans' ::
   forall m s t.
   (MonadIO m) =>
-  Lens s t ThreadStateSpan MutatorSpan ->
+  (s -> ThreadStateSpan) ->
+  (s -> MutatorSpan -> t) ->
   ProcessT m s t
-asMutatorSpans' value = repeatedly go
+asMutatorSpans' getThreadStateSpan setMutatorSpan = repeatedly go
  where
   go =
     await >>= \s -> do
-      let threadStateSpan = s ^. value
+      let threadStateSpan = getThreadStateSpan s
       let maybeMutatorSpan = threadStateSpanToMutatorSpan threadStateSpan
-      for_ maybeMutatorSpan $ yield . flip (set value) s
+      for_ maybeMutatorSpan $ yield . setMutatorSpan s
 
 {- |
 Convert the `Running` `ThreadStateSpan` to `Just` a `MutatorSpan`.
@@ -653,11 +656,11 @@ threadStateSpanToMutatorSpan ThreadStateSpan{..} =
     Running{..} -> Just MutatorSpan{..}
     _otherwise -> Nothing
 
-{- |
-Adapt a @`Lens` s t a b@ into a @`Lens` s (f t) a c@ with a function @c -> f b@.
--}
-apLens :: (Functor f) => (c -> f b) -> Lens s t a b -> Lens s (f t) a c
-apLens c2fb l = lens (^. l) ((. c2fb) . fmap . flip (set l))
+-- {- |
+-- Adapt a @`Lens` s t a b@ into a @`Lens` s (f t) a c@ with a function @c -> f b@.
+-- -}
+-- apLens :: (Functor f) => (c -> f b) -> Lens s t a b -> Lens s (f t) a c
+-- apLens c2fb l = lens (^. l) ((. c2fb) . fmap . flip (set l))
 
 {- |
 Internal helper.
@@ -788,7 +791,7 @@ processThreadStateSpans ::
   Verbosity ->
   ProcessT m (WithStartTime Event) ThreadStateSpan
 processThreadStateSpans =
-  processThreadStateSpans' tryGetTimeUnixNano withStartTime'consume
+  processThreadStateSpans' tryGetTimeUnixNano (.value) (const id)
 
 {- |
 Generalised version of `processThreadStateSpans` that can be adapted to work
@@ -798,15 +801,16 @@ processThreadStateSpans' ::
   forall m s t.
   (MonadIO m) =>
   (s -> Maybe Timestamp) ->
-  Lens s t Event ThreadStateSpan ->
+  (s -> Event) ->
+  (s -> ThreadStateSpan -> t) ->
   Verbosity ->
   ProcessT m s t
-processThreadStateSpans' timeUnixNano value verbosity =
+processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity =
   liftRouter measure spawn
  where
-  getEventTime i = (i ^. value).evTime
-  getEventInfo i = (i ^. value).evSpec
-  getEventCap i = (i ^. value).evCap
+  getEventTime = (.evTime) . getEvent
+  getEventInfo = (.evSpec) . getEvent
+  getEventCap = (.evCap) . getEvent
 
   measure :: s -> Maybe ThreadId
   measure i = case getEventInfo i of
@@ -837,7 +841,7 @@ processThreadStateSpans' timeUnixNano value verbosity =
           , -- ...gather the start time of the current event, and...
             Just endTimeUnixNano <- timeUnixNano j -> do
               -- ...yield a thread state span, and...
-              yield . flip (set value) j $
+              yield . setThreadStateSpan j $
                 ThreadStateSpan{threadState = Blocked status, ..}
               go (Just j)
           --
@@ -869,7 +873,7 @@ processThreadStateSpans' timeUnixNano value verbosity =
           , -- ...gather the start time of the current event, and...
             Just endTimeUnixNano <- timeUnixNano j -> do
               -- ...yield a thread state span, and...
-              yield . flip (set value) j $
+              yield . setThreadStateSpan j $
                 ThreadStateSpan{threadState = Blocked status, ..}
               -- ...keep the current event.
               --
@@ -889,7 +893,7 @@ processThreadStateSpans' timeUnixNano value verbosity =
           , -- ...gather the start time of the current event, and...
             Just endTimeUnixNano <- timeUnixNano j -> do
               -- ...yield a thread state span, and...
-              yield . flip (set value) j $
+              yield . setThreadStateSpan j $
                 ThreadStateSpan{threadState = Running cap, ..}
               -- ...keep the current event.
               go (Just j)
