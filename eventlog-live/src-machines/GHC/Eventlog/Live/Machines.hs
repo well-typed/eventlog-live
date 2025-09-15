@@ -390,6 +390,11 @@ type CapabilityUsageSpan = Either GCSpan MutatorSpan
 {- |
 This machine runs `processGCSpans` and `processMutatorSpans` in parallel and
 combines their output.
+
+This is effectively a fanout of `processGCSpans` and `processMutatorSpans`, the
+latter of which runs `processThreadStateSpans` internally. If you are running
+`processThreadStateSpans` as well, then using `asMutatorSpans` and constructing
+the fanout yourself is more efficient.
 -}
 processCapabilityUsageSpans ::
   forall m.
@@ -603,6 +608,10 @@ the thread @X@ is added to a set of finished threads,
 and any further @RunThread[X]@ events for that thread are ignored.
 This is done because the GHC RTS frequently emits a @RunThread[X]@ event
 immediately after a @StopThread[X]@ event with the @ThreadFinished@ status.
+
+This runs `processThreadStateSpans` internally. If you are also running
+`processThreadStateSpans`, then post-composing it with `asMutatorSpans`
+is more efficient.
 -}
 processMutatorSpans ::
   forall m.
