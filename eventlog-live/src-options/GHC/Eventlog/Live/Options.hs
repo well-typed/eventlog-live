@@ -8,7 +8,8 @@ module GHC.Eventlog.Live.Options (
 ) where
 
 import Data.Char (toLower)
-import GHC.Eventlog.Live.Machines (Verbosity, heapProfBreakdownEitherReader, verbosityError, verbosityQuiet, verbosityWarning)
+import GHC.Eventlog.Live.Machines (heapProfBreakdownEitherReader)
+import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError, verbosityQuiet, verbosityWarning)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 import Text.Read (readEither)

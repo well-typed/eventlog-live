@@ -18,7 +18,9 @@ COPY --parents \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
   "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Internal/Logger.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Machines.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Verbosity.hs" \
   "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
   "./examples/dumper/app/Main.hs" \
   "./examples/dumper/dumper.cabal" \

@@ -105,12 +105,6 @@ module GHC.Eventlog.Live.Machines (
   heapProfBreakdownEitherReader,
   heapProfBreakdownShow,
 
-  -- * Verbosity
-  Verbosity,
-  verbosityQuiet,
-  verbosityError,
-  verbosityWarning,
-
   -- * Data
 
   -- ** Metrics
@@ -152,10 +146,11 @@ import Data.Ord (comparing)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
 import Data.Void (Void)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Clock (getMonotonicTimeNSec)
+import GHC.Eventlog.Live.Internal.Logger (logError, logWarning)
+import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), EventInfo, HeapProfBreakdown (..), ThreadId, ThreadStopStatus (..), Timestamp)
 import GHC.RTS.Events qualified as E
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
@@ -163,7 +158,6 @@ import GHC.Records (HasField (..))
 import Numeric (showHex)
 import System.Clock qualified as Clock
 import System.IO (Handle, hWaitForInput)
-import System.IO qualified as IO
 import System.IO.Error (isEOFError)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.ParserCombinators.ReadP qualified as P
@@ -1718,31 +1712,6 @@ delimit = construct . go
         go mm
 
 -------------------------------------------------------------------------------
--- Verbosity
--------------------------------------------------------------------------------
-
-data Verbosity
-  = VerbosityWarning
-  | VerbosityError
-  | VerbosityQuiet
-  deriving (Eq, Ord)
-
-showVerbosity :: Verbosity -> Text
-showVerbosity = \case
-  VerbosityWarning -> "Warning"
-  VerbosityError -> "Error"
-  VerbosityQuiet -> "Quiet"
-
-verbosityQuiet :: Verbosity
-verbosityQuiet = VerbosityQuiet
-
-verbosityError :: Verbosity
-verbosityError = VerbosityError
-
-verbosityWarning :: Verbosity
-verbosityWarning = VerbosityWarning
-
--------------------------------------------------------------------------------
 -- Metrics
 -------------------------------------------------------------------------------
 
@@ -1942,33 +1911,6 @@ Internal helper. Variant of `mapping` for plans.
 -}
 mappingPlan :: (a -> b) -> PlanT (Is a) b m a
 mappingPlan f = forever (await >>= \a -> yield (f a))
-
-{- |
-Internal helper. Denotes the source of a log message.
--}
-type LogSource = Text
-
-{- |
-Internal helper. Log messages to `IO.stderr`.
-Only prints a message if its verbosity level is above the verbosity threshold.
--}
-logMessage :: Verbosity -> Verbosity -> LogSource -> Text -> IO ()
-logMessage verbosityLevel verbosityThreshold logSource msg
-  | verbosityLevel >= verbosityThreshold =
-      TIO.hPutStrLn IO.stderr . mconcat $ [logSource, ": ", showVerbosity verbosityLevel, ": ", msg]
-  | otherwise = pure ()
-
-{- |
-Internal helper. Log errors to `IO.stderr`.
--}
-logError :: Verbosity -> LogSource -> Text -> IO ()
-logError = logMessage VerbosityError
-
-{- |
-Internal helper. Log warnings to `IO.stderr`.
--}
-logWarning :: Verbosity -> LogSource -> Text -> IO ()
-logWarning = logMessage VerbosityWarning
 
 {- |
 Internal helper. Return the minimal value by some projection.

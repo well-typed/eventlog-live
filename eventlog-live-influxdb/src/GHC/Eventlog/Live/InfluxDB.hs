@@ -27,6 +27,7 @@ import Database.InfluxDB.Write qualified as I
 import GHC.Eventlog.Live.Machines
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
+import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
