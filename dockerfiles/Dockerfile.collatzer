@@ -17,8 +17,7 @@ COPY --parents \
   "./eventlog-live/assets/eventlog-live-otelcol.png" \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
-  "./eventlog-live/src/GHC/Eventlog/Live.hs" \
-  "./eventlog-live/src-lens/GHC/Eventlog/Live/Lens.hs" \
+  "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Machines.hs" \
   "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
   "./examples/collatzer/app/Main.hs" \

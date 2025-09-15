@@ -1,4 +1,4 @@
-module GHC.Eventlog.Live (
+module GHC.Eventlog.Live.Socket (
   EventlogSocket (..),
   Tick (..),
   connect,
@@ -13,13 +13,11 @@ import Data.Machine.Is (Is)
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)
 import GHC.Eventlog.Live.Machines
+import GHC.Eventlog.Live.Options (EventlogSocket (..))
 import GHC.RTS.Events (Event)
 import Network.Socket qualified as S
 import System.IO (Handle)
 import System.IO qualified as IO
-
-newtype EventlogSocket
-  = EventlogSocketUnix FilePath
 
 -------------------------------------------------------------------------------
 -- Run an event processor with an eventlog socket

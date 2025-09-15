@@ -9,9 +9,9 @@ import Data.Machine.Runner (runT_)
 import Data.Machine.Type (MachineT, repeatedly)
 import Data.Void (Void)
 import Data.Word (Word64)
-import GHC.Eventlog.Live
 import GHC.Eventlog.Live.Machines (sortByBatchTick)
 import GHC.Eventlog.Live.Options
+import GHC.Eventlog.Live.Socket
 import GHC.RTS.Events (Event)
 import qualified GHC.RTS.Events as E
 import qualified Network.Socket as S

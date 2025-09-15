@@ -24,9 +24,9 @@ import Data.Word (Word32, Word64)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
-import GHC.Eventlog.Live
 import GHC.Eventlog.Live.Machines
 import GHC.Eventlog.Live.Options
+import GHC.Eventlog.Live.Socket
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
