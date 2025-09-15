@@ -27,10 +27,11 @@ import Data.Text qualified as T
 import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
-import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan, MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, Verbosity, WithStartTime (..), (~=))
+import GHC.Eventlog.Live.Machines (Attr, AttrValue (..), CapabilityUsageSpan, MemReturnData (..), Metric (..), ThreadStateSpan (..), Tick, WithStartTime (..), (~=))
 import GHC.Eventlog.Live.Machines qualified as ELM
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket (runWithEventlogSocket)
+import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import Lens.Family2 ((&), (.~), (^.))
 import Network.GRPC.Client qualified as G
