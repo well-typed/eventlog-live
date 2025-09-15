@@ -142,7 +142,7 @@ import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.List qualified as L
-import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
+import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Machine.Mealy (unfoldMealy)
 import Data.Machine.Process (Automaton (..))
@@ -160,6 +160,7 @@ import GHC.RTS.Events qualified as E
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import GHC.Records (HasField (..))
 import Lens.Family2 (Lens, set, (^.))
+import Lens.Family2.Unchecked (lens)
 import Numeric (showHex)
 import System.Clock qualified as Clock
 import System.IO (Handle, hWaitForInput)
@@ -613,108 +614,19 @@ processMutatorSpans' ::
   Verbosity ->
   ProcessT m s t
 processMutatorSpans' timeUnixNano value verbosity =
-  liftRouter measure spawn
+  processThreadStateSpans' timeUnixNano (apLens fromThreadStateSpan value) verbosity ~> asParts
  where
-  measure :: s -> Maybe Int
-  measure i
-    | accept (i ^. value).evSpec = (i ^. value).evCap
-    | otherwise = Nothing
-   where
-    accept E.CreateThread{} = True
-    accept E.RunThread{} = True
-    accept E.StopThread{} = True
-    accept _ = False
+  fromThreadStateSpan :: ThreadStateSpan -> Maybe MutatorSpan
+  fromThreadStateSpan ThreadStateSpan{..} =
+    case threadState of
+      Running{..} -> Just MutatorSpan{..}
+      _otherwise -> Nothing
 
-  -- TODO: Rewrite using `MealyT`
-  spawn :: Int -> ProcessT m s t
-  spawn cap = construct $ go Nothing Nothing
-   where
-    -- The "finished" variable tracks the "set" of threads which have finished.
-    -- This is needed because the GHC RTS frequently emits a `RunThread` event
-    -- for threads which have just finished. In practice, this only happens
-    -- immediately after a thread finishes, so it suffices to remember only the
-    -- thread ID of most recent thread that finished.
-    --
-    -- The "mi" variable tracks the previous event for this capability, which
-    -- is either `Nothing` or `Just` a `RunThread` or a `StopThread` event.
-    go :: Maybe ThreadId -> Maybe s -> PlanT (Is s) t m Void
-    go finished mi =
-      -- We start by awaiting the next event "j"...
-      await >>= \j -> case (j ^. value).evSpec of
-        -- If the next event is a `RunThread` event, and...
-        E.RunThread{thread}
-          -- ...it is for a thread which has finished, then...
-          | thread `is` finished ->
-              -- ...continue with the previous event.
-              go finished mi
-          -- ...otherwise, examine the previous event.
-          | otherwise -> case mi of
-              Just i
-                -- If the previous event was a `RunThread` event for the same thread, then...
-                | E.RunThread{thread = thread'} <- (i ^. value).evSpec
-                , thread == thread' ->
-                    -- ...continue with the oldest event.
-                    go finished (Just $ minBy ((.evTime) . (^. value)) i j)
-                -- If the previous event was a `StopThread` event, then...
-                | E.StopThread{} <- (i ^. value).evSpec ->
-                    -- ...continue with the current event.
-                    go finished (Just j)
-                -- If the previous event was any other event, then...
-                | otherwise -> do
-                    -- ...emit an error, and...
-                    liftIO . logError verbosity "processMutatorSpans" . T.pack $
-                      printf
-                        "Capability %d: Unsupported trace %s --> %s"
-                        cap
-                        (showEventInfo (i ^. value).evSpec)
-                        (showEventInfo (j ^. value).evSpec)
-                    -- ...continue with the previous event.
-                    go finished (Just i)
-              -- If there was no previous event, then...
-              Nothing ->
-                -- ...continue with the current event.
-                go finished (Just j)
-        -- If the next event is a `StopThread` event...
-        E.StopThread{thread, status}
-          -- ...compute the updated fininshed set, and examine the previous event.
-          | let finished' = updateFor finished thread status -> case mi of
-              Just i
-                -- If the previous event was a `RunThread` event for the same thread, then...
-                | E.RunThread{thread = thread'} <- (i ^. value).evSpec
-                , thread == thread'
-                , Just startTimeUnixNano <- timeUnixNano i
-                , Just endTimeUnixNano <- timeUnixNano j -> do
-                    -- ...yield a mutator span, and...
-                    yield . flip (set value) j $
-                      MutatorSpan{..}
-                    -- ...continue with the current event and updated finished set.
-                    go finished' (Just j)
-                -- If the previous event was a `StopThread` event for the same thread, then...
-                | E.StopThread{thread = thread'} <- (i ^. value).evSpec
-                , thread == thread' ->
-                    -- ...continue with the oldest event and updated finished set.
-                    go finished' (Just $ minBy ((.evTime) . (^. value)) i j)
-              -- If there was no previous event or it was any other event, then...
-              _otherwise -> do
-                -- ...emit an error, and...
-                liftIO . logWarning verbosity "processMutatorSpans" . T.pack $
-                  printf
-                    "Capability %d: Unsupported trace %s --> %s"
-                    cap
-                    (maybe "?" (showEventInfo . ((.evSpec) . (^. value))) mi)
-                    (showEventInfo (j ^. value).evSpec)
-                -- ...continue with the previous event.
-                go finished' mi
-        -- If the next event is any other event, ignore it.
-        _otherwise -> go finished mi
-
-    -- Update the finished set using the `ThreadId` and `ThreadStopStatus` from a `StopThread` event.
-    updateFor :: Maybe ThreadId -> ThreadId -> ThreadStopStatus -> Maybe ThreadId
-    updateFor finished thread status = if isThreadFinished status then Just thread else finished
-
-    -- Check whether a given `ThreadId` is in the finished set.
-    is :: ThreadId -> Maybe ThreadId -> Bool
-    is thread = (Just thread ==)
+{- |
+Adapt a @`Lens` s t a b@ into a @`Lens` s (f t) a c@ with a function @c -> f b@.
+-}
+apLens :: (Functor f) => (c -> f b) -> Lens s t a b -> Lens s (f t) a c
+apLens c2fb l = lens (^. l) ((. c2fb) . fmap . flip (set l))
 
 {- |
 Internal helper.
