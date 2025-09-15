@@ -1,4 +1,5 @@
 module GHC.Eventlog.Live.Options (
+  EventlogSocket (..),
   eventlogSocketParser,
   heapProfBreakdownParser,
   eventlogLogFileParser,
@@ -7,7 +8,6 @@ module GHC.Eventlog.Live.Options (
 ) where
 
 import Data.Char (toLower)
-import GHC.Eventlog.Live (EventlogSocket (..))
 import GHC.Eventlog.Live.Machines (Verbosity, heapProfBreakdownEitherReader, verbosityError, verbosityQuiet, verbosityWarning)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
@@ -15,6 +15,9 @@ import Text.Read (readEither)
 
 --------------------------------------------------------------------------------
 -- Eventlog Socket
+
+newtype EventlogSocket
+  = EventlogSocketUnix FilePath
 
 eventlogSocketParser :: O.Parser EventlogSocket
 eventlogSocketParser = socketUnixParser
