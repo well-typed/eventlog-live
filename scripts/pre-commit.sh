@@ -2,7 +2,7 @@
 
 # To install as a Git pre-commit hook, run:
 #
-# > ln scripts/pre-commit.sh .git/hooks/pre-commit.sh
+# > ln ./scripts/pre-commit.sh .git/hooks/pre-commit
 #
 
 # POSIX compliant method for 'pipefail':
