@@ -1,5 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{- |
+Module      : GHC.Eventlog.Live.Verbosity
+Description : Logging verbosity for eventlog machines.
+Stability   : experimental
+Portability : portable
+-}
 module GHC.Eventlog.Live.Verbosity (
   Verbosity,
   showVerbosity,
@@ -14,6 +20,10 @@ import Data.Text (Text)
 -- Verbosity
 -------------------------------------------------------------------------------
 
+{- |
+The type of logging verbosities supported by the machines
+in "GHC.Eventlog.Live.Machines".
+-}
 data Verbosity
   = VerbosityWarning
   | VerbosityError
@@ -21,7 +31,7 @@ data Verbosity
   deriving (Eq, Ord)
 
 {- |
-Pretty-printer for `Verbosity`.
+Pretty-printer for t`Verbosity`.
 -}
 showVerbosity :: Verbosity -> Text
 showVerbosity = \case
@@ -30,19 +40,19 @@ showVerbosity = \case
   VerbosityQuiet -> "Quiet"
 
 {- |
-Quiet `Verbosity`.
+Quiet t`Verbosity`.
 -}
 verbosityQuiet :: Verbosity
 verbosityQuiet = VerbosityQuiet
 
 {- |
-Error `Verbosity`.
+Error t`Verbosity`.
 -}
 verbosityError :: Verbosity
 verbosityError = VerbosityError
 
 {- |
-Warning `Verbosity`.
+Warning t`Verbosity`.
 -}
 verbosityWarning :: Verbosity
 verbosityWarning = VerbosityWarning
