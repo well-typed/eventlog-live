@@ -1,6 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
+{- |
+Module      : GHC.Eventlog.Live.Machines
+Description : Machines for processing eventlog data.
+Stability   : experimental
+Portability : portable
+-}
 module GHC.Eventlog.Live.Machines (
   -- * Eventlog source
   sourceHandleWait,
@@ -84,6 +90,7 @@ module GHC.Eventlog.Live.Machines (
   -- * Ticks
   Tick (..),
   batchByTick,
+  batchToTick,
   batchListToTick,
   batchByTickList,
   liftTick,
@@ -118,6 +125,7 @@ module GHC.Eventlog.Live.Machines (
   Attr,
   AttrKey,
   AttrValue (..),
+  IsAttrValue (..),
   (~=),
 ) where
 
@@ -182,7 +190,7 @@ data WithStartTime a = WithStartTime
   deriving (Functor, Show)
 
 {- |
-Setter for the `value` within a `WithStartTime`
+Setter for the value of a t`WithStartTime`
 -}
 setWithStartTime'value :: WithStartTime a -> b -> WithStartTime b
 setWithStartTime'value (WithStartTime _a t) b = WithStartTime b t
@@ -195,8 +203,8 @@ tryGetTimeUnixNano :: WithStartTime Event -> Maybe Timestamp
 tryGetTimeUnixNano i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
 
 {- |
-Wrap every event in `WithStartTime`. Every event after `E.WallClockTime` will
-have its `maybeStartTimeUnixNano` field set to `Just` the process start time.
+Wrap every event in t`WithStartTime`. Every event after `E.WallClockTime` will
+have its start time field set to `Just` the process start time.
 
 This machine swallows the first and only `E.WallClockTime` event.
 -}
@@ -227,7 +235,7 @@ withStartTime' getEventInfo setStartTime = construct start
       value `setStartTime` Just startTimeUnixNano
 
 {- |
-Drop the `WithStartTime` wrapper.
+Drop the t`WithStartTime` wrapper.
 -}
 dropStartTime :: Process (WithStartTime a) a
 dropStartTime = mapping (.value)
@@ -245,8 +253,8 @@ data WithMainThreadId a = WithMainThreadId
   deriving (Functor, Show)
 
 {- |
-Wrap every event in `WithMainThreadId`. Every event after the first `E.RunThread`
-event will have its `maybeMainThreadId` set to `Just` the main thread ID.
+Wrap every event in t`WithMainThreadId`. Every event after the first `E.RunThread`
+event will have its main thread ID set to `Just` the main thread ID.
 -}
 withMainThreadId :: Process Event (WithMainThreadId Event)
 withMainThreadId = withMainThreadId' E.evSpec WithMainThreadId
@@ -270,7 +278,7 @@ withMainThreadId' getEventInfo setMainThreadId = construct start
       value `setMainThreadId` Just thread
 
 {- |
-Drop the `WithMainThreadId` wrapper.
+Drop the t`WithMainThreadId` wrapper.
 -}
 dropMainThreadId :: Process (WithMainThreadId a) a
 dropMainThreadId = mapping (.value)
@@ -297,6 +305,11 @@ supplier supply =
 -------------------------------------------------------------------------------
 -- Capability Usage Metrics
 
+{- |
+This machine processes t`CapabilityUsageSpan` spans and produces metrics that
+contain the duration and category of each such span and each idle period in
+between.
+-}
 processCapabilityUsageMetrics ::
   forall m.
   (MonadIO m) =>
@@ -338,6 +351,10 @@ processCapabilityUsageMetrics =
             }
         go (Just j.value)
 
+{- |
+The type of process using a capability,
+which is either a mutator thread or garbage collection.
+-}
 data CapabilityUser
   = GC
   | Mutator {thread :: !ThreadId}
@@ -349,7 +366,7 @@ instance Show CapabilityUser where
     Mutator{thread} -> show thread
 
 {- |
-Get the `CapabilityUser` associated with a `CapabilityUsageSpan`.
+Get the t`CapabilityUser` associated with a t`CapabilityUsageSpan`.
 -}
 capabilityUser :: CapabilityUsageSpan -> CapabilityUser
 capabilityUser = either (const GC) (Mutator . (.thread))
@@ -366,7 +383,7 @@ showCapabilityUserCategory = \case
 -- Capability Usage Spans
 
 {- |
-A `CapabilityUsageSpan` is either a `GCSpan` or a `MutatorSpan`.
+A t`CapabilityUsageSpan` is either a t`GCSpan` or a t`MutatorSpan`.
 -}
 type CapabilityUsageSpan = Either GCSpan MutatorSpan
 
@@ -414,8 +431,8 @@ processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan verb
 -- GC spans
 
 {- |
-A `GCSpan` represents a segment of time between `startTimeUnixNano` and
-`endTimeUnixNano` during which capability `cap` ran GC.
+A t`GCSpan` represents a segment of time during which the specified capability
+ran GC.
 -}
 data GCSpan = GCSpan
   { cap :: !Int
@@ -425,7 +442,7 @@ data GCSpan = GCSpan
   deriving (Show)
 
 {- |
-This machine processes `E.StartGC` and `E.EndGC` events to produce `GCSpan`
+This machine processes `E.StartGC` and `E.EndGC` events to produce t`GCSpan`
 values that represent the segments of time a capability spent in GC.
 
 This processor uses the following finite-state automaton:
@@ -549,8 +566,8 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
 -- Mutator spans
 
 {- |
-A `MutatorSpan` represents a segment of time between `startTimeUnixNano` and
-`endTimeUnixNano` during which capability `cap` ran mutator thread `thread`.
+A t`MutatorSpan` represents a segment of time during which the specified
+capability ran the specified mutator thread.
 -}
 data MutatorSpan = MutatorSpan
   { cap :: !Int
@@ -562,7 +579,7 @@ data MutatorSpan = MutatorSpan
 
 {- |
 This machine processes `E.RunThread` and `E.StopThread` events to produce
-`MutatorSpan` values that represent the segments of time a capability spent
+t`MutatorSpan` values that represent the segments of time a capability spent
 executating a mutator.
 
 This processor uses the following finite-state automaton:
@@ -579,7 +596,7 @@ This processor uses the following finite-state automaton:
       └─(RunThread[X])──┘
 @
 
-The transition from @Mutator[X]@ to @Idle@ yields a `MutatorSpan`.
+The transition from @Mutator[X]@ to @Idle@ yields a t`MutatorSpan`.
 While in the @Mutator[X]@ state, any @RunThread[Y]@ or @StopThread[Y]@ events result in an error.
 Furthermore, when a @StopThread[X]@ event with the @ThreadFinished@ status is processed,
 the thread @X@ is added to a set of finished threads,
@@ -615,7 +632,7 @@ processMutatorSpans' timeUnixNano getEvent setMutatorSpan verbosity =
     setMutatorSpan s <$> threadStateSpanToMutatorSpan threadStateSpan
 
 {- |
-This machine converts any `Running` `ThreadStateSpan` to a `MutatorSpan`.
+This machine converts any `Running` t`ThreadStateSpan` to a t`MutatorSpan`.
 -}
 asMutatorSpans ::
   forall m.
@@ -642,7 +659,7 @@ asMutatorSpans' getThreadStateSpan setMutatorSpan = repeatedly go
       for_ maybeMutatorSpan $ yield . setMutatorSpan s
 
 {- |
-Convert the `Running` `ThreadStateSpan` to `Just` a `MutatorSpan`.
+Convert the `Running` t`ThreadStateSpan` to `Just` a t`MutatorSpan`.
 -}
 threadStateSpanToMutatorSpan :: ThreadStateSpan -> Maybe MutatorSpan
 threadStateSpanToMutatorSpan ThreadStateSpan{..} =
@@ -650,16 +667,10 @@ threadStateSpanToMutatorSpan ThreadStateSpan{..} =
     Running{..} -> Just MutatorSpan{..}
     _otherwise -> Nothing
 
--- {- |
--- Adapt a @`Lens` s t a b@ into a @`Lens` s (f t) a c@ with a function @c -> f b@.
--- -}
--- apLens :: (Functor f) => (c -> f b) -> Lens s t a b -> Lens s (f t) a c
--- apLens c2fb l = lens (^. l) ((. c2fb) . fmap . flip (set l))
-
 {- |
 Internal helper.
-Check whether a `ThreadStopStatus` is equal to `ThreadFinished`.
-This is needed because `ThreadStopStatus` does not define an `Eq` instance.
+Check whether a t`ThreadStopStatus` is equal to `ThreadFinished`.
+This is needed because t`ThreadStopStatus` does not define an `Eq` instance.
 -}
 isThreadFinished :: ThreadStopStatus -> Bool
 isThreadFinished = \case
@@ -683,7 +694,8 @@ showEventInfo = \case
 -- Thread Labels
 
 {- |
-A `ThreadLabel` value
+The t`ThreadLabel` type represents the association of a label with a thread
+starting at a given time.
 -}
 data ThreadLabel
   = ThreadLabel
@@ -693,7 +705,7 @@ data ThreadLabel
   }
 
 {- |
-This machine processes `E.ThreadLabel` events and yields `ThreadLabel` values.
+This machine processes `E.ThreadLabel` events and yields t`ThreadLabel` values.
 -}
 processThreadLabels :: Process (WithStartTime Event) ThreadLabel
 processThreadLabels = repeatedly go
@@ -727,7 +739,7 @@ showThreadStateCategory = \case
   Finished{} -> "Finished"
 
 {- |
-Get the `ThreadState` `status`, if the `ThreadState` is `Blocked`.
+Get the t`ThreadState` status, if the t`ThreadState` is `Blocked`.
 -}
 threadStateStatus :: ThreadState -> Maybe ThreadStopStatus
 threadStateStatus = \case
@@ -736,7 +748,7 @@ threadStateStatus = \case
   Finished{} -> Nothing
 
 {- |
-Get the `ThreadState` `cap`, if the `ThreadState` is `Running`.
+Get the t`ThreadState` capability, if the `ThreadState` is `Running`.
 -}
 threadStateCap :: ThreadState -> Maybe Int
 threadStateCap = \case
@@ -758,7 +770,7 @@ data ThreadStateSpan
 
 {- |
 This machine processes `E.RunThread` and `E.StopThread` events to produce
-`ThreadStateSpan` values that represent segments of time where a thread is
+t`ThreadStateSpan` values that represent segments of time where a thread is
 running, blocked, or finished.
 
 This processor uses the following finite-state automaton:
@@ -776,7 +788,7 @@ This processor uses the following finite-state automaton:
 @
 
 The transitions from @Blocked@ to @Blocked@, @Blocked@ to @Running@, and
-@Running@ to @Running@ yield a `ThreadStateSpan`. There are additional
+@Running@ to @Running@ yield a t`ThreadStateSpan`. There are additional
 transitions (not pictured) from either state to the final `Finished` state
 with a `E.StopThread` event with the `ThreadFinished` status.
 -}
@@ -916,6 +928,9 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity =
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
+{- |
+This machine processes `E.HeapAllocated` events into metrics.
+-}
 processHeapAllocatedData :: Process (WithStartTime Event) (Metric Word64)
 processHeapAllocatedData =
   repeatedly $
@@ -932,6 +947,9 @@ processHeapAllocatedData =
 -------------------------------------------------------------------------------
 -- HeapSize
 
+{- |
+This machine processes `E.HeapSize` events into metrics.
+-}
 processHeapSizeData :: Process (WithStartTime Event) (Metric Word64)
 processHeapSizeData = repeatedly go
  where
@@ -949,6 +967,9 @@ processHeapSizeData = repeatedly go
 -------------------------------------------------------------------------------
 -- BlocksSize
 
+{- |
+This machine processes `E.BlocksSize` events into metrics.
+-}
 processBlocksSizeData :: Process (WithStartTime Event) (Metric Word64)
 processBlocksSizeData =
   repeatedly $
@@ -965,6 +986,9 @@ processBlocksSizeData =
 -------------------------------------------------------------------------------
 -- HeapLive
 
+{- |
+This machine processes `E.HeapLive` events into metrics.
+-}
 processHeapLiveData :: Process (WithStartTime Event) (Metric Word64)
 processHeapLiveData =
   repeatedly $
@@ -979,14 +1003,23 @@ processHeapLiveData =
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
--- HeapLive
+-- MemReturn
 
+{- |
+The type of data associated with a `E.MemReturn` event.
+-}
 data MemReturnData = MemReturnData
   { current :: !Word32
+  -- ^ The number of megablocks currently allocated.
   , needed :: !Word32
+  -- ^ The number of megablocks currently needed.
   , returned :: !Word32
+  -- ^ The number of megablocks currently being returned to the OS.
   }
 
+{- |
+This machine processes `E.MemReturn` events into metrics.
+-}
 processMemReturnData :: Process (WithStartTime Event) (Metric MemReturnData)
 processMemReturnData =
   repeatedly $
@@ -1003,6 +1036,10 @@ processMemReturnData =
 -------------------------------------------------------------------------------
 -- HeapProfSample
 
+{- |
+Internal helper.
+The type of info table pointers.
+-}
 newtype InfoTablePtr = InfoTablePtr Word64
   deriving newtype (Eq, Hashable, Ord)
 
@@ -1015,6 +1052,10 @@ instance Read InfoTablePtr where
   readsPrec :: Int -> ReadS InfoTablePtr
   readsPrec _ = readP_to_S (InfoTablePtr <$> (P.string "0x" *> readHexP))
 
+{- |
+Internal helper.
+The type of an info table entry, as produced by the `E.InfoTableProv` event.
+-}
 data InfoTable = InfoTable
   { infoTablePtr :: InfoTablePtr
   , infoTableName :: Text
@@ -1026,6 +1067,10 @@ data InfoTable = InfoTable
   }
   deriving (Show)
 
+{- |
+Internal helper.
+The type of the state kept by `processHeapProfSampleData`.
+-}
 data HeapProfSampleState = HeapProfSampleState
   { eitherShouldWarnOrHeapProfBreakdown :: Either Bool HeapProfBreakdown
   , infoTableMap :: HashMap InfoTablePtr InfoTable
@@ -1033,15 +1078,35 @@ data HeapProfSampleState = HeapProfSampleState
   }
   deriving (Show)
 
+{- |
+Internal helper.
+Decides whether or not `processHeapProfSampleData` should track info tables.
+We track info tables until (1) we learn that the RTS is not run with @-hi@,
+or (2) we see the first heap profiling sample and don't yet know for sure
+that the RTS is run with @-hi@.
+-}
 shouldTrackInfoTableMap :: Either Bool HeapProfBreakdown -> Bool
 shouldTrackInfoTableMap (Left _shouldWarn) = True
 shouldTrackInfoTableMap (Right HeapProfBreakdownInfoTable) = True
 shouldTrackInfoTableMap _ = False
 
+{- |
+Internal helper.
+Checks whether a `HeapProfBreakdown` is `HeapProfBreakdownInfoTable`.
+This is needed because the ghc-events package does not define an `Eq`
+instance for the `HeapProfBreakdown` type.
+-}
 isHeapProfBreakdownInfoTable :: HeapProfBreakdown -> Bool
 isHeapProfBreakdownInfoTable HeapProfBreakdownInfoTable = True
 isHeapProfBreakdownInfoTable _ = False
 
+{- |
+This machine processes `E.HeapProfSampleString` events into metrics.
+Furthermore, it processes the `E.HeapProfBegin` and `E.ProgramArgs` events
+to determine the heap profile breakdown, processes `E.InfoTableProv` events to
+build an info table map, if necessary, and processes `E.HeapProfSampleBegin`
+and `E.HeapProfSampleEnd` events to maintain an era stack.
+-}
 processHeapProfSampleData ::
   (MonadIO m) =>
   Verbosity ->
@@ -1148,6 +1213,19 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
             go $ if isHeapProfBreakdownInfoTable heapProfBreakdown then st else st{infoTableMap = mempty}
       _otherwise -> go st
 
+{- |
+Parses the `HeapProfBreakdown` command-line arguments:
+
+> heapProfBreakdownEitherReader "T" == Left HeapProfBreakdownClosureType
+> heapProfBreakdownEitherReader "c" == Left HeapProfBreakdownCostCentre
+> heapProfBreakdownEitherReader "m" == Left HeapProfBreakdownModule
+> heapProfBreakdownEitherReader "d" == Left HeapProfBreakdownClosureDescr
+> heapProfBreakdownEitherReader "y" == Left HeapProfBreakdownTypeDescr
+> heapProfBreakdownEitherReader "e" == Left HeapProfBreakdownEra
+> heapProfBreakdownEitherReader "r" == Left HeapProfBreakdownRetainer
+> heapProfBreakdownEitherReader "b" == Left HeapProfBreakdownBiography
+> heapProfBreakdownEitherReader "i" == Left HeapProfBreakdownInfoTable
+-}
 heapProfBreakdownEitherReader :: String -> Either String HeapProfBreakdown
 heapProfBreakdownEitherReader =
   \case
@@ -1162,6 +1240,19 @@ heapProfBreakdownEitherReader =
     "i" -> Right HeapProfBreakdownInfoTable
     str -> Left $ "Unsupported heap profile breakdown -h" <> str
 
+{- |
+Shows a `HeapProfBreakdown` as its corresponding command-line flag:
+
+> heapProfBreakdownShow HeapProfBreakdownClosureType == "-hT"
+> heapProfBreakdownShow HeapProfBreakdownCostCentre == "-hc"
+> heapProfBreakdownShow HeapProfBreakdownModule == "-hm"
+> heapProfBreakdownShow HeapProfBreakdownClosureDescr == "-hd"
+> heapProfBreakdownShow HeapProfBreakdownTypeDescr == "-hy"
+> heapProfBreakdownShow HeapProfBreakdownEra == "-he"
+> heapProfBreakdownShow HeapProfBreakdownRetainer == "-hr"
+> heapProfBreakdownShow HeapProfBreakdownBiography == "-hb"
+> heapProfBreakdownShow HeapProfBreakdownInfoTable == "-hi"
+-}
 heapProfBreakdownShow :: HeapProfBreakdown -> String
 heapProfBreakdownShow =
   ("-h" <>) . \case
@@ -1175,8 +1266,15 @@ heapProfBreakdownShow =
     HeapProfBreakdownBiography -> "b"
     HeapProfBreakdownInfoTable -> "i"
 
--- NOTE: This scan is currently flawed, as it does not handle @-with-rtsopts@,
---       nor does it restrict its search to between @+RTS@ and @-RTS@ tags.
+{- |
+Internal helper.
+Determine the `HeapProfBreakdown` from the list of program arguments.
+
+__Warning__: This scan is not fully correct. It merely scans for the presence
+of arguments that, as a whole, parse with `heapProfBreakdownEitherReader`.
+It does not handle @-with-rtsopts@ and does not restrict its search to those
+arguments between @+RTS@ and @-RTS@ tags.
+-}
 findHeapProfBreakdown :: [Text] -> Maybe HeapProfBreakdown
 findHeapProfBreakdown = listToMaybe . mapMaybe parseHeapProfBreakdown
  where
@@ -1198,8 +1296,9 @@ findHeapProfBreakdown = listToMaybe . mapMaybe parseHeapProfBreakdown
 -- Socket source
 
 {- |
-A source which waits for input using 'hWaitForInput',
-produces 'Tick' events on timeout.
+A source which reads chunks from a `Handle`.
+When an input is available, it yields an v`Item`.
+When the timeout is reached, it yields a v`Tick`.
 -}
 sourceHandleWait ::
   (MonadIO m) =>
@@ -1227,6 +1326,11 @@ sourceHandleWait timeoutMilli chunkSizeBytes handle =
 -------------------------------------------------------------------------------
 -- Socket source with batches
 
+{- |
+A source which reads chunks from a `Handle`.
+When input is available, it yields an v`Item`.
+It yields a v`Tick` at each increment of the batch interval.
+-}
 sourceHandleBatch ::
   (MonadIO m) =>
   -- | The batch interval in milliseconds.
@@ -1284,9 +1388,22 @@ It cannot overflow due to the division by 1_000_000.
 nanoToMilli :: Word64 -> Int
 nanoToMilli = fromIntegral . (`div` 1_000_000)
 
+{- |
+Internal helper.
+Type to represent the state of a handle.
+-}
 data Ready = Ready | NotReady | EOF
 
-hWaitForInput' :: Handle -> Int -> IO Ready
+{- |
+Internal helper.
+Wait for input from a `Handle` for a given number of milliseconds.
+-}
+hWaitForInput' ::
+  -- | The handle.
+  Handle ->
+  -- | The timeout in milliseconds.
+  Int ->
+  IO Ready
 hWaitForInput' handle timeoutMilli =
   catch (boolToReady <$> hWaitForInput handle timeoutMilli) handleEOFError
  where
@@ -1328,9 +1445,27 @@ fileSinkBatch handle = dropTick ~> fileSink handle
 -- Ticks
 -------------------------------------------------------------------------------
 
+{- |
+The type of data on a stream of items and ticks.
+
+The t`Tick` type is isomorphic to `Maybe` modulo strictness,
+but with the caveat that v`Tick` does not represent failure.
+-}
 data Tick a = Item !a | Tick
   deriving (Eq, Functor, Foldable, Traversable, Show)
 
+{- |
+This machine batches all items between two ticks into a list.
+-}
+batchByTickList :: Process (Tick a) [a]
+batchByTickList =
+  mapping (fmap D.singleton)
+    ~> batchByTick
+    ~> mapping D.toList
+
+{- |
+Generalised version of `batchByTickList`.
+-}
 batchByTick :: (Monoid a) => Process (Tick a) a
 batchByTick = construct start
  where
@@ -1340,17 +1475,24 @@ batchByTick = construct start
       Item a -> batch (a <> acc)
       Tick -> yield acc >> start
 
+{- |
+This machine streams a list of items into a series of items
+separated by ticks.
+-}
 batchListToTick :: Process [a] (Tick a)
-batchListToTick = repeatedly go
+batchListToTick = batchToTick
+
+{- |
+Generalised version of `batchListToTick`.
+-}
+batchToTick :: (Foldable f) => Process (f a) (Tick a)
+batchToTick = repeatedly go
  where
   go = await >>= \xs -> for_ xs (yield . Item) >> yield Tick
 
-batchByTickList :: Process (Tick a) [a]
-batchByTickList =
-  mapping (fmap D.singleton)
-    ~> batchByTick
-    ~> mapping D.toList
-
+{- |
+This machine drops all ticks.
+-}
 dropTick :: Process (Tick a) a
 dropTick =
   repeatedly $
@@ -1358,6 +1500,9 @@ dropTick =
       Item a -> yield a
       Tick -> pure ()
 
+{- |
+This machine drops all items.
+-}
 onlyTick :: Process (Tick a) ()
 onlyTick =
   repeatedly $
@@ -1373,9 +1518,9 @@ onlyTick =
 -- Decoding events
 
 {- |
-Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.
+Parse t'Event's from a stream of 'BS.ByteString' chunks with ticks.
 
-Throws 'DecodeError' on error.
+Throws a t'DecodeError' on error.
 -}
 decodeEvent :: (MonadIO m) => ProcessT m BS.ByteString Event
 decodeEvent = construct $ loop decodeEventLog
@@ -1446,7 +1591,8 @@ liftTick m =
 -- Lift a machine to a machine that operates on batches
 
 {- |
-Lift a machine that processes @a@s into @b@s to a machine that processes batches of @a@s into batches of @b@s.
+Lift a machine that processes @a@s into @b@s to a machine that processes
+batches of @a@s into batches of @b@s.
 -}
 liftBatch ::
   forall m a b.
@@ -1547,10 +1693,10 @@ liftRouter measure spawn = awaiting M.empty
 -- Event stream sorting
 -------------------------------------------------------------------------------
 
-{-
+{- |
 Reorder events respecting ticks.
 
-This function caches two batches worth of events, sorts them together,
+This machine caches two batches worth of events, sorts them together,
 and then yields only those events whose timestamp is less than or equal
 to the maximum of the first batch.
 -}
@@ -1583,6 +1729,9 @@ sortByBatch timestamp = construct $ go mempty
       LT -> x : go xs (y : ys)
       _ -> y : go (x : xs) ys
 
+{- |
+Variant of `sortByBatch` that operates on streams of items and ticks.
+-}
 sortByBatchTick :: (a -> Timestamp) -> Process (Tick a) (Tick a)
 sortByBatchTick timestamp =
   mapping (fmap (: [])) ~> batchByTick ~> sortByBatch timestamp ~> batchListToTick
@@ -1591,8 +1740,8 @@ sortByBatchTick timestamp =
 -- Sorting the eventlog event stream
 
 {- |
-Buffer and reorder 'Event's to hopefully achieve
-monotonic, causal stream of 'Event's.
+Buffer and reorder t`Event`s to hopefully achieve
+monotonic, causal stream of t`Event`s.
 -}
 sortEventsUpTo ::
   (MonadIO m) =>
@@ -1681,7 +1830,7 @@ handleOutOfOrderEvents cbOutOfOrderEvents = construct start
 -- Filtering semaphores
 -------------------------------------------------------------------------------
 
-{- | A simple delimiting 'Moore' machine,
+{- | A simple delimiting t'Moore' machine,
 which is opened by one constant marker and closed by the other one.
 -}
 between :: Text -> Text -> Moore Text Bool
@@ -1734,8 +1883,8 @@ data Metric a = Metric
   deriving (Functor, Show)
 
 {- |
-Internal helper. Construct a `Metric` from an event with a start time
-(`WithStartTime` `Event`), together with the measurement and any attributes.
+Internal helper. Construct a t`Metric` from an event with a start time
+(t`WithStartTime` t`Event`), together with the measurement and any attributes.
 This is a smart constructor that pulls the various timestamps out of the event.
 -}
 metric ::
@@ -1789,10 +1938,14 @@ instance HasField "cap" CapabilityUsageSpan Int where
 {- |
 An attribute is a key-value pair where the key is any string and the value is
 some numeric type, string, or null. Attributes should be constructed using the
-`(~=)` operator, which automatically converts Haskell types to `AttrValue`.
+`(~=)` operator, which automatically converts Haskell types to t`AttrValue`.
 -}
 type Attr = (AttrKey, AttrValue)
 
+{- |
+Construct an t`Attr` as a pair of an t`AttrKey` and an t`AttrValue`,
+constructed via the t`IsAttrValue` class.
+-}
 (~=) :: (IsAttrValue v) => AttrKey -> v -> Attr
 k ~= v = (ak, av)
  where
@@ -1800,9 +1953,15 @@ k ~= v = (ak, av)
   !av = toAttrValue v
 {-# INLINE (~=) #-}
 
+{- |
+The type of attribute keys.
+-}
 type AttrKey =
   Text
 
+{- |
+The type of attribute values.
+-}
 data AttrValue
   = AttrInt !Int
   | AttrInt8 !Int8
@@ -1819,6 +1978,9 @@ data AttrValue
   | AttrNull
   deriving (Show)
 
+{- |
+Utility class to help construct values of the t`AttrValue` type.
+-}
 class IsAttrValue v where
   toAttrValue :: v -> AttrValue
 
