@@ -11,10 +11,5 @@ packages:
 
 source-repository-package
   type:     git
-  location: https://github.com/haskell/ghc-events
-  tag:      10bb9091e8bc7f8012c28d5dfe7f5c4586961436
-
-source-repository-package
-  type:     git
   location: https://github.com/well-typed/eventlog-socket
   tag:      b39aec656a7ded7427410c5a82477d4972d2a0bc
