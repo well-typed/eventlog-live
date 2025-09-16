@@ -1,3 +1,9 @@
+{- |
+Module      : GHC.Eventlog.Live.Socket
+Description : Utilities for running eventlog machines with sockets.
+Stability   : experimental
+Portability : portable
+-}
 module GHC.Eventlog.Live.Socket (
   EventlogSocket (..),
   Tick (..),
@@ -7,9 +13,8 @@ module GHC.Eventlog.Live.Socket (
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO (..))
-import Data.Machine (MachineT, runT_, (~>))
+import Data.Machine (ProcessT, runT_, (~>))
 import Data.Machine.Fanout (fanout)
-import Data.Machine.Is (Is)
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)
 import GHC.Eventlog.Live.Machines
@@ -19,24 +24,24 @@ import Network.Socket qualified as S
 import System.IO (Handle)
 import System.IO qualified as IO
 
--------------------------------------------------------------------------------
--- Run an event processor with an eventlog socket
-
+{- |
+Run an event processor with an eventlog socket.
+-}
 runWithEventlogSocket ::
   (MonadUnliftIO m) =>
   -- | The batch interval in milliseconds.
   Int ->
-  -- | The number of bytes to read.
+  -- | The number of bytes to read (defaults to 4KiB).
   Maybe Int ->
   -- | The eventlog socket handle.
   EventlogSocket ->
   -- | An optional file to which to stream binary eventlog data.
   Maybe FilePath ->
-  -- | The event machine.
-  MachineT m (Is (Tick Event)) Void ->
+  -- | The event processor.
+  ProcessT m (Tick Event) Void ->
   m ()
 runWithEventlogSocket batchIntervalMs maybeChuckSizeBytes eventlogSocket maybeOutputFile toEventSink = do
-  -- Connect to the eventlog socket
+  -- TODO: Handle connection errors by waiting for the socket to be created.
   eventlogHandle <- liftIO $ connect eventlogSocket
   let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
   let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogHandle
@@ -54,9 +59,9 @@ runWithEventlogSocket batchIntervalMs maybeChuckSizeBytes eventlogSocket maybeOu
                 , decodeEventBatch ~> toEventSink
                 ]
 
--------------------------------------------------------------------------------
--- Connect to the eventlog socket
-
+{- |
+Connect to an eventlog socket.
+-}
 connect :: EventlogSocket -> IO Handle
 connect = \case
   EventlogSocketUnix socketName -> do
