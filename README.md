@@ -4,7 +4,7 @@
 > This package is experimental.
 > It is versioned according to the [PVP](https://pvp.haskell.org).
 > However, breaking changes should be expected and no effort will be
-> made to avoid major version bumps until at least version @1.0.0.0@.
+> made to avoid major version bumps until at least version 1.0.0.0.
 
 This repository contains a collection of libraries and tools for the live profiling of Haskell applications instrumented with [`eventlog-socket`](https://github.com/well-typed/ghc-eventlog-socket).
 
