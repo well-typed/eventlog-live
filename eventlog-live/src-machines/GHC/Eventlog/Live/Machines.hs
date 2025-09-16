@@ -77,6 +77,7 @@ module GHC.Eventlog.Live.Machines (
   threadStateCap,
   ThreadStateSpan (..),
   processThreadStateSpans,
+  processThreadStateSpans',
 
   -- ** Heap events
   processHeapAllocatedData,
