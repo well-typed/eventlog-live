@@ -54,7 +54,7 @@ heapProfBreakdownParser =
   O.option
     (O.eitherReader heapProfBreakdownEitherReader)
     ( O.short 'h'
-        <> O.metavar "[Tcmdyrbi]"
+        <> O.metavar "Tcmdyrbi"
         <> O.help "Heap profile breakdown."
     )
 
@@ -108,7 +108,7 @@ verbosityParser =
     (O.eitherReader readEitherVerbosity)
     ( O.short 'v'
         <> O.long "verbosity"
-        <> O.metavar "[N|quiet|error|warning]"
+        <> O.metavar "NUM|quiet|error|warning"
         <> O.help "The verbosity threshold for logging."
         <> O.value verbosityWarning
     )
