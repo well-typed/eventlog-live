@@ -2,6 +2,12 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+{- |
+Module      : GHC.Eventlog.Live.Otelcol
+Description : The implementation of @eventlog-live-otelcol@.
+Stability   : experimental
+Portability : portable
+-}
 module GHC.Eventlog.Live.Otelcol (
   main,
 ) where
@@ -56,6 +62,9 @@ import System.IO qualified as IO
 import System.Random (StdGen, initStdGen, uniformByteString)
 import Text.Printf (printf)
 
+{- |
+The main function for @eventlog-live-otelcol@.
+-}
 main :: IO ()
 main = do
   Options{..} <- O.execParser options

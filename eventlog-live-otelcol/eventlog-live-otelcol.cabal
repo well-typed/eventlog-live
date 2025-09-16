@@ -3,7 +3,51 @@ name:          eventlog-live-otelcol
 version:       0.1.0.0
 synopsis:      Stream eventlog data to the OpenTelemetry Collector.
 description:
-  This executable supports live streaming of eventlog data to the OpenTelemetry Collector.
+  This executable supports live streaming of eventlog data into
+  the OpenTelemetry Collector.
+
+  > Usage: eventlog-live-otelcol --eventlog-socket SOCKET
+  >                              [--eventlog-socket-timeout NUM]
+  >                              [--eventlog-socket-exponent NUM]
+  >                              [--batch-interval NUM] [--eventlog-log-file FILE]
+  >                              [-h Tcmdyrbi] [--service-name STRING]
+  >                              [-v|--verbosity NUM|quiet|error|warning]
+  >                              --otelcol-host HOST [--otelcol-port PORT]
+  >                              [--otelcol-authority HOST] [--otelcol-ssl]
+  >                              [--otelcol-certificate-store FILE]
+  >                              [--otelcol-ssl-key-log FILE |
+  >                                --otelcol-ssl-key-log-from-env]
+  >                              [--otelcol-no-metrics] [--otelcol-no-traces]
+  >
+  > Available options:
+  >   --eventlog-socket SOCKET Eventlog Unix socket.
+  >   --eventlog-socket-timeout NUM
+  >                            Eventlog socket connection retry timeout in
+  >                            microseconds.
+  >   --eventlog-socket-exponent NUM
+  >                            Eventlog socket connection retry timeout exponent.
+  >   --batch-interval NUM     Batch interval in microseconds.
+  >   --eventlog-log-file FILE Use file to log binary eventlog data.
+  >   -h Tcmdyrbi              Heap profile breakdown.
+  >   --service-name STRING    The name of the profiled service.
+  >   -v,--verbosity NUM|quiet|error|warning
+  >                            The verbosity threshold for logging.
+  >   --help                   Show this help text.
+  >   --version                Show version information
+  >
+  > OpenTelemetry Collector Server Options
+  >   --otelcol-host HOST      Server hostname.
+  >   --otelcol-port PORT      Server TCP port.
+  >   --otelcol-authority HOST Server authority.
+  >   --otelcol-ssl            Use SSL.
+  >   --otelcol-certificate-store FILE
+  >                            Store for certificate validation.
+  >   --otelcol-ssl-key-log FILE
+  >                            Use file to log SSL keys.
+  >   --otelcol-ssl-key-log-from-env
+  >                            Use SSLKEYLOGFILE to log SSL keys.
+  >   --otelcol-no-metrics     Disable metrics exporter.
+  >   --otelcol-no-traces      Disable traces exporter.
 
 license:       AGPL-3.0-only
 license-file:  LICENSE
