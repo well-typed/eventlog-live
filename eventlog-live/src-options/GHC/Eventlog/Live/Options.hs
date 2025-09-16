@@ -1,3 +1,9 @@
+{- |
+Module      : GHC.Eventlog.Live.Options
+Description : Command-line option parsers for eventlog machines.
+Stability   : experimental
+Portability : portable
+-}
 module GHC.Eventlog.Live.Options (
   EventlogSocket (..),
   eventlogSocketParser,
@@ -17,9 +23,15 @@ import Text.Read (readEither)
 --------------------------------------------------------------------------------
 -- Eventlog Socket
 
+{- |
+The type of eventlog sockets.
+-}
 newtype EventlogSocket
   = EventlogSocketUnix FilePath
 
+{- |
+Parser for the eventlog socket.
+-}
 eventlogSocketParser :: O.Parser EventlogSocket
 eventlogSocketParser = socketUnixParser
  where
@@ -34,6 +46,9 @@ eventlogSocketParser = socketUnixParser
 --------------------------------------------------------------------------------
 -- Heap Profile Breakdown
 
+{- |
+Parser for the heap profile breakdown.
+-}
 heapProfBreakdownParser :: O.Parser HeapProfBreakdown
 heapProfBreakdownParser =
   O.option
@@ -46,6 +61,9 @@ heapProfBreakdownParser =
 --------------------------------------------------------------------------------
 -- Eventlog Log File
 
+{- |
+Parser for the eventlog log file.
+-}
 eventlogLogFileParser :: O.Parser FilePath
 eventlogLogFileParser =
   O.strOption
@@ -57,6 +75,9 @@ eventlogLogFileParser =
 --------------------------------------------------------------------------------
 -- Batch Interval
 
+{- |
+Parser for the batch interval.
+-}
 batchIntervalParser :: O.Parser Int
 batchIntervalParser =
   O.option
@@ -67,12 +88,20 @@ batchIntervalParser =
         <> O.value defaultBatchIntervalMs
     )
 
+{- |
+Internal helper.
+The default batch interval in milliseconds.
+-}
 defaultBatchIntervalMs :: Int
 defaultBatchIntervalMs = 1_000
 
 --------------------------------------------------------------------------------
 -- Verbosity
 
+{- |
+Parser for verbosities.
+The default verbosity is `verbosityWarning`.
+-}
 verbosityParser :: O.Parser Verbosity
 verbosityParser =
   O.option
@@ -84,6 +113,11 @@ verbosityParser =
         <> O.value verbosityWarning
     )
 
+{- |
+Internal helper.
+Parser for verbosities by number or name.
+Case insensitive.
+-}
 readEitherVerbosity :: String -> Either String Verbosity
 readEitherVerbosity rawVerbosity =
   -- try to parse the verbosity as a number...
