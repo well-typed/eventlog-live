@@ -28,14 +28,7 @@ description:
       However, breaking changes should be expected and no effort will be
       made to avoid major version bumps until at least version @1.0.0.0@.
 
-  The following is a screenshot of [Grafana](https://grafana.com) showing
-  live heap profiling statistics coming from the
-  [`oddball`](https://github.com/well-typed/eventlog-live/tree/b66c79526c79f28e5d85a4f7a9cbd29da65fb5bc/examples/oddball)
-  example program.
-
-  ![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](https://github.com/well-typed/eventlog-live/blob/b66c79526c79f28e5d85a4f7a9cbd29da65fb5bc/eventlog-live/assets/eventlog-live-otelcol.png?raw=true)
-
-  For more information, see the README in the repository.
+  For more information, see [the README](https://github.com/well-typed/eventlog-live#readme).
 
 license:       AGPL-3.0-only
 license-file:  LICENSE
