@@ -19,6 +19,7 @@ import Data.Maybe (catMaybes, mapMaybe)
 import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import Database.InfluxDB.Line qualified as I (Line (..))
@@ -31,6 +32,8 @@ import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
+import Options.Applicative.Extra qualified as O (helperWith)
+import PackageInfo_eventlog_live_influxdb qualified as EventlogLive
 import System.Clock (TimeSpec, fromNanoSecs)
 
 --------------------------------------------------------------------------------
@@ -252,7 +255,13 @@ influxDBWriter writeParams = repeatedly go
 --------------------------------------------------------------------------------
 
 optionsInfo :: O.ParserInfo Options
-optionsInfo = O.info (optionsParser O.<**> O.helper) O.idm
+optionsInfo =
+  O.info
+    ( optionsParser
+        O.<**> O.helperWith (O.long "help" <> O.help "Show this help text.")
+        O.<**> O.simpleVersioner (showVersion EventlogLive.version)
+    )
+    O.idm
 
 data Options = Options
   { eventlogSocket :: EventlogSocket
