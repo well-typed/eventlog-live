@@ -106,9 +106,23 @@ stateDiagram-v2
         [*]                                             --> processThreadEvents'batchByTick
         processThreadEvents'sortByBatch                                                                     : sortByBatch
         processThreadEvents'batchByTick                 --> processThreadEvents'sortByBatch                 : [WithStartTime Event]
-        processThreadEvents'sortByBatch                 --> processCapabilityUsageSpans                     : [WithStartTime Event]
 
-        processCapabilityUsageSpans                     --> processCapabilityUsageMetrics                   : [CapabilityUsageSpan]
+        processThreadEvents'sortByBatch                 --> processGCSpans                                  : [WithStartTime Event]
+        processGCSpans                                  --> asCapabilityUsageSpans                          : [GCSpan]
+
+        processThreadEvents'sortByBatch                 --> processThreadStateSpans                         : [WithStartTime Event]
+        processThreadStateSpans                         --> asMutatorSpan                                   : [ThreadStateSpan]
+
+        asMutatorSpan                                   --> asCapabilityUsageSpans                          : [MutatorSpan]
+        asCapabilityUsageSpans'asSpan                                                                       : asSpan
+        asCapabilityUsageSpans                          --> asCapabilityUsageSpans'asSpan                   : [OT.Span]
+        asCapabilityUsageSpans'asSpan                   --> processThreadEvents'asRight                     : [OTLP.Span]
+
+        processThreadStateSpans'asSpan                                                                      : asSpan
+        processThreadStateSpans                         --> processThreadStateSpans'asSpan                  : [ThreadStateSpan]
+        processThreadStateSpans'asSpan                  --> processThreadEvents'asRight                     : [OTLP.Span]
+
+        asCapabilityUsageSpans                          --> processCapabilityUsageMetrics                   : [CapabilityUsageSpan]
         processCapabilityUsageMetrics'asNumberDataPoint                                                     : asNumberDataPoint
         processCapabilityUsageMetrics                   --> processCapabilityUsageMetrics'asNumberDataPoint : [Metric Double]
         processCapabilityUsageMetrics'asSum                                                                 : asSum
@@ -118,15 +132,6 @@ stateDiagram-v2
         processCapabilityUsageMetrics'asLeft                                                                : asLeft
         processCapabilityUsageMetrics'asMetric          --> processCapabilityUsageMetrics'asLeft            : OTLP.Metric
         processCapabilityUsageMetrics'asLeft            --> [*]
-
-        processCapabilityUsageSpans'asSpan                                                                  : asSpan
-        processCapabilityUsageSpans                     --> processCapabilityUsageSpans'asSpan              : [CapabilityUsageSpan]
-        processCapabilityUsageSpans'asSpan              --> processThreadEvents'asRight                     : [OTLP.Span]
-
-        processThreadEvents'sortByBatch                 --> processThreadStateSpans                         : [WithStartTime Event]
-        processThreadStateSpans'asSpan                                                                      : asSpan
-        processThreadStateSpans                         --> processThreadStateSpans'asSpan                  : [ThreadStateSpan]
-        processThreadStateSpans'asSpan                  --> processThreadEvents'asRight                     : [OTLP.Span]
 
         processThreadEvents'asRight                                                                         : asRight
         processThreadEvents'asRight                     --> [*]
