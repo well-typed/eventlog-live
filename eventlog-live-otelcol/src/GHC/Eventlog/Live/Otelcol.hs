@@ -18,7 +18,7 @@ import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Machine (Process, ProcessT, await, construct, filtered, mapping, repeatedly, yield, (~>))
+import Data.Machine (Process, ProcessT, asParts, await, construct, filtered, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
@@ -115,16 +115,40 @@ errorWriter = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr
 -- processThreadEvents
 --------------------------------------------------------------------------------
 
+data OneOf a b c = A !a | B !b | C !c
+
 processThreadEvents ::
   (MonadIO m) =>
   Verbosity ->
   ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
 processThreadEvents verbosity =
   ELM.sortByBatchTick (.value.evTime)
+    ~> ELM.liftTick
+      ( fanout
+          [ ELM.processGCSpans verbosity
+              ~> mapping (D.singleton . A)
+          , ELM.processThreadStateSpans' ELM.tryGetTimeUnixNano (.value) ELM.setWithStartTime'value verbosity
+              ~> fanout
+                [ ELM.asMutatorSpans' (.value) ELM.setWithStartTime'value
+                    ~> mapping (D.singleton . B)
+                , mapping (D.singleton . C)
+                ]
+          ]
+      )
+    ~> ELM.liftTick
+      ( asParts
+          ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
+      )
     ~> fanout
-      [ ELM.liftTick (ELM.processCapabilityUsageSpans verbosity)
+      [ ELM.liftTick
+          ( mapping leftToMaybe
+              ~> asParts
+          )
           ~> fanout
-            [ ELM.liftTick (ELM.processCapabilityUsageMetrics ~> asNumberDataPoint)
+            [ ELM.liftTick
+                ( ELM.processCapabilityUsageMetrics
+                    ~> asNumberDataPoint
+                )
                 ~> ELM.batchByTickList
                 ~> asSum
                   [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
@@ -135,8 +159,7 @@ processThreadEvents verbosity =
                   , OM.description .~ "Report the duration of each capability usage span."
                   , OM.unit .~ "ns"
                   ]
-                ~> mapping Left
-                ~> mapping D.singleton
+                ~> mapping (D.singleton . Left)
             , ELM.liftTick
                 ( ELM.dropStartTime
                     ~> asSpan
@@ -145,12 +168,32 @@ processThreadEvents verbosity =
                 ~> ELM.batchByTick
             ]
       , ELM.liftTick
-          ( ELM.processThreadStateSpans verbosity
+          ( mapping rightToMaybe
+              ~> asParts
               ~> asSpan
               ~> mapping (D.singleton . Right)
           )
           ~> ELM.batchByTick
       ]
+ where
+  repackCapabilityUsageSpanOrThreadStateSpan = \case
+    A i -> Left $ fmap Left i
+    B i -> Left $ fmap Right i
+    C i -> Right i.value
+
+{- |
+Internal helper.
+Get the `Left` value, if any.
+-}
+leftToMaybe :: Either a b -> Maybe a
+leftToMaybe = either Just (const Nothing)
+
+{- |
+Internal helper.
+Get the `Right` value, if any.
+-}
+rightToMaybe :: Either a b -> Maybe b
+rightToMaybe = either (const Nothing) Just
 
 --------------------------------------------------------------------------------
 -- processHeapEvents
