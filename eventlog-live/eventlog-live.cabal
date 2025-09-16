@@ -1,20 +1,50 @@
-cabal-version:   3.12
-name:            eventlog-live
-version:         0.1.0.0
-synopsis:        Live processing of eventlog data.
+cabal-version: 3.12
+name:          eventlog-live
+version:       0.1.0.0
+synopsis:      Live processing of eventlog data.
 description:
   This package supports live processing of eventlog data.
-  It currently has two backends: the OpenTelemetry Collector and InfluxDB.
+  It consists of three libraries:
 
-license:         AGPL-3.0-only
-license-file:    LICENSE
-author:          Wen Kokke
-maintainer:      wen@well-typed.com
-copyright:       (c) 2021-2025 Well-Typed
-build-type:      Simple
-category:        Debug, Monitoring, System
-tested-with:     GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
-extra-doc-files: assets/eventlog-live-otelcol.png
+  *   The @eventlog-live@ library defines
+      [machines](https://hackage.haskell.org/package/machines)
+      for processing eventlog data.
+  *   The @eventlog-live:options@ sub-library defines
+      [optparse-applicative](https://hackage.haskell.org/package/optparse-applicative)
+      parsers for common command-line arguments.
+  *   The @eventlog-live:socket@ sub-library defines functions to read the
+      eventlog from a Unix socket, which depend on the
+      [network](https://hackage.haskell.org/package/network) package.
+
+  This package is primarily intended for use via the
+  [eventlog-live-influxdb](https://hackage.haskell.org/package/eventlog-live-influxdb)
+  and
+  [eventlog-live-otelcol](https://hackage.haskell.org/package/eventlog-live-otelcol)
+  packages.
+
+  [⚠️ Warning]:
+      This package is experimental.
+      It is versioned according to the [PVP](https://pvp.haskell.org).
+      However, breaking changes should be expected and no effort will be
+      made to avoid major version bumps until at least version @1.0.0.0@.
+
+  The following is a screenshot of [Grafana](https://grafana.com) showing
+  live heap profiling statistics coming from the
+  [`oddball`](https://github.com/well-typed/eventlog-live/tree/b66c79526c79f28e5d85a4f7a9cbd29da65fb5bc/examples/oddball)
+  example program.
+
+  ![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](https://github.com/well-typed/eventlog-live/blob/b66c79526c79f28e5d85a4f7a9cbd29da65fb5bc/eventlog-live/assets/eventlog-live-otelcol.png?raw=true)
+
+  For more information, see the README in the repository.
+
+license:       AGPL-3.0-only
+license-file:  LICENSE
+author:        Wen Kokke
+maintainer:    wen@well-typed.com
+copyright:     (c) 2021-2025 Well-Typed
+build-type:    Simple
+category:      Debug, Monitoring, System
+tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
 common language
   ghc-options:
