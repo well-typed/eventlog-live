@@ -7,6 +7,8 @@ Portability : portable
 module GHC.Eventlog.Live.Options (
   EventlogSocket (..),
   eventlogSocketParser,
+  eventlogSocketTimeoutParser,
+  eventlogSocketTimeoutExponentParser,
   heapProfBreakdownParser,
   eventlogLogFileParser,
   batchIntervalParser,
@@ -42,6 +44,32 @@ eventlogSocketParser = socketUnixParser
             <> O.metavar "SOCKET"
             <> O.help "Eventlog Unix socket."
         )
+
+{- |
+Parser for the intial timeout for exponential backoff.
+-}
+eventlogSocketTimeoutParser :: O.Parser Double
+eventlogSocketTimeoutParser =
+  O.option
+    O.auto
+    ( O.long "eventlog-socket-timeout"
+        <> O.metavar "NUM"
+        <> O.help "Eventlog socket connection retry timeout in microseconds."
+        <> O.value 1
+    )
+
+{- |
+Parser for the exponent for exponential backoff.
+-}
+eventlogSocketTimeoutExponentParser :: O.Parser Double
+eventlogSocketTimeoutExponentParser =
+  O.option
+    O.auto
+    ( O.long "eventlog-socket-exponent"
+        <> O.metavar "NUM"
+        <> O.help "Eventlog socket connection retry timeout exponent."
+        <> O.value 1
+    )
 
 --------------------------------------------------------------------------------
 -- Heap Profile Breakdown
