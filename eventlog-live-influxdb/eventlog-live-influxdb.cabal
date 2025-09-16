@@ -3,7 +3,46 @@ name:          eventlog-live-influxdb
 version:       0.1.0.0
 synopsis:      Stream eventlog data into InfluxDB.
 description:
-  This executable supports live streaming of eventlog data into InfluxDB.
+  This executable supports live streaming of eventlog data into
+  [InfluxDB](https://www.influxdata.com) version 1.8.
+
+  > Usage: eventlog-live-influxdb --eventlog-socket SOCKET
+  >                               [--eventlog-socket-timeout NUM]
+  >                               [--eventlog-socket-exponent NUM]
+  >                               [--batch-interval NUM] [--eventlog-log-file FILE]
+  >                               [-h Tcmdyrbi]
+  >                               [-v|--verbosity NUM|quiet|error|warning]
+  >                               [--influxdb-username USERNAME
+  >                                 --influxdb-password PASSWORD]
+  >                               [--influxdb-retention-policy RETENTION_POLICY]
+  >                               [--influxdb-host HOST] [--influxdb-port HOST]
+  >                               [--influxdb-ssl] --influxdb-database DATABASE
+  >
+  > Available options:
+  >   --eventlog-socket SOCKET Eventlog Unix socket.
+  >   --eventlog-socket-timeout NUM
+  >                            Eventlog socket connection retry timeout in
+  >                            microseconds.
+  >   --eventlog-socket-exponent NUM
+  >                            Eventlog socket connection retry timeout exponent.
+  >   --batch-interval NUM     Batch interval in microseconds.
+  >   --eventlog-log-file FILE Use file to log binary eventlog data.
+  >   -h Tcmdyrbi              Heap profile breakdown.
+  >   -v,--verbosity NUM|quiet|error|warning
+  >                            The verbosity threshold for logging.
+  >   --influxdb-username USERNAME
+  >                            InfluxDB username
+  >   --influxdb-password PASSWORD
+  >                            InfluxDB password
+  >   --influxdb-retention-policy RETENTION_POLICY
+  >                            InfluxDB retention policy
+  >   --influxdb-host HOST     InfluxDB server host
+  >   --influxdb-port HOST     InfluxDB server host
+  >   --influxdb-ssl           InfluxDB server SSL
+  >   --influxdb-database DATABASE
+  >                            InfluxDB database name
+  >   --help                   Show this help text.
+  >   --version                Show version information
 
 license:       AGPL-3.0-only
 license-file:  LICENSE
@@ -52,6 +91,8 @@ library
   import:          language
   hs-source-dirs:  src
   exposed-modules: GHC.Eventlog.Live.InfluxDB
+  other-modules:   PackageInfo_eventlog_live_influxdb
+  autogen-modules: PackageInfo_eventlog_live_influxdb
   build-depends:
     , base                   >=4.16  && <4.21
     , clock                  >=0.8.4 && <0.9

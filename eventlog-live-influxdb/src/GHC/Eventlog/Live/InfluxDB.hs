@@ -1,5 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{- |
+Module      : GHC.Eventlog.Live.InfluxDB
+Description : The implementation of @eventlog-live-influxdb@.
+Stability   : experimental
+Portability : portable
+-}
 module GHC.Eventlog.Live.InfluxDB (
   main,
 ) where
@@ -40,6 +46,9 @@ import System.Clock (TimeSpec, fromNanoSecs)
 -- Main function
 --------------------------------------------------------------------------------
 
+{- |
+The main function for @eventlog-live-influxdb@.
+-}
 main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
