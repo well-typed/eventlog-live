@@ -24,41 +24,7 @@ The transition from `GC` to `Idle` yields a GC span.
 
 ### Mutator Span Analysis
 
-The mutator span analysis produces mutator spans and follows this automaton.
-This is not a finite-state automaton, since the `Mutator[X]` state and the `RunThread[X]` and `StopThread[X]` events are indexed by a thread ID. Furthermore, each `StopThread` event has a `status` field (which can be either `ThreadFinished` or not). Finally, the automaton maintains a set of finished thread IDs, to block `RunThread[X]` transitions after a thread has finished.
-
-```mermaid
-stateDiagram-v2
-  direction RL
-
-  state Idle
-  state Mutator[X]
-  state RunThread[Y] <<choice>>
-  state StopThread[Y] <<choice>>
-  state RunThreadError
-  RunThreadError : Error
-  state StopThreadError
-  StopThreadError : Error
-
-  classDef badBadEvent fill:#f00,color:white,font-weight:bold,stroke-width:2px,stroke:yellow
-  class RunThreadError, StopThreadError badEvent
-
-  [*]             --> Idle
-  Idle            --> Idle            : StopThread[X]
-  Idle            --> Mutator[X]      : RunThread[X]
-  Mutator[X]      --> StopThread[Y]   : StopThread[Y]
-  StopThread[Y]   --> Idle            : if X=Y<br />if status=ThreadFinished, ignore future RunThread[X]
-  StopThread[Y]   --> StopThreadError : if X≠Y
-  StopThreadError --> Mutator[X]
-
-  Mutator[X]      --> RunThread[Y]    : RunThread[Y]
-  RunThread[Y]    --> Mutator[X]      : if X=Y
-  RunThread[Y]    --> RunThreadError  : if X≠Y
-  RunThreadError  --> Mutator[X]
-```
-
-The transition from `Mutator[X]` to `Idle` yields a mutator span.
-While in the `Mutator[X]` state, any `RunThread[Y]` or `StopThread[Y]` events with `X≠Y` result in an error. Furthermore, when a `StopThread[Y]` event with `X=Y` and `status=ThreadFinished` status is processed, the thread `X` is added to a set of finished threads, and any further `RunThread[X]` events for that `X` are ignored. This is done because the GHC RTS frequently emits a false `RunThread[X]` event immediately after the `StopThread[X]` event with `status=ThreadFinished`.
+The mutator span analysis reuses the thread state analysis and produces a mutator span for every thread state span whose thread state is `Running`.
 
 ## Thread State Analysis
 
