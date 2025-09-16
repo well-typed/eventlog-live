@@ -53,9 +53,11 @@ main = do
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSocket
+    eventlogSocket
+    eventlogSocketTimeout
+    eventlogSocketTimeoutExponent
     batchInterval
     Nothing -- chunk size (bytes)
-    eventlogSocket
     maybeEventlogLogFile
     toInfluxDB
 
@@ -254,6 +256,8 @@ optionsInfo = O.info (optionsParser O.<**> O.helper) O.idm
 
 data Options = Options
   { eventlogSocket :: EventlogSocket
+  , eventlogSocketTimeout :: Double
+  , eventlogSocketTimeoutExponent :: Double
   , batchInterval :: Int
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
@@ -265,6 +269,8 @@ optionsParser :: O.Parser Options
 optionsParser =
   Options
     <$> eventlogSocketParser
+    <*> eventlogSocketTimeoutParser
+    <*> eventlogSocketTimeoutExponentParser
     <*> batchIntervalParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser

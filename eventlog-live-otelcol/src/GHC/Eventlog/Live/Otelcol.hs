@@ -63,8 +63,14 @@ main = do
   let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-    runWithEventlogSocket batchInterval Nothing eventlogSocket maybeEventlogLogFile $
-      ELM.liftTick ELM.withStartTime
+    runWithEventlogSocket
+      eventlogSocket
+      eventlogSocketTimeout
+      eventlogSocketTimeoutExponent
+      batchInterval
+      Nothing
+      maybeEventlogLogFile
+      $ ELM.liftTick ELM.withStartTime
         ~> fanout
           [ processHeapEvents verbosity maybeHeapProfBreakdown
               ~> mapping (fmap Left)
@@ -633,11 +639,13 @@ options =
     O.idm
 
 data Options = Options
-  { batchInterval :: Int
+  { eventlogSocket :: EventlogSocket
+  , eventlogSocketTimeout :: Double
+  , eventlogSocketTimeoutExponent :: Double
+  , batchInterval :: Int
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
-  , eventlogSocket :: EventlogSocket
   , verbosity :: Verbosity
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   }
@@ -645,11 +653,13 @@ data Options = Options
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> batchIntervalParser
+    <$> eventlogSocketParser
+    <*> eventlogSocketTimeoutParser
+    <*> eventlogSocketTimeoutExponentParser
+    <*> batchIntervalParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
-    <*> eventlogSocketParser
     <*> verbosityParser
     <*> openTelemetryCollectorOptionsParser
 
