@@ -256,7 +256,7 @@ processMemReturn =
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemReturned"
-            , OM.description .~ "Report the number of megablocks currently being returned to the OT."
+            , OM.description .~ "Report the number of megablocks currently being returned to the OS."
             , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
