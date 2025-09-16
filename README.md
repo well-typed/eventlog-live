@@ -12,7 +12,7 @@ This repository contains a collection of libraries and tools for the live profil
 
 The following is a screenshow of Grafana which shows live heap profiling statistics coming from the [`oddball`](examples/oddball) example program.
 
-![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](eventlog-live/assets/eventlog-live-otelcol.png)
+![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example program.](assets/eventlog-live-otelcol.png)
 
 To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then navigate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Heap_.
 
