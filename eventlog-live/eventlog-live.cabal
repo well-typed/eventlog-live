@@ -46,6 +46,11 @@ build-type:    Simple
 category:      Debug, Monitoring, System
 tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
+source-repository head
+  type:     git
+  location: https://github.com/well-typed/eventlog-live.git
+  subdir:   eventlog-live
+
 common language
   ghc-options:
     -Wall -Wcompat -Widentities -Wprepositive-qualified-module
