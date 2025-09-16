@@ -724,7 +724,7 @@ otelcolAddressParser =
   G.Address
     <$> O.strOption
       ( O.long "otelcol-host"
-          <> O.metavar "HOTT"
+          <> O.metavar "HOST"
           <> O.help "Server hostname."
       )
     <*> O.option
@@ -737,7 +737,7 @@ otelcolAddressParser =
     <*> O.optional
       ( O.strOption
           ( O.long "otelcol-authority"
-              <> O.metavar "HOTT"
+              <> O.metavar "HOST"
               <> O.help "Server authority."
           )
       )
