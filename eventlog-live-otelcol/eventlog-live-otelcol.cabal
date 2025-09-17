@@ -1,7 +1,7 @@
-cabal-version: 3.12
-name:          eventlog-live-otelcol
-version:       0.1.0.0
-synopsis:      Stream eventlog data to the OpenTelemetry Collector.
+cabal-version:   3.12
+name:            eventlog-live-otelcol
+version:         0.1.0.0
+synopsis:        Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into
   the OpenTelemetry Collector.
@@ -49,14 +49,15 @@ description:
   >   --otelcol-no-metrics     Disable metrics exporter.
   >   --otelcol-no-traces      Disable traces exporter.
 
-license:       AGPL-3.0-only
-license-file:  LICENSE
-author:        Wen Kokke
-maintainer:    wen@well-typed.com
-copyright:     (c) 2025 Well-Typed
-build-type:    Simple
-category:      Debug, Monitoring, System
-tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+license:         AGPL-3.0-only
+license-file:    LICENSE
+author:          Wen Kokke
+maintainer:      wen@well-typed.com
+copyright:       (c) 2025 Well-Typed
+build-type:      Simple
+category:        Debug, Monitoring, System
+extra-doc-files: CHANGELOG.md
+tested-with:     GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
 source-repository head
   type:     git
