@@ -102,8 +102,6 @@ module GHC.Eventlog.Live.Machines (
   -- * Event sorting
   sortByBatch,
   sortByBatchTick,
-  sortEventsUpTo,
-  handleOutOfOrderEvents,
 
   -- * Delimiting
   between,
@@ -165,7 +163,6 @@ import GHC.RTS.Events qualified as E
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import GHC.Records (HasField (..))
 import Numeric (showHex)
-import System.Clock qualified as Clock
 import System.IO (Handle, hWaitForInput)
 import System.IO.Error (isEOFError)
 import Text.ParserCombinators.ReadP (readP_to_S)
@@ -1745,96 +1742,6 @@ Variant of `sortByBatch` that operates on streams of items and ticks.
 sortByBatchTick :: (a -> Timestamp) -> Process (Tick a) (Tick a)
 sortByBatchTick timestamp =
   mapping (fmap (: [])) ~> batchByTick ~> sortByBatch timestamp ~> batchListToTick
-
--------------------------------------------------------------------------------
--- Sorting the eventlog event stream
-
-{- |
-Buffer and reorder t`Event`s to hopefully achieve
-monotonic, causal stream of t`Event`s.
--}
-sortEventsUpTo ::
-  (MonadIO m) =>
-  -- | Interval in nanoseconds.
-  Word64 ->
-  ProcessT m (Tick Event) Event
-sortEventsUpTo flushoutIntervalNs = construct start
- where
-  -- Interval to wait for cutoff, 1.5 times the flushout interval
-  cutoffIntervalNs :: Int64
-  cutoffIntervalNs = fromIntegral $ flushoutIntervalNs + flushoutIntervalNs `div` 2
-
-  start :: (MonadIO m) => PlanT (Is (Tick Event)) Event m ()
-  start = do
-    mev <- await
-    case mev of
-      Tick -> start
-      Item ev -> do
-        our <- liftIO (timeSpec <$> Clock.getTime Clock.Monotonic)
-        loop (our - timeStampNs (evTime ev)) [ev]
-
-  -- the Int64 argument is the minimum difference we have seen between our
-  -- clock and incoming events.
-  loop :: (MonadIO m) => Int64 -> [Event] -> PlanT (Is (Tick Event)) Event m ()
-  loop diff evs = do
-    mev <- await
-    case mev of
-      Tick -> do
-        our <- liftIO (timeSpec <$> Clock.getTime Clock.Monotonic)
-        yieldEvents our diff evs
-      Item ev -> do
-        our <- liftIO (timeSpec <$> Clock.getTime Clock.Monotonic)
-
-        -- Adjust the difference
-        let this :: Int64
-            this = our - timeStampNs (evTime ev)
-
-        let diff'
-              | abs diff < abs this = diff
-              | otherwise = this
-
-        yieldEvents our diff' (ev : evs)
-
-  yieldEvents :: (MonadIO m) => Int64 -> Int64 -> [Event] -> PlanT (Is (Tick Event)) Event m ()
-  yieldEvents our diff evs = do
-    -- approximation of events time in our clock
-    let approx e = timeStampNs (evTime e) + diff
-    let cutoff = our - cutoffIntervalNs
-    let (old, new) = L.partition (\e -> approx e < cutoff) evs
-    traverse_ yield (L.sortBy (comparing evTime) old)
-    loop diff new
-
-  timeStampNs :: Timestamp -> Int64
-  timeStampNs = fromIntegral
-
-  timeSpec :: Clock.TimeSpec -> Int64
-  timeSpec ts
-    | ns >= 0 = ns
-    | otherwise = 0
-   where
-    ns = Clock.sec ts * 1_000_000_000 + Clock.nsec ts
-
-{- |
-Machine which checks that consecutive events are properly ordered.
-Runs an effect on non-causal events.
--}
-handleOutOfOrderEvents ::
-  (Monad m) =>
-  (Event -> Event -> m ()) ->
-  ProcessT m Event Event
-handleOutOfOrderEvents cbOutOfOrderEvents = construct start
- where
-  start = do
-    e <- await
-    yield e
-    loop e
-
-  loop e = do
-    e' <- await
-    when (evTime e' < evTime e) . lift $
-      cbOutOfOrderEvents e e'
-    yield e'
-    loop e'
 
 -------------------------------------------------------------------------------
 -- Filtering semaphores
