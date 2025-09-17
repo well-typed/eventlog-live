@@ -131,12 +131,11 @@ module GHC.Eventlog.Live.Machines (
 import Control.Exception (Exception, catch, throwIO)
 import Control.Monad (forever, unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
 import Data.Char (isSpace)
 import Data.DList qualified as D
 import Data.Either (isLeft)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.Function (fix, on)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
@@ -149,7 +148,6 @@ import Data.Machine.Fanout (fanout)
 import Data.Machine.Mealy (unfoldMealy)
 import Data.Machine.Process (Automaton (..))
 import Data.Maybe (fromMaybe, isNothing, listToMaybe, mapMaybe)
-import Data.Ord (comparing)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
