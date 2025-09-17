@@ -3,6 +3,7 @@ cabal=3.12.1.0
 cabal-fmt=0.1.12
 fourmolu=0.16.2.0
 ghc=9.8.4
+haddock=2.31.0
 hlint=3.10
 prettier=3.4.1
 shellcheck=0.10.0
