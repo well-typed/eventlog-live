@@ -51,7 +51,13 @@ maintainer:    wen@well-typed.com
 copyright:     (c) 2025 Well-Typed
 build-type:    Simple
 category:      Debug, Monitoring, System
-tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+tested-with:
+  GHC ==9.2.8
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.2
+   || ==9.12.2
 
 common language
   ghc-options:
@@ -94,7 +100,7 @@ library
   other-modules:   PackageInfo_eventlog_live_influxdb
   autogen-modules: PackageInfo_eventlog_live_influxdb
   build-depends:
-    , base                   >=4.16  && <4.21
+    , base                   >=4.16  && <4.22
     , clock                  >=0.8.4 && <0.9
     , containers             >=0.6   && <0.8
     , dlist                  >=1.0   && <1.1

@@ -9,7 +9,13 @@ copyright:     (c) 2021 Well-Typed
 license:       BSD-3-Clause
 license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
-tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+tested-with:
+  GHC ==9.2.8
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.2
+   || ==9.12.2
 
 source-repository head
   type:     git
