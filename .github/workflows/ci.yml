@@ -95,6 +95,9 @@ jobs:
           - "9.12.2"
         include:
           - name: false
+          - name: false
+            os: "windows-latest"
+            ghc-version: "9.10.2"
 
   #############################################################################
   # Build dockerfiles
