@@ -9,7 +9,13 @@ copyright:     (c) 2025 Well-Typed
 license:       AGPL-3.0-only
 license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
-tested-with:   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+tested-with:
+  GHC ==9.2.8
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.2
+   || ==9.12.2
 
 executable dumper
   hs-source-dirs:     app
@@ -20,7 +26,7 @@ executable dumper
 
   main-is:            Main.hs
   build-depends:
-    , base                   >=4.16    && <4.21
+    , base                   >=4.16    && <4.22
     , bytestring             >=0.11    && <0.13
     , eventlog-live          >=0.1.0.0 && <0.2
     , eventlog-live:options
