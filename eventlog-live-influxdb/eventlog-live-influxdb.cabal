@@ -1,7 +1,7 @@
-cabal-version: 3.12
-name:          eventlog-live-influxdb
-version:       0.1.0.0
-synopsis:      Stream eventlog data into InfluxDB.
+cabal-version:   3.12
+name:            eventlog-live-influxdb
+version:         0.1.0.0
+synopsis:        Stream eventlog data into InfluxDB.
 description:
   This executable supports live streaming of eventlog data into
   [InfluxDB](https://www.influxdata.com) version 1.8.
@@ -44,13 +44,14 @@ description:
   >   --help                   Show this help text.
   >   --version                Show version information
 
-license:       AGPL-3.0-only
-license-file:  LICENSE
-author:        Wen Kokke
-maintainer:    wen@well-typed.com
-copyright:     (c) 2025 Well-Typed
-build-type:    Simple
-category:      Debug, Monitoring, System
+license:         AGPL-3.0-only
+license-file:    LICENSE
+author:          Wen Kokke
+maintainer:      wen@well-typed.com
+copyright:       (c) 2025 Well-Typed
+build-type:      Simple
+category:        Debug, Monitoring, System
+extra-doc-files: CHANGELOG.md
 tested-with:
   GHC ==9.2.8
    || ==9.4.8
