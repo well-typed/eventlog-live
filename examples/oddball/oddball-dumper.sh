@@ -12,7 +12,7 @@ echo "Build dumper"
 cabal build dumper -v0
 
 # Install cleanup handler
-trap 'trap - TERM && kill -- -$$' INT TERM EXIT
+trap 'trap - TERM && kill -- -$$' INT TERM
 
 # Run oddball
 echo "Start oddball"

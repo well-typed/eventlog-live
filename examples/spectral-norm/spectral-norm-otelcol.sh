@@ -12,7 +12,7 @@ echo "Build eventlog-live-otelcol"
 cabal build eventlog-live-otelcol -v0
 
 # Install cleanup handler
-trap 'trap - TERM && kill -- -$$' INT TERM EXIT
+trap 'trap - TERM && kill -- -$$' INT TERM
 
 # Run spectral-norm
 echo "Start spectral-norm"
