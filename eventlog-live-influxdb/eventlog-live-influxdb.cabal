@@ -59,6 +59,11 @@ tested-with:
    || ==9.10.2
    || ==9.12.2
 
+source-repository head
+  type:     git
+  location: https://github.com/well-typed/eventlog-live.git
+  subdir:   eventlog-live-influxdb
+
 common language
   ghc-options:
     -Wall -Wcompat -Widentities -Wprepositive-qualified-module
