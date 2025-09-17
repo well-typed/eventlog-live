@@ -24,7 +24,7 @@ PARFIB_PID=$!
 # NOTE: The purpose of 'sleep 5' is to give the parfib process
 #       sufficient time to create the Unix socket.
 echo "Start eventlog-live-influxdb"
-sleep 5 && cabal run eventlog-live-influxdb -v0 -- \
+cabal run eventlog-live-influxdb -v0 -- \
     --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
     -hT \
     --influxdb-host=localhost \

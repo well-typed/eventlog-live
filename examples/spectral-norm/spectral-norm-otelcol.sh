@@ -24,7 +24,7 @@ SPECTRAL_NORM_PID=$!
 # NOTE: The purpose of 'sleep 5' is to give the spectral-norm process
 #       sufficient time to create the Unix socket.
 echo "Start eventlog-live-otelcol"
-sleep 5 && cabal run eventlog-live-otelcol -v0 -- \
+cabal run eventlog-live-otelcol -v0 -- \
     --service-name "spectral-norm" \
     --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
     -hT \

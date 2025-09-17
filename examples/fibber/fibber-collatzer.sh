@@ -20,10 +20,10 @@ FIBBER_PID=$!
 echo
 
 # Run collatzer
-# NOTE: The purpose of 'sleep 5' is to give the oddball process
+# NOTE: The purpose of 'sleep 2' is to give the fibber process
 #       sufficient time to create the Unix socket.
 echo "Run collatzer"
-sleep 5 && cabal run collatzer -v0 -- --unix "$GHC_EVENTLOG_SOCKET"
+sleep 2 && cabal run collatzer -v0 -- --unix "$GHC_EVENTLOG_SOCKET"
 
 # Wait for fibber to finish
 wait $FIBBER_PID
