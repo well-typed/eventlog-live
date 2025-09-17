@@ -11,16 +11,18 @@ FROM haskell:9.10-slim-bullseye AS build
 WORKDIR "/eventlog-live"
 COPY --parents \
   "./eventlog-live-otelcol/app/Main.hs" \
-  "./eventlog-live-otelcol/src/GHC/Eventlog/Live/Otelcol.hs" \
+  "./eventlog-live-otelcol/CHANGELOG.md" \
   "./eventlog-live-otelcol/eventlog-live-otelcol.cabal" \
   "./eventlog-live-otelcol/LICENSE" \
+  "./eventlog-live-otelcol/src/GHC/Eventlog/Live/Otelcol.hs" \
+  "./eventlog-live/CHANGELOG.md" \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
-  "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Internal/Logger.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Machines.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Verbosity.hs" \
   "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
+  "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
   "/eventlog-live/"
 
 # Create cabal.project file
