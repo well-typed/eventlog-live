@@ -24,7 +24,7 @@ SPECTRAL_NORM_PID=$!
 # NOTE: The purpose of 'sleep 5' is to give the oddball process
 #       sufficient time to create the Unix socket.
 echo "Start dumper"
-sleep 5 && cabal run dumper -v0 -- --eventlog-socket="$GHC_EVENTLOG_SOCKET" "$@"
+cabal run dumper -v0 -- --eventlog-socket="$GHC_EVENTLOG_SOCKET" "$@"
 
 # Wait for spectral-norm to finish
 wait $SPECTRAL_NORM_PID
