@@ -21,10 +21,9 @@ runs:
         mkdir -p "${{ github.workspace }}/.protoc"
         curl -Lo protoc.zip "${{
                     format(
-                      'https://github.com/protocolbuffers/protobuf/releases/download/v{0}/protoc-{0}-{1}-{2}.zip',
+                      'https://github.com/protocolbuffers/protobuf/releases/download/v{0}/protoc-{0}-{1}.zip',
                       inputs.protoc-version,
-                      (runner.os == 'Linux' && 'linux') || (runner.os == 'macOS' && 'osx'),
-                      (runner.os == 'Linux' && 'x86_64') || (runner.os == 'macOS' && 'aarch_64')
+                      (runner.os == 'Linux' && 'linux-x86_64') || (runner.os == 'macOS' && 'osx-aarch_64') || (runner.os == 'Windows' && 'win64')
                     )
                   }}"
         unzip protoc.zip -d "${{ github.workspace }}/.protoc"
