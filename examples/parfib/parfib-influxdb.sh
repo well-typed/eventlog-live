@@ -12,7 +12,7 @@ echo "Build eventlog-live-influxdb"
 cabal build eventlog-live-influxdb -v0
 
 # Install cleanup handler
-trap 'trap - TERM && kill -- -$$' INT TERM EXIT
+trap 'trap - TERM && kill -- -$$' INT TERM
 
 # Run parfib
 echo "Start parfib"
