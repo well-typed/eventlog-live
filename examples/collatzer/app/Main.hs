@@ -30,8 +30,8 @@ import qualified System.Remote.Monitoring
 
 import GHC.Eventlog.Counters (Counters (..), ThreadState (..), count, newCounters)
 import GHC.Eventlog.Counters.EKG (registerCounters)
-import GHC.Eventlog.Live.Machines (Tick (..), decodeEventBatch, fileSinkBatch, handleOutOfOrderEvents, sortEventsUpTo, sourceHandleWait)
-import GHC.RTS.Events (Event)
+import GHC.Eventlog.Live.Machines (Tick (..), decodeEventBatch, defaultChunkSizeBytes, dropTick, fileSinkBatch, sortByBatchTick, sourceHandleBatch)
+import GHC.RTS.Events (Event (evTime))
 
 import Data.Machine (MachineT, ProcessT, await, repeatedly, runT_, (~>))
 import Data.Machine.Fanout (fanout)
@@ -49,13 +49,13 @@ main = displayConsoleRegions $ do
     PathTypeFile -> openEventlogFile (optEventLogPath opts)
 
   let input :: MachineT IO k (Tick BS.ByteString)
-      input = sourceHandleWait 1_000_000 4096 hdl
+      input = sourceHandleBatch 1_000 defaultChunkSizeBytes hdl
 
   let events :: ProcessT IO (Tick BS.ByteString) Event
       events =
         decodeEventBatch
-          ~> sortEventsUpTo 1_000_000_000
-          ~> handleOutOfOrderEvents (curry print)
+          ~> sortByBatchTick evTime
+          ~> dropTick
 
   counters <- atomically newCounters
 
