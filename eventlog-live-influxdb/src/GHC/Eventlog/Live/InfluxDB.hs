@@ -15,7 +15,7 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Machine (mapping, (<~))
+import Data.Machine (asParts, mapping, (<~))
 import Data.Machine.Fanout (fanout)
 import Data.Machine.Plan (await)
 import Data.Machine.Process (ProcessT, (~>))
@@ -77,23 +77,67 @@ main = do
 -- Thread events
 --------------------------------------------------------------------------------
 
+data OneOf a b c = A !a | B !b | C !c
+
 processThreadEvents ::
   (MonadIO m) =>
   Verbosity ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processThreadEvents verbosity =
   fanout
-    [ processCapabilityUsageSpans verbosity
+    [ fanout
+        [ -- GCSpan
+          processGCSpans verbosity
+            ~> mapping (D.singleton . A)
+        , processThreadStateSpans' tryGetTimeUnixNano (.value) setWithStartTime'value verbosity
+            ~> fanout
+              [ -- MutatorSpan
+                asMutatorSpans' (.value) setWithStartTime'value
+                  ~> mapping (D.singleton . B)
+              , -- ThreadStateSpan
+                mapping (D.singleton . C)
+              ]
+        ]
+        ~> asParts
+        ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
         ~> fanout
-          [ mapping (D.singleton . fromSpan . (.value))
-          , processCapabilityUsageMetrics
-              ~> mapping (D.singleton . fromMetric "CapabilityUsage")
+          [ mapping leftToMaybe
+              ~> asParts
+              ~> fanout
+                [ -- CapabilityUsageMetric
+                  processCapabilityUsageMetrics
+                    ~> mapping (D.singleton . fromMetric "CapabilityUsage")
+                , -- CapabilityUsageSpan
+                  mapping (D.singleton . fromSpan . (.value))
+                ]
+          , -- ThreadStateSpan
+            mapping rightToMaybe
+              ~> asParts
+              ~> mapping (D.singleton . fromSpan . (.value))
           ]
-    , processThreadLabels
+    , -- ThreadLabel
+      processThreadLabels
         ~> mapping (D.singleton . fromThreadLabel)
-    , processThreadStateSpans verbosity
-        ~> mapping (D.singleton . fromSpan)
     ]
+ where
+  repackCapabilityUsageSpanOrThreadStateSpan = \case
+    A i -> Left $ fmap Left i
+    B i -> Left $ fmap Right i
+    C i -> Right i
+
+{- |
+Internal helper.
+Get the `Left` value, if any.
+-}
+leftToMaybe :: Either a b -> Maybe a
+leftToMaybe = either Just (const Nothing)
+
+{- |
+Internal helper.
+Get the `Right` value, if any.
+-}
+rightToMaybe :: Either a b -> Maybe b
+rightToMaybe = either (const Nothing) Just
 
 --------------------------------------------------------------------------------
 -- Heap events
