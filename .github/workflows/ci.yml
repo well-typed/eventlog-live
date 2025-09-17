@@ -78,8 +78,8 @@ jobs:
       - name: 🏗️ Build
         run: cabal build all
 
-      - name: 🧪 Test fibber-collatzer
-        run: ./examples/fibber/fibber-collatzer.sh
+      - name: 🧪 Test fibber-dumper
+        run: ./examples/fibber/fibber-dumper.sh
 
     strategy:
       fail-fast: false
