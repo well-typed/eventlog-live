@@ -1,4 +1,4 @@
-cabal-version:   3.12
+cabal-version:   3.0
 name:            eventlog-live-influxdb
 version:         0.1.0.0
 synopsis:        Stream eventlog data into InfluxDB.
@@ -103,8 +103,8 @@ library
   import:          language
   hs-source-dirs:  src
   exposed-modules: GHC.Eventlog.Live.InfluxDB
-  other-modules:   PackageInfo_eventlog_live_influxdb
-  autogen-modules: PackageInfo_eventlog_live_influxdb
+  other-modules:   Paths_eventlog_live_influxdb
+  autogen-modules: Paths_eventlog_live_influxdb
   build-depends:
     , base                   >=4.16  && <4.22
     , clock                  >=0.8.4 && <0.9
