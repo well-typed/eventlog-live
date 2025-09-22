@@ -318,3 +318,24 @@ jobs:
 
       - name: 🎗️ Lint with ShellCheck
         run: ./scripts/lint-shellcheck.sh
+
+  #############################################################################
+  # Lint with cabal2nix
+  #############################################################################
+
+  lint-cabal2nix:
+    name: "Lint with cabal2nix"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🛠️ Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+
+      - name: 🎗️ Lint with cabal2nix
+        run: nix-shell -p haskellPackages.cabal2nix --run 'cabal2nix file://${{ github.workspace }}/eventlog-live'
