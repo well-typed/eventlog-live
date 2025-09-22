@@ -52,7 +52,7 @@ fi
 
 # Configure metadata
 # TODO: read from .cabal file
-PKG_VERSION="0.1.0.0"
+EVENTLOG_LIVE_VERSION="0.1.0.1"
 
 # Make working directory:
 WORKDIR=$(mktemp -d build-haddock.XXXXXX)
@@ -62,7 +62,7 @@ trap 'rm -r "${WORKDIR}"' EXIT
 BUILDDIR="${WORKDIR}/dist-newstyle"
 
 # Make dist directory:
-DIST="eventlog-live-${PKG_VERSION}-docs"
+DIST="eventlog-live-${EVENTLOG_LIVE_VERSION}-docs"
 DISTDIR="${WORKDIR}/${DIST}"
 mkdir "${DISTDIR}"
 
@@ -119,4 +119,4 @@ PROLOGUE="${WORKDIR}/prologue.haddock"
   --read-interface="${DISTDIR}/socket.haddock"
 
 # Create tarball for Hackage
-tar -czvf "eventlog-live-${PKG_VERSION}-docs.tar.gz" --format="ustar" -C "${WORKDIR}" "${DIST}"
+tar -czvf "eventlog-live-${EVENTLOG_LIVE_VERSION}-docs.tar.gz" --format="ustar" -C "${WORKDIR}" "${DIST}"
