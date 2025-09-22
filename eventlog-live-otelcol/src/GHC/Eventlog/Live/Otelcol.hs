@@ -47,7 +47,7 @@ import Network.GRPC.Common.Protobuf (Protobuf)
 import Network.GRPC.Common.Protobuf qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O
-import PackageInfo_eventlog_live_otelcol qualified as EventlogLive
+import Paths_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
@@ -352,10 +352,16 @@ processHeapProfSample verbosity maybeHeapProfBreakdown =
 -- Machines
 --------------------------------------------------------------------------------
 
+-- 2025-09-22:
+-- Once `cabal2nix` supports Cabal 3.12, this can once again use the value from:
+-- `PackageInfo_eventlog_live_otelcol.name`.
+eventlogLiveName :: String
+eventlogLiveName = "eventlog-live-otelcol"
+
 eventlogLiveScope :: OC.InstrumentationScope
 eventlogLiveScope =
   messageWith
-    [ OC.name .~ T.pack EventlogLive.name
+    [ OC.name .~ T.pack eventlogLiveName
     , OC.version .~ T.pack (showVersion EventlogLive.version)
     ]
 
