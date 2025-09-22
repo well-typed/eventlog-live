@@ -103,8 +103,8 @@ library
   import:          language
   hs-source-dirs:  src
   exposed-modules: GHC.Eventlog.Live.Otelcol
-  other-modules:   PackageInfo_eventlog_live_otelcol
-  autogen-modules: PackageInfo_eventlog_live_otelcol
+  other-modules:   Paths_eventlog_live_otelcol
+  autogen-modules: Paths_eventlog_live_otelcol
   build-depends:
     , base                   >=4.16   && <4.22
     , bytestring             >=0.11   && <0.13
