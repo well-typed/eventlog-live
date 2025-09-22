@@ -39,7 +39,7 @@ import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O (helperWith)
-import PackageInfo_eventlog_live_influxdb qualified as EventlogLive
+import Paths_eventlog_live_influxdb qualified as EventlogLive
 import System.Clock (TimeSpec, fromNanoSecs)
 
 --------------------------------------------------------------------------------
