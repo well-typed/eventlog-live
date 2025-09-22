@@ -30,7 +30,7 @@ description:
 
   For more information, see [the README](https://github.com/well-typed/eventlog-live#readme).
 
-license:         AGPL-3.0-only
+license:         BSD-3-Clause
 license-file:    LICENSE
 author:          Wen Kokke
 maintainer:      wen@well-typed.com
