@@ -338,4 +338,9 @@ jobs:
           nix_path: nixpkgs=channel:nixpkgs-unstable
 
       - name: 🎗️ Lint with cabal2nix
-        run: nix-shell -p haskellPackages.cabal2nix --run 'cabal2nix file://${{ github.workspace }}/eventlog-live'
+        run: |
+          nix-shell -p haskellPackages.cabal2nix --run '\
+            cabal2nix file://${{ github.workspace }}/eventlog-live && \
+            cabal2nix file://${{ github.workspace }}/eventlog-live-influxdb && \
+            cabal2nix file://${{ github.workspace }}/eventlog-live-otelcol'
+        shell: bash
