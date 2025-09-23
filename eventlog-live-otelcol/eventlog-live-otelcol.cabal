@@ -1,4 +1,4 @@
-cabal-version:   3.12
+cabal-version:   3.0
 name:            eventlog-live-otelcol
 version:         0.1.0.1
 synopsis:        Stream eventlog data to the OpenTelemetry Collector.
