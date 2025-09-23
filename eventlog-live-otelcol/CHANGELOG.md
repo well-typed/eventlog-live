@@ -1,4 +1,4 @@
-### 0.1.0.1
+### 0.1.0.2
 
 - Lower `cabal-version` constraint to `3.0`
 
