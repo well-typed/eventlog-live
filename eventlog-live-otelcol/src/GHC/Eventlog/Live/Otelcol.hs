@@ -59,7 +59,8 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import System.IO qualified as IO
-import System.Random (StdGen, initStdGen, uniformByteString)
+import System.Random (StdGen, initStdGen)
+import System.Random.Compat (uniformByteString)
 import Text.Printf (printf)
 
 {- |
