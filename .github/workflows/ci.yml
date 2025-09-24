@@ -88,13 +88,15 @@ jobs:
           - "ubuntu-latest"
           - "macOS-latest"
         ghc-version:
-          - "9.4.8"
-          - "9.6.7"
           - "9.8.4"
           - "9.10.2"
           - "9.12.2"
         include:
           - name: false
+          - os: "ubuntu-latest"
+            ghc-version: "9.4.8"
+          - os: "ubuntu-latest"
+            ghc-version: "9.6.7"
 
   #############################################################################
   # Build dockerfiles
