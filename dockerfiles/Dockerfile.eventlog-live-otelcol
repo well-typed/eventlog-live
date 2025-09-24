@@ -15,6 +15,7 @@ COPY --parents \
   "./eventlog-live-otelcol/eventlog-live-otelcol.cabal" \
   "./eventlog-live-otelcol/LICENSE" \
   "./eventlog-live-otelcol/src/GHC/Eventlog/Live/Otelcol.hs" \
+  "./eventlog-live-otelcol/src/System/Random/Compat.hs" \
   "./eventlog-live/CHANGELOG.md" \
   "./eventlog-live/eventlog-live.cabal" \
   "./eventlog-live/LICENSE" \
