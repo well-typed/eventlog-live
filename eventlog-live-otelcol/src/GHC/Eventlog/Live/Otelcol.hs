@@ -46,7 +46,8 @@ import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
 import Network.GRPC.Common.Protobuf qualified as G
 import Options.Applicative qualified as O
-import Options.Applicative.Extra qualified as O
+import Options.Applicative.Compat qualified as OC
+import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
@@ -692,8 +693,8 @@ options :: O.ParserInfo Options
 options =
   O.info
     ( optionsParser
-        O.<**> O.helperWith (O.long "help" <> O.help "Show this help text.")
-        O.<**> O.simpleVersioner (showVersion EventlogLive.version)
+        O.<**> OE.helperWith (O.long "help" <> O.help "Show this help text.")
+        O.<**> OC.simpleVersioner (showVersion EventlogLive.version)
     )
     O.idm
 
@@ -746,7 +747,7 @@ data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
 
 openTelemetryCollectorOptionsParser :: O.Parser OpenTelemetryCollectorOptions
 openTelemetryCollectorOptionsParser =
-  O.parserOptionGroup "OpenTelemetry Collector Server Options" $
+  OC.parserOptionGroup "OpenTelemetry Collector Server Options" $
     OpenTelemetryCollectorOptions
       <$> otelcolServerParser
       <*> otelcolExporterOptionsParsers
