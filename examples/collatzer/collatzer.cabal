@@ -77,6 +77,6 @@ executable collatzer
     , ghc-events              >=0.20.0  && <0.21
     , machines                >=0.7.4   && <0.8
     , network                 >=3.2.7   && <3.3
-    , optparse-applicative    >=0.19.0  && <0.20
+    , optparse-applicative    >=0.17    && <0.20
     , stm                     >=2.5     && <2.6
     , text                    >=1.2     && <2.2
