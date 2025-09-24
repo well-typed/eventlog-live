@@ -55,7 +55,7 @@
 # - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
 - ignore: { name: "Redundant $" }
 - ignore: { name: "Use ?~" } # 2 hints
-
+- ignore: { name: Use fewer imports, within: Options.Applicative.Compat }
 # Define some custom infix operators
 # - fixity: infixr 3 ~^#^~
 
