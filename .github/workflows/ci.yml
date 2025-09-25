@@ -275,6 +275,31 @@ jobs:
         run: ./scripts/lint-fourmolu.sh
 
   #############################################################################
+  # Lint with Nixfmt
+  #############################################################################
+
+  lint-nixfmt:
+    name: "Lint with Nixfmt"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-25.05
+
+      - name: 🎗️ Lint with Nixfmt
+        run: nix-shell -p nixfmt-rfc-style --run 'sh ./scripts/lint-nixfmt.sh'
+
+  #############################################################################
   # Lint with Prettier
   #############################################################################
 
