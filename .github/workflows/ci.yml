@@ -139,6 +139,39 @@ jobs:
           - "oddball"
 
   #############################################################################
+  # Build Nix VM
+  #############################################################################
+
+  build-nix-vm:
+    name: "Build Nix VM"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🛠️ Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+
+      - name: 🛠️ Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+
+      - name: 🏗️ Build
+        run: nix build .#vm
+        working-directory: "nix/${{ matrix.nix-vm-directory }}"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        nix-vm-directory:
+          - "eventlog-live-otelcol"
+
+  #############################################################################
   # Lint with actionlint
   #############################################################################
 
