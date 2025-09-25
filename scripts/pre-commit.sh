@@ -38,6 +38,8 @@ fi
 echo
 (./scripts/format-fourmolu.sh || echo >"${FAIL}")
 echo
+(./scripts/format-nixfmt.sh || echo >"${FAIL}")
+echo
 (./scripts/format-prettier.sh || echo >"${FAIL}")
 echo
 (./scripts/lint-actionlint.sh || echo >"${FAIL}")
