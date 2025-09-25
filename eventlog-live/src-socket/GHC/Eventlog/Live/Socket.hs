@@ -13,8 +13,8 @@ module GHC.Eventlog.Live.Socket (
 
 import Control.Concurrent (threadDelay)
 import Control.Exception qualified as E
-import Control.Monad.IO.Unlift (MonadUnliftIO (..))
-import Data.Machine (ProcessT, runT_, (~>))
+import Control.Monad.IO.Unlift
+import Data.Machine
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)
@@ -24,6 +24,8 @@ import GHC.RTS.Events (Event)
 import Network.Socket qualified as S
 import System.IO (Handle)
 import System.IO qualified as IO
+import Data.Machine.MealyT (scanMealyTM)
+import Control.Monad (when)
 
 {- |
 Run an event processor with an eventlog socket.
@@ -46,6 +48,7 @@ runWithEventlogSocket ::
   ProcessT m (Tick Event) Void ->
   m ()
 runWithEventlogSocket eventlogSocket timeoutExponent initialTimeoutMcs batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  liftIO $ print "Running with eventlog socket"
   -- TODO: Handle connection errors by waiting for the socket to be created.
   withEventlogSocket timeoutExponent initialTimeoutMcs eventlogSocket $ \eventlogHandle -> do
     let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
@@ -53,7 +56,7 @@ runWithEventlogSocket eventlogSocket timeoutExponent initialTimeoutMcs batchInte
     case maybeOutputFile of
       Nothing ->
         runT_ $
-          fromSocket ~> decodeEventBatch ~> toEventSink
+          fromSocket ~> fanout [decodeEventBatch ~> fanout [loggingSink, toEventSink ]]
       Just outputFile ->
         withRunInIO $ \runInIO ->
           IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
@@ -61,8 +64,17 @@ runWithEventlogSocket eventlogSocket timeoutExponent initialTimeoutMcs batchInte
               fromSocket
                 ~> fanout
                   [ fileSinkBatch outputHandle
-                  , decodeEventBatch ~> toEventSink
+                  , decodeEventBatch ~> fanout [loggingSink, toEventSink]
                   ]
+
+-- | Log progress about how many events have been processed
+loggingSink :: forall m . MonadIO m => ProcessT m (Tick Event) Void
+loggingSink = construct (go 0)
+  where
+    go !n = do
+      e <- await
+      when (n `mod` 100 == 0) $ liftIO $ print ("Processed " ++ show n ++ " events")
+      go (n + 1)
 
 {- |
 Run an action with a `Handle` to an `EventlogSocket`.
@@ -103,6 +115,7 @@ connectRetry initialTimeoutMcs timeoutExponent eventlogSocket =
   connectLoop :: Double -> IO Handle
   connectLoop timeoutMcs = do
     E.catch (tryConnect eventlogSocket) $ \(_e :: E.IOException) -> do
+      print ("Failed to connect to eventlog socket, retrying" ++ show eventlogSocket ++ " with timeout " ++ show timeoutMcs)
       waitFor timeoutMcs
       connectLoop (timeoutMcs * timeoutExponent)
 

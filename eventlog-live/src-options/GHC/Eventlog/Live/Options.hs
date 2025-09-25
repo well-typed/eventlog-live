@@ -29,7 +29,7 @@ import Text.Read (readEither)
 The type of eventlog sockets.
 -}
 newtype EventlogSocket
-  = EventlogSocketUnix FilePath
+  = EventlogSocketUnix FilePath deriving Show
 
 {- |
 Parser for the eventlog socket.

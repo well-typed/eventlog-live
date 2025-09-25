@@ -146,6 +146,7 @@ import Data.List qualified as L
 import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Machine.Mealy (unfoldMealy)
+import Data.Machine.MealyT (scanMealyTM)
 import Data.Machine.Process (Automaton (..))
 import Data.Maybe (fromMaybe, isNothing, listToMaybe, mapMaybe)
 import Data.Semigroup (Max (..))

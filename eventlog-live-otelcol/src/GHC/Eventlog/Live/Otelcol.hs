@@ -24,7 +24,7 @@ import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Machine (Process, ProcessT, asParts, await, construct, filtered, mapping, repeatedly, yield, (~>))
+import Data.Machine
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
@@ -62,16 +62,20 @@ import System.IO qualified as IO
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
 import Text.Printf (printf)
+import System.IO
 
 {- |
 The main function for @eventlog-live-otelcol@.
 -}
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering   -- or NoBuffering
+  hSetBuffering stderr LineBuffering   -- or NoBuffering
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
   let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
+  print "Starting eventlog-live-otelcol"
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
     runWithEventlogSocket
       eventlogSocket
@@ -118,8 +122,6 @@ main = do
 errorWriter :: (MonadIO m) => ProcessT m String Void
 errorWriter = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr
 
--- dumpBatch :: (MonadIO m, Show a) => ProcessT m [a] [a]
--- dumpBatch = traversing (\as -> for_ as (liftIO . print) >> pure as)
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
