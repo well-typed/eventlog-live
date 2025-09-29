@@ -112,7 +112,7 @@ batchIntervalParser =
     O.auto
     ( O.long "batch-interval"
         <> O.metavar "NUM"
-        <> O.help "Batch interval in microseconds."
+        <> O.help "Batch interval in milliseconds."
         <> O.value defaultBatchIntervalMs
     )
 
