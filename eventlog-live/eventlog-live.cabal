@@ -118,8 +118,9 @@ library logger
     GHC.Eventlog.Live.Verbosity
 
   build-depends:
-    , base  >=4.16 && <4.22
-    , text  >=1.2  && <2.2
+    , ansi-terminal  >=1.1  && <1.2
+    , base           >=4.16 && <4.22
+    , text           >=1.2  && <2.2
 
 library options
   import:          language
