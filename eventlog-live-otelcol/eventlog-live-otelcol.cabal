@@ -11,7 +11,7 @@ description:
   >                              [--eventlog-socket-exponent NUM]
   >                              [--batch-interval NUM] [--eventlog-log-file FILE]
   >                              [-h Tcmdyrbi] [--service-name STRING]
-  >                              [-v|--verbosity NUM|quiet|error|warning]
+  >                              [-v|--verbosity quiet|error|warning|info|debug|0-4]
   >                              --otelcol-host HOST [--otelcol-port PORT]
   >                              [--otelcol-authority HOST] [--otelcol-ssl]
   >                              [--otelcol-certificate-store FILE]
@@ -26,11 +26,11 @@ description:
   >                            microseconds.
   >   --eventlog-socket-exponent NUM
   >                            Eventlog socket connection retry timeout exponent.
-  >   --batch-interval NUM     Batch interval in microseconds.
+  >   --batch-interval NUM     Batch interval in milliseconds.
   >   --eventlog-log-file FILE Use file to log binary eventlog data.
   >   -h Tcmdyrbi              Heap profile breakdown.
   >   --service-name STRING    The name of the profiled service.
-  >   -v,--verbosity NUM|quiet|error|warning
+  >   -v,--verbosity quiet|error|warning|info|debug|0-4
   >                            The verbosity threshold for logging.
   >   --help                   Show this help text.
   >   --version                Show version information
