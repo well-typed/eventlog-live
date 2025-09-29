@@ -17,6 +17,7 @@ module GHC.Eventlog.Live.Internal.Logger (
   logDebug,
 ) where
 
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Text (Text)
 import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.Verbosity (Verbosity, showVerbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityWarning)
@@ -31,32 +32,32 @@ type LogSource = Text
 Internal helper. Log messages to `IO.stderr`.
 Only prints a message if its verbosity level is above the verbosity threshold.
 -}
-logMessage :: Verbosity -> Verbosity -> LogSource -> Text -> IO ()
+logMessage :: (MonadIO m) => Verbosity -> Verbosity -> LogSource -> Text -> m ()
 logMessage verbosityLevel verbosityThreshold logSource msg
   | verbosityLevel >= verbosityThreshold =
-      TIO.hPutStrLn IO.stderr . mconcat $ [logSource, ": ", showVerbosity verbosityLevel, ": ", msg]
+      liftIO . TIO.hPutStrLn IO.stderr . mconcat $ [logSource, ": ", showVerbosity verbosityLevel, ": ", msg]
   | otherwise = pure ()
 
 {- |
 Internal helper. Log errors to `IO.stderr`.
 -}
-logError :: Verbosity -> LogSource -> Text -> IO ()
+logError :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
 logError = logMessage verbosityError
 
 {- |
 Internal helper. Log warnings to `IO.stderr`.
 -}
-logWarning :: Verbosity -> LogSource -> Text -> IO ()
+logWarning :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
 logWarning = logMessage verbosityWarning
 
 {- |
 Internal helper. Log info messages to `IO.stderr`.
 -}
-logInfo :: Verbosity -> LogSource -> Text -> IO ()
+logInfo :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
 logInfo = logMessage verbosityInfo
 
 {- |
 Internal helper. Log debug messages to `IO.stderr`.
 -}
-logDebug :: Verbosity -> LogSource -> Text -> IO ()
+logDebug :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
 logDebug = logMessage verbosityDebug
