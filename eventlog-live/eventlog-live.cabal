@@ -90,7 +90,12 @@ common language
 library
   import:             language
   hs-source-dirs:     src-machines
-  exposed-modules:    GHC.Eventlog.Live.Machines
+  exposed-modules:
+    GHC.Eventlog.Live.Data.Attribute
+    GHC.Eventlog.Live.Data.Metric
+    GHC.Eventlog.Live.Data.Span
+    GHC.Eventlog.Live.Machines
+
   reexported-modules: GHC.Eventlog.Live.Verbosity
   build-depends:
     , base                  >=4.16   && <4.22

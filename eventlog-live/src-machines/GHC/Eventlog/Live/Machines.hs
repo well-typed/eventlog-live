@@ -110,22 +110,6 @@ module GHC.Eventlog.Live.Machines (
   -- * Heap profile breakdown
   heapProfBreakdownEitherReader,
   heapProfBreakdownShow,
-
-  -- * Data
-
-  -- ** Metrics
-  Metric (..),
-
-  -- ** Spans
-  IsSpan,
-  duration,
-
-  -- ** Attributes
-  Attr,
-  AttrKey,
-  AttrValue (..),
-  IsAttrValue (..),
-  (~=),
 ) where
 
 import Control.Exception (Exception, catch, throwIO)
@@ -141,7 +125,6 @@ import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
-import Data.Int (Int16, Int32, Int64, Int8)
 import Data.List qualified as L
 import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
@@ -152,8 +135,11 @@ import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import Data.Word (Word16, Word32, Word64, Word8)
+import Data.Word (Word32, Word64)
 import GHC.Clock (getMonotonicTimeNSec)
+import GHC.Eventlog.Live.Data.Attribute (Attr, AttrValue, IsAttrValue (..), (~=))
+import GHC.Eventlog.Live.Data.Metric (Metric (..))
+import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Internal.Logger (logWarning)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), EventInfo, HeapProfBreakdown (..), ThreadId, ThreadStopStatus (..), Timestamp)
@@ -361,6 +347,11 @@ instance Show CapabilityUser where
     GC -> "GC"
     Mutator{thread} -> show thread
 
+instance IsAttrValue CapabilityUser where
+  toAttrValue :: CapabilityUser -> AttrValue
+  toAttrValue = toAttrValue . show
+  {-# INLINE toAttrValue #-}
+
 {- |
 Get the t`CapabilityUser` associated with a t`CapabilityUsageSpan`.
 -}
@@ -382,6 +373,20 @@ showCapabilityUserCategory = \case
 A t`CapabilityUsageSpan` is either a t`GCSpan` or a t`MutatorSpan`.
 -}
 type CapabilityUsageSpan = Either GCSpan MutatorSpan
+
+instance HasField "startTimeUnixNano" CapabilityUsageSpan Timestamp where
+  getField :: CapabilityUsageSpan -> Timestamp
+  getField = either (.startTimeUnixNano) (.startTimeUnixNano)
+
+instance HasField "endTimeUnixNano" CapabilityUsageSpan Timestamp where
+  getField :: CapabilityUsageSpan -> Timestamp
+  getField = either (.endTimeUnixNano) (.endTimeUnixNano)
+
+instance HasField "cap" CapabilityUsageSpan Int where
+  getField :: CapabilityUsageSpan -> Int
+  getField = either (.cap) (.cap)
+
+{-# SPECIALIZE duration :: CapabilityUsageSpan -> Timestamp #-}
 
 {- |
 This machine runs `processGCSpans` and `processMutatorSpans` in parallel and
@@ -441,6 +446,8 @@ data GCSpan = GCSpan
   , endTimeUnixNano :: !Timestamp
   }
   deriving (Show)
+
+{-# SPECIALIZE duration :: GCSpan -> Timestamp #-}
 
 {- |
 This machine processes `E.StartGC` and `E.EndGC` events to produce t`GCSpan`
@@ -577,6 +584,8 @@ data MutatorSpan = MutatorSpan
   , endTimeUnixNano :: !Timestamp
   }
   deriving (Show)
+
+{-# SPECIALIZE duration :: MutatorSpan -> Timestamp #-}
 
 {- |
 This machine processes `E.RunThread` and `E.StopThread` events to produce
@@ -772,6 +781,8 @@ data ThreadStateSpan
   , endTimeUnixNano :: !Timestamp
   }
   deriving (Show)
+
+{-# SPECIALIZE duration :: ThreadStateSpan -> Timestamp #-}
 
 {- |
 This machine processes `E.RunThread` and `E.StopThread` events to produce
@@ -1776,26 +1787,8 @@ delimit = construct . go
         go mm
 
 -------------------------------------------------------------------------------
--- Metrics
+-- Internal Helpers
 -------------------------------------------------------------------------------
-
-{- |
-Metrics combine a measurement with a timestamp representing the time of the
-measurement, a timestamp representing the earliest possible measurment, and
-a list of attributes.
--}
-data Metric a = Metric
-  { value :: !a
-  -- ^ The measurement.
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
-  -- ^ The time at which the measurment was taken.
-  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
-  -- ^ The earliest time at which any measurement could have been taken.
-  --   Usually, this represents the start time of a process.
-  , attr :: [Attr]
-  -- ^ A list of attributes.
-  }
-  deriving (Functor, Show)
 
 {- |
 Internal helper. Construct a t`Metric` from an event with a start time
@@ -1814,174 +1807,6 @@ metric i v attr =
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
     , attr = attr
     }
-
--------------------------------------------------------------------------------
--- Spans
--------------------------------------------------------------------------------
-
-{- |
-Internal helper. A span is any type with a start and end time.
--}
-type IsSpan s = (HasField "startTimeUnixNano" s Timestamp, HasField "endTimeUnixNano" s Timestamp)
-
-{- |
-Internal helper. Determine the duration of a span.
--}
-{-# SPECIALIZE duration :: CapabilityUsageSpan -> Timestamp #-}
-{-# SPECIALIZE duration :: GCSpan -> Timestamp #-}
-{-# SPECIALIZE duration :: MutatorSpan -> Timestamp #-}
-{-# SPECIALIZE duration :: ThreadStateSpan -> Timestamp #-}
-duration :: (IsSpan s) => s -> Timestamp
-duration s = if s.startTimeUnixNano < s.endTimeUnixNano then s.endTimeUnixNano - s.startTimeUnixNano else 0
-
-instance HasField "startTimeUnixNano" CapabilityUsageSpan Timestamp where
-  getField :: CapabilityUsageSpan -> Timestamp
-  getField = either (.startTimeUnixNano) (.startTimeUnixNano)
-
-instance HasField "endTimeUnixNano" CapabilityUsageSpan Timestamp where
-  getField :: CapabilityUsageSpan -> Timestamp
-  getField = either (.endTimeUnixNano) (.endTimeUnixNano)
-
-instance HasField "cap" CapabilityUsageSpan Int where
-  getField :: CapabilityUsageSpan -> Int
-  getField = either (.cap) (.cap)
-
--------------------------------------------------------------------------------
--- Attributes
--------------------------------------------------------------------------------
-
-{- |
-An attribute is a key-value pair where the key is any string and the value is
-some numeric type, string, or null. Attributes should be constructed using the
-`(~=)` operator, which automatically converts Haskell types to t`AttrValue`.
--}
-type Attr = (AttrKey, AttrValue)
-
-{- |
-Construct an t`Attr` as a pair of an t`AttrKey` and an t`AttrValue`,
-constructed via the t`IsAttrValue` class.
--}
-(~=) :: (IsAttrValue v) => AttrKey -> v -> Attr
-k ~= v = (ak, av)
- where
-  !ak = k
-  !av = toAttrValue v
-{-# INLINE (~=) #-}
-
-{- |
-The type of attribute keys.
--}
-type AttrKey =
-  Text
-
-{- |
-The type of attribute values.
--}
-data AttrValue
-  = AttrInt !Int
-  | AttrInt8 !Int8
-  | AttrInt16 !Int16
-  | AttrInt32 !Int32
-  | AttrInt64 !Int64
-  | AttrWord !Word
-  | AttrWord8 !Word8
-  | AttrWord16 !Word16
-  | AttrWord32 !Word32
-  | AttrWord64 !Word64
-  | AttrDouble !Double
-  | AttrText !Text
-  | AttrNull
-  deriving (Show)
-
-{- |
-Utility class to help construct values of the t`AttrValue` type.
--}
-class IsAttrValue v where
-  toAttrValue :: v -> AttrValue
-
-instance IsAttrValue AttrValue where
-  toAttrValue :: AttrValue -> AttrValue
-  toAttrValue = id
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Int where
-  toAttrValue :: Int -> AttrValue
-  toAttrValue = AttrInt
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Int8 where
-  toAttrValue :: Int8 -> AttrValue
-  toAttrValue = AttrInt8
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Int16 where
-  toAttrValue :: Int16 -> AttrValue
-  toAttrValue = AttrInt16
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Int32 where
-  toAttrValue :: Int32 -> AttrValue
-  toAttrValue = AttrInt32
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Int64 where
-  toAttrValue :: Int64 -> AttrValue
-  toAttrValue = AttrInt64
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Word where
-  toAttrValue :: Word -> AttrValue
-  toAttrValue = AttrWord
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Word8 where
-  toAttrValue :: Word8 -> AttrValue
-  toAttrValue = AttrWord8
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Word16 where
-  toAttrValue :: Word16 -> AttrValue
-  toAttrValue = AttrWord16
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Word32 where
-  toAttrValue :: Word32 -> AttrValue
-  toAttrValue = AttrWord32
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Word64 where
-  toAttrValue :: Word64 -> AttrValue
-  toAttrValue = AttrWord64
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Double where
-  toAttrValue :: Double -> AttrValue
-  toAttrValue = AttrDouble
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue String where
-  toAttrValue :: String -> AttrValue
-  toAttrValue = AttrText . T.pack
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue Text where
-  toAttrValue :: Text -> AttrValue
-  toAttrValue = AttrText
-  {-# INLINE toAttrValue #-}
-
-instance IsAttrValue CapabilityUser where
-  toAttrValue :: CapabilityUser -> AttrValue
-  toAttrValue = toAttrValue . show
-  {-# INLINE toAttrValue #-}
-
-instance (IsAttrValue v) => IsAttrValue (Maybe v) where
-  toAttrValue :: Maybe v -> AttrValue
-  toAttrValue = maybe AttrNull toAttrValue
-  {-# INLINE toAttrValue #-}
-
--------------------------------------------------------------------------------
--- Internal Helpers
--------------------------------------------------------------------------------
 
 {- |
 Internal helper. Variant of `mapping` for plans.
