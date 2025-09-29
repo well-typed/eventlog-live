@@ -1,5 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{- |
+Module      : GHC.Eventlog.Live.Internal.Logger
+Description : /Internal module/. Logging functions.
+Stability   : experimental
+Portability : portable
+
+This module is __internal__. The [PVP](https://pvp.haskell.org) __does not apply__.
+-}
 module GHC.Eventlog.Live.Internal.Logger (
   LogSource,
   logMessage,
