@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            eventlog-live-influxdb
-version:         0.1.0.1
+version:         0.2.0.0
 synopsis:        Stream eventlog data into InfluxDB.
 description:
   This executable supports live streaming of eventlog data into
@@ -110,7 +110,7 @@ library
     , clock                  >=0.8.4 && <0.9
     , containers             >=0.6   && <0.8
     , dlist                  >=1.0   && <1.1
-    , eventlog-live          >=0.1   && <0.3
+    , eventlog-live          >=0.2   && <0.3
     , eventlog-live:options
     , eventlog-live:socket
     , ghc-events             >=0.20  && <0.21
