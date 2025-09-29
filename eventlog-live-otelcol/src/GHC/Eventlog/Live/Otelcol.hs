@@ -35,8 +35,10 @@ import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
-import GHC.Eventlog.Live.Machines (CapabilityUsageSpan, MemReturnData (..), ThreadStateSpan (..), Tick, WithStartTime (..))
-import GHC.Eventlog.Live.Machines qualified as ELM
+import GHC.Eventlog.Live.Machine (CapabilityUsageSpan, MemReturnData (..), ThreadStateSpan (..), WithStartTime (..))
+import GHC.Eventlog.Live.Machine qualified as M
+import GHC.Eventlog.Live.Machine.Core (Tick)
+import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket (runWithEventlogSocket)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
@@ -84,7 +86,7 @@ main = do
       batchInterval
       Nothing
       maybeEventlogLogFile
-      $ ELM.liftTick ELM.withStartTime
+      $ M.liftTick M.withStartTime
         ~> fanout
           [ processHeapEvents verbosity maybeHeapProfBreakdown
               ~> mapping (fmap Left)
@@ -136,34 +138,34 @@ processThreadEvents ::
   Verbosity ->
   ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
 processThreadEvents verbosity =
-  ELM.sortByBatchTick (.value.evTime)
-    ~> ELM.liftTick
+  M.sortByBatchTick (.value.evTime)
+    ~> M.liftTick
       ( fanout
-          [ ELM.processGCSpans verbosity
+          [ M.processGCSpans verbosity
               ~> mapping (D.singleton . A)
-          , ELM.processThreadStateSpans' ELM.tryGetTimeUnixNano (.value) ELM.setWithStartTime'value verbosity
+          , M.processThreadStateSpans' M.tryGetTimeUnixNano (.value) M.setWithStartTime'value verbosity
               ~> fanout
-                [ ELM.asMutatorSpans' (.value) ELM.setWithStartTime'value
+                [ M.asMutatorSpans' (.value) M.setWithStartTime'value
                     ~> mapping (D.singleton . B)
                 , mapping (D.singleton . C)
                 ]
           ]
       )
-    ~> ELM.liftTick
+    ~> M.liftTick
       ( asParts
           ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
       )
     ~> fanout
-      [ ELM.liftTick
+      [ M.liftTick
           ( mapping leftToMaybe
               ~> asParts
           )
           ~> fanout
-            [ ELM.liftTick
-                ( ELM.processCapabilityUsageMetrics
+            [ M.liftTick
+                ( M.processCapabilityUsageMetrics
                     ~> asNumberDataPoint
                 )
-                ~> ELM.batchByTickList
+                ~> M.batchByTickList
                 ~> asSum
                   [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
                   , OM.isMonotonic .~ True
@@ -174,20 +176,20 @@ processThreadEvents verbosity =
                   , OM.unit .~ "ns"
                   ]
                 ~> mapping (D.singleton . Left)
-            , ELM.liftTick
-                ( ELM.dropStartTime
+            , M.liftTick
+                ( M.dropStartTime
                     ~> asSpan
                     ~> mapping (D.singleton . Right)
                 )
-                ~> ELM.batchByTick
+                ~> M.batchByTick
             ]
-      , ELM.liftTick
+      , M.liftTick
           ( mapping rightToMaybe
               ~> asParts
               ~> asSpan
               ~> mapping (D.singleton . Right)
           )
-          ~> ELM.batchByTick
+          ~> M.batchByTick
       ]
  where
   repackCapabilityUsageSpanOrThreadStateSpan = \case
@@ -233,8 +235,8 @@ processHeapEvents verbosity maybeHeapProfBreakdown =
 
 processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapAllocated =
-  ELM.liftTick (ELM.processHeapAllocatedData ~> asNumberDataPoint)
-    ~> ELM.batchByTickList
+  M.liftTick (M.processHeapAllocatedData ~> asNumberDataPoint)
+    ~> M.batchByTickList
     ~> asSum
       [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
       , OM.isMonotonic .~ True
@@ -251,8 +253,8 @@ processHeapAllocated =
 
 processHeapSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapSize =
-  ELM.liftTick (ELM.processHeapSizeData ~> asNumberDataPoint)
-    ~> ELM.batchByTickList
+  M.liftTick (M.processHeapSizeData ~> asNumberDataPoint)
+    ~> M.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapSize"
@@ -266,8 +268,8 @@ processHeapSize =
 
 processBlocksSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processBlocksSize =
-  ELM.liftTick (ELM.processBlocksSizeData ~> asNumberDataPoint)
-    ~> ELM.batchByTickList
+  M.liftTick (M.processBlocksSizeData ~> asNumberDataPoint)
+    ~> M.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "BlocksSize"
@@ -281,8 +283,8 @@ processBlocksSize =
 
 processHeapLive :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapLive =
-  ELM.liftTick (ELM.processHeapLiveData ~> asNumberDataPoint)
-    ~> ELM.batchByTickList
+  M.liftTick (M.processHeapLiveData ~> asNumberDataPoint)
+    ~> M.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapLive"
@@ -296,10 +298,10 @@ processHeapLive =
 
 processMemReturn :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processMemReturn =
-  ELM.liftTick ELM.processMemReturnData
-    ~> ELM.batchByTickList
+  M.liftTick M.processMemReturnData
+    ~> M.batchByTickList
     ~> fanout
-      [ ELM.liftBatch (asMemCurrent ~> asNumberDataPoint)
+      [ M.liftBatch (asMemCurrent ~> asNumberDataPoint)
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemCurrent"
@@ -307,7 +309,7 @@ processMemReturn =
             , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
-      , ELM.liftBatch (asMemNeeded ~> asNumberDataPoint)
+      , M.liftBatch (asMemNeeded ~> asNumberDataPoint)
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemNeeded"
@@ -315,7 +317,7 @@ processMemReturn =
             , OM.unit .~ "{mblock}"
             ]
           ~> mapping D.singleton
-      , ELM.liftBatch (asMemReturned ~> asNumberDataPoint)
+      , M.liftBatch (asMemReturned ~> asNumberDataPoint)
           ~> asGauge
           ~> asMetric
             [ OM.name .~ "MemReturned"
@@ -343,8 +345,8 @@ processHeapProfSample ::
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapProfSample verbosity maybeHeapProfBreakdown =
-  ELM.liftTick (ELM.processHeapProfSampleData verbosity maybeHeapProfBreakdown ~> asNumberDataPoint)
-    ~> ELM.batchByTickList
+  M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown ~> asNumberDataPoint)
+    ~> M.batchByTickList
     ~> asGauge
     ~> asMetric
       [ OM.name .~ "HeapProfSample"
@@ -493,7 +495,7 @@ instance AsSpan CapabilityUsageSpan where
     messageWith
       [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
-      , OT.name .~ ELM.showCapabilityUserCategory user
+      , OT.name .~ M.showCapabilityUserCategory user
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
@@ -509,7 +511,7 @@ instance AsSpan CapabilityUsageSpan where
             ]
       ]
    where
-    user = ELM.capabilityUser i
+    user = M.capabilityUser i
 
 --------------------------------------------------------------------------------
 -- Interpret thread state spans
@@ -525,15 +527,15 @@ instance AsSpan ThreadStateSpan where
     messageWith
       [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
-      , OT.name .~ ELM.showThreadStateCategory i.threadState
+      , OT.name .~ M.showThreadStateCategory i.threadState
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
       , OT.attributes
           .~ mapMaybe
             toMaybeKeyValue
-            [ "capability" ~= ELM.threadStateCap i.threadState
-            , "status" ~= (show <$> ELM.threadStateStatus i.threadState)
+            [ "capability" ~= M.threadStateCap i.threadState
+            , "status" ~= (show <$> M.threadStateStatus i.threadState)
             ]
       , OT.status
           .~ messageWith
