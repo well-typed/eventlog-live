@@ -141,7 +141,8 @@ processThreadEvents verbosity =
   M.sortByBatchTick (.value.evTime)
     ~> M.liftTick
       ( fanout
-          [ M.processGCSpans verbosity
+          [ M.validateOrder verbosity (.value.evTime)
+          , M.processGCSpans verbosity
               ~> mapping (D.singleton . A)
           , M.processThreadStateSpans' M.tryGetTimeUnixNano (.value) M.setWithStartTime'value verbosity
               ~> fanout
