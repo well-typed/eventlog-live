@@ -17,7 +17,7 @@ module GHC.Eventlog.Live.Options (
 
 import Data.Char (toLower)
 import GHC.Eventlog.Live.Machines (heapProfBreakdownEitherReader)
-import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError, verbosityQuiet, verbosityWarning)
+import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityQuiet, verbosityWarning)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 import Text.Read (readEither)
@@ -136,7 +136,7 @@ verbosityParser =
     (O.eitherReader readEitherVerbosity)
     ( O.short 'v'
         <> O.long "verbosity"
-        <> O.metavar "NUM|quiet|error|warning"
+        <> O.metavar "quiet|error|warning|info|debug|0-4"
         <> O.help "The verbosity threshold for logging."
         <> O.value verbosityWarning
     )
@@ -154,10 +154,14 @@ readEitherVerbosity rawVerbosity =
     Right verbosityThreshold
       | verbosityThreshold <= 0 -> Right verbosityQuiet
       | verbosityThreshold == 1 -> Right verbosityError
-      | otherwise -> Right verbosityWarning
+      | verbosityThreshold == 2 -> Right verbosityWarning
+      | verbosityThreshold == 3 -> Right verbosityInfo
+      | otherwise -> Right verbosityDebug
     -- otherwise, match it against the literal names of the levels...
     Left _parseError -> case toLower <$> rawVerbosity of
       "quiet" -> Right verbosityQuiet
       "error" -> Right verbosityError
       "warning" -> Right verbosityWarning
+      "info" -> Right verbosityInfo
+      "debug" -> Right verbosityDebug
       _otherwise -> Left $ "Could not parse verbosity '" <> rawVerbosity <> "'."

@@ -12,6 +12,8 @@ module GHC.Eventlog.Live.Verbosity (
   verbosityQuiet,
   verbosityError,
   verbosityWarning,
+  verbosityInfo,
+  verbosityDebug,
 ) where
 
 import Data.Text (Text)
@@ -25,7 +27,9 @@ The type of logging verbosities supported by the machines
 in "GHC.Eventlog.Live.Machines".
 -}
 data Verbosity
-  = VerbosityWarning
+  = VerbosityDebug
+  | VerbosityInfo
+  | VerbosityWarning
   | VerbosityError
   | VerbosityQuiet
   deriving (Eq, Ord)
@@ -35,6 +39,8 @@ Pretty-printer for t`Verbosity`.
 -}
 showVerbosity :: Verbosity -> Text
 showVerbosity = \case
+  VerbosityDebug -> "Debug"
+  VerbosityInfo -> "Info"
   VerbosityWarning -> "Warning"
   VerbosityError -> "Error"
   VerbosityQuiet -> "Quiet"
@@ -56,3 +62,15 @@ Warning t`Verbosity`.
 -}
 verbosityWarning :: Verbosity
 verbosityWarning = VerbosityWarning
+
+{- |
+Info t`Verbosity`.
+-}
+verbosityInfo :: Verbosity
+verbosityInfo = VerbosityInfo
+
+{- |
+Debug t`Verbosity`.
+-}
+verbosityDebug :: Verbosity
+verbosityDebug = VerbosityDebug
