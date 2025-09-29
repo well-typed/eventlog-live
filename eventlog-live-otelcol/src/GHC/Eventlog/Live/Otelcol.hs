@@ -75,6 +75,7 @@ main = do
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
     runWithEventlogSocket
+      verbosity
       eventlogSocket
       eventlogSocketTimeout
       eventlogSocketTimeoutExponent
