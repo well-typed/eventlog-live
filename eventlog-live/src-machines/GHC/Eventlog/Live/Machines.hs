@@ -154,7 +154,7 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Clock (getMonotonicTimeNSec)
-import GHC.Eventlog.Live.Internal.Logger (logError, logWarning)
+import GHC.Eventlog.Live.Internal.Logger (logWarning)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), EventInfo, HeapProfBreakdown (..), ThreadId, ThreadStopStatus (..), Timestamp)
 import GHC.RTS.Events qualified as E
@@ -522,7 +522,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
             -- If the previous event was any other event, then...
             | otherwise -> do
                 -- ...emit an error, and...
-                liftIO . logError verbosity "processGCSpans" . T.pack $
+                logWarning verbosity "processGCSpans" . T.pack $
                   printf
                     "Capability %d: Unsupported trace %s --> %s"
                     cap
@@ -552,7 +552,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
           -- If there was no previous event or it was any other event, then...
           _otherwise -> do
             -- ...emit an error, and...
-            liftIO . logWarning verbosity "processGCSpans" . T.pack $
+            logWarning verbosity "processGCSpans" . T.pack $
               printf
                 "Capability %d: Unsupported trace %s --> %s"
                 cap
@@ -912,7 +912,7 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity =
           -- If the current event is any other event, then...
           | otherwise -> do
               -- ...emit an error, and...
-              liftIO . logError verbosity "processThreadStateSpans" . T.pack $
+              logWarning verbosity "processThreadStateSpans" . T.pack $
                 printf
                   "Thread %d: Unexpected event %s"
                   thread
@@ -1163,14 +1163,14 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
       E.HeapProfSampleEnd{..} ->
         case L.uncons heapProfSampleEraStack of
           Nothing -> do
-            liftIO . logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+            logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
               printf
                 "Eventlog closed era %d, but there is no current era."
                 heapProfSampleEra
             go st
           Just (currentEra, heapProfSampleEraStack') -> do
             unless (currentEra == heapProfSampleEra) $
-              liftIO . logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+              logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
                 printf
                   "Eventlog closed era %d, but the current era is era %d."
                   heapProfSampleEra
@@ -1180,7 +1180,7 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
       E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
         | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
-            liftIO . logWarning verbosityThreshold "processHeapProfSampleData" $
+            logWarning verbosityThreshold "processHeapProfSampleData" $
               "Cannot infer heap profile breakdown.\n\
               \         If your binary was compiled with a GHC version prior to 9.14,\n\
               \         you must also pass the heap profile type to this executable.\n\
@@ -1188,7 +1188,7 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
-            liftIO . logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+            logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
               printf
                 "Unsupported heap profile breakdown %s"
                 (heapProfBreakdownShow HeapProfBreakdownBiography)
