@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Machine.Core
 Description : Core machines for processing data in batches.
@@ -26,6 +28,9 @@ module GHC.Eventlog.Live.Machine.Core (
   -- * Delimiting
   between,
   delimit,
+
+  -- * Validation
+  validateOrder,
 ) where
 
 import Control.Monad (when)
@@ -42,8 +47,12 @@ import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, Process
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
+import Data.Text qualified as T
+import GHC.Eventlog.Live.Internal.Logger (logError)
+import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
+import Text.Printf (printf)
 
 -------------------------------------------------------------------------------
 -- Ticks
@@ -338,3 +347,39 @@ delimit = construct . go
       _ -> do
         when s $ yield e
         go mm
+
+-------------------------------------------------------------------------------
+-- Validation
+-------------------------------------------------------------------------------
+
+{- |
+This machine validates that the inputs are received in order.
+
+If an out-of-order input is encountered, the machine prints an error message
+that directs the user to check that the @--eventlog-flush-interval@ and the
+@--batch-interval@ flags are set correctly.
+-}
+validateOrder ::
+  (MonadIO m, Show a) =>
+  Verbosity ->
+  (a -> Timestamp) ->
+  ProcessT m a x
+validateOrder verbosity timestamp
+  | verbosityError >= verbosity = construct $ start Nothing
+  | otherwise = stopped
+ where
+  start maybeOld =
+    await >>= \new ->
+      case maybeOld of
+        Just old
+          | timestamp new < timestamp old -> do
+              logError verbosity "validateOrder" . T.pack $
+                printf
+                  "Encountered two out-of-order inputs.\n\
+                  \Did you pass --eventlog-flush-interval to the GHC RTS?\n\
+                  \Did you set --batch-interval to be at least as big as the value of --eventlog-flush-interval?"
+                  (show old)
+                  (show new)
+              pure ()
+        _otherwise -> do
+          start (Just new)
