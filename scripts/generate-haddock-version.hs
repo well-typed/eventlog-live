@@ -3,24 +3,22 @@
 build-depends:
     , base          >=4.16
     , bytestring    >=0.11
-    , Cabal-syntax ^>=3.10  || ^>=3.12
-    , text          >=2.1
+    , Cabal-syntax ^>=3.10 || ^>=3.12
 -}
 {-
-This script reads the `description` field from a Cabal file.
+This script reads the `version` field from a Cabal file.
 -}
 
 module Main (main) where
 
 import qualified Data.ByteString as BS
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import qualified Distribution.PackageDescription.Parsec as PackageDescription
+import Distribution.Pretty (prettyShow)
 import qualified Distribution.Types.GenericPackageDescription as GenericPackageDescription
 import qualified Distribution.Types.PackageDescription as PackageDescription
-import Distribution.Utils.ShortText (fromShortText)
-import System.IO (hPutStrLn, stderr, stdin, stdout)
+import qualified Distribution.Types.PackageId as PackageId
+import qualified Distribution.Types.Version as Version
+import System.IO (hPutStrLn, stderr, stdin)
 
 main :: IO ()
 main = do
@@ -29,5 +27,6 @@ main = do
     Nothing -> hPutStrLn stderr $ "error: Could not parse input"
     Just genericPackageDescription -> do
       let packageDescription = GenericPackageDescription.packageDescription genericPackageDescription
-      let description = T.pack . fromShortText $ PackageDescription.description packageDescription
-      TIO.putStrLn description
+      let packageId = PackageDescription.package packageDescription
+      let packageVersion = PackageId.pkgVersion packageId
+      putStrLn (prettyShow packageVersion)

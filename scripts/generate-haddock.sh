@@ -52,7 +52,7 @@ fi
 
 # Configure metadata
 # TODO: read from .cabal file
-EVENTLOG_LIVE_VERSION="0.1.0.1"
+EVENTLOG_LIVE_VERSION=$("./scripts/generate-haddock-version.hs" <"./eventlog-live/eventlog-live.cabal" | head -n1)
 
 # Make working directory:
 WORKDIR=$(mktemp -d build-haddock.XXXXXX)
