@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            eventlog-live-otelcol
-version:         0.1.0.4
+version:         0.2.0.0
 synopsis:        Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into
@@ -113,7 +113,7 @@ library
     , base                   >=4.16   && <4.22
     , bytestring             >=0.11   && <0.13
     , dlist                  >=1.0    && <1.1
-    , eventlog-live          >=0.1    && <0.3
+    , eventlog-live          >=0.2    && <0.3
     , eventlog-live:options
     , eventlog-live:socket
     , ghc-events             >=0.20   && <0.21
