@@ -9,7 +9,7 @@ import Data.Machine.Runner (runT_)
 import Data.Machine.Type (MachineT, repeatedly)
 import Data.Void (Void)
 import Data.Word (Word64)
-import GHC.Eventlog.Live.Machines (sortByBatchTick)
+import GHC.Eventlog.Live.Machine.Core (sortByBatchTick)
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
 import GHC.Eventlog.Live.Verbosity (verbosityInfo)
