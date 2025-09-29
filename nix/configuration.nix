@@ -108,10 +108,6 @@ in
 
   # Install required packages
   environment.systemPackages = with pkgs; [
-    curl
-    jq
-    htop
-    nmap
   ];
 
   # Enable OpenTelemetry Collector service
