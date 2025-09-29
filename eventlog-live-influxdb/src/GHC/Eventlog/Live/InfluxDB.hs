@@ -31,6 +31,9 @@ import Data.Word (Word32, Word64)
 import Database.InfluxDB.Line qualified as I (Line (..))
 import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
+import GHC.Eventlog.Live.Data.Attribute
+import GHC.Eventlog.Live.Data.Metric
+import GHC.Eventlog.Live.Data.Span
 import GHC.Eventlog.Live.Machines
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
