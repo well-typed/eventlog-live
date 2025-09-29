@@ -6,6 +6,7 @@
 - **BREAKING**: Move attributes, metrics, and spans into their own modules.
 - **BREAKING**: Drop `Stream` and `supplier` machine.
 - **BREAKING**: Rename `GHC.Eventlog.Live.Machines` to `GHC.Eventlog.Live.Machine`.
+- **BREAKING**: Move core machines to their own module.
 
 ### 0.1.0.1
 
