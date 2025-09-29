@@ -37,10 +37,6 @@ module GHC.Eventlog.Live.Machines (
   withMainThreadId',
   dropMainThreadId,
 
-  -- ** Supplier
-  Stream (..),
-  supplier,
-
   -- ** Capability Usage
 
   -- *** Capability Usage Metrics
@@ -264,22 +260,6 @@ Drop the t`WithMainThreadId` wrapper.
 -}
 dropMainThreadId :: Process (WithMainThreadId a) a
 dropMainThreadId = mapping (.value)
-
--------------------------------------------------------------------------------
--- Supplier
-
-{- |
-An infinite stream of values.
--}
-data Stream a = Cons !a (Stream a)
-
-{- |
-Supply each function with the next element from an infinite stream of values.
--}
-supplier :: Stream s -> Process (s -> a) a
-supplier supply =
-  auto $
-    unfoldMealy (\(Cons x xs) f -> (f x, xs)) supply
 
 -------------------------------------------------------------------------------
 -- Capability Usage
