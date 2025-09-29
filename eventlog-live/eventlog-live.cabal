@@ -139,4 +139,5 @@ library socket
     , ghc-events             >=0.20  && <0.21
     , machines               >=0.7.4 && <0.8
     , network                >=3.2.7 && <3.3
+    , text                   >=1.2   && <2.2
     , unliftio-core          >=0.2.1 && <0.3

@@ -1,6 +1,7 @@
 ### 0.2.0.0
 
 - Add `verbosityInfo` and `verbosityDebug`.
+- **BREAKING**: Add logs to `runWithEventlogSocket` connection loop.
 - **BREAKING**: Downgrade severity of all errors logged during eventlog analyses to warnings.
 
 ### 0.1.0.1
