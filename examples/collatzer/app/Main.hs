@@ -30,7 +30,8 @@ import qualified System.Remote.Monitoring
 
 import GHC.Eventlog.Counters (Counters (..), ThreadState (..), count, newCounters)
 import GHC.Eventlog.Counters.EKG (registerCounters)
-import GHC.Eventlog.Live.Machines (Tick (..), decodeEventBatch, defaultChunkSizeBytes, dropTick, fileSinkBatch, sortByBatchTick, sourceHandleBatch)
+import GHC.Eventlog.Live.Machine (decodeEventBatch, defaultChunkSizeBytes, fileSinkBatch, sourceHandleBatch)
+import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, sortByBatchTick)
 import GHC.RTS.Events (Event (evTime))
 
 import Data.Machine (MachineT, ProcessT, await, repeatedly, runT_, (~>))
