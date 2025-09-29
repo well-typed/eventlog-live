@@ -5,11 +5,13 @@ module GHC.Eventlog.Live.Internal.Logger (
   logMessage,
   logError,
   logWarning,
+  logInfo,
+  logDebug,
 ) where
 
 import Data.Text (Text)
 import Data.Text.IO qualified as TIO
-import GHC.Eventlog.Live.Verbosity (Verbosity, showVerbosity, verbosityError, verbosityWarning)
+import GHC.Eventlog.Live.Verbosity (Verbosity, showVerbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityWarning)
 import System.IO qualified as IO
 
 {- |
@@ -38,3 +40,15 @@ Internal helper. Log warnings to `IO.stderr`.
 -}
 logWarning :: Verbosity -> LogSource -> Text -> IO ()
 logWarning = logMessage verbosityWarning
+
+{- |
+Internal helper. Log info messages to `IO.stderr`.
+-}
+logInfo :: Verbosity -> LogSource -> Text -> IO ()
+logInfo = logMessage verbosityInfo
+
+{- |
+Internal helper. Log debug messages to `IO.stderr`.
+-}
+logDebug :: Verbosity -> LogSource -> Text -> IO ()
+logDebug = logMessage verbosityDebug
