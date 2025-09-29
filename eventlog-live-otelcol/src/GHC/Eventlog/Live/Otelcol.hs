@@ -86,40 +86,43 @@ main = do
       batchInterval
       Nothing
       maybeEventlogLogFile
-      $ M.liftTick M.withStartTime
-        ~> fanout
-          [ processHeapEvents verbosity maybeHeapProfBreakdown
-              ~> mapping (fmap Left)
-          , processThreadEvents verbosity
-          ]
-        ~> mapping (partitionEithers . D.toList)
-        ~> fanout
-          [ filtered (const exportMetrics)
-              ~> mapping fst
-              ~> asScopeMetrics
-                [ OM.scope .~ eventlogLiveScope
-                ]
-              ~> asResourceMetric []
-              ~> asExportMetricServiceRequest
-              ~> exportResourceMetrics conn
-              ~> mapping (either displayException displayException)
-              ~> errorWriter
-          , filtered (const exportTraces)
-              ~> mapping snd
-              ~> asScopeSpans
-                [ OT.scope .~ eventlogLiveScope
-                ]
-              ~> asResourceSpan
-                [ OT.resource
-                    .~ messageWith
-                      [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                      ]
-                ]
-              ~> asExportTraceServiceRequest
-              ~> exportResourceSpans conn
-              ~> mapping (either displayException displayException)
-              ~> errorWriter
-          ]
+      $ fanout
+        [ M.validateInput verbosity 10
+        , M.liftTick M.withStartTime
+            ~> fanout
+              [ processHeapEvents verbosity maybeHeapProfBreakdown
+                  ~> mapping (fmap Left)
+              , processThreadEvents verbosity
+              ]
+            ~> mapping (partitionEithers . D.toList)
+            ~> fanout
+              [ filtered (const exportMetrics)
+                  ~> mapping fst
+                  ~> asScopeMetrics
+                    [ OM.scope .~ eventlogLiveScope
+                    ]
+                  ~> asResourceMetric []
+                  ~> asExportMetricServiceRequest
+                  ~> exportResourceMetrics conn
+                  ~> mapping (either displayException displayException)
+                  ~> errorWriter
+              , filtered (const exportTraces)
+                  ~> mapping snd
+                  ~> asScopeSpans
+                    [ OT.scope .~ eventlogLiveScope
+                    ]
+                  ~> asResourceSpan
+                    [ OT.resource
+                        .~ messageWith
+                          [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                          ]
+                    ]
+                  ~> asExportTraceServiceRequest
+                  ~> exportResourceSpans conn
+                  ~> mapping (either displayException displayException)
+                  ~> errorWriter
+              ]
+        ]
 
 errorWriter :: (MonadIO m) => ProcessT m String Void
 errorWriter = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr
