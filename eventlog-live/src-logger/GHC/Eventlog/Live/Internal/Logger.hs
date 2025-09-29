@@ -30,17 +30,17 @@ Internal helper. Denotes the source of a log message.
 type LogSource = Text
 
 {- |
-Internal helper. Log messages to `IO.stderr`.
+Internal helper. Log messages to given handle.
 Only prints a message if its verbosity level is above the verbosity threshold.
 -}
-logMessage :: (MonadIO m) => Verbosity -> Verbosity -> LogSource -> Text -> m ()
-logMessage verbosityLevel verbosityThreshold logSource msg
-  | verbosityLevel >= verbosityThreshold =
-      liftIO
-        . withVerbosityColor verbosityLevel IO.stderr
+logMessage :: (MonadIO m) => IO.Handle -> Verbosity -> Verbosity -> LogSource -> Text -> m ()
+logMessage handle verbosityLevel verbosityThreshold logSource msg
+  | verbosityLevel >= verbosityThreshold = liftIO $ do
+      withVerbosityColor verbosityLevel handle
         . flip TIO.hPutStrLn
         . formatMessage verbosityLevel verbosityThreshold logSource
         $ msg
+      IO.hFlush handle
   | otherwise = pure ()
 
 {- |
@@ -82,22 +82,22 @@ verbosityColor verbosity
 Internal helper. Log errors to `IO.stderr`.
 -}
 logError :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logError = logMessage verbosityError
+logError = logMessage IO.stderr verbosityError
 
 {- |
 Internal helper. Log warnings to `IO.stderr`.
 -}
 logWarning :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logWarning = logMessage verbosityWarning
+logWarning = logMessage IO.stderr verbosityWarning
 
 {- |
 Internal helper. Log info messages to `IO.stderr`.
 -}
 logInfo :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logInfo = logMessage verbosityInfo
+logInfo = logMessage IO.stdout verbosityInfo
 
 {- |
 Internal helper. Log debug messages to `IO.stderr`.
 -}
 logDebug :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logDebug = logMessage verbosityDebug
+logDebug = logMessage IO.stderr verbosityDebug
