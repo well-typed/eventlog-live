@@ -12,6 +12,7 @@ import Data.Word (Word64)
 import GHC.Eventlog.Live.Machines (sortByBatchTick)
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
+import GHC.Eventlog.Live.Verbosity (verbosityInfo)
 import GHC.RTS.Events (Event)
 import qualified GHC.RTS.Events as E
 import qualified Network.Socket as S
@@ -27,7 +28,7 @@ import qualified Text.Regex.TDFA as RE
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  runWithEventlogSocket eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchInterval Nothing Nothing $
+  runWithEventlogSocket verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchInterval Nothing Nothing $
     sortByBatchTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
