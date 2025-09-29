@@ -6,14 +6,18 @@
     flake-utils.url = "github:numtide/flake-utils";
     all-cabal-hashes.url = "github:commercialhaskell/all-cabal-hashes/hackage";
     all-cabal-hashes.flake = false;
+    nixos-generators = {
+      url = "github:nix-community/nixos-generators";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, all-cabal-hashes }:
+  outputs = { self, nixpkgs, flake-utils, all-cabal-hashes, nixos-generators }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        nixosConfig = nixpkgs.lib.nixosSystem {
-           inherit system;
+        nixosConfig = format: nixos-generators.nixosGenerate {
+           inherit system format;
            modules = [
              ./configuration.nix
            ];
@@ -24,7 +28,8 @@
         pkgs = pkgs;
         packages = {
           # Build the VM
-          vm = nixosConfig.config.system.build.vm;
+          config = nixosConfig;
+          vm = nixosConfig "qcow";
         };
 
         # Development shell
