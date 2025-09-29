@@ -30,6 +30,7 @@ module GHC.Eventlog.Live.Machine.Core (
   delimit,
 
   -- * Validation
+  validateInput,
   validateOrder,
 ) where
 
@@ -48,8 +49,8 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Internal.Logger (logError)
-import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError)
+import GHC.Eventlog.Live.Internal.Logger (logDebug, logError, logWarning)
+import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError, verbosityWarning)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
 import Text.Printf (printf)
@@ -351,6 +352,37 @@ delimit = construct . go
 -------------------------------------------------------------------------------
 -- Validation
 -------------------------------------------------------------------------------
+
+{- |
+This machine validates that there is some input.
+
+If no input is encountered after the given number of ticks, the machine prints
+a warning that directs the user to check that the @-l@ flag was set correctly.
+-}
+validateInput ::
+  (MonadIO m) =>
+  Verbosity ->
+  Int ->
+  ProcessT m (Tick a) x
+validateInput verbosity ticks
+  | verbosityWarning >= verbosity = construct $ start ticks
+  | otherwise = stopped
+ where
+  start remaining
+    | remaining <= 0 = liftIO $ do
+        logWarning verbosity "validateInput" . T.pack $
+          printf
+            "No input after %d ticks. Did you pass -l to the GHC RTS?"
+            ticks
+    | otherwise = do
+        logDebug verbosity "validateInput" $
+          T.pack (show remaining) <> " ticks remaining."
+        await >>= \case
+          Item{} -> do
+            logDebug verbosity "validateInput" "Received item."
+          Tick -> do
+            logDebug verbosity "validateInput" "Received tick."
+            start (pred remaining)
 
 {- |
 This machine validates that the inputs are received in order.
