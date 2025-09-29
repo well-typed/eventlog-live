@@ -94,7 +94,7 @@ library
     GHC.Eventlog.Live.Data.Attribute
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Span
-    GHC.Eventlog.Live.Machines
+    GHC.Eventlog.Live.Machine
 
   reexported-modules: GHC.Eventlog.Live.Verbosity
   build-depends:

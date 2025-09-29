@@ -5,6 +5,7 @@
 - **BREAKING**: Downgrade severity of all errors logged during eventlog analyses to warnings.
 - **BREAKING**: Move attributes, metrics, and spans into their own modules.
 - **BREAKING**: Drop `Stream` and `supplier` machine.
+- **BREAKING**: Rename `GHC.Eventlog.Live.Machines` to `GHC.Eventlog.Live.Machine`.
 
 ### 0.1.0.1
 

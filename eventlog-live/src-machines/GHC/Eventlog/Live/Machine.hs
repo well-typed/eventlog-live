@@ -2,12 +2,12 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Machines
+Module      : GHC.Eventlog.Live.Machine
 Description : Machines for processing eventlog data.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Machines (
+module GHC.Eventlog.Live.Machine (
   -- * Eventlog source
   sourceHandleWait,
   sourceHandleBatch,
