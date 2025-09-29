@@ -65,6 +65,7 @@ main = do
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSocket
+    verbosity
     eventlogSocket
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
