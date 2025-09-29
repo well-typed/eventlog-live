@@ -34,7 +34,8 @@ import Database.InfluxDB.Write qualified as I
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Data.Span
-import GHC.Eventlog.Live.Machines
+import GHC.Eventlog.Live.Machine
+import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
 import GHC.Eventlog.Live.Verbosity (Verbosity)
