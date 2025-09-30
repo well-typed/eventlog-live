@@ -3,4 +3,4 @@ dist-newstyle/
 *.eventlog
 *.hp
 *.prof
-/nix/*/result/
+/nix/*/result
