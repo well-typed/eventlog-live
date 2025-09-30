@@ -147,6 +147,7 @@ jobs:
   build-nix-vm:
     name: "Build Nix VM"
     runs-on: "ubuntu-latest"
+    if: github.ref_name == 'master' && github.event_name == 'push'
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
