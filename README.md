@@ -37,7 +37,11 @@ This [Docker Compose](https://docs.docker.com/compose/) configuration builds and
 
 - [`prom/prometheus`](https://hub.docker.com/r/prom/prometheus)
 
-  The Prometheus metric processor and database, which acts as a datasource for Grafana.
+  The Prometheus metric processor and database, which acts as a metric datasource for Grafana.
+
+- [`grafana/tempo`](https://hub.docker.com/r/grafana/tempo)
+
+  The Tempo span processor and database, which acts as a span datasource for Grafana.
 
 - [`grafana/grafana-oss`](https://hub.docker.com/r/grafana/grafana-oss)
 
