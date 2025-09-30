@@ -29,6 +29,13 @@ To build a lightweight image, run the following command from the `nix/eventlog-l
 nix build .#vm
 ```
 
+To build standalone images for different architectures, you can use [remote builders](https://nixos.wiki/wiki/Distributed_build).
+For instance, if you have set up a remote builder for `aarch64-linux` builds, then you can build a standalone image for `aarch64-linux` by running the following command from the `nix/eventlog-live-otelcol` directory:
+
+```
+nix build .#packages.aarch64-linux.standalone-vm
+```
+
 ## Running the VM
 
 There are two options for running the VM, depending on whether your system is capable of building the VM.
