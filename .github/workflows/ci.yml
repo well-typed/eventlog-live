@@ -165,6 +165,15 @@ jobs:
         run: nix build .#vm
         working-directory: "nix/${{ matrix.nix-vm-directory }}"
 
+      - name: 📦 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ matrix.nix-vm-directory }}.qcow2"
+          path: "${{ github.workspace }}/nix/${{ matrix.nix-vm-directory }}/result/nixos.qcow2"
+          if-no-files-found: error
+          compression-level: 9
+          overwrite: true
+
     strategy:
       fail-fast: false
       matrix:
