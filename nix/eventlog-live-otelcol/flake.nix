@@ -24,22 +24,23 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        nixosConfig =
-          format:
-          nixos-generators.nixosGenerate {
-            inherit system format;
-            modules = [ ./configuration.nix ];
-            specialArgs = {
-              all-cabal-hashes = all-cabal-hashes.outPath;
-            };
+        systemConfig = {
+          inherit system;
+          modules = [ ./configuration.nix ];
+          specialArgs = {
+            all-cabal-hashes = all-cabal-hashes.outPath;
           };
+        };
+        generator = format: nixos-generators.nixosGenerate (systemConfig // { inherit format; });
+        nixosConfig = nixpkgs.lib.nixosSystem systemConfig;
       in
       {
         pkgs = pkgs;
         packages = {
           # Build the VM
-          config = nixosConfig;
-          vm = nixosConfig "qcow";
+          config = systemConfig;
+          standalone-vm = generator "qcow";
+          vm = nixosConfig.config.system.build.vm;
         };
 
         # Development shell
