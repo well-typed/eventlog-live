@@ -165,7 +165,7 @@ jobs:
           nix_path: nixpkgs=channel:nixpkgs-unstable
 
       - name: 🏗️ Build
-        run: nix build .#vm
+        run: nix build .#standalone-vm
         working-directory: "nix/${{ matrix.nix-vm-directory }}"
 
       - name: 📦 Upload artifact
