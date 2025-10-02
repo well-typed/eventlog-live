@@ -103,6 +103,10 @@ withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource ac
               traverse_ (IO.hSetEncoding IO.stdin) maybeStdinTextEncoding
               IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
         E.bracket enter leave . const . runInIO . action $ IO.stdin
+      EventlogFile eventlogFile -> do
+        logInfo verbosity "withEventlogSource" $ "Reading eventlog from " <> T.pack eventlogFile
+        IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
+          runInIO $ action handle
       EventlogSocketUnix eventlogSocketUnix -> do
         logInfo verbosity "withEventlogSource" $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
         E.bracket (connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
