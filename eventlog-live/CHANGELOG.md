@@ -8,6 +8,8 @@
 - **BREAKING**: Rename `GHC.Eventlog.Live.Machines` to `GHC.Eventlog.Live.Machine`.
 - **BREAKING**: Move core machines to their own module.
 - **BREAKING**: Use ANSI colors for logs, if supported.
+- Support reading the eventlog from stdin.
+- **BREAKING**: Rename `EventlogSocket` and related functions to `EventlogSource`.
 
 ### 0.1.0.1
 

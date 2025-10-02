@@ -5,8 +5,8 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Options (
-  EventlogSocket (..),
-  eventlogSocketParser,
+  EventlogSource (..),
+  eventlogSourceParser,
   eventlogSocketTimeoutParser,
   eventlogSocketTimeoutExponentParser,
   heapProfBreakdownParser,
@@ -15,6 +15,7 @@ module GHC.Eventlog.Live.Options (
   verbosityParser,
 ) where
 
+import Control.Applicative (asum)
 import Data.Char (toLower)
 import GHC.Eventlog.Live.Machine (heapProfBreakdownEitherReader)
 import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityQuiet, verbosityWarning)
@@ -28,21 +29,33 @@ import Text.Read (readEither)
 {- |
 The type of eventlog sockets.
 -}
-newtype EventlogSocket
-  = EventlogSocketUnix FilePath
+data EventlogSource
+  = EventlogStdin
+  | EventlogSocketUnix FilePath
 
 {- |
 Parser for the eventlog socket.
 -}
-eventlogSocketParser :: O.Parser EventlogSocket
-eventlogSocketParser = socketUnixParser
+eventlogSourceParser :: O.Parser EventlogSource
+eventlogSourceParser =
+  asum
+    [ stdinParser
+    , socketUnixParser
+    ]
  where
+  stdinParser =
+    EventlogStdin
+      <$ O.flag'
+        ()
+        ( O.long "eventlog-stdin"
+            <> O.help "Read the eventlog from stdin."
+        )
   socketUnixParser =
     EventlogSocketUnix
       <$> O.strOption
         ( O.long "eventlog-socket"
             <> O.metavar "SOCKET"
-            <> O.help "Eventlog Unix socket."
+            <> O.help "Read the eventlog from a Unix socket."
         )
 
 {- |
