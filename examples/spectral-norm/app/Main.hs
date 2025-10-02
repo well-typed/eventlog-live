@@ -17,7 +17,7 @@
 
 import Control.Concurrent
 import Control.Monad
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Maybe
 import Foreign
 import Foreign.Marshal.Array
@@ -40,10 +40,7 @@ type Reals = Ptr Double
 
 main :: IO ()
 main = do
-  eventlogSocket <-
-    fromMaybe "/tmp/ghc_eventlog.sock"
-      <$> lookupEnv "GHC_EVENTLOG_SOCKET"
-  startWait eventlogSocket
+  traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
   ns <- getArgs
   for_ (map read ns) $ \n ->
     allocaArray n $ \u -> allocaArray n $ \v -> do
