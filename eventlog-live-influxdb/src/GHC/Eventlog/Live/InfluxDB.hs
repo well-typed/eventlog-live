@@ -68,9 +68,9 @@ main = do
           ~> batchByTick
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
-  runWithEventlogSocket
+  runWithEventlogSource
     verbosity
-    eventlogSocket
+    eventlogSource
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
     batchInterval
@@ -322,7 +322,7 @@ optionsInfo =
     O.idm
 
 data Options = Options
-  { eventlogSocket :: EventlogSocket
+  { eventlogSource :: EventlogSource
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
   , batchInterval :: Int
@@ -335,7 +335,7 @@ data Options = Options
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> eventlogSocketParser
+    <$> eventlogSourceParser
     <*> eventlogSocketTimeoutParser
     <*> eventlogSocketTimeoutExponentParser
     <*> batchIntervalParser
