@@ -6,17 +6,14 @@
 module Main (main) where
 
 import Control.Parallel
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Maybe
 import GHC.Eventlog.Socket
 import System.Environment
 
 main :: IO ()
 main = do
-  eventlogSocket <-
-    fromMaybe "/tmp/ghc_eventlog.sock"
-      <$> lookupEnv "GHC_EVENTLOG_SOCKET"
-  startWait eventlogSocket
+  traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
   (t : ns) <- getArgs
   for_ (map read ns) $ \n -> do
     let res = parfib n (read t)
