@@ -28,7 +28,7 @@ import qualified Text.Regex.TDFA as RE
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  runWithEventlogSocket verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchInterval Nothing Nothing $
+  runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchInterval Nothing Nothing $
     sortByBatchTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
@@ -43,7 +43,7 @@ printSink maybePattern = repeatedly go
         putStrLn evStr
 
 -- | Connect to eventlog socket.
-connect :: EventlogSocket -> IO Handle
+connect :: EventlogSource -> IO Handle
 connect = \case
   EventlogSocketUnix socketName -> do
     socket <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
@@ -60,7 +60,7 @@ options :: O.ParserInfo Options
 options = O.info (optionsParser O.<**> O.helper) O.idm
 
 data Options = Options
-  { eventlogSocket :: EventlogSocket
+  { eventlogSocket :: EventlogSource
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
   , batchInterval :: Int
@@ -70,7 +70,7 @@ data Options = Options
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> eventlogSocketParser
+    <$> eventlogSourceParser
     <*> eventlogSocketTimeoutParser
     <*> eventlogSocketTimeoutExponentParser
     <*> batchIntervalParser
