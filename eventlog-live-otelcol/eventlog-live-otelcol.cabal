@@ -6,7 +6,7 @@ description:
   This executable supports live streaming of eventlog data into
   the OpenTelemetry Collector.
 
-  > Usage: eventlog-live-otelcol --eventlog-socket SOCKET
+  > Usage: eventlog-live-otelcol (--eventlog-stdin | --eventlog-socket SOCKET)
   >                              [--eventlog-socket-timeout NUM]
   >                              [--eventlog-socket-exponent NUM]
   >                              [--batch-interval NUM] [--eventlog-log-file FILE]
@@ -20,7 +20,8 @@ description:
   >                              [--otelcol-no-metrics] [--otelcol-no-traces]
   >
   > Available options:
-  >   --eventlog-socket SOCKET Eventlog Unix socket.
+  >   --eventlog-stdin         Read the eventlog from stdin.
+  >   --eventlog-socket SOCKET Read the eventlog from a Unix socket.
   >   --eventlog-socket-timeout NUM
   >                            Eventlog socket connection retry timeout in
   >                            microseconds.
