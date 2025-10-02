@@ -40,7 +40,7 @@ import GHC.Eventlog.Live.Machine qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Options
-import GHC.Eventlog.Live.Socket (runWithEventlogSocket)
+import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import Lens.Family2 ((&), (.~), (^.))
@@ -78,7 +78,7 @@ main = do
   let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-    runWithEventlogSocket
+    runWithEventlogSource
       verbosity
       eventlogSocket
       eventlogSocketTimeout
@@ -708,7 +708,7 @@ options =
     O.idm
 
 data Options = Options
-  { eventlogSocket :: EventlogSocket
+  { eventlogSocket :: EventlogSource
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
   , batchInterval :: Int
@@ -722,7 +722,7 @@ data Options = Options
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> eventlogSocketParser
+    <$> eventlogSourceParser
     <*> eventlogSocketTimeoutParser
     <*> eventlogSocketTimeoutExponentParser
     <*> batchIntervalParser
