@@ -6,7 +6,7 @@ description:
   This executable supports live streaming of eventlog data into
   [InfluxDB](https://www.influxdata.com) version 1.8.
 
-  > Usage: eventlog-live-influxdb --eventlog-socket SOCKET
+  > Usage: eventlog-live-influxdb (--eventlog-stdin | --eventlog-socket SOCKET)
   >                               [--eventlog-socket-timeout NUM]
   >                               [--eventlog-socket-exponent NUM]
   >                               [--batch-interval NUM] [--eventlog-log-file FILE]
@@ -19,7 +19,8 @@ description:
   >                               [--influxdb-ssl] --influxdb-database DATABASE
   >
   > Available options:
-  >   --eventlog-socket SOCKET Eventlog Unix socket.
+  >   --eventlog-stdin         Read the eventlog from stdin.
+  >   --eventlog-socket SOCKET Read the eventlog from a Unix socket.
   >   --eventlog-socket-timeout NUM
   >                            Eventlog socket connection retry timeout in
   >                            microseconds.
