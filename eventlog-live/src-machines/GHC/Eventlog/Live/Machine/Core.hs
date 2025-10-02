@@ -80,14 +80,21 @@ batchByTickList =
 {- |
 Generalised version of `batchByTickList`.
 -}
-batchByTick :: (Monoid a) => Process (Tick a) a
-batchByTick = construct start
+batchByTick ::
+  forall m a.
+  (Monad m, Monoid a) =>
+  ProcessT m (Tick a) a
+batchByTick = batchByTickWith mempty
  where
-  start = batch mempty
-  batch acc =
-    await >>= \case
-      Item a -> batch (a <> acc)
-      Tick -> yield acc >> start
+  batchByTickWith :: a -> MachineT m (Is (Tick a)) a
+  batchByTickWith acc = MachineT $ pure $ Await onNext Refl onStop
+   where
+    onNext :: Tick a -> MachineT m (Is (Tick a)) a
+    onNext = \case
+      Item a -> batchByTickWith (a <> acc)
+      Tick -> MachineT $ pure $ Yield acc batchByTick
+    onStop :: MachineT m (Is (Tick a)) a
+    onStop = MachineT $ pure $ Yield acc stopped
 
 {- |
 This machine streams a list of items into a series of items
@@ -281,19 +288,37 @@ This machine caches two batches worth of events, sorts them together,
 and then yields only those events whose timestamp is less than or equal
 to the maximum of the first batch.
 -}
-sortByBatch :: (a -> Timestamp) -> Process [a] [a]
-sortByBatch timestamp = construct $ go mempty
+sortByBatch ::
+  forall m a.
+  (Monad m) =>
+  (a -> Timestamp) ->
+  ProcessT m [a] [a]
+sortByBatch timestamp = sortByBatchWith Nothing
  where
-  go old =
-    await >>= \case
-      new
-        | null old -> go (sortByTime new)
-        | otherwise -> yield before >> go after
+  sortByBatchWith :: Maybe [a] -> ProcessT m [a] [a]
+  sortByBatchWith = \case
+    Nothing -> MachineT $ pure $ Await onNext Refl onStop
+     where
+      onNext :: [a] -> ProcessT m [a] [a]
+      onNext new = sortByBatchWith (Just sortedNew)
+       where
+        sortedNew = sortByTime new
+      onStop :: ProcessT m [a] [a]
+      onStop = stopped
+    Just sortedOld -> MachineT $ pure $ Await onNext Refl onStop
+     where
+      onNext :: [a] -> ProcessT m [a] [a]
+      onNext new
+        | null sortedOld = sortByBatchWith $ Just sortedNew
+        | otherwise = MachineT $ pure $ Yield sortedBeforeCutoff $ sortByBatchWith $ Just sortedAfterCutoff
        where
         -- NOTE: use of partial @maximum@ is guarded by the check @null old@.
-        cutoff = getMax (foldMap (Max . timestamp) old)
-        sorted = joinByTime old (sortByTime new)
-        (before, after) = L.partition ((<= cutoff) . timestamp) sorted
+        cutoff = getMax (foldMap (Max . timestamp) sortedOld)
+        sortedNew = sortByTime new
+        sorted = joinByTime sortedOld sortedNew
+        (sortedBeforeCutoff, sortedAfterCutoff) = L.partition ((<= cutoff) . timestamp) sorted
+      onStop :: ProcessT m [a] [a]
+      onStop = MachineT $ pure $ Yield sortedOld $ stopped
 
   -- compByTime :: a -> a -> Ordering
   compByTime = compare `on` timestamp
