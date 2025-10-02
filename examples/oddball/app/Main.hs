@@ -2,6 +2,7 @@ module Main where
 
 import Control.Concurrent
 import Control.Monad
+import Data.Foldable (traverse_)
 import Data.Maybe
 import Debug.Trace
 import GHC.Eventlog.Socket
@@ -10,10 +11,7 @@ import System.Random
 
 main :: IO ()
 main = do
-  eventlogSocket <-
-    fromMaybe "/tmp/ghc_eventlog.sock"
-      <$> lookupEnv "GHC_EVENTLOG_SOCKET"
-  startWait eventlogSocket
+  traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
   _ <- forever $ threadDelay 3000000 >> doRandom
   return ()
 
