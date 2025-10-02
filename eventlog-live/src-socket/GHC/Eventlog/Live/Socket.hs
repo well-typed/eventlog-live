@@ -17,6 +17,7 @@ import Control.Concurrent (threadDelay)
 import Control.Exception (Exception (..))
 import Control.Exception qualified as E
 import Control.Monad.IO.Unlift (MonadUnliftIO (..))
+import Data.Foldable (traverse_)
 import Data.Machine (ProcessT, runT_, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe)
@@ -94,7 +95,14 @@ withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource ac
     case eventlogSource of
       EventlogStdin -> do
         logInfo verbosity "withEventlogSource" "Reading eventlog from stdin"
-        runInIO $ action IO.stdin
+        let enter = do
+              maybeStdinTextEncoding <- IO.hGetEncoding IO.stdin
+              IO.hSetBinaryMode IO.stdin True
+              pure maybeStdinTextEncoding
+        let leave maybeStdinTextEncoding = do
+              traverse_ (IO.hSetEncoding IO.stdin) maybeStdinTextEncoding
+              IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
+        E.bracket enter leave . const . runInIO . action $ IO.stdin
       EventlogSocketUnix eventlogSocketUnix -> do
         logInfo verbosity "withEventlogSource" $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
         E.bracket (connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
