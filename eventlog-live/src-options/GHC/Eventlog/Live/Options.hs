@@ -31,6 +31,7 @@ The type of eventlog sockets.
 -}
 data EventlogSource
   = EventlogStdin
+  | EventlogFile FilePath
   | EventlogSocketUnix FilePath
 
 {- |
@@ -40,6 +41,7 @@ eventlogSourceParser :: O.Parser EventlogSource
 eventlogSourceParser =
   asum
     [ stdinParser
+    , fileParser
     , socketUnixParser
     ]
  where
@@ -49,6 +51,13 @@ eventlogSourceParser =
         ()
         ( O.long "eventlog-stdin"
             <> O.help "Read the eventlog from stdin."
+        )
+  fileParser =
+    EventlogFile
+      <$> O.strOption
+        ( O.long "eventlog-file"
+            <> O.metavar "FILE"
+            <> O.help "Read the eventlog from a file."
         )
   socketUnixParser =
     EventlogSocketUnix
