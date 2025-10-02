@@ -7,10 +7,10 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Socket (
-  EventlogSocket (..),
+  EventlogSource (..),
   Tick (..),
   tryConnect,
-  runWithEventlogSocket,
+  runWithEventlogSource,
 ) where
 
 import Control.Concurrent (threadDelay)
@@ -26,7 +26,7 @@ import Data.Void (Void)
 import GHC.Eventlog.Live.Internal.Logger (logDebug, logInfo)
 import GHC.Eventlog.Live.Machine
 import GHC.Eventlog.Live.Machine.Core
-import GHC.Eventlog.Live.Options (EventlogSocket (..))
+import GHC.Eventlog.Live.Options (EventlogSource (..))
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event)
 import Network.Socket qualified as S
@@ -37,12 +37,12 @@ import Text.Printf (printf)
 {- |
 Run an event processor with an eventlog socket.
 -}
-runWithEventlogSocket ::
+runWithEventlogSource ::
   (MonadUnliftIO m) =>
   -- | The logging verbosity.
   Verbosity ->
   -- | The eventlog socket handle.
-  EventlogSocket ->
+  EventlogSource ->
   -- | The initial timeout in microseconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
@@ -56,11 +56,10 @@ runWithEventlogSocket ::
   -- | The event processor.
   ProcessT m (Tick Event) Void ->
   m ()
-runWithEventlogSocket verbosity eventlogSocket timeoutExponent initialTimeoutMcs batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
-  logInfo verbosity "runWithEventlogSocket" $ "Waiting to connect on " <> prettyEventlogSocket eventlogSocket
-  withEventlogSocket verbosity timeoutExponent initialTimeoutMcs eventlogSocket $ \eventlogHandle -> do
+runWithEventlogSource verbosity eventlogSocket timeoutExponent initialTimeoutMcs batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  withEventlogSource verbosity timeoutExponent initialTimeoutMcs eventlogSocket $ \eventlogSource -> do
     let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
-    let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogHandle
+    let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSource
     case maybeOutputFile of
       Nothing ->
         runT_ $
@@ -76,9 +75,9 @@ runWithEventlogSocket verbosity eventlogSocket timeoutExponent initialTimeoutMcs
                   ]
 
 {- |
-Run an action with a `Handle` to an `EventlogSocket`.
+Run an action with a `Handle` to an `EventlogSource`.
 -}
-withEventlogSocket ::
+withEventlogSource ::
   (MonadUnliftIO m) =>
   -- | The logging verbosity.
   Verbosity ->
@@ -87,17 +86,22 @@ withEventlogSocket ::
   -- | The timeout exponent for exponential backoff.
   Double ->
   -- | The eventlog socket.
-  EventlogSocket ->
+  EventlogSource ->
   (Handle -> m ()) ->
   m ()
-withEventlogSocket verbosity initialTimeoutMcs timeoutExponent eventlogSocket action = do
+withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource action = do
   withRunInIO $ \runInIO ->
-    E.bracket (connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocket) IO.hClose $ \handle ->
-      runInIO $
-        action handle
+    case eventlogSource of
+      EventlogStdin -> do
+        logInfo verbosity "withEventlogSource" "Reading eventlog from stdin"
+        runInIO $ action IO.stdin
+      EventlogSocketUnix eventlogSocketUnix -> do
+        logInfo verbosity "withEventlogSource" $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+        E.bracket (connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
+          runInIO $ action handle
 
 {- |
-Connect to an `EventlogSocket` with retries and non-randomised exponential backoff.
+Connect to an `EventlogSource` with retries and non-randomised exponential backoff.
 -}
 connectRetry ::
   -- | The logging verbosity.
@@ -107,9 +111,9 @@ connectRetry ::
   -- | The timeout exponent for exponential backoff.
   Double ->
   -- | The eventlog socket.
-  EventlogSocket ->
+  FilePath ->
   IO Handle
-connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocket =
+connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix =
   connectLoop initialTimeoutMcs
  where
   waitFor :: Double -> IO ()
@@ -118,28 +122,27 @@ connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocket =
   connectLoop :: Double -> IO Handle
   connectLoop timeoutMcs = do
     let connect = do
-          logDebug verbosity "connectRetry" $ "Trying to connect on " <> prettyEventlogSocket eventlogSocket
-          handle <- tryConnect eventlogSocket
-          logInfo verbosity "connectRetry" $ "Connected on " <> prettyEventlogSocket eventlogSocket
+          logDebug verbosity "connectRetry" $ "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          handle <- tryConnect eventlogSocketUnix
+          logInfo verbosity "connectRetry" $ "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
           pure handle
     let cleanup (e :: E.IOException) = do
-          logDebug verbosity "connectRetry" $ "Failed to connect on " <> prettyEventlogSocket eventlogSocket <> ": " <> T.pack (displayException e)
+          logDebug verbosity "connectRetry" $ "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
           logDebug verbosity "connectRetry" $ "Waiting " <> prettyTimeoutMcs timeoutMcs <> " to retry..."
           waitFor timeoutMcs
           connectLoop (timeoutMcs * timeoutExponent)
     E.catch connect cleanup
 
 {- |
-Try to connect to an `EventlogSocket`.
+Try to connect to a Unix socket.
 -}
-tryConnect :: EventlogSocket -> IO Handle
-tryConnect eventlogSocket = case eventlogSocket of
-  EventlogSocketUnix socketName ->
-    E.bracketOnError (S.socket S.AF_UNIX S.Stream S.defaultProtocol) S.close $ \socket -> do
-      S.connect socket (S.SockAddrUnix socketName)
-      handle <- S.socketToHandle socket IO.ReadMode
-      IO.hSetBuffering handle IO.NoBuffering
-      pure handle
+tryConnect :: FilePath -> IO Handle
+tryConnect eventlogSocketUnix =
+  E.bracketOnError (S.socket S.AF_UNIX S.Stream S.defaultProtocol) S.close $ \socket -> do
+    S.connect socket (S.SockAddrUnix eventlogSocketUnix)
+    handle <- S.socketToHandle socket IO.ReadMode
+    IO.hSetBuffering handle IO.NoBuffering
+    pure handle
 
 {- |
 Interal helper. Pretty-printer for timeout values in microseconds.
@@ -156,6 +159,5 @@ prettyTimeoutMcs timeoutMcs
 {- |
 Internal helper. Pretty-printer for eventlog sockets.
 -}
-prettyEventlogSocket :: EventlogSocket -> Text
-prettyEventlogSocket = \case
-  EventlogSocketUnix socketPath -> "Unix socket " <> T.pack socketPath
+prettyEventlogSocketUnix :: FilePath -> Text
+prettyEventlogSocketUnix eventlogSocketUnix = "Unix socket " <> T.pack eventlogSocketUnix
