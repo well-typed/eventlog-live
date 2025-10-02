@@ -2,6 +2,7 @@
 
 - **BREAKING**: Support info and debug verbosity. This changes the semantics of `--verbosity=3` and up.
 - Support reading the eventlog from stdin.
+- Support reading the eventlog from file.
 
 ### 0.1.0.3
 
