@@ -31,12 +31,6 @@ module GHC.Eventlog.Live.Machine (
   withStartTime',
   dropStartTime,
 
-  -- ** Main thread ID
-  WithMainThreadId (..),
-  withMainThreadId,
-  withMainThreadId',
-  dropMainThreadId,
-
   -- ** Capability Usage
 
   -- *** Capability Usage Metrics
@@ -194,49 +188,6 @@ Drop the t`WithStartTime` wrapper.
 -}
 dropStartTime :: Process (WithStartTime a) a
 dropStartTime = mapping (.value)
-
--------------------------------------------------------------------------------
--- Main thread ID
-
-{- |
-Data decorated with a main thread ID.
--}
-data WithMainThreadId a = WithMainThreadId
-  { value :: !a
-  , maybeMainThreadId :: !(Maybe ThreadId)
-  }
-  deriving (Functor, Show)
-
-{- |
-Wrap every event in t`WithMainThreadId`. Every event after the first `E.RunThread`
-event will have its main thread ID set to `Just` the main thread ID.
--}
-withMainThreadId :: Process Event (WithMainThreadId Event)
-withMainThreadId = withMainThreadId' E.evSpec WithMainThreadId
-
-{- |
-Generalised version of `withMainThreadId` that can be adapted to work on arbitrary
-types using a getter and a setter.
--}
-withMainThreadId' :: (a -> EventInfo) -> (a -> Maybe ThreadId -> b) -> Process a b
-withMainThreadId' getEventInfo setMainThreadId = construct start
- where
-  start =
-    await >>= \case
-      value
-        | E.RunThread{thread} <- getEventInfo value ->
-            yield (value `setMainThreadId` Just thread) >> continue thread
-        | otherwise ->
-            yield (value `setMainThreadId` Nothing) >> start
-  continue thread =
-    mappingPlan $ \value ->
-      value `setMainThreadId` Just thread
-
-{- |
-Drop the t`WithMainThreadId` wrapper.
--}
-dropMainThreadId :: Process (WithMainThreadId a) a
-dropMainThreadId = mapping (.value)
 
 -------------------------------------------------------------------------------
 -- Capability Usage
