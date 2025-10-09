@@ -5,6 +5,7 @@
 - **BREAKING**: Downgrade severity of all errors logged during eventlog analyses to warnings.
 - **BREAKING**: Move attributes, metrics, and spans into their own modules.
 - **BREAKING**: Drop `Stream` and `supplier` machine.
+- **BREAKING**: Drop `WithMainThreadId` and `withMainThreadId` machines.
 - **BREAKING**: Rename `GHC.Eventlog.Live.Machines` to `GHC.Eventlog.Live.Machine`.
 - **BREAKING**: Move core machines to their own module.
 - **BREAKING**: Use ANSI colors for logs, if supported.
