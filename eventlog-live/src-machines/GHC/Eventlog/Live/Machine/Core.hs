@@ -281,6 +281,27 @@ liftRouter measure spawn = awaiting M.empty
 -- Event stream sorting
 -------------------------------------------------------------------------------
 
+{- Note [Event Sorting]
+
+The GHC RTS writes events to a series of eventlog buffers—one global buffer and
+one buffer per capability. These buffers are flushed whenever they fill up.
+However, by setting the `--eventlog-flush-interval=N` RTS option, you can force
+the RTS to flush all buffers at set time intervals.
+Without this option set, sorting the eventlog stream is impossible, since in
+the pathological case, an event may linger in the event buffer indefinitely.
+With this option set, it is possible, if tricky, to sort the eventlog stream.
+If `--eventlog-flush-interval=N` is set, you are guaranteed to receive events
+no older than `N` seconds plus some delay incurred by sending.
+The way that `sourceHandleBatch` works, this means that should neatly delimit
+the eventlog stream into batches that correspond, in interval size, to those
+batches flushed by the RTS. However, they are likely out of sync.
+-}
+
+data Three a
+  = Nil
+  | One a
+  | Two a a
+
 {- |
 Reorder events respecting ticks.
 
@@ -293,32 +314,57 @@ sortByBatch ::
   (Monad m) =>
   (a -> Timestamp) ->
   ProcessT m [a] [a]
-sortByBatch timestamp = sortByBatchWith Nothing
+sortByBatch timestamp = sortByBatchWith Nil
  where
-  sortByBatchWith :: Maybe [a] -> ProcessT m [a] [a]
+  sortByBatchWith :: Three [a] -> ProcessT m [a] [a]
   sortByBatchWith = \case
-    Nothing -> MachineT $ pure $ Await onNext Refl onStop
+    Nil -> MachineT $ pure $ Await onNext Refl onStop
      where
       onNext :: [a] -> ProcessT m [a] [a]
-      onNext new = sortByBatchWith (Just sortedNew)
-       where
-        sortedNew = sortByTime new
+      onNext as1
+        -- If the next batch is empty, skip it and remain at `Nil`,
+        -- because the first batch needs to have *something* in it
+        -- to be able to determine a valid cutoff.
+        | null as1  = sortByBatchWith Nil
+        | otherwise = sortByBatchWith (One $ sortByTime as1)
       onStop :: ProcessT m [a] [a]
       onStop = stopped
-    Just sortedOld -> MachineT $ pure $ Await onNext Refl onStop
+    One as1 -> MachineT $ pure $ Await onNext Refl onStop
      where
       onNext :: [a] -> ProcessT m [a] [a]
-      onNext new
-        | null sortedOld = sortByBatchWith $ Just sortedNew
-        | otherwise = MachineT $ pure $ Yield sortedBeforeCutoff $ sortByBatchWith $ Just sortedAfterCutoff
-       where
-        -- NOTE: use of partial @maximum@ is guarded by the check @null old@.
-        cutoff = getMax (foldMap (Max . timestamp) sortedOld)
-        sortedNew = sortByTime new
-        sorted = joinByTime sortedOld sortedNew
-        (sortedBeforeCutoff, sortedAfterCutoff) = L.partition ((<= cutoff) . timestamp) sorted
+      onNext as2 = sortByBatchWith (Two as1 $ sortByTime as2)
       onStop :: ProcessT m [a] [a]
-      onStop = MachineT $ pure $ Yield sortedOld $ stopped
+      onStop = _
+    Two as1 as2 -> MachineT $ pure $ Await onNext Refl onStop
+     where
+      onNext :: [a] -> ProcessT m [a] [a]
+      onNext as3 = _
+      onStop :: ProcessT m [a] [a]
+      onStop = _
+  -- sortByBatchWith = \case
+  --   Nil -> MachineT $ pure $ Await onNext Refl onStop
+  --    where
+  --     onNext :: [a] -> ProcessT m [a] [a]
+  --     onNext new = sortByBatchWith (One sortedNew)
+  --      where
+  --       sortedNew = sortByTime new
+  --     onStop :: ProcessT m [a] [a]
+  --     onStop = stopped
+  --   One sortedOld -> _
+  --   Two sortedOld -> MachineT $ pure $ Await onNext Refl onStop
+  --    where
+  --     onNext :: [a] -> ProcessT m [a] [a]
+  --     onNext new
+  --       | null sortedOld = sortByBatchWith $ Just sortedNew
+  --       | otherwise = MachineT $ pure $ Yield sortedBeforeCutoff $ sortByBatchWith $ Just sortedAfterCutoff
+  --      where
+  --       -- NOTE: use of partial @maximum@ is guarded by the check @null sortedOld@.
+  --       cutoff = getMax (foldMap (Max . timestamp) sortedOld)
+  --       sortedNew = sortByTime new
+  --       sorted = joinByTime sortedOld sortedNew
+  --       (sortedBeforeCutoff, sortedAfterCutoff) = L.partition ((<= cutoff) . timestamp) sorted
+  --     onStop :: ProcessT m [a] [a]
+  --     onStop = MachineT $ pure $ Yield sortedOld $ stopped
 
   -- compByTime :: a -> a -> Ordering
   compByTime = compare `on` timestamp
@@ -332,6 +378,10 @@ sortByBatch timestamp = sortByBatchWith Nothing
   joinByTime (x : xs) (y : ys) = case compByTime x y of
     LT -> x : joinByTime xs (y : ys)
     _ -> y : joinByTime (x : xs) ys
+
+  -- splitByTime :: Timestamp -> [a] -> ([a], [a])
+  splitByTime cutoff  = L.partition ((<= cutoff) . timestamp)
+
 
 {- |
 Variant of `sortByBatch` that operates on streams of items and ticks.
