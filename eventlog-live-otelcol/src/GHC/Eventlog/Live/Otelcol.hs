@@ -35,10 +35,12 @@ import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
-import GHC.Eventlog.Live.Machine (CapabilityUsageSpan, MemReturnData (..), ThreadStateSpan (..), WithStartTime (..))
+import GHC.Eventlog.Live.Machine (CapabilityUsageSpan, MemReturnData (..), ThreadStateSpan (..))
 import GHC.Eventlog.Live.Machine qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
