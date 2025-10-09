@@ -25,6 +25,9 @@ COPY --parents \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Span.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine.hs" \
   "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Core.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Decoder.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Sink.hs" \
+  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Source.hs" \
   "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
   "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
   "/eventlog-live/"
