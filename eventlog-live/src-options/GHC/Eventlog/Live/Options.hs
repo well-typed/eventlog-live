@@ -11,7 +11,7 @@ module GHC.Eventlog.Live.Options (
   eventlogSocketTimeoutExponentParser,
   heapProfBreakdownParser,
   eventlogLogFileParser,
-  batchIntervalParser,
+  eventlogFlushIntervalParser,
   verbosityParser,
 ) where
 
@@ -123,27 +123,27 @@ eventlogLogFileParser =
     )
 
 --------------------------------------------------------------------------------
--- Batch Interval
+-- Eventlog Flush Interval
 
 {- |
-Parser for the batch interval.
+Parser for the eventlog flush interval.
 -}
-batchIntervalParser :: O.Parser Int
-batchIntervalParser =
+eventlogFlushIntervalParser :: O.Parser Double
+eventlogFlushIntervalParser =
   O.option
     O.auto
-    ( O.long "batch-interval"
+    ( O.long "eventlog-flush-interval"
         <> O.metavar "NUM"
-        <> O.help "Batch interval in milliseconds."
-        <> O.value defaultBatchIntervalMs
+        <> O.help "Eventlog flush interval in seconds."
+        <> O.value defaultEventlogFlushIntervalS
     )
 
 {- |
 Internal helper.
-The default batch interval in milliseconds.
+The default eventlog flush interval in seconds.
 -}
-defaultBatchIntervalMs :: Int
-defaultBatchIntervalMs = 1_000
+defaultEventlogFlushIntervalS :: Double
+defaultEventlogFlushIntervalS = 0.1
 
 --------------------------------------------------------------------------------
 -- Verbosity
