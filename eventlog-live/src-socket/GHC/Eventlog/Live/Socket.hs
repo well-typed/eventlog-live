@@ -25,8 +25,10 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Internal.Logger (logDebug, logInfo)
-import GHC.Eventlog.Live.Machine
 import GHC.Eventlog.Live.Machine.Core
+import GHC.Eventlog.Live.Machine.Decoder
+import GHC.Eventlog.Live.Machine.Sink
+import GHC.Eventlog.Live.Machine.Source
 import GHC.Eventlog.Live.Options (EventlogSource (..))
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event)
