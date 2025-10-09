@@ -99,6 +99,7 @@ library
     GHC.Eventlog.Live.Machine.Decoder
     GHC.Eventlog.Live.Machine.Sink
     GHC.Eventlog.Live.Machine.Source
+    GHC.Eventlog.Live.Machine.WithStartTime
 
   reexported-modules: GHC.Eventlog.Live.Verbosity
   build-depends:
