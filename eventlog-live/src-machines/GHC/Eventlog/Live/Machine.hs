@@ -8,19 +8,6 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Machine (
-  -- * Eventlog source
-  sourceHandleWait,
-  sourceHandleBatch,
-  defaultChunkSizeBytes,
-
-  -- * Eventlog file sink
-  fileSink,
-  fileSinkBatch,
-
-  -- * Event decoding
-  decodeEvent,
-  decodeEventBatch,
-
   -- * Event processing
 
   -- ** Start time
@@ -83,39 +70,32 @@ module GHC.Eventlog.Live.Machine (
   heapProfBreakdownShow,
 ) where
 
-import Control.Exception (Exception, catch, throwIO)
 import Control.Monad (forever, unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.ByteString qualified as BS
 import Data.Char (isSpace)
 import Data.Either (isLeft)
 import Data.Foldable (for_)
-import Data.Function (fix)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
 import Data.List qualified as L
-import Data.Machine (Is (..), MachineT (..), PlanT, Process, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
+import Data.Machine (Is (..), PlanT, Process, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
-import GHC.Clock (getMonotonicTimeNSec)
 import GHC.Eventlog.Live.Data.Attribute (Attr, AttrValue, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Internal.Logger (logWarning)
-import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, liftRouter, liftTick)
+import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), EventInfo, HeapProfBreakdown (..), ThreadId, ThreadStopStatus (..), Timestamp)
 import GHC.RTS.Events qualified as E
-import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 import GHC.Records (HasField (..))
 import Numeric (showHex)
-import System.IO (Handle, hWaitForInput)
-import System.IO.Error (isEOFError)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Printf (printf)
@@ -1213,190 +1193,8 @@ findHeapProfBreakdown = listToMaybe . mapMaybe parseHeapProfBreakdown
     | otherwise = Nothing
 
 -------------------------------------------------------------------------------
--- Reading from the socket
--------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------
--- Socket source
-
-{- |
-A source which reads chunks from a `Handle`.
-When an input is available, it yields an v`Item`.
-When the timeout is reached, it yields a v`Tick`.
--}
-sourceHandleWait ::
-  (MonadIO m) =>
-  -- | The wait timeout in milliseconds.
-  Int ->
-  -- | The number of bytes to read.
-  Int ->
-  -- | The eventlog socket handle.
-  Handle ->
-  MachineT m k (Tick BS.ByteString)
-sourceHandleWait timeoutMilli chunkSizeBytes handle =
-  construct $ fix $ \loop -> do
-    ready <- liftIO $ hWaitForInput' handle timeoutMilli
-    case ready of
-      Ready -> do
-        bs <- liftIO $ BS.hGetSome handle chunkSizeBytes
-        yield (Item bs)
-        loop
-      NotReady -> do
-        yield Tick
-        loop
-      EOF ->
-        pure ()
-
--------------------------------------------------------------------------------
--- Socket source with batches
-
-{- |
-A source which reads chunks from a `Handle`.
-When input is available, it yields an v`Item`.
-It yields a v`Tick` at each increment of the batch interval.
--}
-sourceHandleBatch ::
-  (MonadIO m) =>
-  -- | The batch interval in milliseconds.
-  Int ->
-  -- | The number of bytes to read.
-  Int ->
-  -- | The eventlog socket handle.
-  Handle ->
-  MachineT m k (Tick BS.ByteString)
-sourceHandleBatch batchIntervalMs chunkSizeBytes handle = construct start
- where
-  start = do
-    startTimeMs <- liftIO getMonotonicTimeMilli
-    batch startTimeMs
-  batch startTimeMs = waitForInput
-   where
-    getRemainingTimeMilli = do
-      currentTimeMilli <- liftIO getMonotonicTimeMilli
-      pure $ (startTimeMs + batchIntervalMs) - currentTimeMilli
-    waitForInput = do
-      remainingTimeMilli <- getRemainingTimeMilli
-      if remainingTimeMilli <= 0
-        then do
-          yield Tick
-          start
-        else do
-          ready <- liftIO (hWaitForInput' handle remainingTimeMilli)
-          case ready of
-            Ready -> do
-              chunk <- liftIO $ BS.hGetSome handle chunkSizeBytes
-              yield (Item chunk) >> waitForInput
-            NotReady -> waitForInput
-            EOF -> pure ()
-
-{- |
-Eventlog chunk size in bytes.
-This should be equal to the page size.
--}
-defaultChunkSizeBytes :: Int
-defaultChunkSizeBytes = 4096
-
-{- |
-Internal helper.
-Return monotonic time in milliseconds, since some unspecified starting point
--}
-getMonotonicTimeMilli :: IO Int
-getMonotonicTimeMilli = nanoToMilli <$> getMonotonicTimeNSec
-
-{- |
-Internal helper.
-Convert nanoseconds to milliseconds.
-The conversion from 'Word64' to 'Int' is safe.
-It cannot overflow due to the division by 1_000_000.
--}
-nanoToMilli :: Word64 -> Int
-nanoToMilli = fromIntegral . (`div` 1_000_000)
-
-{- |
-Internal helper.
-Type to represent the state of a handle.
--}
-data Ready = Ready | NotReady | EOF
-
-{- |
-Internal helper.
-Wait for input from a `Handle` for a given number of milliseconds.
--}
-hWaitForInput' ::
-  -- | The handle.
-  Handle ->
-  -- | The timeout in milliseconds.
-  Int ->
-  IO Ready
-hWaitForInput' handle timeoutMilli =
-  catch (boolToReady <$> hWaitForInput handle timeoutMilli) handleEOFError
- where
-  boolToReady True = Ready
-  boolToReady False = NotReady
-  handleEOFError err
-    | isEOFError err = pure EOF
-    | otherwise = throwIO err
-
--------------------------------------------------------------------------------
--- Writing to a file
--------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------
--- Log file sink
-
-{- |
-File sink for optional eventlog log file.
--}
-fileSink ::
-  (MonadIO m) =>
-  Handle ->
-  ProcessT m BS.ByteString Void
-fileSink handle = repeatedly $ await >>= liftIO . BS.hPut handle
-
--------------------------------------------------------------------------------
--- Log file sink with batches
-
-{- |
-File sink for optional eventlog log file.
--}
-fileSinkBatch ::
-  (MonadIO m) =>
-  Handle ->
-  ProcessT m (Tick BS.ByteString) Void
-fileSinkBatch handle = dropTick ~> fileSink handle
-
--------------------------------------------------------------------------------
 -- Decoding
 -------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------
--- Decoding events
-
-{- |
-Parse t'Event's from a stream of 'BS.ByteString' chunks with ticks.
-
-Throws a t'DecodeError' on error.
--}
-decodeEvent :: (MonadIO m) => ProcessT m BS.ByteString Event
-decodeEvent = construct $ loop decodeEventLog
- where
-  loop :: (MonadIO m) => Decoder a -> PlanT (Is BS.ByteString) a m ()
-  loop Done{} = pure ()
-  loop (Consume k) = await >>= \chunk -> loop (k chunk)
-  loop (Produce a d') = yield a >> loop d'
-  loop (Error _ err) = liftIO $ throwIO $ DecodeError err
-
-{- |
-Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.
-
-Throws 'DecodeError' on error.
--}
-decodeEventBatch :: (MonadIO m) => ProcessT m (Tick BS.ByteString) (Tick Event)
-decodeEventBatch = liftTick decodeEvent
-
-newtype DecodeError = DecodeError String deriving (Show)
-
-instance Exception DecodeError
 
 -------------------------------------------------------------------------------
 -- Internal Helpers
