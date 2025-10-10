@@ -30,6 +30,7 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Vector qualified as V
 import Data.Version (showVersion)
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
@@ -90,6 +91,7 @@ main = do
       maybeEventlogLogFile
       $ fanout
         [ M.validateInput verbosity 10
+        , M.counterByTick verbosity "events"
         , M.liftTick M.withStartTime
             ~> fanout
               [ processHeapEvents verbosity maybeHeapProfBreakdown
@@ -100,31 +102,53 @@ main = do
             ~> fanout
               [ filtered (const exportMetrics)
                   ~> mapping fst
-                  ~> asScopeMetrics
-                    [ OM.scope .~ eventlogLiveScope
+                  ~> fanout
+                    [ M.counterBy verbosity "metrics" (sum . fmap countMetricDataPoints)
+                    , asScopeMetrics
+                        [ OM.scope .~ eventlogLiveScope
+                        ]
+                        ~> asResourceMetric []
+                        ~> asExportMetricServiceRequest
+                        ~> exportResourceMetrics conn
+                        ~> mapping (either displayException displayException)
+                        ~> errorWriter
                     ]
-                  ~> asResourceMetric []
-                  ~> asExportMetricServiceRequest
-                  ~> exportResourceMetrics conn
-                  ~> mapping (either displayException displayException)
-                  ~> errorWriter
               , filtered (const exportTraces)
                   ~> mapping snd
-                  ~> asScopeSpans
-                    [ OT.scope .~ eventlogLiveScope
-                    ]
-                  ~> asResourceSpan
-                    [ OT.resource
-                        .~ messageWith
-                          [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                  ~> fanout
+                    [ M.counterBy verbosity "spans" (fromIntegral . length)
+                    , asScopeSpans
+                        [ OT.scope .~ eventlogLiveScope
+                        ]
+                        ~> asResourceSpan
+                          [ OT.resource
+                              .~ messageWith
+                                [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                                ]
                           ]
+                        ~> asExportTraceServiceRequest
+                        ~> exportResourceSpans conn
+                        ~> mapping (either displayException displayException)
+                        ~> errorWriter
                     ]
-                  ~> asExportTraceServiceRequest
-                  ~> exportResourceSpans conn
-                  ~> mapping (either displayException displayException)
-                  ~> errorWriter
               ]
         ]
+
+countMetricDataPoints :: OM.Metric -> Word
+countMetricDataPoints metric =
+  fromIntegral $
+    case metric ^. OM.maybe'data' of
+      Nothing -> 0
+      Just (OM.Metric'Gauge gauge) ->
+        V.length (gauge ^. OM.vec'dataPoints)
+      Just (OM.Metric'Sum sum) ->
+        V.length (sum ^. OM.vec'dataPoints)
+      Just (OM.Metric'Histogram histogram) ->
+        V.length (histogram ^. OM.vec'dataPoints)
+      Just (OM.Metric'ExponentialHistogram exponentialHistogram) ->
+        V.length (exponentialHistogram ^. OM.vec'dataPoints)
+      Just (OM.Metric'Summary summary) ->
+        V.length (summary ^. OM.vec'dataPoints)
 
 errorWriter :: (MonadIO m) => ProcessT m String Void
 errorWriter = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr
