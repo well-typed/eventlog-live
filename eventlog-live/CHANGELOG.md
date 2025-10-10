@@ -1,6 +1,7 @@
 ### 0.2.0.0
 
 - Add `verbosityInfo` and `verbosityDebug`.
+- Add `counterBy` and `counterByTick`.
 - **BREAKING**: Add logs to `runWithEventlogSocket` connection loop.
 - **BREAKING**: Downgrade severity of all errors logged during eventlog analyses to warnings.
 - **BREAKING**: Move attributes, metrics, and spans into their own modules.

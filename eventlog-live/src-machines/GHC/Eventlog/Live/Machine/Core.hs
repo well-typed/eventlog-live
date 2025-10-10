@@ -18,6 +18,10 @@ module GHC.Eventlog.Live.Machine.Core (
   onlyTick,
   liftBatch,
 
+  -- * Debug
+  counterBy,
+  counterByTick,
+
   -- * Routers
   liftRouter,
 
@@ -50,7 +54,7 @@ import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Eventlog.Live.Internal.Logger (logDebug, logError, logWarning)
-import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError, verbosityWarning)
+import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityWarning)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
 import Text.Printf (printf)
@@ -130,6 +134,50 @@ onlyTick =
     await >>= \case
       Tick -> yield ()
       Item{} -> pure ()
+
+-------------------------------------------------------------------------------
+-- Machine combinators
+-------------------------------------------------------------------------------
+
+{- |
+This machine counts the number of inputs it received,
+using the given function, and logs this value.
+-}
+counterBy ::
+  forall m a x.
+  (MonadIO m) =>
+  Verbosity ->
+  Text ->
+  (a -> Word) ->
+  ProcessT m a x
+counterBy verbosity label count
+  | verbosityDebug >= verbosity = repeatedly go
+  | otherwise = stopped
+ where
+  go :: PlanT (Is a) x m ()
+  go =
+    await >>= \a ->
+      logDebug verbosity "counterBy" ("saw " <> T.pack (show (count a)) <> " " <> label)
+
+{- |
+This machine counts the number of inputs it received,
+and logs this value on every tick.
+-}
+counterByTick ::
+  forall m a x.
+  (MonadIO m) =>
+  Verbosity ->
+  Text ->
+  ProcessT m (Tick a) x
+counterByTick verbosity label
+  | verbosityDebug >= verbosity = construct $ go 0
+  | otherwise = stopped
+ where
+  go :: Word -> PlanT (Is (Tick a)) x m ()
+  go count =
+    await >>= \case
+      Item _ -> go (count + 1)
+      Tick -> logDebug verbosity "counterByTick" ("saw " <> T.pack (show count) <> " " <> label) >> go 0
 
 -------------------------------------------------------------------------------
 -- Machine combinators
