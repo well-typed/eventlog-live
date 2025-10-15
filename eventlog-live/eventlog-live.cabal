@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            eventlog-live
-version:         0.2.0.1
+version:         0.3.0.0
 synopsis:        Live processing of eventlog data.
 description:
   This package supports live processing of eventlog data.
@@ -95,6 +95,8 @@ library
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Span
     GHC.Eventlog.Live.Machine
+    GHC.Eventlog.Live.Machine.Analysis.Capability
+    GHC.Eventlog.Live.Machine.Analysis.Thread
     GHC.Eventlog.Live.Machine.Core
     GHC.Eventlog.Live.Machine.Decoder
     GHC.Eventlog.Live.Machine.Sink
