@@ -88,8 +88,8 @@ common language
     TypeFamilies
 
 library
-  import:             language
-  hs-source-dirs:     src-machines
+  import:          language
+  hs-source-dirs:  src
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
     GHC.Eventlog.Live.Data.Metric
@@ -102,55 +102,21 @@ library
     GHC.Eventlog.Live.Machine.Sink
     GHC.Eventlog.Live.Machine.Source
     GHC.Eventlog.Live.Machine.WithStartTime
+    GHC.Eventlog.Live.Options
+    GHC.Eventlog.Live.Socket
+    GHC.Eventlog.Live.Verbosity
 
-  reexported-modules: GHC.Eventlog.Live.Verbosity
+  other-modules:   GHC.Eventlog.Live.Internal.Logger
   build-depends:
+    , ansi-terminal         >=1.1    && <1.2
     , base                  >=4.16   && <4.22
     , bytestring            >=0.11   && <0.13
     , dlist                 >=1.0    && <1.1
-    , eventlog-live:logger
     , ghc-events            >=0.20   && <0.21
     , hashable              >=1.4    && <1.6
     , machines              >=0.7.4  && <0.8
+    , network               >=3.2.7  && <3.3
+    , optparse-applicative  >=0.17   && <0.20
     , text                  >=1.2    && <2.2
+    , unliftio-core         >=0.2.1  && <0.3
     , unordered-containers  >=0.2.20 && <0.3
-
-library logger
-  import:          language
-  visibility:      private
-  hs-source-dirs:  src-logger
-  exposed-modules:
-    GHC.Eventlog.Live.Internal.Logger
-    GHC.Eventlog.Live.Verbosity
-
-  build-depends:
-    , ansi-terminal  >=1.1  && <1.2
-    , base           >=4.16 && <4.22
-    , text           >=1.2  && <2.2
-
-library options
-  import:          language
-  visibility:      public
-  hs-source-dirs:  src-options
-  exposed-modules: GHC.Eventlog.Live.Options
-  build-depends:
-    , base                  >=4.16 && <4.22
-    , eventlog-live
-    , ghc-events            >=0.20 && <0.21
-    , optparse-applicative  >=0.17 && <0.20
-
-library socket
-  import:          language
-  visibility:      public
-  hs-source-dirs:  src-socket
-  exposed-modules: GHC.Eventlog.Live.Socket
-  build-depends:
-    , base                   >=4.16  && <4.22
-    , eventlog-live
-    , eventlog-live:logger
-    , eventlog-live:options
-    , ghc-events             >=0.20  && <0.21
-    , machines               >=0.7.4 && <0.8
-    , network                >=3.2.7 && <3.3
-    , text                   >=1.2   && <2.2
-    , unliftio-core          >=0.2.1 && <0.3
