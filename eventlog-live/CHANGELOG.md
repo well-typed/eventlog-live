@@ -1,3 +1,7 @@
+### 0.2.0.1
+
+- Fix error due to incorrect formatting string.
+
 ### 0.2.0.0
 
 - Add `verbosityInfo` and `verbosityDebug`.

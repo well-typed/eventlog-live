@@ -479,10 +479,14 @@ validateOrder verbosity timestamp
         Just old
           | timestamp new < timestamp old -> do
               logError verbosity "validateOrder" . T.pack $
+                "Encountered two out-of-order inputs.\n\
+                \Did you pass --eventlog-flush-interval to the GHC RTS?\n\
+                \Did you set --batch-interval to be at least as big as the value of --eventlog-flush-interval?"
+              logDebug verbosity "validateOrder" . T.pack $
                 printf
-                  "Encountered two out-of-order inputs.\n\
-                  \Did you pass --eventlog-flush-interval to the GHC RTS?\n\
-                  \Did you set --batch-interval to be at least as big as the value of --eventlog-flush-interval?"
+                  "Out-of-order inputs:\n\
+                  \- %s\n\
+                  \- %s"
                   (show old)
                   (show new)
               pure ()
