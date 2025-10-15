@@ -36,10 +36,10 @@ import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
-import GHC.Eventlog.Live.Machine (MemReturnData (..))
-import GHC.Eventlog.Live.Machine qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
+import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
+import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadStateSpan (..))
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
