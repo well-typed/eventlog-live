@@ -17,7 +17,7 @@ module GHC.Eventlog.Live.Options (
 
 import Control.Applicative (asum)
 import Data.Char (toLower)
-import GHC.Eventlog.Live.Machine (heapProfBreakdownEitherReader)
+import GHC.Eventlog.Live.Machine.Analysis.Heap (heapProfBreakdownEitherReader)
 import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityQuiet, verbosityWarning)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O

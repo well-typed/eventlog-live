@@ -2,13 +2,13 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Machine
+Module      : GHC.Eventlog.Live.Machine.Analysis.Heap
 Description : Machines for processing eventlog data.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Machine (
-  -- * Heap events
+module GHC.Eventlog.Live.Machine.Analysis.Heap (
+  -- * Heap Usage
   processHeapAllocatedData,
   processHeapSizeData,
   processBlocksSizeData,
@@ -17,7 +17,7 @@ module GHC.Eventlog.Live.Machine (
   processMemReturnData,
   processHeapProfSampleData,
 
-  -- * Heap profile breakdown
+  -- ** Heap Profile Breakdown
   heapProfBreakdownEitherReader,
   heapProfBreakdownShow,
 ) where
