@@ -1,3 +1,8 @@
+### 0.3.0.0
+
+- **BREAKING**: Move thread label analysis machines to their own module.
+- **BREAKING**: Move thread state analysis machines to their own module.
+
 ### 0.2.0.1
 
 - Fix error due to incorrect formatting string.
