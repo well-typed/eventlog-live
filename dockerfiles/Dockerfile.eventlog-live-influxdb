@@ -10,27 +10,8 @@ FROM haskell:9.10-slim-bullseye AS build
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-  "./eventlog-live-influxdb/app/Main.hs" \
-  "./eventlog-live-influxdb/CHANGELOG.md" \
-  "./eventlog-live-influxdb/eventlog-live-influxdb.cabal" \
-  "./eventlog-live-influxdb/LICENSE" \
-  "./eventlog-live-influxdb/src/GHC/Eventlog/Live/InfluxDB.hs" \
-  "./eventlog-live/CHANGELOG.md" \
-  "./eventlog-live/eventlog-live.cabal" \
-  "./eventlog-live/LICENSE" \
-  "./eventlog-live/src-logger/GHC/Eventlog/Live/Internal/Logger.hs" \
-  "./eventlog-live/src-logger/GHC/Eventlog/Live/Verbosity.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Attribute.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Metric.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Span.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Core.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Decoder.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Sink.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Source.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/WithStartTime.hs" \
-  "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
-  "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
+  "./eventlog-live-influxdb/" \
+  "./eventlog-live/" \
   "/eventlog-live/"
 
 # Create cabal.project file
