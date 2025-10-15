@@ -113,7 +113,7 @@ library
     , clock                  >=0.8.4 && <0.9
     , containers             >=0.6   && <0.8
     , dlist                  >=1.0   && <1.1
-    , eventlog-live          >=0.2   && <0.3
+    , eventlog-live          >=0.3   && <0.4
     , eventlog-live:options
     , eventlog-live:socket
     , ghc-events             >=0.20  && <0.21

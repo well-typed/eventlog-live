@@ -35,6 +35,8 @@ import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Data.Span
 import GHC.Eventlog.Live.Machine
+import GHC.Eventlog.Live.Machine.Analysis.Capability
+import GHC.Eventlog.Live.Machine.Analysis.Thread
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.WithStartTime
 import GHC.Eventlog.Live.Options
