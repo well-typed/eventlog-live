@@ -13,9 +13,7 @@ ARG GHC_EVENTLOG_SOCKET "/tmp/ghc_eventlog.sock"
 # Copy files from the project directory
 WORKDIR "/eventlog-live/examples/fibber"
 COPY --parents \
-    "./examples/fibber/app/Main.hs" \
-    "./examples/fibber/fibber.cabal" \
-    "./examples/fibber/LICENSE" \
+    "./examples/fibber/" \
     "/eventlog-live/"
 
 # Build fibber
