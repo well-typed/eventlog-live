@@ -14,25 +14,8 @@ ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-  "./eventlog-live/CHANGELOG.md" \
-  "./eventlog-live/eventlog-live.cabal" \
-  "./eventlog-live/LICENSE" \
-  "./eventlog-live/src-logger/GHC/Eventlog/Live/Internal/Logger.hs" \
-  "./eventlog-live/src-logger/GHC/Eventlog/Live/Verbosity.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Attribute.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Metric.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Data/Span.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Core.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Decoder.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Sink.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/Source.hs" \
-  "./eventlog-live/src-machines/GHC/Eventlog/Live/Machine/WithStartTime.hs" \
-  "./eventlog-live/src-options/GHC/Eventlog/Live/Options.hs" \
-  "./eventlog-live/src-socket/GHC/Eventlog/Live/Socket.hs" \
-  "./examples/dumper/app/Main.hs" \
-  "./examples/dumper/dumper.cabal" \
-  "./examples/dumper/LICENSE" \
+  "./eventlog-live/" \
+  "./examples/dumper/" \
   "/eventlog-live/"
 
 # Create cabal.project file
