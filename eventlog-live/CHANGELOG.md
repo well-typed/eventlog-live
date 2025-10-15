@@ -1,7 +1,10 @@
 ### 0.3.0.0
 
+- **BREAKING**: Move capability usage analysis machines to their own module.
+- **BREAKING**: Move heap analysis machines to their own module.
 - **BREAKING**: Move thread label analysis machines to their own module.
 - **BREAKING**: Move thread state analysis machines to their own module.
+- **BREAKING**: Merge all sub-libraries into the main library.
 
 ### 0.2.0.1
 
