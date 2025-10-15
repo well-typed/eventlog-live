@@ -13,9 +13,7 @@ ARG GHC_EVENTLOG_SOCKET "/tmp/ghc_eventlog.sock"
 # Copy files from the project directory
 WORKDIR "/eventlog-live/examples/oddball"
 COPY --parents \
-    "./examples/oddball/app/Main.hs" \
-    "./examples/oddball/oddball.cabal" \
-    "./examples/oddball/LICENSE" \
+    "./examples/oddball/" \
     "/eventlog-live/"
 
 # Build oddball
