@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            eventlog-live
-version:         0.3.1.0
+version:         0.3.0.0
 synopsis:        Live processing of eventlog data.
 description:
   This package supports live processing of eventlog data.

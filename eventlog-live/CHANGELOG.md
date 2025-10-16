@@ -1,7 +1,3 @@
-### 0.3.1.0
-
-- Expose `GHC.Eventlog.Live.Logger`.
-
 ### 0.3.0.0
 
 - **BREAKING**: Move capability usage analysis machines to their own module.
@@ -9,6 +5,7 @@
 - **BREAKING**: Move thread label analysis machines to their own module.
 - **BREAKING**: Move thread state analysis machines to their own module.
 - **BREAKING**: Merge all sub-libraries into the main library.
+- Expose `GHC.Eventlog.Live.Logger`.
 
 ### 0.2.0.1
 
