@@ -69,13 +69,13 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(CapabilityUsage_nanoseconds_total{category!=\"Idle\"}[$__interval]))",
+          "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{category!=\"Idle\"}[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -243,6 +243,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -286,13 +287,13 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(CapabilityUsage_nanoseconds_total[$__interval]))",
+          "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -342,7 +343,7 @@
   ],
   "preload": false,
   "refresh": "",
-  "schemaVersion": 41,
+  "schemaVersion": 42,
   "tags": [],
   "templating": {
     "list": []
