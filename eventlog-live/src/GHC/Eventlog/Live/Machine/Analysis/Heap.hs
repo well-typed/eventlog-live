@@ -285,14 +285,14 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
       E.HeapProfSampleEnd{..} ->
         case L.uncons heapProfSampleEraStack of
           Nothing -> do
-            logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+            logWarning verbosityThreshold . T.pack $
               printf
                 "Eventlog closed era %d, but there is no current era."
                 heapProfSampleEra
             go st
           Just (currentEra, heapProfSampleEraStack') -> do
             unless (currentEra == heapProfSampleEra) $
-              logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+              logWarning verbosityThreshold . T.pack $
                 printf
                   "Eventlog closed era %d, but the current era is era %d."
                   heapProfSampleEra
@@ -302,7 +302,7 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
       E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
         | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
-            logWarning verbosityThreshold "processHeapProfSampleData" $
+            logWarning verbosityThreshold $
               "Cannot infer heap profile breakdown.\n\
               \         If your binary was compiled with a GHC version prior to 9.14,\n\
               \         you must also pass the heap profile type to this executable.\n\
@@ -310,7 +310,7 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
-            logWarning verbosityThreshold "processHeapProfSampleData" . T.pack $
+            logWarning verbosityThreshold . T.pack $
               printf
                 "Unsupported heap profile breakdown %s"
                 (heapProfBreakdownShow HeapProfBreakdownBiography)

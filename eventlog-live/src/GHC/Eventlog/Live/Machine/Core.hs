@@ -157,7 +157,7 @@ counterBy verbosity label count
   go :: PlanT (Is a) x m ()
   go =
     await >>= \a ->
-      logDebug verbosity "counterBy" ("saw " <> T.pack (show (count a)) <> " " <> label)
+      logDebug verbosity ("saw " <> T.pack (show (count a)) <> " " <> label)
 
 {- |
 This machine counts the number of inputs it received,
@@ -177,7 +177,7 @@ counterByTick verbosity label
   go count =
     await >>= \case
       Item _ -> go (count + 1)
-      Tick -> logDebug verbosity "counterByTick" ("saw " <> T.pack (show count) <> " " <> label) >> go 0
+      Tick -> logDebug verbosity ("saw " <> T.pack (show count) <> " " <> label) >> go 0
 
 -------------------------------------------------------------------------------
 -- Machine combinators
@@ -443,18 +443,18 @@ validateInput verbosity ticks
  where
   start remaining
     | remaining <= 0 = liftIO $ do
-        logWarning verbosity "validateInput" . T.pack $
+        logWarning verbosity . T.pack $
           printf
             "No input after %d ticks. Did you pass -l to the GHC RTS?"
             ticks
     | otherwise = do
-        logDebug verbosity "validateInput" $
+        logDebug verbosity $
           T.pack (show remaining) <> " ticks remaining."
         await >>= \case
           Item{} -> do
-            logDebug verbosity "validateInput" "Received item."
+            logDebug verbosity "Received item."
           Tick -> do
-            logDebug verbosity "validateInput" "Received tick."
+            logDebug verbosity "Received tick."
             start (pred remaining)
 
 {- |
@@ -478,11 +478,11 @@ validateOrder verbosity timestamp
       case maybeOld of
         Just old
           | timestamp new < timestamp old -> do
-              logError verbosity "validateOrder" . T.pack $
+              logError verbosity . T.pack $
                 "Encountered two out-of-order inputs.\n\
                 \Did you pass --eventlog-flush-interval to the GHC RTS?\n\
                 \Did you set --batch-interval to be at least as big as the value of --eventlog-flush-interval?"
-              logDebug verbosity "validateOrder" . T.pack $
+              logDebug verbosity . T.pack $
                 printf
                   "Out-of-order inputs:\n\
                   \- %s\n\
