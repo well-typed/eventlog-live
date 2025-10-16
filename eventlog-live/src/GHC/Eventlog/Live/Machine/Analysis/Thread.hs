@@ -32,7 +32,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Span (duration)
-import GHC.Eventlog.Live.Internal.Logger (logWarning)
+import GHC.Eventlog.Live.Logger (logWarning)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Verbosity (Verbosity)

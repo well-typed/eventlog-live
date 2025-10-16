@@ -1,12 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Internal.Logger
-Description : /Internal module/. Logging functions.
+Module      : GHC.Eventlog.Live..Logger
+Description : Logging functions.
 Stability   : experimental
 Portability : portable
-
-This module is __internal__. The [PVP](https://pvp.haskell.org) __does not apply__.
 -}
 module GHC.Eventlog.Live.Logger (
   logError,
@@ -17,17 +15,17 @@ module GHC.Eventlog.Live.Logger (
 
 import Control.Exception (bracket_)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.List qualified as L
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.Verbosity (Verbosity, showVerbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityWarning)
-import GHC.Stack (HasCallStack, CallStack, callStack, getCallStack, SrcLoc (..))
+import GHC.Stack (CallStack, HasCallStack, SrcLoc (..), callStack, getCallStack)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
-import Data.List qualified as L
 
 {- |
-Internal helper. Log messages to given handle.
+Log messages to given handle.
 Only prints a message if its verbosity level is above the verbosity threshold.
 -}
 logMessage :: (MonadIO m) => IO.Handle -> CallStack -> Verbosity -> Verbosity -> Text -> m ()
@@ -91,25 +89,25 @@ verbosityColor verbosity
   | otherwise = Nothing
 
 {- |
-Internal helper. Log errors to `IO.stderr`.
+Log errors to `IO.stderr`.
 -}
 logError :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
 logError = logMessage IO.stderr callStack verbosityError
 
 {- |
-Internal helper. Log warnings to `IO.stderr`.
+Log warnings to `IO.stderr`.
 -}
 logWarning :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
 logWarning = logMessage IO.stderr callStack verbosityWarning
 
 {- |
-Internal helper. Log info messages to `IO.stderr`.
+Log info messages to `IO.stderr`.
 -}
 logInfo :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
 logInfo = logMessage IO.stdout callStack verbosityInfo
 
 {- |
-Internal helper. Log debug messages to `IO.stderr`.
+Log debug messages to `IO.stderr`.
 -}
 logDebug :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
 logDebug = logMessage IO.stderr callStack verbosityDebug

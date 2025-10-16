@@ -1,3 +1,7 @@
+### 0.3.1.0
+
+- Expose `GHC.Eventlog.Live.Logger`.
+
 ### 0.3.0.0
 
 - **BREAKING**: Move capability usage analysis machines to their own module.
