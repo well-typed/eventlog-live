@@ -55,6 +55,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -99,13 +100,13 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "HeapProfSample_bytes",
+          "expr": "ghc_eventlog_HeapProfSample_bytes",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -196,7 +197,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "datasource": {
@@ -205,7 +206,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(HeapSize_bytes)",
+          "expr": "avg(ghc_eventlog_HeapSize_bytes)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapSize",
@@ -220,7 +221,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(BlocksSize_bytes)",
+          "expr": "avg(ghc_eventlog_BlocksSize_bytes)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -237,7 +238,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(HeapLive_bytes)",
+          "expr": "avg(ghc_eventlog_HeapLive_bytes)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -326,12 +327,12 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(MemCurrent)",
+          "expr": "avg(ghc_eventlog_MemCurrent)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "MemCurrent",
@@ -346,7 +347,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(MemNeeded)",
+          "expr": "avg(ghc_eventlog_MemNeeded)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -363,7 +364,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(MemReturned)",
+          "expr": "avg(ghc_eventlog_MemReturned)",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -451,12 +452,12 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg(delta(HeapAllocated_bytes_total[$__interval]))",
+          "expr": "avg(delta(ghc_eventlog_HeapAllocated_bytes_total[$__interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapAllocated",
@@ -470,7 +471,7 @@
     }
   ],
   "preload": false,
-  "schemaVersion": 41,
+  "schemaVersion": 42,
   "tags": [],
   "templating": {
     "list": []
