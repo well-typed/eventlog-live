@@ -301,7 +301,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
             -- If the previous event was any other event, then...
             | otherwise -> do
                 -- ...emit an error, and...
-                logWarning verbosity "processGCSpans" . T.pack $
+                logWarning verbosity . T.pack $
                   printf
                     "Capability %d: Unsupported trace %s --> %s"
                     cap
@@ -331,7 +331,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
           -- If there was no previous event or it was any other event, then...
           _otherwise -> do
             -- ...emit an error, and...
-            logWarning verbosity "processGCSpans" . T.pack $
+            logWarning verbosity . T.pack $
               printf
                 "Capability %d: Unsupported trace %s --> %s"
                 cap

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Internal.Logger
 Description : /Internal module/. Logging functions.
@@ -6,9 +8,7 @@ Portability : portable
 
 This module is __internal__. The [PVP](https://pvp.haskell.org) __does not apply__.
 -}
-module GHC.Eventlog.Live.Internal.Logger (
-  LogSource,
-  logMessage,
+module GHC.Eventlog.Live.Logger (
   logError,
   logWarning,
   logInfo,
@@ -21,38 +21,49 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.Verbosity (Verbosity, showVerbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityWarning)
+import GHC.Stack (HasCallStack, CallStack, callStack, getCallStack, SrcLoc (..))
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
-
-{- |
-Internal helper. Denotes the source of a log message.
--}
-type LogSource = Text
+import Data.List qualified as L
 
 {- |
 Internal helper. Log messages to given handle.
 Only prints a message if its verbosity level is above the verbosity threshold.
 -}
-logMessage :: (MonadIO m) => IO.Handle -> Verbosity -> Verbosity -> LogSource -> Text -> m ()
-logMessage handle verbosityLevel verbosityThreshold logSource msg
+logMessage :: (MonadIO m) => IO.Handle -> CallStack -> Verbosity -> Verbosity -> Text -> m ()
+logMessage handle theCallStack verbosityLevel verbosityThreshold msg
   | verbosityLevel >= verbosityThreshold = liftIO $ do
       withVerbosityColor verbosityLevel handle
         . flip TIO.hPutStrLn
-        . formatMessage verbosityLevel verbosityThreshold logSource
+        . formatMessage verbosityLevel verbosityThreshold theCallStack
         $ msg
       IO.hFlush handle
   | otherwise = pure ()
 
 {- |
-Internal helper. Format the message appropriately for the given verbosity level and threshold.
+Internal helper.
+Format the `CallStack`.
 -}
-formatMessage :: Verbosity -> Verbosity -> LogSource -> Text -> Text
-formatMessage verbosityLevel verbosityThreshold logSource msg
-  | verbosityLevel == verbosityInfo && verbosityThreshold /= verbosityDebug = msg
-  | otherwise = mconcat [showVerbosity verbosityLevel, T.pack "[", logSource, T.pack "]: ", msg]
+formatCallStack :: CallStack -> Text
+formatCallStack theCallStack =
+  maybe T.empty (formatSrcLoc . snd . fst) (L.uncons (getCallStack theCallStack))
+ where
+  formatSrcLoc :: SrcLoc -> Text
+  formatSrcLoc srcLoc =
+    mconcat [T.pack srcLoc.srcLocFile, ":", T.pack (show srcLoc.srcLocStartLine), ":", T.pack (show srcLoc.srcLocStartCol)]
 
 {- |
-Internal helper. Use a handle with the color set appropriately for the given verbosity level.
+Internal helper.
+Format the message appropriately for the given verbosity level and threshold.
+-}
+formatMessage :: Verbosity -> Verbosity -> CallStack -> Text -> Text
+formatMessage verbosityLevel verbosityThreshold theCallStack msg
+  | verbosityLevel == verbosityInfo && verbosityThreshold /= verbosityDebug = msg
+  | otherwise = mconcat [showVerbosity verbosityLevel, " (", formatCallStack theCallStack, "): ", msg]
+
+{- |
+Internal helper.
+Use a handle with the color set appropriately for the given verbosity level.
 -}
 withVerbosityColor :: Verbosity -> IO.Handle -> (IO.Handle -> IO a) -> IO a
 withVerbosityColor verbosity handle action = do
@@ -69,7 +80,8 @@ withVerbosityColor verbosity handle action = do
         bracket_ setVerbosityColor setDefaultColor $ action handle
 
 {- |
-Internal helper. Determine the ANSI color associated with a particular verbosity level.
+Internal helper.
+Determine the ANSI color associated with a particular verbosity level.
 -}
 verbosityColor :: Verbosity -> Maybe Color
 verbosityColor verbosity
@@ -81,23 +93,23 @@ verbosityColor verbosity
 {- |
 Internal helper. Log errors to `IO.stderr`.
 -}
-logError :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logError = logMessage IO.stderr verbosityError
+logError :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
+logError = logMessage IO.stderr callStack verbosityError
 
 {- |
 Internal helper. Log warnings to `IO.stderr`.
 -}
-logWarning :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logWarning = logMessage IO.stderr verbosityWarning
+logWarning :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
+logWarning = logMessage IO.stderr callStack verbosityWarning
 
 {- |
 Internal helper. Log info messages to `IO.stderr`.
 -}
-logInfo :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logInfo = logMessage IO.stdout verbosityInfo
+logInfo :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
+logInfo = logMessage IO.stdout callStack verbosityInfo
 
 {- |
 Internal helper. Log debug messages to `IO.stderr`.
 -}
-logDebug :: (MonadIO m) => Verbosity -> LogSource -> Text -> m ()
-logDebug = logMessage IO.stderr verbosityDebug
+logDebug :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
+logDebug = logMessage IO.stderr callStack verbosityDebug

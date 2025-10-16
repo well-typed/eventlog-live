@@ -96,7 +96,7 @@ withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource ac
   withRunInIO $ \runInIO ->
     case eventlogSource of
       EventlogStdin -> do
-        logInfo verbosity "withEventlogSource" "Reading eventlog from stdin"
+        logInfo verbosity "Reading eventlog from stdin"
         let enter = do
               maybeStdinTextEncoding <- IO.hGetEncoding IO.stdin
               IO.hSetBinaryMode IO.stdin True
@@ -106,11 +106,11 @@ withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource ac
               IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
         E.bracket enter leave . const . runInIO . action $ IO.stdin
       EventlogFile eventlogFile -> do
-        logInfo verbosity "withEventlogSource" $ "Reading eventlog from " <> T.pack eventlogFile
+        logInfo verbosity $ "Reading eventlog from " <> T.pack eventlogFile
         IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
           runInIO $ action handle
       EventlogSocketUnix eventlogSocketUnix -> do
-        logInfo verbosity "withEventlogSource" $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+        logInfo verbosity $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
         E.bracket (connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
           runInIO $ action handle
 
@@ -136,13 +136,13 @@ connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix =
   connectLoop :: Double -> IO Handle
   connectLoop timeoutMcs = do
     let connect = do
-          logDebug verbosity "connectRetry" $ "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          logDebug verbosity $ "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
           handle <- tryConnect eventlogSocketUnix
-          logInfo verbosity "connectRetry" $ "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          logInfo verbosity $ "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
           pure handle
     let cleanup (e :: E.IOException) = do
-          logDebug verbosity "connectRetry" $ "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
-          logDebug verbosity "connectRetry" $ "Waiting " <> prettyTimeoutMcs timeoutMcs <> " to retry..."
+          logDebug verbosity $ "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
+          logDebug verbosity $ "Waiting " <> prettyTimeoutMcs timeoutMcs <> " to retry..."
           waitFor timeoutMcs
           connectLoop (timeoutMcs * timeoutExponent)
     E.catch connect cleanup

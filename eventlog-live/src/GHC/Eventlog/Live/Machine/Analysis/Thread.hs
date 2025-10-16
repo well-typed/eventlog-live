@@ -259,7 +259,7 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity =
           -- If the current event is any other event, then...
           | otherwise -> do
               -- ...emit an error, and...
-              logWarning verbosity "processThreadStateSpans" . T.pack $
+              logWarning verbosity . T.pack $
                 printf
                   "Thread %d: Unexpected event %s"
                   thread
