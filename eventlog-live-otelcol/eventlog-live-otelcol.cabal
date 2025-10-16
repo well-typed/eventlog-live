@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            eventlog-live-otelcol
-version:         0.2.0.0
+version:         0.3.0.0
 synopsis:        Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into
@@ -13,12 +13,12 @@ description:
   >                              [--batch-interval NUM] [--eventlog-log-file FILE]
   >                              [-h Tcmdyrbi] [--service-name STRING]
   >                              [-v|--verbosity quiet|error|warning|info|debug|0-4]
-  >                              --otelcol-host HOST [--otelcol-port PORT]
-  >                              [--otelcol-authority HOST] [--otelcol-ssl]
-  >                              [--otelcol-certificate-store FILE]
+  >                              [--config FILE] --otelcol-host HOST
+  >                              [--otelcol-port PORT] [--otelcol-authority HOST]
+  >                              [--otelcol-ssl] [--otelcol-certificate-store FILE]
   >                              [--otelcol-ssl-key-log FILE |
   >                                --otelcol-ssl-key-log-from-env]
-  >                              [--otelcol-no-metrics] [--otelcol-no-traces]
+  >                              [--print-defaults]
   >
   > Available options:
   >   --eventlog-stdin         Read the eventlog from stdin.
@@ -35,6 +35,9 @@ description:
   >   --service-name STRING    The name of the profiled service.
   >   -v,--verbosity quiet|error|warning|info|debug|0-4
   >                            The verbosity threshold for logging.
+  >   --config FILE            The path to a detailed configuration file.
+  >   --print-defaults         Print default configuration options that can be used
+  >                            in config.yaml
   >   --help                   Show this help text.
   >   --version                Show version information
   >
@@ -49,8 +52,6 @@ description:
   >                            Use file to log SSL keys.
   >   --otelcol-ssl-key-log-from-env
   >                            Use SSLKEYLOGFILE to log SSL keys.
-  >   --otelcol-no-metrics     Disable metrics exporter.
-  >   --otelcol-no-traces      Disable traces exporter.
 
 license:         BSD-3-Clause
 license-file:    LICENSE
@@ -80,6 +81,7 @@ common language
     DefaultSignatures
     DeriveFoldable
     DeriveFunctor
+    DeriveGeneric
     DeriveTraversable
     DerivingStrategies
     DuplicateRecordFields
@@ -105,18 +107,23 @@ common language
 library
   import:          language
   hs-source-dirs:  src
-  autogen-modules: Paths_eventlog_live_otelcol
+  exposed-modules:
+    GHC.Eventlog.Live.Otelcol
+    GHC.Eventlog.Live.Otelcol.Config
+
   other-modules:
     Options.Applicative.Compat
     Paths_eventlog_live_otelcol
     System.Random.Compat
 
-  exposed-modules: GHC.Eventlog.Live.Otelcol
+  autogen-modules: Paths_eventlog_live_otelcol
   build-depends:
+    , aeson                  >=2.2    && <2.3
     , base                   >=4.16   && <4.22
     , bytestring             >=0.11   && <0.13
+    , data-default           >=0.8    && <0.9
     , dlist                  >=1.0    && <1.1
-    , eventlog-live          >=0.3    && <0.4
+    , eventlog-live          >=0.3.1  && <0.4
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
@@ -129,6 +136,7 @@ library
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
+    , yaml                   >=0.11   && <0.12
 
 executable eventlog-live-otelcol
   import:         language

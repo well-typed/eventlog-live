@@ -1,3 +1,8 @@
+### 0.3.0.0
+
+- **BREAKING**: Remove `--otelcol-no-metrics` and `--otelcol-no-traces` flags.
+- Support configuration file.
+
 ### 0.2.0.0
 
 - **BREAKING**: Support info and debug verbosity. This changes the semantics of `--verbosity=3` and up.
