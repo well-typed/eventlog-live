@@ -18,24 +18,27 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.DList (DList)
 import Data.DList qualified as D
+import Data.Default (Default (..))
 import Data.Either (partitionEithers)
 import Data.Foldable (for_, traverse_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Machine (Process, ProcessT, asParts, await, construct, filtered, mapping, repeatedly, yield, (~>))
+import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, mapping, repeatedly, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Vector qualified as V
 import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
+import Data.Yaml qualified as Y
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
-import GHC.Eventlog.Live.Logger (logError)
+import GHC.Eventlog.Live.Logger (logDebug, logError)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -47,9 +50,12 @@ import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
+import GHC.Eventlog.Live.Otelcol.Config (Config)
+import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
+import GHC.Records (HasField)
 import Lens.Family2 ((&), (.~), (^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -81,9 +87,14 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
-  let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
   -- Define the error writer:
   let errorWriter = repeatedly $ await >>= logError verbosity . T.pack
+  -- Read the configuration file:
+  config <- flip (maybe (pure def)) maybeConfigFile $ \configFile -> do
+    logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
+    config <- C.readConfig configFile
+    logDebug verbosity $ "Configuration file:\n" <> (TE.decodeUtf8Lenient . Y.encode $ config)
+    pure config
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
     runWithEventlogSource
@@ -99,43 +110,43 @@ main = do
         , M.counterByTick verbosity "events"
         , M.liftTick M.withStartTime
             ~> fanout
-              [ processHeapEvents verbosity maybeHeapProfBreakdown
+              [ processHeapEvents config verbosity maybeHeapProfBreakdown
                   ~> mapping (fmap Left)
-              , processThreadEvents verbosity
+              , processThreadEvents config verbosity
               ]
             ~> mapping (partitionEithers . D.toList)
             ~> fanout
-              [ filtered (const exportMetrics)
-                  ~> mapping fst
-                  ~> fanout
-                    [ M.counterBy verbosity "metrics" (sum . fmap countMetricDataPoints)
-                    , asScopeMetrics
-                        [ OM.scope .~ eventlogLiveScope
-                        ]
-                        ~> asResourceMetric []
-                        ~> asExportMetricServiceRequest
-                        ~> exportResourceMetrics conn
-                        ~> mapping (either displayException displayException)
-                        ~> errorWriter
-                    ]
-              , filtered (const exportTraces)
-                  ~> mapping snd
-                  ~> fanout
-                    [ M.counterBy verbosity "spans" (fromIntegral . length)
-                    , asScopeSpans
-                        [ OT.scope .~ eventlogLiveScope
-                        ]
-                        ~> asResourceSpan
-                          [ OT.resource
-                              .~ messageWith
-                                [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                                ]
+              [ runIf (shouldExportMetrics config) $
+                  mapping fst
+                    ~> fanout
+                      [ M.counterBy verbosity "metrics" (sum . fmap countMetricDataPoints)
+                      , asScopeMetrics
+                          [ OM.scope .~ eventlogLiveScope
                           ]
-                        ~> asExportTraceServiceRequest
-                        ~> exportResourceSpans conn
-                        ~> mapping (either displayException displayException)
-                        ~> errorWriter
-                    ]
+                          ~> asResourceMetric []
+                          ~> asExportMetricServiceRequest
+                          ~> exportResourceMetrics conn
+                          ~> mapping (either displayException displayException)
+                          ~> errorWriter
+                      ]
+              , runIf (shouldExportSpans config) $
+                  mapping snd
+                    ~> fanout
+                      [ M.counterBy verbosity "spans" (fromIntegral . length)
+                      , asScopeSpans
+                          [ OT.scope .~ eventlogLiveScope
+                          ]
+                          ~> asResourceSpan
+                            [ OT.resource
+                                .~ messageWith
+                                  [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                                  ]
+                            ]
+                          ~> asExportTraceServiceRequest
+                          ~> exportResourceSpans conn
+                          ~> mapping (either displayException displayException)
+                          ~> errorWriter
+                      ]
               ]
         ]
 
@@ -155,8 +166,32 @@ countMetricDataPoints metric =
       Just (OM.Metric'Summary summary) ->
         V.length (summary ^. OM.vec'dataPoints)
 
--- dumpBatch :: (MonadIO m, Show a) => ProcessT m [a] [a]
--- dumpBatch = traversing (\as -> for_ as (liftIO . print) >> pure as)
+{- |
+Internal helper.
+Determine whether or not any spans should be exported.
+-}
+shouldExportMetrics :: Config -> Bool
+shouldExportMetrics config =
+  or
+    [ C.processorEnabled (.metrics) (.heapAllocated) config
+    , C.processorEnabled (.metrics) (.blocksSize) config
+    , C.processorEnabled (.metrics) (.heapSize) config
+    , C.processorEnabled (.metrics) (.heapLive) config
+    , C.processorEnabled (.metrics) (.memCurrent) config
+    , C.processorEnabled (.metrics) (.memNeeded) config
+    , C.processorEnabled (.metrics) (.memReturned) config
+    , C.processorEnabled (.metrics) (.heapProfSample) config
+    , C.processorEnabled (.metrics) (.capabilityUsage) config
+    ]
+
+{- |
+Internal helper.
+Determine whether or not any spans should be exported.
+-}
+shouldExportSpans :: Config -> Bool
+shouldExportSpans config =
+  C.processorEnabled (.spans) (.capabilityUsage) config
+    || C.processorEnabled (.spans) (.threadState) config
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
@@ -166,63 +201,66 @@ data OneOf a b c = A !a | B !b | C !c
 
 processThreadEvents ::
   (MonadIO m) =>
+  Config ->
   Verbosity ->
   ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
-processThreadEvents verbosity =
-  M.sortByBatchTick (.value.evTime)
-    ~> M.liftTick
-      ( fanout
-          [ M.validateOrder verbosity (.value.evTime)
-          , M.processGCSpans verbosity
-              ~> mapping (D.singleton . A)
-          , M.processThreadStateSpans' M.tryGetTimeUnixNano (.value) M.setWithStartTime'value verbosity
-              ~> fanout
-                [ M.asMutatorSpans' (.value) M.setWithStartTime'value
-                    ~> mapping (D.singleton . B)
-                , mapping (D.singleton . C)
-                ]
-          ]
-      )
-    ~> M.liftTick
-      ( asParts
-          ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
-      )
-    ~> fanout
-      [ M.liftTick
-          ( mapping leftToMaybe
-              ~> asParts
-          )
-          ~> fanout
-            [ M.liftTick
-                ( M.processCapabilityUsageMetrics
-                    ~> asNumberDataPoint
-                )
-                ~> M.batchByTickList
-                ~> asSum
-                  [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
-                  , OM.isMonotonic .~ True
-                  ]
-                ~> asMetric
-                  [ OM.name .~ "CapabilityUsage"
-                  , OM.description .~ "Report the duration of each capability usage span."
-                  , OM.unit .~ "ns"
-                  ]
-                ~> mapping (D.singleton . Left)
-            , M.liftTick
-                ( M.dropStartTime
-                    ~> asSpan
-                    ~> mapping (D.singleton . Right)
-                )
-                ~> M.batchByTick
+processThreadEvents config verbosity =
+  runIf (shouldProcessThreadEvents config) $
+    M.sortByBatchTick (.value.evTime)
+      ~> M.liftTick
+        ( fanout
+            [ M.validateOrder verbosity (.value.evTime)
+            , runIf (shouldComputeCapabilityUsageSpan config) $
+                M.processGCSpans verbosity
+                  ~> mapping (D.singleton . A)
+            , runIf (shouldComputeThreadStateSpan config) $
+                M.processThreadStateSpans' M.tryGetTimeUnixNano (.value) M.setWithStartTime'value verbosity
+                  ~> fanout
+                    [ M.asMutatorSpans' (.value) M.setWithStartTime'value
+                        ~> mapping (D.singleton . B)
+                    , mapping (D.singleton . C)
+                    ]
             ]
-      , M.liftTick
-          ( mapping rightToMaybe
-              ~> asParts
-              ~> asSpan
-              ~> mapping (D.singleton . Right)
-          )
-          ~> M.batchByTick
-      ]
+        )
+      ~> M.liftTick
+        ( asParts
+            ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
+        )
+      ~> fanout
+        [ M.liftTick
+            ( mapping leftToMaybe
+                ~> asParts
+            )
+            ~> fanout
+              [ runIf (C.processorEnabled (.metrics) (.capabilityUsage) config) $
+                  M.liftTick
+                    ( M.processCapabilityUsageMetrics
+                        ~> asNumberDataPoint
+                    )
+                    ~> M.batchByTickList
+                    ~> asSum
+                      [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+                      , OM.isMonotonic .~ True
+                      ]
+                    ~> asMetricWith config (.capabilityUsage) [OM.unit .~ "ns"]
+                    ~> mapping (D.singleton . Left)
+              , runIf (C.processorEnabled (.spans) (.capabilityUsage) config) $
+                  M.liftTick
+                    ( M.dropStartTime
+                        ~> asSpan config
+                        ~> mapping (D.singleton . Right)
+                    )
+                    ~> M.batchByTick
+              ]
+        , runIf (C.processorEnabled (.spans) (.threadState) config) $
+            M.liftTick
+              ( mapping rightToMaybe
+                  ~> asParts
+                  ~> asSpan config
+                  ~> mapping (D.singleton . Right)
+              )
+              ~> M.batchByTick
+        ]
  where
   repackCapabilityUsageSpanOrThreadStateSpan = \case
     A i -> Left $ fmap Left i
@@ -243,121 +281,140 @@ Get the `Right` value, if any.
 rightToMaybe :: Either a b -> Maybe b
 rightToMaybe = either (const Nothing) Just
 
+{- |
+Internal helper.
+Determine whether or not any thread events should be processed at all.
+-}
+shouldProcessThreadEvents :: Config -> Bool
+shouldProcessThreadEvents config =
+  C.processorEnabled (.metrics) (.capabilityUsage) config
+    || C.processorEnabled (.spans) (.capabilityUsage) config
+    || C.processorEnabled (.spans) (.threadState) config
+
+{- |
+Internal helper.
+Determine whether or not the capability usage spans should be computed.
+-}
+shouldComputeCapabilityUsageSpan :: Config -> Bool
+shouldComputeCapabilityUsageSpan config =
+  C.processorEnabled (.spans) (.capabilityUsage) config
+    || C.processorEnabled (.metrics) (.capabilityUsage) config
+
+{- |
+Internal helper.
+Determine whether or not the thread state spans should be computed.
+-}
+shouldComputeThreadStateSpan :: Config -> Bool
+shouldComputeThreadStateSpan config =
+  C.processorEnabled (.spans) (.threadState) config
+    || shouldComputeCapabilityUsageSpan config
+
 --------------------------------------------------------------------------------
 -- processHeapEvents
 --------------------------------------------------------------------------------
 
 processHeapEvents ::
   (MonadIO m) =>
+  Config ->
   Verbosity ->
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapEvents verbosity maybeHeapProfBreakdown =
+processHeapEvents config verbosity maybeHeapProfBreakdown =
   fanout
-    [ processHeapAllocated
-    , processBlocksSize
-    , processHeapSize
-    , processHeapLive
-    , processMemReturn
-    , processHeapProfSample verbosity maybeHeapProfBreakdown
+    [ processHeapAllocated config
+    , processBlocksSize config
+    , processHeapSize config
+    , processHeapLive config
+    , processMemReturn config
+    , processHeapProfSample config verbosity maybeHeapProfBreakdown
     ]
 
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocated :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapAllocated =
-  M.liftTick (M.processHeapAllocatedData ~> asNumberDataPoint)
-    ~> M.batchByTickList
-    ~> asSum
-      [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
-      , OM.isMonotonic .~ True
-      ]
-    ~> asMetric
-      [ OM.name .~ "HeapAllocated"
-      , OM.description .~ "Report when a new chunk of heap has been allocated by the indicated capability set."
-      , OM.unit .~ "By"
-      ]
-    ~> mapping D.singleton
+processHeapAllocated :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processHeapAllocated config =
+  runIf (C.processorEnabled (.metrics) (.heapAllocated) config) $
+    M.liftTick (M.processHeapAllocatedData ~> asNumberDataPoint)
+      ~> M.batchByTickList
+      ~> asSum
+        [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+        , OM.isMonotonic .~ True
+        ]
+      ~> asMetricWith config (.heapAllocated) [OM.unit .~ "By"]
+      ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapSize =
-  M.liftTick (M.processHeapSizeData ~> asNumberDataPoint)
-    ~> M.batchByTickList
-    ~> asGauge
-    ~> asMetric
-      [ OM.name .~ "HeapSize"
-      , OM.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , OM.unit .~ "By"
-      ]
-    ~> mapping D.singleton
+processHeapSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processHeapSize config =
+  runIf (C.processorEnabled (.metrics) (.heapSize) config) $
+    M.liftTick (M.processHeapSizeData ~> asNumberDataPoint)
+      ~> M.batchByTickList
+      ~> asGauge
+      ~> asMetricWith config (.heapSize) [OM.unit .~ "By"]
+      ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSize :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processBlocksSize =
-  M.liftTick (M.processBlocksSizeData ~> asNumberDataPoint)
-    ~> M.batchByTickList
-    ~> asGauge
-    ~> asMetric
-      [ OM.name .~ "BlocksSize"
-      , OM.description .~ "Report the current heap size, calculated by the allocated number of blocks."
-      , OM.unit .~ "By"
-      ]
-    ~> mapping D.singleton
+processBlocksSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processBlocksSize config =
+  runIf (C.processorEnabled (.metrics) (.blocksSize) config) $
+    M.liftTick (M.processBlocksSizeData ~> asNumberDataPoint)
+      ~> M.batchByTickList
+      ~> asGauge
+      ~> asMetricWith config (.blocksSize) [OM.unit .~ "By"]
+      ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLive :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapLive =
-  M.liftTick (M.processHeapLiveData ~> asNumberDataPoint)
-    ~> M.batchByTickList
-    ~> asGauge
-    ~> asMetric
-      [ OM.name .~ "HeapLive"
-      , OM.description .~ "Report the current heap size, calculated by the allocated number of megablocks."
-      , OM.unit .~ "By"
-      ]
-    ~> mapping D.singleton
+processHeapLive :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processHeapLive config =
+  runIf (C.processorEnabled (.metrics) (.heapLive) config) $
+    M.liftTick (M.processHeapLiveData ~> asNumberDataPoint)
+      ~> M.batchByTickList
+      ~> asGauge
+      ~> asMetricWith config (.heapLive) [OM.unit .~ "By"]
+      ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-processMemReturn :: Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processMemReturn =
-  M.liftTick M.processMemReturnData
-    ~> M.batchByTickList
-    ~> fanout
-      [ M.liftBatch (asMemCurrent ~> asNumberDataPoint)
-          ~> asGauge
-          ~> asMetric
-            [ OM.name .~ "MemCurrent"
-            , OM.description .~ "Report the number of megablocks currently allocated."
-            , OM.unit .~ "{mblock}"
-            ]
-          ~> mapping D.singleton
-      , M.liftBatch (asMemNeeded ~> asNumberDataPoint)
-          ~> asGauge
-          ~> asMetric
-            [ OM.name .~ "MemNeeded"
-            , OM.description .~ "Report the number of megablocks currently needed."
-            , OM.unit .~ "{mblock}"
-            ]
-          ~> mapping D.singleton
-      , M.liftBatch (asMemReturned ~> asNumberDataPoint)
-          ~> asGauge
-          ~> asMetric
-            [ OM.name .~ "MemReturned"
-            , OM.description .~ "Report the number of megablocks currently being returned to the OS."
-            , OM.unit .~ "{mblock}"
-            ]
-          ~> mapping D.singleton
-      ]
+processMemReturn :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processMemReturn config =
+  runIf (shouldComputeMemReturn config) $
+    M.liftTick M.processMemReturnData
+      ~> M.batchByTickList
+      ~> fanout
+        [ runIf (C.processorEnabled (.metrics) (.memCurrent) config) $
+            M.liftBatch (asMemCurrent ~> asNumberDataPoint)
+              ~> asGauge
+              ~> asMetricWith config (.memCurrent) [OM.unit .~ "{mblock}"]
+              ~> mapping D.singleton
+        , runIf (C.processorEnabled (.metrics) (.memNeeded) config) $
+            M.liftBatch (asMemNeeded ~> asNumberDataPoint)
+              ~> asGauge
+              ~> asMetricWith config (.memNeeded) [OM.unit .~ "{mblock}"]
+              ~> mapping D.singleton
+        , runIf (C.processorEnabled (.metrics) (.memReturned) config) $
+            M.liftBatch (asMemReturned ~> asNumberDataPoint)
+              ~> asGauge
+              ~> asMetricWith config (.memReturned) [OM.unit .~ "{mblock}"]
+              ~> mapping D.singleton
+        ]
+
+{- |
+Internal helper.
+Determine whether the MemReturn data should be computed.
+-}
+shouldComputeMemReturn :: Config -> Bool
+shouldComputeMemReturn config =
+  C.processorEnabled (.metrics) (.memCurrent) config
+    || C.processorEnabled (.metrics) (.memNeeded) config
+    || C.processorEnabled (.metrics) (.memReturned) config
 
 asMemCurrent :: Process (Metric MemReturnData) (Metric Word32)
 asMemCurrent = mapping (fmap (.current))
@@ -373,19 +430,17 @@ asMemReturned = mapping (fmap (.returned))
 
 processHeapProfSample ::
   (MonadIO m) =>
+  Config ->
   Verbosity ->
   Maybe HeapProfBreakdown ->
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapProfSample verbosity maybeHeapProfBreakdown =
-  M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown ~> asNumberDataPoint)
-    ~> M.batchByTickList
-    ~> asGauge
-    ~> asMetric
-      [ OM.name .~ "HeapProfSample"
-      , OM.description .~ "Report a heap profile sample."
-      , OM.unit .~ "By"
-      ]
-    ~> mapping D.singleton
+processHeapProfSample config verbosity maybeHeapProfBreakdown =
+  runIf (C.processorEnabled (.metrics) (.heapProfSample) config) $
+    M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown ~> asNumberDataPoint)
+      ~> M.batchByTickList
+      ~> asGauge
+      ~> asMetricWith config (.heapProfSample) [OM.unit .~ "By"]
+      ~> mapping D.singleton
 
 --------------------------------------------------------------------------------
 -- Machines
@@ -438,6 +493,19 @@ asScopeMetrics :: [OM.ScopeMetrics -> OM.ScopeMetrics] -> Process [OM.Metric] OM
 asScopeMetrics mod = mapping $ \metrics ->
   messageWith ((OM.metrics .~ metrics) : mod)
 
+asMetricWith ::
+  (Default a, HasField "description" a (Maybe Text), HasField "name" a Text) =>
+  Config ->
+  (C.Metrics -> Maybe a) ->
+  [OM.Metric -> OM.Metric] ->
+  Process OM.Metric'Data OM.Metric
+asMetricWith config field mod =
+  asMetric $
+    [ OM.name .~ C.processorName (.metrics) field config
+    , maybe id (OM.description .~) $ C.processorDescription (.metrics) field config
+    ]
+      <> mod
+
 asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
 asMetric mod = mapping $ toMetric mod
 
@@ -481,6 +549,8 @@ class AsSpan v where
     Key v
 
   toSpan ::
+    -- | The configuration.
+    Config ->
     -- | The input value.
     v ->
     -- | The trace ID.
@@ -490,9 +560,9 @@ class AsSpan v where
     OT.Span
 
   -- | The `asSpan` machine processes values @v@ into OpenTelemetry spans `OT.Span`.
-  asSpan :: (MonadIO m) => ProcessT m v OT.Span
-  default asSpan :: (MonadIO m, Hashable (Key v)) => ProcessT m v OT.Span
-  asSpan = construct $ go (mempty, Nothing)
+  asSpan :: (MonadIO m) => Config -> ProcessT m v OT.Span
+  default asSpan :: (MonadIO m, Hashable (Key v)) => Config -> ProcessT m v OT.Span
+  asSpan config = construct $ go (mempty, Nothing)
    where
     -- go :: (HashMap (Key v) ByteString, Maybe StdGen) -> PlanT (Is v) OT.Span m Void
     go (traceIds, maybeGen) = do
@@ -509,7 +579,7 @@ class AsSpan v where
       -- Ensure the next value has a span ID
       let (spanId, gen2) = uniformByteString 8 gen1
       -- Yield a span
-      yield $ toSpan i traceId spanId
+      yield $ toSpan config i traceId spanId
       -- Continue
       go (traceIds', Just gen2)
 
@@ -522,12 +592,12 @@ instance AsSpan CapabilityUsageSpan where
   toKey :: CapabilityUsageSpan -> Int
   toKey = (.cap)
 
-  toSpan :: CapabilityUsageSpan -> ByteString -> ByteString -> OT.Span
-  toSpan i traceId spanId =
+  toSpan :: Config -> CapabilityUsageSpan -> ByteString -> ByteString -> OT.Span
+  toSpan config i traceId spanId =
     messageWith
       [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
-      , OT.name .~ M.showCapabilityUserCategory user
+      , OT.name .~ C.processorName (.spans) (.capabilityUsage) config <> " " <> M.showCapabilityUserCategory user
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
@@ -554,12 +624,12 @@ instance AsSpan ThreadStateSpan where
   toKey :: ThreadStateSpan -> ThreadId
   toKey = (.thread)
 
-  toSpan :: ThreadStateSpan -> ByteString -> ByteString -> OT.Span
-  toSpan i traceId spanId =
+  toSpan :: Config -> ThreadStateSpan -> ByteString -> ByteString -> OT.Span
+  toSpan config i traceId spanId =
     messageWith
       [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
-      , OT.name .~ M.showThreadStateCategory i.threadState
+      , OT.name .~ C.processorName (.spans) (.threadState) config <> " " <> M.showThreadStateCategory i.threadState
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
@@ -730,6 +800,7 @@ options :: O.ParserInfo Options
 options =
   O.info
     ( optionsParser
+        O.<**> defaultsPrinter
         O.<**> OE.helperWith (O.long "help" <> O.help "Show this help text.")
         O.<**> OC.simpleVersioner (showVersion EventlogLive.version)
     )
@@ -744,6 +815,7 @@ data Options = Options
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
   , verbosity :: Verbosity
+  , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   }
 
@@ -758,7 +830,29 @@ optionsParser =
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
     <*> verbosityParser
+    <*> O.optional configFileParser
     <*> openTelemetryCollectorOptionsParser
+
+--------------------------------------------------------------------------------
+-- Configuration
+
+configFileParser :: O.Parser FilePath
+configFileParser =
+  O.strOption
+    ( O.long "config"
+        <> O.metavar "FILE"
+        <> O.help "The path to a detailed configuration file."
+    )
+
+defaultsPrinter :: O.Parser (a -> a)
+defaultsPrinter =
+  O.infoOption defaults . mconcat $
+    [ O.long "print-defaults"
+    , O.help "Print default configuration options that can be used in config.yaml"
+    ]
+ where
+  defaults :: String
+  defaults = T.unpack (TE.decodeUtf8Lenient (Y.encode (def :: Config)))
 
 --------------------------------------------------------------------------------
 -- Service Name
@@ -777,9 +871,8 @@ serviceNameParser =
 --------------------------------------------------------------------------------
 -- OpenTelemetry Collector configuration
 
-data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
+newtype OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
   { openTelemetryCollectorServer :: G.Server
-  , openTelemetryExporterOptions :: OpenTelemetryExporterOptions
   }
 
 openTelemetryCollectorOptionsParser :: O.Parser OpenTelemetryCollectorOptions
@@ -787,31 +880,6 @@ openTelemetryCollectorOptionsParser =
   OC.parserOptionGroup "OpenTelemetry Collector Server Options" $
     OpenTelemetryCollectorOptions
       <$> otelcolServerParser
-      <*> otelcolExporterOptionsParsers
-
-data OpenTelemetryExporterOptions = OpenTelemetryExporterOptions
-  { exportMetrics :: Bool
-  , exportTraces :: Bool
-  }
-
-otelcolExporterOptionsParsers :: O.Parser OpenTelemetryExporterOptions
-otelcolExporterOptionsParsers =
-  OpenTelemetryExporterOptions
-    <$> exportMetricsParser
-    <*> exportTracesParser
- where
-  exportMetricsParser =
-    -- flipped from O.switch to match negated semantics
-    O.flag True False . mconcat $
-      [ O.long "otelcol-no-metrics"
-      , O.help "Disable metrics exporter."
-      ]
-  exportTracesParser =
-    -- flipped from O.switch to match negated semantics
-    O.flag True False . mconcat $
-      [ O.long "otelcol-no-traces"
-      , O.help "Disable traces exporter."
-      ]
 
 otelcolServerParser :: O.Parser G.Server
 otelcolServerParser =
@@ -886,3 +954,10 @@ otelcolSslKeyLogParser =
             <> O.help "Use SSLKEYLOGFILE to log SSL keys."
         )
     ]
+
+-------------------------------------------------------------------------------
+-- Internal Helpers
+-------------------------------------------------------------------------------
+
+runIf :: (Monad m) => Bool -> MachineT m k o -> MachineT m k o
+runIf b m = if b then m else stopped
