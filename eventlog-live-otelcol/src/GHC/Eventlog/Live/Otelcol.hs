@@ -32,10 +32,10 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Version (showVersion)
-import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
+import GHC.Eventlog.Live.Logger (logError)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -70,7 +70,6 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
-import System.IO qualified as IO
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
 import Text.Printf (printf)
@@ -83,6 +82,8 @@ main = do
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
   let OpenTelemetryExporterOptions{..} = openTelemetryExporterOptions
+  -- Define the error writer:
+  let errorWriter = repeatedly $ await >>= logError verbosity . T.pack
   let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
   G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
     runWithEventlogSource
@@ -153,9 +154,6 @@ countMetricDataPoints metric =
         V.length (exponentialHistogram ^. OM.vec'dataPoints)
       Just (OM.Metric'Summary summary) ->
         V.length (summary ^. OM.vec'dataPoints)
-
-errorWriter :: (MonadIO m) => ProcessT m String Void
-errorWriter = repeatedly $ await >>= liftIO . IO.hPutStrLn IO.stderr
 
 -- dumpBatch :: (MonadIO m, Show a) => ProcessT m [a] [a]
 -- dumpBatch = traversing (\as -> for_ as (liftIO . print) >> pure as)
