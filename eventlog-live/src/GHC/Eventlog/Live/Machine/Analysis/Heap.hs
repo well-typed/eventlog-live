@@ -36,7 +36,7 @@ import Data.Text qualified as T
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attr, (~=))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
-import GHC.Eventlog.Live.Internal.Logger (logWarning)
+import GHC.Eventlog.Live.Logger (logWarning)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))

@@ -53,7 +53,7 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Internal.Logger (logDebug, logError, logWarning)
+import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
 import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityWarning)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E

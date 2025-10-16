@@ -24,7 +24,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Internal.Logger (logDebug, logInfo)
+import GHC.Eventlog.Live.Logger (logDebug, logInfo)
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.Decoder
 import GHC.Eventlog.Live.Machine.Sink
