@@ -97,6 +97,7 @@ common language
     NoFieldSelectors
     NumericUnderscores
     OverloadedRecordDot
+    PatternSynonyms
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
@@ -111,6 +112,7 @@ library
     GHC.Eventlog.Live.Otelcol
     GHC.Eventlog.Live.Otelcol.Config
     GHC.Eventlog.Live.Otelcol.Exporter
+    GHC.Eventlog.Live.Otelcol.Stats
 
   other-modules:
     Options.Applicative.Compat
@@ -120,6 +122,7 @@ library
   autogen-modules: Paths_eventlog_live_otelcol
   build-depends:
     , aeson                  >=2.2    && <2.3
+    , ansi-terminal          >=1.1    && <1.2
     , base                   >=4.16   && <4.22
     , bytestring             >=0.11   && <0.13
     , data-default           >=0.2    && <0.9
@@ -134,6 +137,7 @@ library
     , optparse-applicative   >=0.17   && <0.20
     , proto-lens             >=0.7.1  && <0.8
     , random                 >=1.2    && <1.4
+    , strict-list            >=0.1    && <0.2
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
