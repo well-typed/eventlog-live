@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol
@@ -13,18 +12,17 @@ module GHC.Eventlog.Live.Otelcol (
 ) where
 
 import Control.Applicative (asum)
-import Control.Exception (Exception (..), catch)
+import Control.Exception (Exception (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Either (partitionEithers)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
-import Data.Int (Int64)
 import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, mapping, repeatedly, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -52,22 +50,19 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config)
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
+import GHC.Eventlog.Live.Otelcol.Exporter (exportResourceMetrics, exportResourceSpans)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField)
 import Lens.Family2 ((&), (.~), (^.))
 import Network.GRPC.Client qualified as G
-import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
-import Network.GRPC.Common.Protobuf (Protobuf)
-import Network.GRPC.Common.Protobuf qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
-import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
@@ -78,7 +73,6 @@ import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
-import Text.Printf (printf)
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -703,94 +697,6 @@ toMaybeAnyValue = \case
 -- | Construct a message with a list of modifications applied.
 messageWith :: (Message msg) => [msg -> msg] -> msg
 messageWith = foldr ($) defMessage
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector exporters
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector Trace Exporter
-
-data ExportTraceError
-  = ExportTraceError
-  { rejectedSpans :: Int64
-  , errorMessage :: Text
-  }
-  deriving (Show)
-
-instance Exception ExportTraceError where
-  displayException :: ExportTraceError -> String
-  displayException ExportTraceError{..} =
-    printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedSpans errorMessage
-
-sendResourceSpans :: G.Connection -> OTS.ExportTraceServiceRequest -> IO (Maybe (Either G.GrpcError ExportTraceError))
-sendResourceSpans conn exportTraceServiceRequest =
-  fmap (fmap Right) doGrpc `catch` handleGrpcError
- where
-  doGrpc :: IO (Maybe ExportTraceError)
-  doGrpc = do
-    G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest) >>= \case
-      G.Proto resp
-        | resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0 -> pure Nothing
-        | otherwise -> pure $ Just ExportTraceError{..}
-       where
-        rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
-        errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage
-  handleGrpcError :: G.GrpcError -> IO (Maybe (Either G.GrpcError ExportTraceError))
-  handleGrpcError = pure . pure . Left
-
-exportResourceSpans :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest (Either G.GrpcError ExportTraceError)
-exportResourceSpans conn =
-  repeatedly $
-    await >>= \exportTraceServiceRequest ->
-      liftIO (sendResourceSpans conn exportTraceServiceRequest)
-        >>= traverse_ yield
-
-type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
-type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
-type instance G.ResponseTrailingMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector Metrics Exporter
-
-data ExportMetricsError
-  = ExportMetricsError
-  { rejectedDataPoints :: Int64
-  , errorMessage :: Text
-  }
-  deriving (Show)
-
-instance Exception ExportMetricsError where
-  displayException :: ExportMetricsError -> String
-  displayException ExportMetricsError{..} =
-    printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
-
-sendResourceMetrics :: G.Connection -> OMS.ExportMetricsServiceRequest -> IO (Maybe (Either G.GrpcError ExportMetricsError))
-sendResourceMetrics conn exportMetricsServiceRequest =
-  fmap (fmap Right) doGrpc `catch` handleGrpcError
- where
-  doGrpc :: IO (Maybe ExportMetricsError)
-  doGrpc = do
-    G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest) >>= \case
-      G.Proto resp
-        | resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0 -> pure Nothing
-        | otherwise -> pure $ Just ExportMetricsError{..}
-       where
-        rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-        errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage
-  handleGrpcError :: G.GrpcError -> IO (Maybe (Either G.GrpcError ExportMetricsError))
-  handleGrpcError = pure . pure . Left
-
-exportResourceMetrics :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest (Either G.GrpcError ExportMetricsError)
-exportResourceMetrics conn =
-  repeatedly $
-    await >>= \exportMetricsServiceRequest ->
-      liftIO (sendResourceMetrics conn exportMetricsServiceRequest)
-        >>= traverse_ yield
-
-type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
-type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
-type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 
 --------------------------------------------------------------------------------
 -- Options
