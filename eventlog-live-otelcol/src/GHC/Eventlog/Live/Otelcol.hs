@@ -12,7 +12,6 @@ module GHC.Eventlog.Live.Otelcol (
 ) where
 
 import Control.Applicative (asum)
-import Control.Exception (Exception (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.DList (DList)
@@ -30,13 +29,12 @@ import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Vector qualified as V
 import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
-import GHC.Eventlog.Live.Logger (logDebug, logError)
+import GHC.Eventlog.Live.Logger (logDebug)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -51,11 +49,12 @@ import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config)
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Exporter (exportResourceMetrics, exportResourceSpans)
+import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField)
-import Lens.Family2 ((&), (.~), (^.))
+import Lens.Family2 ((&), (.~))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
 import Options.Applicative qualified as O
@@ -81,8 +80,6 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
-  -- Define the error writer:
-  let errorWriter = repeatedly $ await >>= logError verbosity . T.pack
   -- Read the configuration file:
   config <- flip (maybe (pure def)) maybeConfigFile $ \configFile -> do
     logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
@@ -101,7 +98,7 @@ main = do
       maybeEventlogLogFile
       $ fanout
         [ M.validateInput verbosity 10
-        , M.counterByTick verbosity "events"
+        , eventCountTick ~> mapping (D.singleton . EventCountStat)
         , M.liftTick M.withStartTime
             ~> fanout
               [ processHeapEvents config verbosity maybeHeapProfBreakdown
@@ -113,21 +110,18 @@ main = do
               [ runIf (shouldExportMetrics config) $
                   mapping fst
                     ~> fanout
-                      [ M.counterBy verbosity "metrics" (sum . fmap countMetricDataPoints)
-                      , asScopeMetrics
+                      [ asScopeMetrics
                           [ OM.scope .~ eventlogLiveScope
                           ]
                           ~> asResourceMetric []
                           ~> asExportMetricServiceRequest
                           ~> exportResourceMetrics conn
-                          ~> mapping (either displayException displayException)
-                          ~> errorWriter
+                          ~> mapping (D.singleton . ExportMetricsResultStat)
                       ]
               , runIf (shouldExportSpans config) $
                   mapping snd
                     ~> fanout
-                      [ M.counterBy verbosity "spans" (fromIntegral . length)
-                      , asScopeSpans
+                      [ asScopeSpans
                           [ OT.scope .~ eventlogLiveScope
                           ]
                           ~> asResourceSpan
@@ -138,27 +132,12 @@ main = do
                             ]
                           ~> asExportTraceServiceRequest
                           ~> exportResourceSpans conn
-                          ~> mapping (either displayException displayException)
-                          ~> errorWriter
+                          ~> mapping (D.singleton . ExportTraceResultStat)
                       ]
               ]
         ]
-
-countMetricDataPoints :: OM.Metric -> Word
-countMetricDataPoints metric =
-  fromIntegral $
-    case metric ^. OM.maybe'data' of
-      Nothing -> 0
-      Just (OM.Metric'Gauge gauge) ->
-        V.length (gauge ^. OM.vec'dataPoints)
-      Just (OM.Metric'Sum sum) ->
-        V.length (sum ^. OM.vec'dataPoints)
-      Just (OM.Metric'Histogram histogram) ->
-        V.length (histogram ^. OM.vec'dataPoints)
-      Just (OM.Metric'ExponentialHistogram exponentialHistogram) ->
-        V.length (exponentialHistogram ^. OM.vec'dataPoints)
-      Just (OM.Metric'Summary summary) ->
-        V.length (summary ^. OM.vec'dataPoints)
+        ~> asParts
+        ~> processStats verbosity stats batchInterval 10
 
 {- |
 Internal helper.
@@ -721,6 +700,7 @@ data Options = Options
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
   , verbosity :: Verbosity
+  , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   }
@@ -736,6 +716,7 @@ optionsParser =
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
     <*> verbosityParser
+    <*> statsParser
     <*> O.optional configFileParser
     <*> openTelemetryCollectorOptionsParser
 
