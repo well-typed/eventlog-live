@@ -25,7 +25,7 @@ ODDBALL_PID=$!
 #       sufficient time to create the Unix socket.
 echo "Start eventlog-live-otelcol"
 cabal run eventlog-live-otelcol -v0 -- \
-	--verbosity=debug \
+	--verbosity=quiet \
     --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
     -hT \
     --otelcol-host=localhost

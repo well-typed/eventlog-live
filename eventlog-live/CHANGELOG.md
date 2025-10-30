@@ -1,3 +1,7 @@
+### 0.3.1.0
+
+- Add `averageCounterBy` and `averageCounterByTick`.
+
 ### 0.3.0.0
 
 - **BREAKING**: Move capability usage analysis machines to their own module.

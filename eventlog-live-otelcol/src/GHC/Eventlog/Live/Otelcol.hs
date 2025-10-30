@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol
@@ -13,14 +12,14 @@ module GHC.Eventlog.Live.Otelcol (
 ) where
 
 import Control.Applicative (asum)
-import Control.Exception (Exception (..), catch)
+import Control.Exception (Exception (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Either (partitionEithers)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
@@ -28,17 +27,19 @@ import Data.Int (Int64)
 import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, mapping, repeatedly, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Monoid (First (..))
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Vector qualified as V
+import Data.Text.IO qualified as TIO
 import Data.Version (showVersion)
+import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
-import GHC.Eventlog.Live.Logger (logDebug, logError)
+import GHC.Eventlog.Live.Logger (logDebug)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -52,22 +53,19 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config)
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
+import GHC.Eventlog.Live.Otelcol.Exporter (ExportMetricsResult (..), ExportTraceResult (..), countDataPointsInMetric, exportResourceMetrics, exportResourceSpans)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField)
-import Lens.Family2 ((&), (.~), (^.))
+import Lens.Family2 ((&), (.~))
 import Network.GRPC.Client qualified as G
-import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
-import Network.GRPC.Common.Protobuf (Protobuf)
-import Network.GRPC.Common.Protobuf qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
-import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
@@ -76,9 +74,10 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
+import StrictList qualified as Strict
+import System.Console.ANSI qualified as ANSI
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
-import Text.Printf (printf)
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -87,8 +86,6 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
   let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
-  -- Define the error writer:
-  let errorWriter = repeatedly $ await >>= logError verbosity . T.pack
   -- Read the configuration file:
   config <- flip (maybe (pure def)) maybeConfigFile $ \configFile -> do
     logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
@@ -108,6 +105,7 @@ main = do
       $ fanout
         [ M.validateInput verbosity 10
         , M.counterByTick verbosity "events"
+        , countItemsPerTick ~> mapping (D.singleton . A)
         , M.liftTick M.withStartTime
             ~> fanout
               [ processHeapEvents config verbosity maybeHeapProfBreakdown
@@ -119,15 +117,14 @@ main = do
               [ runIf (shouldExportMetrics config) $
                   mapping fst
                     ~> fanout
-                      [ M.counterBy verbosity "metrics" (sum . fmap countMetricDataPoints)
+                      [ M.counterBy verbosity "metrics" (sum . fmap countDataPointsInMetric)
                       , asScopeMetrics
                           [ OM.scope .~ eventlogLiveScope
                           ]
                           ~> asResourceMetric []
                           ~> asExportMetricServiceRequest
                           ~> exportResourceMetrics conn
-                          ~> mapping (either displayException displayException)
-                          ~> errorWriter
+                          ~> mapping (D.singleton . B)
                       ]
               , runIf (shouldExportSpans config) $
                   mapping snd
@@ -144,27 +141,19 @@ main = do
                             ]
                           ~> asExportTraceServiceRequest
                           ~> exportResourceSpans conn
-                          ~> mapping (either displayException displayException)
-                          ~> errorWriter
+                          ~> mapping (D.singleton . C)
                       ]
               ]
         ]
+        ~> asParts
+        ~> processStatistics verbosity batchInterval 10
 
-countMetricDataPoints :: OM.Metric -> Word
-countMetricDataPoints metric =
-  fromIntegral $
-    case metric ^. OM.maybe'data' of
-      Nothing -> 0
-      Just (OM.Metric'Gauge gauge) ->
-        V.length (gauge ^. OM.vec'dataPoints)
-      Just (OM.Metric'Sum sum) ->
-        V.length (sum ^. OM.vec'dataPoints)
-      Just (OM.Metric'Histogram histogram) ->
-        V.length (histogram ^. OM.vec'dataPoints)
-      Just (OM.Metric'ExponentialHistogram exponentialHistogram) ->
-        V.length (exponentialHistogram ^. OM.vec'dataPoints)
-      Just (OM.Metric'Summary summary) ->
-        V.length (summary ^. OM.vec'dataPoints)
+{- |
+Internal helper.
+Count the number of items seen between each tick.
+-}
+countItemsPerTick :: (Monad m) => ProcessT m (Tick a) Int64
+countItemsPerTick = M.batchByTickList ~> mapping (fromIntegral . length)
 
 {- |
 Internal helper.
@@ -192,6 +181,177 @@ shouldExportSpans :: Config -> Bool
 shouldExportSpans config =
   C.processorEnabled (.spans) (.capabilityUsage) config
     || C.processorEnabled (.spans) (.threadState) config
+
+--------------------------------------------------------------------------------
+-- Statistics
+--
+-- TODO:
+--
+--   * Statistics should be enabled with the `--statistics` flag.
+--
+--   * Statistics should imply `--verbosity=quiet`.
+--     This should be checked. If the user passed both `--statistics` and
+--     `--verbosity` with any verbosity other than `quiet`, this should cause a
+--     warning to be issued.
+--
+--   * Statistics should only be enabled with terminals that support ANSI codes.
+--     This should be checked. If the user passed `--statistics` for a terminal
+--     that doesn't support ANSI codes, this should cause a warning to be issued
+--     and statististics mode to be disabled.
+--
+--   * The rates should be properly computed as averages per second, which is
+--     what is currently printed, but not what is currently ACTUALLY computed.
+--
+--   * The statistics printer should only overwrite the numbers, instead of
+--     reprenting the entire string, which is what it currently does.
+--
+--------------------------------------------------------------------------------
+
+data Statistics = Statistics
+  { windowSize :: !Int
+  , eventCounts :: !(Strict.List Int64)
+  , acceptedDataPointsInWindow :: !(Strict.List Int64)
+  , rejectedDataPointsTotal :: !Int64
+  , acceptedSpansInWindow :: !(Strict.List Int64)
+  , rejectedSpansTotal :: !Int64
+  , errors :: !(Strict.List Text)
+  , displayedLines :: !(First Int)
+  }
+  deriving (Show)
+
+instance Semigroup Statistics where
+  (<>) :: Statistics -> Statistics -> Statistics
+  new <> old = Statistics{..}
+   where
+    windowSize = max new.windowSize old.windowSize
+
+    trim :: Strict.List a -> Strict.List a
+    trim = Strict.take windowSize
+
+    eventCounts = trim (new.eventCounts <> old.eventCounts)
+    acceptedDataPointsInWindow = trim (new.acceptedDataPointsInWindow <> old.acceptedDataPointsInWindow)
+    rejectedDataPointsTotal = new.rejectedDataPointsTotal + old.rejectedDataPointsTotal
+    acceptedSpansInWindow = trim (new.acceptedSpansInWindow <> old.acceptedSpansInWindow)
+    rejectedSpansTotal = new.rejectedSpansTotal + old.rejectedSpansTotal
+    errors = trim (new.errors <> old.errors)
+    displayedLines = new.displayedLines <> old.displayedLines
+
+fromEventCount :: Int64 -> Statistics
+fromEventCount eventCount =
+  mempty{eventCounts = singletonStrictList eventCount}
+
+fromExportMetricsResult ::
+  ExportMetricsResult ->
+  Statistics
+fromExportMetricsResult exportMetricResult =
+  mempty
+    { acceptedDataPointsInWindow = singletonStrictList exportMetricResult.acceptedDataPoints
+    , rejectedDataPointsTotal = exportMetricResult.rejectedDataPoints
+    , errors = maybeToStrictList $ T.pack . displayException <$> exportMetricResult.maybeSomeException
+    }
+
+fromExportTraceResult ::
+  ExportTraceResult ->
+  Statistics
+fromExportTraceResult exportTraceResult =
+  mempty
+    { acceptedSpansInWindow = singletonStrictList exportTraceResult.acceptedSpans
+    , rejectedSpansTotal = exportTraceResult.rejectedSpans
+    , errors = maybeToStrictList $ T.pack . displayException <$> exportTraceResult.maybeSomeException
+    }
+
+singletonStrictList :: a -> Strict.List a
+singletonStrictList = (`Strict.Cons` Strict.Nil)
+
+maybeToStrictList :: Maybe a -> Strict.List a
+maybeToStrictList = maybe Strict.Nil singletonStrictList
+
+instance Monoid Statistics where
+  mempty :: Statistics
+  mempty =
+    Statistics
+      { windowSize = 10
+      , eventCounts = mempty
+      , acceptedDataPointsInWindow = mempty
+      , rejectedDataPointsTotal = 0
+      , acceptedSpansInWindow = mempty
+      , rejectedSpansTotal = 0
+      , errors = mempty
+      , displayedLines = First Nothing
+      }
+
+processStatistics ::
+  (MonadIO m) =>
+  Verbosity ->
+  Int ->
+  Int ->
+  ProcessT m (OneOf Int64 ExportMetricsResult ExportTraceResult) Void
+processStatistics verbosity batchIntervalMs windowSize = construct $ go mempty{windowSize = windowSize}
+ where
+  go statistics0 =
+    await >>= \update -> do
+      let statistics1 = updateStatistics statistics0 update
+      statistics2 <- liftIO (displayStatistics verbosity batchIntervalMs statistics1)
+      go statistics2
+
+updateStatistics :: Statistics -> OneOf Int64 ExportMetricsResult ExportTraceResult -> Statistics
+updateStatistics old = \case
+  A eventCount -> fromEventCount eventCount <> old
+  B exportMetricsResult -> fromExportMetricsResult exportMetricsResult <> old
+  C exportTraceResult -> fromExportTraceResult exportTraceResult <> old
+
+displayStatistics :: Verbosity -> Int -> Statistics -> IO Statistics
+displayStatistics _verbosity _batchIntervalMs old@Statistics{..} = do
+  -- Clear the previous statistics
+  for_ displayedLines $ \numberOfLines -> do
+    ANSI.cursorUp numberOfLines
+    ANSI.clearFromCursorToScreenEnd
+
+  -- TODO: use _batchIntervalMs to compute average _per second_
+  let averageEventCounts = showText (average eventCounts)
+  let acceptedDataPoints = showText (average acceptedDataPointsInWindow)
+  let rejectedDataPoints = showText rejectedDataPointsTotal
+  let acceptedSpans = showText (average acceptedSpansInWindow)
+  let rejectedSpans = showText rejectedSpansTotal
+  let width =
+        maximum . fmap T.length $
+          [averageEventCounts, acceptedDataPoints, rejectedDataPoints, acceptedSpans, rejectedSpans]
+  let leftPad text = T.replicate (width - T.length text) " " <> text
+  let outputLines =
+        [ "Eventlog"
+        , "  Received " <> leftPad averageEventCounts <> " (events per second)"
+        , ""
+        , "Metrics"
+        , "  Exported " <> leftPad acceptedDataPoints <> " (metrics per second)"
+        , "  Rejected " <> leftPad rejectedDataPoints <> " (metrics total)"
+        , ""
+        , "Traces"
+        , "  Exported " <> leftPad acceptedSpans <> " (spans per second)"
+        , "  Rejected " <> leftPad rejectedSpans <> " (spans total)"
+        ]
+          <> concatMap T.lines errors
+  for_ outputLines TIO.putStrLn
+
+  pure old{displayedLines = First (Just $ length outputLines)}
+
+{- |
+Internal helper.
+Show a value as `Text`.
+-}
+showText :: (Show a) => a -> Text
+showText = T.pack . show
+
+{- |
+Internal helper.
+Compute the average over a list of points.
+
+__Warning__: @average xs@ is not well-behaved if @sum xs@ underflows or overflows.
+-}
+{-# SPECIALIZE average :: Strict.List Int64 -> Int64 #-}
+average :: (Foldable t, Integral a) => t a -> a
+average xs =
+  let !n = length xs
+   in if n <= 0 then 0 else sum xs `div` fromIntegral n
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
@@ -703,94 +863,6 @@ toMaybeAnyValue = \case
 -- | Construct a message with a list of modifications applied.
 messageWith :: (Message msg) => [msg -> msg] -> msg
 messageWith = foldr ($) defMessage
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector exporters
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector Trace Exporter
-
-data ExportTraceError
-  = ExportTraceError
-  { rejectedSpans :: Int64
-  , errorMessage :: Text
-  }
-  deriving (Show)
-
-instance Exception ExportTraceError where
-  displayException :: ExportTraceError -> String
-  displayException ExportTraceError{..} =
-    printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedSpans errorMessage
-
-sendResourceSpans :: G.Connection -> OTS.ExportTraceServiceRequest -> IO (Maybe (Either G.GrpcError ExportTraceError))
-sendResourceSpans conn exportTraceServiceRequest =
-  fmap (fmap Right) doGrpc `catch` handleGrpcError
- where
-  doGrpc :: IO (Maybe ExportTraceError)
-  doGrpc = do
-    G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest) >>= \case
-      G.Proto resp
-        | resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0 -> pure Nothing
-        | otherwise -> pure $ Just ExportTraceError{..}
-       where
-        rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
-        errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage
-  handleGrpcError :: G.GrpcError -> IO (Maybe (Either G.GrpcError ExportTraceError))
-  handleGrpcError = pure . pure . Left
-
-exportResourceSpans :: G.Connection -> ProcessT IO OTS.ExportTraceServiceRequest (Either G.GrpcError ExportTraceError)
-exportResourceSpans conn =
-  repeatedly $
-    await >>= \exportTraceServiceRequest ->
-      liftIO (sendResourceSpans conn exportTraceServiceRequest)
-        >>= traverse_ yield
-
-type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
-type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
-type instance G.ResponseTrailingMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector Metrics Exporter
-
-data ExportMetricsError
-  = ExportMetricsError
-  { rejectedDataPoints :: Int64
-  , errorMessage :: Text
-  }
-  deriving (Show)
-
-instance Exception ExportMetricsError where
-  displayException :: ExportMetricsError -> String
-  displayException ExportMetricsError{..} =
-    printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
-
-sendResourceMetrics :: G.Connection -> OMS.ExportMetricsServiceRequest -> IO (Maybe (Either G.GrpcError ExportMetricsError))
-sendResourceMetrics conn exportMetricsServiceRequest =
-  fmap (fmap Right) doGrpc `catch` handleGrpcError
- where
-  doGrpc :: IO (Maybe ExportMetricsError)
-  doGrpc = do
-    G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest) >>= \case
-      G.Proto resp
-        | resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0 -> pure Nothing
-        | otherwise -> pure $ Just ExportMetricsError{..}
-       where
-        rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-        errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage
-  handleGrpcError :: G.GrpcError -> IO (Maybe (Either G.GrpcError ExportMetricsError))
-  handleGrpcError = pure . pure . Left
-
-exportResourceMetrics :: G.Connection -> ProcessT IO OMS.ExportMetricsServiceRequest (Either G.GrpcError ExportMetricsError)
-exportResourceMetrics conn =
-  repeatedly $
-    await >>= \exportMetricsServiceRequest ->
-      liftIO (sendResourceMetrics conn exportMetricsServiceRequest)
-        >>= traverse_ yield
-
-type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
-type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
-type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 
 --------------------------------------------------------------------------------
 -- Options
