@@ -110,6 +110,7 @@ library
   exposed-modules:
     GHC.Eventlog.Live.Otelcol
     GHC.Eventlog.Live.Otelcol.Config
+    GHC.Eventlog.Live.Otelcol.Exporter
 
   other-modules:
     Options.Applicative.Compat
