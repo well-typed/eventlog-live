@@ -279,7 +279,7 @@ fromMetric :: (IsField v) => I.Measurement -> Metric v -> I.Line TimeSpec
 fromMetric measurement@(I.Measurement measurementName) i =
   I.Line measurement tagSet fieldSet timestamp
  where
-  tagSet = M.fromList (mapMaybe (\(k, v) -> (I.Key k,) <$> fromAttrValue v) i.attr)
+  tagSet = M.fromList (mapMaybe (\(k, v) -> (I.Key k,) <$> fromAttrValue v) (toList i.attrs))
   fieldSet = M.singleton (I.Key measurementName) (toField i.value)
   timestamp = fromNanoSecs . toInteger <$> i.maybeTimeUnixNano
 
