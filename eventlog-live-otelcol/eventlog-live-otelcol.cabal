@@ -127,7 +127,7 @@ library
     , bytestring             >=0.11   && <0.13
     , data-default           >=0.2    && <0.9
     , dlist                  >=1.0    && <1.1
-    , eventlog-live          >=0.3    && <0.5
+    , eventlog-live          >=0.4    && <0.5
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
