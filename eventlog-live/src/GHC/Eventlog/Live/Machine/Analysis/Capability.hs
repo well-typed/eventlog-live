@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -92,7 +93,7 @@ processCapabilityUsageMetrics =
                 { value = j.value.startTimeUnixNano - i.endTimeUnixNano
                 , maybeTimeUnixNano = Just i.endTimeUnixNano
                 , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-                , attr = ["cap" ~= cap, "category" ~= ("Idle" :: Text)]
+                , attrs = ["cap" ~= cap, "category" ~= ("Idle" :: Text)]
                 }
         -- Yield a duration metric for the current span.
         let user = capabilityUser j.value
@@ -101,7 +102,7 @@ processCapabilityUsageMetrics =
             { value = duration j.value
             , maybeTimeUnixNano = Just j.value.startTimeUnixNano
             , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-            , attr = ["cap" ~= cap, "category" ~= showCapabilityUserCategory user, "user" ~= user]
+            , attrs = ["cap" ~= cap, "category" ~= showCapabilityUserCategory user, "user" ~= user]
             }
         go (Just j.value)
 

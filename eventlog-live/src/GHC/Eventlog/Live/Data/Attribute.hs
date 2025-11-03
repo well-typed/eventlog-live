@@ -5,6 +5,8 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Attribute (
+  Attrs,
+  toList,
   Attr,
   AttrKey,
   AttrValue (..),
@@ -12,10 +14,32 @@ module GHC.Eventlog.Live.Data.Attribute (
   (~=),
 ) where
 
+import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Strict qualified as M
+import Data.Hashable (Hashable)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word16, Word32, Word64, Word8)
+import GHC.Generics (Generic)
+import GHC.IsList (IsList (..))
+
+{- |
+A set of attributes is a t`HashMap`
+-}
+newtype Attrs = Attrs {attrMap :: HashMap AttrKey AttrValue}
+  deriving (Eq, Generic, Show)
+
+instance Hashable Attrs
+
+instance IsList Attrs where
+  type Item Attrs = Attr
+
+  fromList :: [Item Attrs] -> Attrs
+  fromList = Attrs . M.fromList
+
+  toList :: Attrs -> [Item Attrs]
+  toList = M.toList . (.attrMap)
 
 {- |
 An attribute is a key-value pair where the key is any string and the value is
@@ -58,7 +82,9 @@ data AttrValue
   | AttrDouble !Double
   | AttrText !Text
   | AttrNull
-  deriving (Show)
+  deriving (Eq, Generic, Show)
+
+instance Hashable AttrValue
 
 {- |
 Utility class to help construct values of the t`AttrValue` type.

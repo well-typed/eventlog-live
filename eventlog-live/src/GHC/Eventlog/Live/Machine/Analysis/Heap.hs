@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -34,7 +35,7 @@ import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
-import GHC.Eventlog.Live.Data.Attribute (Attr, (~=))
+import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Logger (logWarning)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
@@ -427,12 +428,12 @@ This is a smart constructor that pulls the various timestamps out of the event.
 metric ::
   WithStartTime Event ->
   v ->
-  [Attr] ->
+  Attrs ->
   Metric v
-metric i v attr =
+metric i v attrs =
   Metric
     { value = v
     , maybeTimeUnixNano = tryGetTimeUnixNano i
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
-    , attr = attr
+    , attrs = attrs
     }

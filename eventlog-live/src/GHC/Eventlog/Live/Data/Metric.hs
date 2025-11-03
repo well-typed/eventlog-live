@@ -8,7 +8,7 @@ module GHC.Eventlog.Live.Data.Metric (
   Metric (..),
 ) where
 
-import GHC.Eventlog.Live.Data.Attribute (Attr)
+import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.RTS.Events (Timestamp)
 
 {- |
@@ -24,7 +24,7 @@ data Metric a = Metric
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
   -- ^ The earliest time at which any measurement could have been taken.
   --   Usually, this represents the start time of a process.
-  , attr :: [Attr]
-  -- ^ A list of attributes.
+  , attrs :: Attrs
+  -- ^ A set of attributes.
   }
   deriving (Functor, Show)
