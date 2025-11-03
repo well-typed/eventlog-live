@@ -138,6 +138,7 @@ library
     , proto-lens             >=0.7.1  && <0.8
     , random                 >=1.2    && <1.4
     , strict-list            >=0.1    && <0.2
+    , table-layout           >=1.0    && <1.1
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14

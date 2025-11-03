@@ -57,19 +57,19 @@ import Text.Printf (printf)
 
 data ExportMetricsResult
   = ExportMetricsResult
-  { acceptedDataPoints :: !Int64
+  { exportedDataPoints :: !Int64
   , rejectedDataPoints :: !Int64
   , maybeSomeException :: Maybe SomeException
   }
   deriving (Show)
 
 pattern ExportMetricsSuccess :: Int64 -> ExportMetricsResult
-pattern ExportMetricsSuccess acceptedDataPoints =
-  ExportMetricsResult acceptedDataPoints 0 Nothing
+pattern ExportMetricsSuccess exportedDataPoints =
+  ExportMetricsResult exportedDataPoints 0 Nothing
 
 pattern ExportMetricsError :: Int64 -> Int64 -> SomeException -> ExportMetricsResult
-pattern ExportMetricsError acceptedDataPoints rejectedDataPoints someException =
-  ExportMetricsResult acceptedDataPoints rejectedDataPoints (Just someException)
+pattern ExportMetricsError exportedDataPoints rejectedDataPoints someException =
+  ExportMetricsResult exportedDataPoints rejectedDataPoints (Just someException)
 
 data RejectedMetricsError
   = RejectedMetricsError
@@ -109,9 +109,9 @@ exportResourceMetrics conn =
               pure $ ExportMetricsSuccess totalDataPoints
           | otherwise -> do
               let !rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-              let !acceptedDataPoints = totalDataPoints - rejectedDataPoints
+              let !exportedDataPoints = totalDataPoints - rejectedDataPoints
               let !rejectedMetricsError = RejectedMetricsError{errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage, ..}
-              pure $ ExportMetricsError acceptedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
+              pure $ ExportMetricsError exportedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
 
     handleGrpcError :: G.GrpcError -> IO ExportMetricsResult
     handleGrpcError grpcError = pure $ ExportMetricsError 0 totalDataPoints (SomeException grpcError)
@@ -125,19 +125,19 @@ type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.
 
 data ExportTraceResult
   = ExportTraceResult
-  { acceptedSpans :: !Int64
+  { exportedSpans :: !Int64
   , rejectedSpans :: !Int64
   , maybeSomeException :: Maybe SomeException
   }
   deriving (Show)
 
 pattern ExportTraceSuccess :: Int64 -> ExportTraceResult
-pattern ExportTraceSuccess acceptedSpans =
-  ExportTraceResult acceptedSpans 0 Nothing
+pattern ExportTraceSuccess exportedSpans =
+  ExportTraceResult exportedSpans 0 Nothing
 
 pattern ExportTraceError :: Int64 -> Int64 -> SomeException -> ExportTraceResult
-pattern ExportTraceError acceptedSpans rejectedSpans someException =
-  ExportTraceResult acceptedSpans rejectedSpans (Just someException)
+pattern ExportTraceError exportedSpans rejectedSpans someException =
+  ExportTraceResult exportedSpans rejectedSpans (Just someException)
 
 data RejectedSpansError
   = RejectedSpansError
@@ -177,9 +177,9 @@ exportResourceSpans conn =
               pure $ ExportTraceSuccess totalSpans
           | otherwise -> do
               let !rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
-              let !acceptedSpans = totalSpans - rejectedSpans
+              let !exportedSpans = totalSpans - rejectedSpans
               let !rejectedMetricsError = RejectedSpansError{errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage, ..}
-              pure $ ExportTraceError acceptedSpans rejectedSpans (SomeException rejectedMetricsError)
+              pure $ ExportTraceError exportedSpans rejectedSpans (SomeException rejectedMetricsError)
 
     handleGrpcError :: G.GrpcError -> IO ExportTraceResult
     handleGrpcError grpcError = pure $ ExportTraceError 0 totalSpans (SomeException grpcError)

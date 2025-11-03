@@ -16,6 +16,7 @@ module GHC.Eventlog.Live.Otelcol.Stats (
 import Control.Exception (Exception (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Default (Default (..))
 import Data.Foldable (for_)
 import Data.Int (Int64)
 import Data.Machine (ProcessT, await, construct, mapping, repeatedly, (~>))
@@ -29,10 +30,12 @@ import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otelcol.Exporter (ExportMetricsResult (..), ExportTraceResult (..))
 import GHC.Eventlog.Live.Verbosity (Verbosity)
+import GHC.Records (HasField (..))
 import StrictList qualified as Strict
 import System.Console.ANSI (hNowSupportsANSI)
 import System.Console.ANSI qualified as ANSI
 import System.IO qualified as IO
+import Text.Layout.Table qualified as TBL
 
 {- |
 This type represents a count of input events.
@@ -58,12 +61,11 @@ Internal helper.
 This type represents the aggregate stats kept by the stats processor.
 -}
 data Stats = Stats
-  { windowSize :: !Int
-  , eventCounts :: !(Strict.List Int64)
-  , acceptedDataPointsInWindow :: !(Strict.List Int64)
-  , rejectedDataPointsTotal :: !Int64
-  , acceptedSpansInWindow :: !(Strict.List Int64)
-  , rejectedSpansTotal :: !Int64
+  { eventCounts :: Row
+  , exportedDataPoints :: Row
+  , rejectedDataPoints :: Row
+  , exportedSpans :: Row
+  , rejectedSpans :: Row
   , errors :: !(Strict.List Text)
   , displayedLines :: !(First Int)
   }
@@ -71,45 +73,82 @@ data Stats = Stats
 
 {- |
 Internal helper.
+This type represents a single row of statistics.
+-}
+data Row = Row
+  { total :: !Int64
+  , peakRatePerBatch :: !Int64
+  , window :: !(Strict.List Int64)
+  }
+  deriving (Show)
+
+instance HasField "ratePerBatch" Row Int64 where
+  getField :: Row -> Int64
+  getField row = ratePerBatch row.window
+
+{- |
+Internal helper.
+Computes the rate per batch from a window.
+-}
+ratePerBatch :: Strict.List Int64 -> Int64
+ratePerBatch window =
+  let !n = length window
+   in if n <= 0 then 0 else sum window `div` fromIntegral n
+
+{- |
+Internal helper.
+Create a singleton `Row`.
+-}
+singletonRow :: Int64 -> Row
+singletonRow total = Row{..}
+ where
+  peakRatePerBatch = total
+  window = singletonStrictList total
+
+{- |
+Internal helper.
+This implements the left-biased union of rows.
+In @unionRow new old@, the @new@ argument should contain the latest data.
+-}
+unionRow :: Int -> Row -> Row -> Row
+unionRow windowSize new old = Row{..}
+ where
+  total = new.total + old.total
+  window = Strict.take windowSize (new.window <> old.window)
+  peakRatePerBatch = maximum [new.peakRatePerBatch, old.peakRatePerBatch, ratePerBatch window]
+
+{- |
+Internal helper.
 This instance implements the left-biased union of stats.
 In @new <> old@, the @new@ argument should contain the latest data.
 -}
-instance Semigroup Stats where
-  (<>) :: Stats -> Stats -> Stats
-  new <> old = Stats{..}
-   where
-    windowSize = max new.windowSize old.windowSize
-
-    trim :: Strict.List a -> Strict.List a
-    trim = Strict.take windowSize
-
-    eventCounts = trim (new.eventCounts <> old.eventCounts)
-    acceptedDataPointsInWindow = trim (new.acceptedDataPointsInWindow <> old.acceptedDataPointsInWindow)
-    rejectedDataPointsTotal = new.rejectedDataPointsTotal + old.rejectedDataPointsTotal
-    acceptedSpansInWindow = trim (new.acceptedSpansInWindow <> old.acceptedSpansInWindow)
-    rejectedSpansTotal = new.rejectedSpansTotal + old.rejectedSpansTotal
-    errors = trim (new.errors <> old.errors)
-    displayedLines = new.displayedLines <> old.displayedLines
+unionStats :: Int -> Stats -> Stats -> Stats
+unionStats windowSize new old = Stats{..}
+ where
+  eventCounts = unionRow windowSize new.eventCounts old.eventCounts
+  exportedDataPoints = unionRow windowSize new.exportedDataPoints old.exportedDataPoints
+  rejectedDataPoints = unionRow windowSize new.rejectedDataPoints old.rejectedDataPoints
+  exportedSpans = unionRow windowSize new.exportedSpans old.exportedSpans
+  rejectedSpans = unionRow windowSize new.rejectedSpans old.rejectedSpans
+  errors = Strict.take windowSize (new.errors <> old.errors)
+  displayedLines = new.displayedLines <> old.displayedLines
 
 {- |
 Internal helper.
 Construct a `Stats` object from an `EventCount`.
 -}
 fromEventCount :: EventCount -> Stats
-fromEventCount eventCount =
-  mempty{eventCounts = singletonStrictList eventCount.value}
+fromEventCount eventCount = def{eventCounts = singletonRow eventCount.value}
 
 {- |
 Internal helper.
 Construct a `Stats` object from an `ExportMetricsResult`.
 -}
-fromExportMetricsResult ::
-  ExportMetricsResult ->
-  Stats
+fromExportMetricsResult :: ExportMetricsResult -> Stats
 fromExportMetricsResult exportMetricResult =
-  mempty
-    { acceptedDataPointsInWindow = singletonStrictList exportMetricResult.acceptedDataPoints
-    , rejectedDataPointsTotal = exportMetricResult.rejectedDataPoints
+  def
+    { exportedDataPoints = singletonRow exportMetricResult.exportedDataPoints
+    , rejectedDataPoints = singletonRow exportMetricResult.rejectedDataPoints
     , errors = maybeToStrictList $ T.pack . displayException <$> exportMetricResult.maybeSomeException
     }
 
@@ -117,13 +156,11 @@ fromExportMetricsResult exportMetricResult =
 Internal helper.
 Construct a `Stats` object from an `ExportTraceResult`.
 -}
-fromExportTraceResult ::
-  ExportTraceResult ->
-  Stats
+fromExportTraceResult :: ExportTraceResult -> Stats
 fromExportTraceResult exportTraceResult =
-  mempty
-    { acceptedSpansInWindow = singletonStrictList exportTraceResult.acceptedSpans
-    , rejectedSpansTotal = exportTraceResult.rejectedSpans
+  def
+    { exportedSpans = singletonRow exportTraceResult.exportedSpans
+    , rejectedSpans = singletonRow exportTraceResult.rejectedSpans
     , errors = maybeToStrictList $ T.pack . displayException <$> exportTraceResult.maybeSomeException
     }
 
@@ -141,19 +178,33 @@ Variant of `Data.Maybe.maybeToList` for `Strict.List`.
 maybeToStrictList :: Maybe a -> Strict.List a
 maybeToStrictList = maybe Strict.Nil singletonStrictList
 
-instance Monoid Stats where
-  mempty :: Stats
-  mempty =
-    Stats
-      { windowSize = 10
-      , eventCounts = mempty
-      , acceptedDataPointsInWindow = mempty
-      , rejectedDataPointsTotal = 0
-      , acceptedSpansInWindow = mempty
-      , rejectedSpansTotal = 0
-      , errors = mempty
-      , displayedLines = First Nothing
-      }
+{- |
+Internal helper.
+This instance implements the empty row.
+-}
+instance Default Row where
+  def :: Row
+  def = Row{..}
+   where
+    total = 0
+    peakRatePerBatch = 0
+    window = Strict.Nil
+
+{- |
+Internal helper.
+This implements the empty stats.
+-}
+instance Default Stats where
+  def :: Stats
+  def = Stats{..}
+   where
+    eventCounts = def
+    exportedDataPoints = def
+    rejectedDataPoints = def
+    exportedSpans = def
+    rejectedSpans = def
+    errors = mempty
+    displayedLines = First Nothing
 
 {- |
 Process and display stats.
@@ -172,10 +223,10 @@ processStats verbosity stats batchIntervalMs windowSize
       -- If --stats is ENABLED, maintain and display `Stats`.
       let go stats0 =
             await >>= \stat -> do
-              let stats1 = updateStats stats0 stat
+              let stats1 = updateStats windowSize stats0 stat
               stats2 <- liftIO (displayStats verbosity batchIntervalMs stats1)
               go stats2
-       in construct $ go mempty{windowSize = windowSize}
+       in construct $ go def
   | otherwise =
       -- If --stats is DISABLED, log all incoming `Stat` values.
       repeatedly $ await >>= logStat verbosity
@@ -184,11 +235,11 @@ processStats verbosity stats batchIntervalMs windowSize
 Internal helper.
 Update the current stats based on new input.
 -}
-updateStats :: Stats -> Stat -> Stats
-updateStats old = \case
-  EventCountStat eventCount -> fromEventCount eventCount <> old
-  ExportMetricsResultStat exportMetricsResult -> fromExportMetricsResult exportMetricsResult <> old
-  ExportTraceResultStat exportTraceResult -> fromExportTraceResult exportTraceResult <> old
+updateStats :: Int -> Stats -> Stat -> Stats
+updateStats windowSize old = \case
+  EventCountStat eventCount -> unionStats windowSize (fromEventCount eventCount) old
+  ExportMetricsResultStat exportMetricsResult -> unionStats windowSize (fromExportMetricsResult exportMetricsResult) old
+  ExportTraceResultStat exportTraceResult -> unionStats windowSize (fromExportTraceResult exportTraceResult) old
 
 {- |
 Internal helper.
@@ -200,7 +251,7 @@ logStat verbosity = \case
     logDebug verbosity $ "received " <> showText eventCount.value <> " events"
   ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
-    logDebug verbosity $ "exported " <> showText exportMetricsResult.acceptedDataPoints <> " metrics"
+    logDebug verbosity $ "exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics"
     -- Log rejected events.
     when (exportMetricsResult.rejectedDataPoints > 0) $
       logError verbosity $
@@ -210,7 +261,7 @@ logStat verbosity = \case
       logError verbosity . T.pack $ displayException someException
   ExportTraceResultStat exportTraceResult -> do
     -- Log exported events.
-    logDebug verbosity $ "exported " <> showText exportTraceResult.acceptedSpans <> " metrics"
+    logDebug verbosity $ "exported " <> showText exportTraceResult.exportedSpans <> " metrics"
     -- Log rejected events.
     when (exportTraceResult.rejectedSpans > 0) $
       logError verbosity $
@@ -227,9 +278,9 @@ This is intented to be the *only* function printing to the terminal.
 TODO: The stats printer should only overwrite the numbers.
 -}
 displayStats :: Verbosity -> Int -> Stats -> IO Stats
-displayStats verbosity intervalMs old@Stats{..} = do
+displayStats verbosity intervalMs stats = do
   -- Check if `displayedLines` is empty...
-  case displayedLines of
+  case stats.displayedLines of
     First Nothing ->
       -- ...if so, this is the first time this function has been evaluated...
       -- ...so we should perform the `warnIfStderrSupportsANSI` check...
@@ -241,55 +292,34 @@ displayStats verbosity intervalMs old@Stats{..} = do
 
   -- Compute the moving average count of items _per second_,
   -- by computing the adjusted average of counts over n batches.
-  let averagePerSecond :: Strict.List Int64 -> Int64
-      averagePerSecond xs
-        | n <= 0 = 0
-        | otherwise = (totalXs * 1_000) `div` totalMs
-       where
-        !n = length xs
-        !totalXs = sum xs
-        !totalMs = fromIntegral intervalMs * fromIntegral n
+  let rate :: Row -> Text
+      rate row =
+        let !r = (row.ratePerBatch * 1_000) `div` fromIntegral intervalMs
+         in showText r <> "/s"
+  let peak :: Row -> Text
+      peak row =
+        let !r = row.peakRatePerBatch
+         in showText r <> "/s"
 
-  -- The moving average count of input events.
-  let averageEventCounts = showText (averagePerSecond eventCounts)
-
-  -- The moving average count of accepted data points.
-  let acceptedDataPoints = showText (averagePerSecond acceptedDataPointsInWindow)
-
-  -- The total count of rejected data points.
-  let rejectedDataPoints = showText rejectedDataPointsTotal
-
-  -- The moving average count of accepted spans.
-  let acceptedSpans = showText (averagePerSecond acceptedSpansInWindow)
-
-  -- The total count of rejected spans.
-  let rejectedSpans = showText rejectedSpansTotal
-
-  -- The maxmimum character width of all columns.
-  let width =
-        maximum . fmap T.length $
-          [averageEventCounts, acceptedDataPoints, rejectedDataPoints, acceptedSpans, rejectedSpans]
-
-  -- The left-pad function that uses the previous maximum character width.
-  let leftPad text = T.replicate (width - T.length text) " " <> text
-
-  -- The output lines for the stats.
-  let outputLines =
-        [ "Eventlog"
-        , "  Received " <> leftPad averageEventCounts <> " (val/s)"
-        , ""
-        , "Metrics"
-        , "  Exported " <> leftPad acceptedDataPoints <> " (val/s)"
-        , "  Rejected " <> leftPad rejectedDataPoints <> " (total)"
-        , ""
-        , "Traces"
-        , "  Exported " <> leftPad acceptedSpans <> " (val/s)"
-        , "  Rejected " <> leftPad rejectedSpans <> " (total)"
+  let cSpec :: [TBL.ColSpec]
+      cSpec = [TBL.defColSpec, TBL.defColSpec, TBL.numCol, TBL.numCol, TBL.numCol]
+  let hSpec :: TBL.HeaderSpec TBL.LineStyle (Maybe Text)
+      hSpec = TBL.titlesH [Just "Item", Just "Action", Just "Total (item)", Just "Rate (item/s)", Just "Peak (item/batch)"]
+  let mkRow :: Maybe Text -> Maybe Text -> Row -> TBL.RowGroup (Maybe Text)
+      mkRow item result row = TBL.rowG [item, result, Just (showText row.total), Just (rate row), Just (peak row)]
+  let rSpec :: [TBL.RowGroup (Maybe Text)]
+      rSpec =
+        [ mkRow (Just "Event") (Just "Received") stats.eventCounts
+        , mkRow (Just "Metric") (Just "Exported") stats.exportedDataPoints
+        , mkRow Nothing (Just "Rejected") stats.rejectedDataPoints
+        , mkRow (Just "Span") (Just "Exported") stats.exportedSpans
+        , mkRow Nothing (Just "Rejected") stats.rejectedSpans
         ]
-          <> concatMap T.lines errors
-  for_ outputLines TIO.putStrLn
-
-  pure old{displayedLines = First (Just $ length outputLines)}
+  let tSpec :: TBL.TableSpec TBL.LineStyle TBL.LineStyle String (Maybe Text) (Maybe Text)
+      tSpec = TBL.columnHeaderTableS cSpec TBL.unicodeS hSpec rSpec
+  let table = TBL.tableLinesB tSpec :: [Text]
+  for_ table TIO.putStrLn
+  pure stats{displayedLines = First (Just $ length table)}
 
 {- |
 Check if `IO.stderr` supports ANSI codes. If it does, it is likely printed to
