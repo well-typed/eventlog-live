@@ -1,7 +1,8 @@
-### 0.3.1.0
+### 0.4.0.0
 
 - Add `averageCounterBy` and `averageCounterByTick`.
 - Add `statsParser`.
+- **BREAKING**: Log info to stderr with `--verbosity==debug`.
 
 ### 0.3.0.0
 

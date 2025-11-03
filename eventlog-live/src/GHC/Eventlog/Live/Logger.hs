@@ -104,7 +104,11 @@ logWarning = logMessage IO.stderr callStack verbosityWarning
 Log info messages to `IO.stderr`.
 -}
 logInfo :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
-logInfo = logMessage IO.stdout callStack verbosityInfo
+logInfo verbosityThreshold = logMessage handle callStack verbosityInfo verbosityThreshold
+ where
+  handle
+    | verbosityThreshold <= verbosityDebug = IO.stderr
+    | otherwise = IO.stdout
 
 {- |
 Log debug messages to `IO.stderr`.
