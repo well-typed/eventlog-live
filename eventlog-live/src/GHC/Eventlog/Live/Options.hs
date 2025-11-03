@@ -13,6 +13,7 @@ module GHC.Eventlog.Live.Options (
   eventlogLogFileParser,
   batchIntervalParser,
   verbosityParser,
+  statsParser,
 ) where
 
 import Control.Applicative (asum)
@@ -187,3 +188,14 @@ readEitherVerbosity rawVerbosity =
       "info" -> Right verbosityInfo
       "debug" -> Right verbosityDebug
       _otherwise -> Left $ "Could not parse verbosity '" <> rawVerbosity <> "'."
+
+--------------------------------------------------------------------------------
+-- Statistics
+
+statsParser :: O.Parser Bool
+statsParser =
+  O.flag False True $
+    ( O.short 's'
+        <> O.long "stats"
+        <> O.help "Display runtime statistics."
+    )

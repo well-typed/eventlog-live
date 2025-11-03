@@ -1,6 +1,7 @@
 ### 0.3.1.0
 
 - Add `averageCounterBy` and `averageCounterByTick`.
+- Add `statsParser`.
 
 ### 0.3.0.0
 
