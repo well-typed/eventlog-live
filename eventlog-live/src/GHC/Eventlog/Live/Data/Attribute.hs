@@ -32,6 +32,10 @@ newtype Attrs = Attrs {attrMap :: HashMap AttrKey AttrValue}
 
 instance Hashable Attrs
 
+instance Semigroup Attrs where
+  (<>) :: Attrs -> Attrs -> Attrs
+  x <> y = Attrs{attrMap = x.attrMap <> y.attrMap}
+
 instance IsList Attrs where
   type Item Attrs = Attr
 
