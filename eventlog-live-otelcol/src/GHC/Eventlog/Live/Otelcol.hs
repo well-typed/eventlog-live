@@ -643,7 +643,7 @@ toNumberDataPoint i =
     [ OM.maybe'value .~ Just (toNumberDataPoint'Value i.value)
     , OM.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
     , OM.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
-    , OM.attributes .~ mapMaybe toMaybeKeyValue i.attr
+    , OM.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
     ]
 
 toMaybeKeyValue :: Attr -> Maybe OC.KeyValue
