@@ -14,6 +14,7 @@ module GHC.Eventlog.Live.Otelcol (
 import Control.Applicative (asum)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
+import Data.Coerce (Coercible, coerce)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
@@ -26,6 +27,8 @@ import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, map
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.ProtoLens (Message (defMessage))
+import Data.Proxy (Proxy (..))
+import Data.Semigroup (Last (..), Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
@@ -33,7 +36,8 @@ import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
 import GHC.Eventlog.Live.Data.Attribute
-import GHC.Eventlog.Live.Data.Metric
+import GHC.Eventlog.Live.Data.Metric (AggregateMetrics (..), Metric (..))
+import GHC.Eventlog.Live.Data.Metric qualified as MG
 import GHC.Eventlog.Live.Logger (logDebug)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -206,11 +210,9 @@ processThreadEvents config verbosity =
             )
             ~> fanout
               [ runIf (C.processorEnabled (.metrics) (.capabilityUsage) config) $
-                  M.liftTick
-                    ( M.processCapabilityUsageMetrics
-                        ~> asNumberDataPoint
-                    )
-                    ~> M.batchByTickList
+                  M.liftTick M.processCapabilityUsageMetrics
+                    ~> aggregate viaSum (C.processorMetricAggregation (.capabilityUsage) config)
+                    ~> mapping (fmap toNumberDataPoint)
                     ~> asSum
                       [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
                       , OM.isMonotonic .~ True
@@ -303,13 +305,42 @@ processHeapEvents config verbosity maybeHeapProfBreakdown =
     ]
 
 --------------------------------------------------------------------------------
+-- Metric Aggregation
+
+newtype MetricAggregators a = MetricAggregators
+  { byBatch :: Process (Tick a) [a]
+  }
+
+aggregate :: MetricAggregators a -> Maybe C.MetricAggregation -> Process (Tick a) [a]
+aggregate MetricAggregators{..} = \case
+  Nothing -> M.batchByTickList
+  Just C.MetricAggregationByBatch -> byBatch
+
+viaSum :: forall a. (Num a) => MetricAggregators (Metric a)
+viaSum = MetricAggregators{byBatch = byBatchVia (Proxy @(Sum a))}
+
+viaLast :: forall a. MetricAggregators (Metric a)
+viaLast = MetricAggregators{byBatch = byBatchVia (Proxy @(Last a))}
+
+byBatchVia ::
+  forall a b.
+  (Coercible a b, Semigroup b) =>
+  Proxy b ->
+  Process (Tick (Metric a)) [Metric a]
+byBatchVia (Proxy :: Proxy b) =
+  mapping (fmap MG.singleton . coerce)
+    ~> M.aggregateByTick @(AggregateMetrics b)
+    ~> mapping (coerce . MG.elems)
+
+--------------------------------------------------------------------------------
 -- HeapAllocated
 
 processHeapAllocated :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapAllocated config =
   runIf (C.processorEnabled (.metrics) (.heapAllocated) config) $
-    M.liftTick (M.processHeapAllocatedData ~> asNumberDataPoint)
-      ~> M.batchByTickList
+    M.liftTick M.processHeapAllocatedData
+      ~> aggregate viaSum (C.processorMetricAggregation (.heapAllocated) config)
+      ~> mapping (fmap toNumberDataPoint)
       ~> asSum
         [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
         , OM.isMonotonic .~ True
@@ -323,8 +354,9 @@ processHeapAllocated config =
 processHeapSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapSize config =
   runIf (C.processorEnabled (.metrics) (.heapSize) config) $
-    M.liftTick (M.processHeapSizeData ~> asNumberDataPoint)
-      ~> M.batchByTickList
+    M.liftTick M.processHeapSizeData
+      ~> aggregate viaLast (C.processorMetricAggregation (.heapSize) config)
+      ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.heapSize) [OM.unit .~ "By"]
       ~> mapping D.singleton
@@ -335,8 +367,9 @@ processHeapSize config =
 processBlocksSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processBlocksSize config =
   runIf (C.processorEnabled (.metrics) (.blocksSize) config) $
-    M.liftTick (M.processBlocksSizeData ~> asNumberDataPoint)
-      ~> M.batchByTickList
+    M.liftTick M.processBlocksSizeData
+      ~> aggregate viaLast (C.processorMetricAggregation (.blocksSize) config)
+      ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.blocksSize) [OM.unit .~ "By"]
       ~> mapping D.singleton
@@ -347,8 +380,9 @@ processBlocksSize config =
 processHeapLive :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapLive config =
   runIf (C.processorEnabled (.metrics) (.heapLive) config) $
-    M.liftTick (M.processHeapLiveData ~> asNumberDataPoint)
-      ~> M.batchByTickList
+    M.liftTick M.processHeapLiveData
+      ~> aggregate viaLast (C.processorMetricAggregation (.heapLive) config)
+      ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.heapLive) [OM.unit .~ "By"]
       ~> mapping D.singleton
@@ -360,20 +394,25 @@ processMemReturn :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Met
 processMemReturn config =
   runIf (shouldComputeMemReturn config) $
     M.liftTick M.processMemReturnData
-      ~> M.batchByTickList
       ~> fanout
         [ runIf (C.processorEnabled (.metrics) (.memCurrent) config) $
-            M.liftBatch (asMemCurrent ~> asNumberDataPoint)
+            M.liftTick asMemCurrent
+              ~> aggregate viaLast (C.processorMetricAggregation (.memCurrent) config)
+              ~> mapping (fmap toNumberDataPoint)
               ~> asGauge
               ~> asMetricWith config (.memCurrent) [OM.unit .~ "{mblock}"]
               ~> mapping D.singleton
         , runIf (C.processorEnabled (.metrics) (.memNeeded) config) $
-            M.liftBatch (asMemNeeded ~> asNumberDataPoint)
+            M.liftTick asMemNeeded
+              ~> aggregate viaLast (C.processorMetricAggregation (.memNeeded) config)
+              ~> mapping (fmap toNumberDataPoint)
               ~> asGauge
               ~> asMetricWith config (.memNeeded) [OM.unit .~ "{mblock}"]
               ~> mapping D.singleton
         , runIf (C.processorEnabled (.metrics) (.memReturned) config) $
-            M.liftBatch (asMemReturned ~> asNumberDataPoint)
+            M.liftTick asMemReturned
+              ~> aggregate viaLast (C.processorMetricAggregation (.memReturned) config)
+              ~> mapping (fmap toNumberDataPoint)
               ~> asGauge
               ~> asMetricWith config (.memReturned) [OM.unit .~ "{mblock}"]
               ~> mapping D.singleton
@@ -409,8 +448,9 @@ processHeapProfSample ::
   ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
 processHeapProfSample config verbosity maybeHeapProfBreakdown =
   runIf (C.processorEnabled (.metrics) (.heapProfSample) config) $
-    M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown ~> asNumberDataPoint)
-      ~> M.batchByTickList
+    M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown)
+      ~> aggregate viaLast (C.processorMetricAggregation (.heapProfSample) config)
+      ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.heapProfSample) [OM.unit .~ "By"]
       ~> mapping D.singleton
@@ -500,9 +540,6 @@ toSum :: [OM.Sum -> OM.Sum] -> [OM.NumberDataPoint] -> Maybe OM.Metric'Data
 toSum mod dataPoints
   | null dataPoints = Nothing
   | otherwise = Just . OM.Metric'Sum . messageWith $ (OM.dataPoints .~ dataPoints) : mod
-
-asNumberDataPoint :: (IsNumberDataPoint'Value v) => Process (Metric v) OM.NumberDataPoint
-asNumberDataPoint = mapping toNumberDataPoint
 
 --------------------------------------------------------------------------------
 -- Interpret data
