@@ -13,9 +13,10 @@ module GHC.Eventlog.Live.Machine.Core (
   batchToTick,
   batchListToTick,
   batchByTickList,
-  liftTick,
   dropTick,
   onlyTick,
+  aggregateByTick,
+  liftTick,
   liftBatch,
 
   -- * Debug
@@ -137,6 +138,17 @@ onlyTick =
     await >>= \case
       Tick -> yield ()
       Item{} -> pure ()
+
+{- |
+This machine aggregates a value by tick.
+-}
+aggregateByTick :: (Semigroup a) => Process (Tick a) a
+aggregateByTick = construct $ go Nothing
+ where
+  go acc =
+    await >>= \case
+      Item x -> go (Just x <> acc)
+      Tick -> for_ acc yield >> go Nothing
 
 -------------------------------------------------------------------------------
 -- Machine combinators
