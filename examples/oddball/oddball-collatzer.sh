@@ -5,6 +5,24 @@ export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
+cabal build oddball -v0
+ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
+
+# Build collatzer
+echo "Build collatzer"
+cabal build collatzer -v0
+COLLATZER_BIN=$(cabal list-bin exe:collatzer -v0 | head -n1)
+
+# Run oddball
+echo "Start oddball"
+"${ODDBALL_BIN}" +RTS -l -hT --eventlog-flush-interval=1 -RTS >/dev/null &
+
+# Install cleanup handler
+# shellcheck disable=SC2064
+trap "trap - TERM && kill -- -$$" INT TERM EXIT
+
+# Build oddball
+echo "Build oddball"
 cabal build oddball
 echo
 
@@ -16,17 +34,8 @@ echo
 # Install cleanup handler
 trap 'trap - TERM && kill -- -$$' INT TERM
 
-# Run oddball
-echo "Run oddball"
-cabal run oddball -v0 >/dev/null -- +RTS -l -hT -RTS &
-ODDBALL_PID=$!
-echo
-
 # Run collatzer
 # NOTE: The purpose of 'sleep 2' is to give the oddball process
 #       sufficient time to create the Unix socket.
 echo "Run collatzer"
-sleep 2 && cabal run collatzer -v0 -- --unix "$GHC_EVENTLOG_SOCKET"
-
-# Wait for oddball to finish
-wait $ODDBALL_PID
+sleep 2 && "${COLLATZER_BIN}" --unix "$GHC_EVENTLOG_SOCKET"
