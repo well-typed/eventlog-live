@@ -64,6 +64,7 @@ common language
     DataKinds
     DeriveFoldable
     DeriveFunctor
+    DeriveGeneric
     DeriveTraversable
     DerivingStrategies
     DuplicateRecordFields

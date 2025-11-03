@@ -3,6 +3,7 @@
 - Add `averageCounterBy` and `averageCounterByTick`.
 - Add `statsParser`.
 - Add `aggregateByTick`.
+- **BREAKING**: Replace `[Attr]` with opaque `Attrs` type.
 - **BREAKING**: Log info to stderr with `--verbosity==debug`.
 
 ### 0.3.0.0
