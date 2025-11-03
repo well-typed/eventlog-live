@@ -12,6 +12,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Processors (..),
   Metrics (..),
   Spans (..),
+  MetricAggregation (..),
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -26,6 +27,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   processorEnabled,
   processorDescription,
   processorName,
+  processorMetricAggregation,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -165,12 +167,30 @@ instance Default Spans where
       }
 
 {- |
+The options for metric aggregation.
+-}
+data MetricAggregation
+  = MetricAggregationByBatch
+  deriving (Generic)
+
+instance FromJSON MetricAggregation where
+  parseJSON :: Value -> Parser MetricAggregation
+  parseJSON = genericParseJSON metricAggregationEncodingOptions
+
+instance ToJSON MetricAggregation where
+  toJSON :: MetricAggregation -> Value
+  toJSON = genericToJSON metricAggregationEncodingOptions
+  toEncoding :: MetricAggregation -> Encoding
+  toEncoding = genericToEncoding metricAggregationEncodingOptions
+
+{- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapAllocatedData`.
 -}
 data HeapAllocatedMetric = HeapAllocatedMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -191,6 +211,7 @@ instance Default HeapAllocatedMetric where
       { description = Just "The size of a newly allocated chunk of heap."
       , enabled = True
       , name = "ghc_eventlog_HeapAllocated"
+      , aggregate = Nothing
       }
 
 {- |
@@ -200,6 +221,7 @@ data HeapSizeMetric = HeapSizeMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -220,6 +242,7 @@ instance Default HeapSizeMetric where
       { description = Just "The current heap size, calculated by the allocated number of megablocks."
       , enabled = True
       , name = "ghc_eventlog_HeapSize"
+      , aggregate = Nothing
       }
 
 {- |
@@ -229,6 +252,7 @@ data BlocksSizeMetric = BlocksSizeMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -249,6 +273,7 @@ instance Default BlocksSizeMetric where
       { description = Just "The current heap size, calculated by the allocated number of blocks."
       , enabled = True
       , name = "ghc_eventlog_BlocksSize"
+      , aggregate = Nothing
       }
 
 {- |
@@ -258,6 +283,7 @@ data HeapLiveMetric = HeapLiveMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -278,6 +304,7 @@ instance Default HeapLiveMetric where
       { description = Just "The current heap size, calculated by the allocated number of megablocks."
       , enabled = True
       , name = "ghc_eventlog_HeapLive"
+      , aggregate = Nothing
       }
 
 {- |
@@ -287,6 +314,7 @@ data MemCurrentMetric = MemCurrentMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -307,6 +335,7 @@ instance Default MemCurrentMetric where
       { description = Just "The number of megablocks currently allocated."
       , enabled = True
       , name = "ghc_eventlog_MemCurrent"
+      , aggregate = Nothing
       }
 
 {- |
@@ -316,6 +345,7 @@ data MemNeededMetric = MemNeededMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -336,6 +366,7 @@ instance Default MemNeededMetric where
       { description = Just "The number of megablocks currently needed."
       , enabled = True
       , name = "ghc_eventlog_MemNeeded"
+      , aggregate = Nothing
       }
 
 {- |
@@ -345,6 +376,7 @@ data MemReturnedMetric = MemReturnedMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -365,6 +397,7 @@ instance Default MemReturnedMetric where
       { description = Just "The number of megablocks currently being returned to the OS."
       , enabled = True
       , name = "ghc_eventlog_MemReturned"
+      , aggregate = Nothing
       }
 
 {- |
@@ -374,6 +407,7 @@ data HeapProfSampleMetric = HeapProfSampleMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -394,6 +428,7 @@ instance Default HeapProfSampleMetric where
       { description = Just "A heap profile sample."
       , enabled = True
       , name = "ghc_eventlog_HeapProfSample"
+      , aggregate = Nothing
       }
 
 {- |
@@ -403,6 +438,7 @@ data CapabilityUsageMetric = CapabilityUsageMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
+  , aggregate :: Maybe MetricAggregation
   }
   deriving (Generic)
 
@@ -423,6 +459,7 @@ instance Default CapabilityUsageMetric where
       { description = Just "The duration of each capability usage span."
       , enabled = True
       , name = "ghc_eventlog_CapabilityUsageDuration"
+      , aggregate = Nothing
       }
 
 {- |
@@ -490,20 +527,50 @@ instance Default ThreadStateSpan where
 {- |
 Get whether or not a processor is enabled.
 -}
-processorEnabled :: (HasField "enabled" b Bool) => (Processors -> Maybe a) -> (a -> Maybe b) -> Config -> Bool
-processorEnabled group field = getAny . with (.processors) (with group (with field (Any . (.enabled))))
+processorEnabled ::
+  (HasField "enabled" b Bool) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Bool
+processorEnabled group field =
+  getAny . with (.processors) (with group (with field (Any . (.enabled))))
 
 {- |
 Get the description corresponding to a processor.
 -}
-processorDescription :: (Default b, HasField "description" b (Maybe Text)) => (Processors -> Maybe a) -> (a -> Maybe b) -> Config -> Maybe Text
-processorDescription group field = (.description) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+processorDescription ::
+  (Default b, HasField "description" b (Maybe Text)) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Maybe Text
+processorDescription group field =
+  (.description) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
 
 {- |
 Get the name corresponding to a processor.
 -}
-processorName :: (Default b, HasField "name" b Text) => (Processors -> Maybe a) -> (a -> Maybe b) -> Config -> Text
-processorName group field = (.name) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+processorName ::
+  (Default b, HasField "name" b Text) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Text
+processorName group field =
+  (.name) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+
+{- |
+Get the aggregation strategy corresponding to a metric processor.
+-}
+processorMetricAggregation ::
+  (Default b, HasField "aggregate" b (Maybe MetricAggregation)) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Maybe MetricAggregation
+processorMetricAggregation group field =
+  (.aggregate) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
 
 -------------------------------------------------------------------------------
 -- Internal Helpers
@@ -524,6 +591,20 @@ encodingOptions =
     , tagSingleConstructors = False
     , unwrapUnaryRecords = False
     }
+
+{- |
+Internal helper.
+The encoding options that should be used by the `FromJSON` and `ToJSON` instances for `MetricAggregation`.
+-}
+metricAggregationEncodingOptions :: Options
+metricAggregationEncodingOptions =
+  encodingOptions
+    { constructorTagModifier = camelTo2 '_' . stripMetricAggregation
+    , tagSingleConstructors = True
+    }
+ where
+  stripMetricAggregation :: String -> String
+  stripMetricAggregation = drop (length ("MetricAggregation" :: String))
 
 {- |
 Internal helper.
