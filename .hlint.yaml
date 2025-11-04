@@ -19,6 +19,7 @@
           OverloadedLists,
           OverloadedStrings,
           TemplateHaskell,
+          UndecidableInstances,
         ]
 #  - name: [PatternGuards, ViewPatterns] # only these listed extensions can be used
 #  - {name: CPP, within: CrossPlatform} # CPP can only be used in a given module
