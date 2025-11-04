@@ -11,7 +11,14 @@
 - extensions:
     - default: false # all extension are banned by default
     - name:
-        [CPP, MagicHash, NoImplicitPrelude, OverloadedLists, OverloadedStrings]
+        [
+          CPP,
+          MagicHash,
+          NoImplicitPrelude,
+          OverloadedLists,
+          OverloadedStrings,
+          TemplateHaskell,
+        ]
 #  - name: [PatternGuards, ViewPatterns] # only these listed extensions can be used
 #  - {name: CPP, within: CrossPlatform} # CPP can only be used in a given module
 #
