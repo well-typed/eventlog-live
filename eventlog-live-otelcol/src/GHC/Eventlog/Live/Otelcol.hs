@@ -52,6 +52,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config)
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
+import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigString)
 import GHC.Eventlog.Live.Otelcol.Exporter (exportResourceMetrics, exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
@@ -770,13 +771,10 @@ configFileParser =
 
 defaultsPrinter :: O.Parser (a -> a)
 defaultsPrinter =
-  O.infoOption defaults . mconcat $
+  O.infoOption defaultConfigString . mconcat $
     [ O.long "print-defaults"
     , O.help "Print default configuration options that can be used in config.yaml"
     ]
- where
-  defaults :: String
-  defaults = T.unpack (TE.decodeUtf8Lenient (Y.encode (def :: Config)))
 
 --------------------------------------------------------------------------------
 -- Service Name

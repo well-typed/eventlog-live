@@ -1,7 +1,7 @@
-cabal-version:   3.0
-name:            eventlog-live-otelcol
-version:         0.3.0.0
-synopsis:        Stream eventlog data to the OpenTelemetry Collector.
+cabal-version:      3.0
+name:               eventlog-live-otelcol
+version:            0.3.0.0
+synopsis:           Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into
   the OpenTelemetry Collector.
@@ -53,15 +53,17 @@ description:
   >   --otelcol-ssl-key-log-from-env
   >                            Use SSLKEYLOGFILE to log SSL keys.
 
-license:         BSD-3-Clause
-license-file:    LICENSE
-author:          Wen Kokke
-maintainer:      wen@well-typed.com
-copyright:       (c) 2025 Well-Typed
-build-type:      Simple
-category:        Debug, Monitoring, System
-extra-doc-files: CHANGELOG.md
-tested-with:     GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Wen Kokke
+maintainer:         wen@well-typed.com
+copyright:          (c) 2025 Well-Typed
+build-type:         Simple
+category:           Debug, Monitoring, System
+extra-doc-files:    CHANGELOG.md
+extra-source-files: data/default.yaml
+tested-with:
+  GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
 source-repository head
   type:     git
@@ -82,6 +84,7 @@ common language
     DeriveFoldable
     DeriveFunctor
     DeriveGeneric
+    DeriveLift
     DeriveTraversable
     DerivingStrategies
     DuplicateRecordFields
@@ -104,6 +107,7 @@ common language
     TupleSections
     TypeApplications
     TypeFamilies
+    TypeOperators
 
 library
   import:          language
@@ -115,6 +119,9 @@ library
     GHC.Eventlog.Live.Otelcol.Stats
 
   other-modules:
+    GHC.Eventlog.Live.Otelcol.Config.Default
+    GHC.Eventlog.Live.Otelcol.Config.Default.Raw
+    GHC.Eventlog.Live.Otelcol.Config.Types
     Options.Applicative.Compat
     Paths_eventlog_live_otelcol
     System.Random.Compat
@@ -128,6 +135,7 @@ library
     , data-default           >=0.2    && <0.9
     , dlist                  >=1.0    && <1.1
     , eventlog-live          >=0.4    && <0.5
+    , file-embed             >=0.0.16 && <0.1
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
@@ -139,6 +147,7 @@ library
     , random                 >=1.2    && <1.4
     , strict-list            >=0.1    && <0.2
     , table-layout           >=1.0    && <1.1
+    , template-haskell-lift  >=0.1    && <0.2
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
