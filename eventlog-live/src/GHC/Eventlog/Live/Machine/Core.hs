@@ -51,7 +51,7 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
 import Data.List qualified as L
-import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
+import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text (Text)
@@ -89,12 +89,14 @@ batchByTickList =
 Generalised version of `batchByTickList`.
 -}
 batchByTick ::
-  forall m a.
-  (Monad m, Monoid a) =>
-  ProcessT m (Tick a) a
+  forall a.
+  (Monoid a) => Process (Tick a) a
 batchByTick = batchByTickWith mempty
  where
-  batchByTickWith :: a -> MachineT m (Is (Tick a)) a
+  batchByTickWith ::
+    forall m.
+    (Monad m) =>
+    a -> MachineT m (Is (Tick a)) a
   batchByTickWith acc = MachineT $ pure $ Await onNext Refl onStop
    where
     onNext :: Tick a -> MachineT m (Is (Tick a)) a
@@ -141,14 +143,16 @@ onlyTick =
 
 {- |
 This machine aggregates a value by tick.
+
+The difference between `batchByTick` and `aggregateByTick` is that
+`batchByTick` yields a batch on every tick whereas
+`aggregateByTick` only yields a batch if there were any values.
 -}
 aggregateByTick :: (Semigroup a) => Process (Tick a) a
-aggregateByTick = construct $ go Nothing
- where
-  go acc =
-    await >>= \case
-      Item x -> go (Just x <> acc)
-      Tick -> for_ acc yield >> go Nothing
+aggregateByTick =
+  mapping (fmap Just)
+    ~> batchByTick
+    ~> asParts
 
 -------------------------------------------------------------------------------
 -- Machine combinators
