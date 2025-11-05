@@ -16,7 +16,7 @@ processors:
       enabled: true
       name: ghc_eventlog_HeapAllocated
     heap_live:
-      aggregate: by_batch
+      aggregate: null
       description: The current heap size, calculated by the allocated number of megablocks.
       enabled: true
       name: ghc_eventlog_HeapLive
