@@ -175,7 +175,7 @@ processHeapEvents verbosity maybeHeapProfBreakdown =
               ]
         )
         <~ processMemReturnData
-    , mapping (D.singleton . fromMetric "HeapProfSample")
+    , mapping (D.fromList . fmap (fromMetric "HeapProfSample") . heapProfSamples)
         <~ processHeapProfSampleData verbosity maybeHeapProfBreakdown
     ]
 
