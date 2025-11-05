@@ -16,6 +16,8 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   processHeapLiveData,
   MemReturnData (..),
   processMemReturnData,
+  HeapProfSampleData,
+  heapProfSamples,
   processHeapProfSampleData,
 
   -- ** Heap Profile Breakdown
@@ -23,19 +25,21 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   heapProfBreakdownShow,
 ) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Either (isLeft)
+import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
 import Data.List qualified as L
 import Data.Machine (Process, ProcessT, await, construct, repeatedly, yield)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
+import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Logger (logWarning)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
@@ -165,6 +169,49 @@ processMemReturnData =
 -- HeapProfSample
 
 {- |
+The type of all heap profile samples from a single garbage collection pass.
+-}
+newtype HeapProfSampleData = HeapProfSampleData
+  { heapProfSampleMap :: HashMap Text (Metric Word64)
+  }
+  deriving (Show)
+  deriving newtype (Semigroup, Monoid)
+
+instance GroupBy HeapProfSampleData where
+  type Key HeapProfSampleData = ()
+
+  toKey :: HeapProfSampleData -> ()
+  toKey = const ()
+
+{- |
+Get the elements of a heap profile sample collection.
+-}
+heapProfSamples :: HeapProfSampleData -> [Metric Word64]
+heapProfSamples = M.elems . (.heapProfSampleMap)
+
+{- |
+Internal helper.
+Insert a heap profiling sample into the collection.
+-}
+insertHeapProfSampleString ::
+  forall m.
+  (MonadIO m) =>
+  Verbosity ->
+  Text ->
+  Metric Word64 ->
+  HeapProfSampleData ->
+  m HeapProfSampleData
+insertHeapProfSampleString verbosityThreshold heapProfLabel heapProfSample heapProfSamples = do
+  let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
+      insert heapProfSample' = do
+        when (isJust heapProfSample') $
+          logWarning verbosityThreshold $
+            "Duplicate HeapProfSampleString for " <> heapProfLabel <> " within the same garbage collection pass."
+        pure (Just heapProfSample)
+  heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSamples.heapProfSampleMap
+  pure HeapProfSampleData{heapProfSampleMap = heapProfSampleMap'}
+
+{- |
 Internal helper.
 The type of info table pointers.
 -}
@@ -203,6 +250,7 @@ data HeapProfSampleState = HeapProfSampleState
   { eitherShouldWarnOrHeapProfBreakdown :: Either Bool HeapProfBreakdown
   , infoTableMap :: HashMap InfoTablePtr InfoTable
   , heapProfSampleEraStack :: [Word64]
+  , maybeHeapProfSampleData :: Maybe HeapProfSampleData
   }
   deriving (Show)
 
@@ -239,7 +287,7 @@ processHeapProfSampleData ::
   (MonadIO m) =>
   Verbosity ->
   Maybe HeapProfBreakdown ->
-  ProcessT m (WithStartTime Event) (Metric Word64)
+  ProcessT m (WithStartTime Event) HeapProfSampleData
 processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
   construct $
     go
@@ -247,9 +295,10 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
         { eitherShouldWarnOrHeapProfBreakdown = maybe (Left True) Right maybeHeapProfBreakdown
         , infoTableMap = mempty
         , heapProfSampleEraStack = mempty
+        , maybeHeapProfSampleData = mempty
         }
  where
-  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) (Metric Word64) m Void
+  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) HeapProfSampleData m Void
   go st@HeapProfSampleState{..} = do
     await >>= \i -> case i.value.evSpec of
       -- Announces the heap profile breakdown, amongst other things.
@@ -280,25 +329,47 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
                     }
             go st{infoTableMap = M.insert infoTablePtr infoTable infoTableMap}
       -- Announces the beginning of a heap profile sample.
-      E.HeapProfSampleBegin{..} ->
-        go st{heapProfSampleEraStack = heapProfSampleEra : heapProfSampleEraStack}
+      E.HeapProfSampleBegin{..} -> do
+        -- Check that maybeHeapProfSampleData is Nothing.
+        for_ st.maybeHeapProfSampleData $ \heapProfSampleData -> do
+          logWarning
+            verbosityThreshold
+            "Unexpected event HeapProfSampleBegin while previous garbage collection pass was left open.\n\
+            \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
+          -- Yield the previous sample data anyway.
+          yield heapProfSampleData
+        -- Start a new garbage collection pass.
+        go
+          st
+            { heapProfSampleEraStack = heapProfSampleEra : heapProfSampleEraStack
+            , maybeHeapProfSampleData = Just mempty
+            }
       -- Announces the end of a heap profile sample.
-      E.HeapProfSampleEnd{..} ->
-        case L.uncons heapProfSampleEraStack of
-          Nothing -> do
-            logWarning verbosityThreshold . T.pack $
-              printf
-                "Eventlog closed era %d, but there is no current era."
-                heapProfSampleEra
-            go st
-          Just (currentEra, heapProfSampleEraStack') -> do
-            unless (currentEra == heapProfSampleEra) $
+      E.HeapProfSampleEnd{..} -> do
+        -- Yield the previous heap profile sample data
+        for_ st.maybeHeapProfSampleData yield
+        -- Pop the heapProfSampleEraStack
+        heapProfSampleEraStack' <-
+          case L.uncons heapProfSampleEraStack of
+            Nothing -> do
               logWarning verbosityThreshold . T.pack $
                 printf
-                  "Eventlog closed era %d, but the current era is era %d."
+                  "Eventlog closed era %d, but there is no current era."
                   heapProfSampleEra
-                  currentEra
-            go st{heapProfSampleEraStack = heapProfSampleEraStack'}
+              pure heapProfSampleEraStack
+            Just (currentEra, heapProfSampleEraStack') -> do
+              unless (currentEra == heapProfSampleEra) $
+                logWarning verbosityThreshold . T.pack $
+                  printf
+                    "Eventlog closed era %d, but the current era is era %d."
+                    heapProfSampleEra
+                    currentEra
+              pure heapProfSampleEraStack'
+        go
+          st
+            { heapProfSampleEraStack = heapProfSampleEraStack'
+            , maybeHeapProfSampleData = Nothing
+            }
       -- Announces a heap profile sample.
       E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
@@ -324,21 +395,41 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
                       !infoTablePtr <- readMaybe (T.unpack heapProfLabel)
                       M.lookup infoTablePtr infoTableMap
                   | otherwise = Nothing
-            yield $
-              metric i heapProfResidency $
-                [ "evCap" ~= i.value.evCap
-                , "heapProfBreakdown" ~= heapProfBreakdownShow heapProfBreakdown
-                , "heapProfId" ~= heapProfId
-                , "heapProfLabel" ~= heapProfLabel
-                , "heapProfSampleEra" ~= (fst <$> L.uncons heapProfSampleEraStack)
-                , "infoTableName" ~= fmap (.infoTableName) maybeInfoTable
-                , "infoTableClosureDesc" ~= fmap (.infoTableClosureDesc) maybeInfoTable
-                , "infoTableTyDesc" ~= fmap (.infoTableTyDesc) maybeInfoTable
-                , "infoTableLabel" ~= fmap (.infoTableLabel) maybeInfoTable
-                , "infoTableModule" ~= fmap (.infoTableModule) maybeInfoTable
-                , "infoTableSrcLoc" ~= fmap (.infoTableSrcLoc) maybeInfoTable
-                ]
-            go $ if isHeapProfBreakdownInfoTable heapProfBreakdown then st else st{infoTableMap = mempty}
+            -- Get the HeapProfSampleData
+            heapProfSampleData <-
+              case st.maybeHeapProfSampleData of
+                Nothing -> do
+                  logWarning verbosityThreshold $
+                    "Unexpected event HeapProfSampleString out of scope of HeapProfSampleBegin and HeapProfSampleEnd.\n\
+                    \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
+                  pure mempty
+                Just heapProfSampleData ->
+                  pure heapProfSampleData
+            -- Update the HeapProfSampleData
+            let heapProfSample =
+                  metric i heapProfResidency $
+                    [ "evCap" ~= i.value.evCap
+                    , "heapProfBreakdown" ~= heapProfBreakdownShow heapProfBreakdown
+                    , "heapProfId" ~= heapProfId
+                    , "heapProfLabel" ~= heapProfLabel
+                    , "heapProfSampleEra" ~= (fst <$> L.uncons heapProfSampleEraStack)
+                    , "infoTableName" ~= fmap (.infoTableName) maybeInfoTable
+                    , "infoTableClosureDesc" ~= fmap (.infoTableClosureDesc) maybeInfoTable
+                    , "infoTableTyDesc" ~= fmap (.infoTableTyDesc) maybeInfoTable
+                    , "infoTableLabel" ~= fmap (.infoTableLabel) maybeInfoTable
+                    , "infoTableModule" ~= fmap (.infoTableModule) maybeInfoTable
+                    , "infoTableSrcLoc" ~= fmap (.infoTableSrcLoc) maybeInfoTable
+                    ]
+            heapProfSampleData' <-
+              insertHeapProfSampleString verbosityThreshold heapProfLabel heapProfSample heapProfSampleData
+            -- Continue with the updated HeapProfSampleState
+            go
+              st
+                { -- If we're not profiling with -hi, discard the info table map
+                  infoTableMap = if isHeapProfBreakdownInfoTable heapProfBreakdown then st.infoTableMap else mempty
+                , -- Add the update HeapProfSampleData
+                  maybeHeapProfSampleData = Just heapProfSampleData'
+                }
       _otherwise -> go st
 
 {- |

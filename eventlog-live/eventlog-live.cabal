@@ -70,6 +70,7 @@ common language
     DuplicateRecordFields
     FlexibleContexts
     FlexibleInstances
+    FunctionalDependencies
     GADTs
     GeneralizedNewtypeDeriving
     ImportQualifiedPost
@@ -84,6 +85,7 @@ common language
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
+    StandaloneDeriving
     TupleSections
     TypeApplications
     TypeFamilies
@@ -93,6 +95,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
+    GHC.Eventlog.Live.Data.Group
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Span
     GHC.Eventlog.Live.Logger
