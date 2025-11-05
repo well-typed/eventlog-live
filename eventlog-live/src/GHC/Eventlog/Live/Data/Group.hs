@@ -17,8 +17,8 @@ module GHC.Eventlog.Live.Data.Group (
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
-import Data.Semigroup (First (..), Last (..), Max (..), Min (..), Product (..), Sum (..))
 import Data.Kind (Type)
+import Data.Semigroup (First (..), Last (..), Max (..), Min (..), Product (..), Sum (..))
 
 {- |
 This class defines the key to group by when aggregating.

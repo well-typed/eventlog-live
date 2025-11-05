@@ -36,8 +36,9 @@ import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
 import GHC.Eventlog.Live.Data.Attribute
-import GHC.Eventlog.Live.Data.Metric (AggregateMetrics (..), Metric (..))
-import GHC.Eventlog.Live.Data.Metric qualified as MG
+import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
+import GHC.Eventlog.Live.Data.Group qualified as DG
+import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Logger (logDebug)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -212,7 +213,7 @@ processThreadEvents config verbosity =
             ~> fanout
               [ runIf (C.processorEnabled (.metrics) (.capabilityUsage) config) $
                   M.liftTick M.processCapabilityUsageMetrics
-                    ~> aggregate viaSum (C.processorMetricAggregation (.capabilityUsage) config)
+                    ~> aggregate viaSum (C.processorAggregationStrategy (.metrics) (.capabilityUsage) config)
                     ~> mapping (fmap toNumberDataPoint)
                     ~> asSum
                       [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
@@ -308,30 +309,61 @@ processHeapEvents config verbosity maybeHeapProfBreakdown =
 --------------------------------------------------------------------------------
 -- Metric Aggregation
 
-newtype MetricAggregators a = MetricAggregators
-  { byBatch :: Process (Tick a) [a]
+data Aggregators a b = Aggregators
+  { nothing :: Process (Tick a) b
+  , byBatch :: Process (Tick a) b
   }
 
-aggregate :: MetricAggregators a -> Maybe C.MetricAggregation -> Process (Tick a) [a]
-aggregate MetricAggregators{..} = \case
-  Nothing -> M.batchByTickList
-  Just C.MetricAggregationByBatch -> byBatch
+{- |
+Internal helper.
+Aggregate items based on the provided aggregators and aggregation strategy.
+-}
+aggregate :: Aggregators a b -> Maybe C.AggregationStrategy -> Process (Tick a) b
+aggregate Aggregators{..} = \case
+  Nothing -> nothing
+  Just C.AggregationStrategyByBatch -> byBatch
 
-viaSum :: forall a. (Num a) => MetricAggregators (Metric a)
-viaSum = MetricAggregators{byBatch = byBatchVia (Proxy @(Sum a))}
+{- |
+Internal helper.
+Metric aggregators via the `Semigroup` instance for `Sum`.
+-}
+viaSum :: forall a. (Num a) => Aggregators (Metric a) [Metric a]
+viaSum =
+  Aggregators
+    { nothing = M.batchByTickList
+    , byBatch =
+        -- TODO: emit group sample counts as separate metric
+        byBatchVia (Proxy @(Metric (Sum a)))
+          ~> mapping (fmap (.representative))
+    }
 
-viaLast :: forall a. MetricAggregators (Metric a)
-viaLast = MetricAggregators{byBatch = byBatchVia (Proxy @(Last a))}
+{- |
+Internal helper.
+Metric aggregators via the `Semigroup` instance for `Last`.
+-}
+viaLast :: forall a. (GroupBy a) => Aggregators a [a]
+viaLast =
+  Aggregators
+    { nothing = M.batchByTickList
+    , byBatch =
+        -- TODO: emit group sample counts as separate metric
+        byBatchVia (Proxy @(Last a))
+          ~> mapping (fmap (.representative))
+    }
 
+{- |
+Internal helper.
+This function aggregates items via a `Semigroup` instance and grouped by the `GroupBy` instance.
+-}
 byBatchVia ::
   forall a b.
-  (Coercible a b, Semigroup b) =>
+  (Coercible a b, GroupBy b, Semigroup b) =>
   Proxy b ->
-  Process (Tick (Metric a)) [Metric a]
+  Process (Tick a) [Group a]
 byBatchVia (Proxy :: Proxy b) =
-  mapping (fmap MG.singleton . coerce)
-    ~> M.aggregateByTick @(AggregateMetrics b)
-    ~> mapping (coerce . MG.elems)
+  mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
+    ~> M.aggregateByTick @(GroupedBy b)
+    ~> mapping (coerce @[Group b] @[Group a] . DG.groups)
 
 --------------------------------------------------------------------------------
 -- HeapAllocated
@@ -340,7 +372,7 @@ processHeapAllocated :: Config -> Process (Tick (WithStartTime Event)) (DList OM
 processHeapAllocated config =
   runIf (C.processorEnabled (.metrics) (.heapAllocated) config) $
     M.liftTick M.processHeapAllocatedData
-      ~> aggregate viaSum (C.processorMetricAggregation (.heapAllocated) config)
+      ~> aggregate viaSum (C.processorAggregationStrategy (.metrics) (.heapAllocated) config)
       ~> mapping (fmap toNumberDataPoint)
       ~> asSum
         [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
@@ -356,7 +388,7 @@ processHeapSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metr
 processHeapSize config =
   runIf (C.processorEnabled (.metrics) (.heapSize) config) $
     M.liftTick M.processHeapSizeData
-      ~> aggregate viaLast (C.processorMetricAggregation (.heapSize) config)
+      ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.heapSize) config)
       ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.heapSize) [OM.unit .~ "By"]
@@ -369,7 +401,7 @@ processBlocksSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Me
 processBlocksSize config =
   runIf (C.processorEnabled (.metrics) (.blocksSize) config) $
     M.liftTick M.processBlocksSizeData
-      ~> aggregate viaLast (C.processorMetricAggregation (.blocksSize) config)
+      ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.blocksSize) config)
       ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.blocksSize) [OM.unit .~ "By"]
@@ -382,7 +414,7 @@ processHeapLive :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metr
 processHeapLive config =
   runIf (C.processorEnabled (.metrics) (.heapLive) config) $
     M.liftTick M.processHeapLiveData
-      ~> aggregate viaLast (C.processorMetricAggregation (.heapLive) config)
+      ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.heapLive) config)
       ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.heapLive) [OM.unit .~ "By"]
@@ -398,21 +430,21 @@ processMemReturn config =
       ~> fanout
         [ runIf (C.processorEnabled (.metrics) (.memCurrent) config) $
             M.liftTick asMemCurrent
-              ~> aggregate viaLast (C.processorMetricAggregation (.memCurrent) config)
+              ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.memCurrent) config)
               ~> mapping (fmap toNumberDataPoint)
               ~> asGauge
               ~> asMetricWith config (.memCurrent) [OM.unit .~ "{mblock}"]
               ~> mapping D.singleton
         , runIf (C.processorEnabled (.metrics) (.memNeeded) config) $
             M.liftTick asMemNeeded
-              ~> aggregate viaLast (C.processorMetricAggregation (.memNeeded) config)
+              ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.memNeeded) config)
               ~> mapping (fmap toNumberDataPoint)
               ~> asGauge
               ~> asMetricWith config (.memNeeded) [OM.unit .~ "{mblock}"]
               ~> mapping D.singleton
         , runIf (C.processorEnabled (.metrics) (.memReturned) config) $
             M.liftTick asMemReturned
-              ~> aggregate viaLast (C.processorMetricAggregation (.memReturned) config)
+              ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.memReturned) config)
               ~> mapping (fmap toNumberDataPoint)
               ~> asGauge
               ~> asMetricWith config (.memReturned) [OM.unit .~ "{mblock}"]
@@ -441,6 +473,20 @@ asMemReturned = mapping (fmap (.returned))
 --------------------------------------------------------------------------------
 -- HeapProfSample
 
+heapProfSampleDataAggregators :: Aggregators M.HeapProfSampleData [Metric Word64]
+heapProfSampleDataAggregators = Aggregators{..}
+ where
+  nothing :: Process (Tick M.HeapProfSampleData) [Metric Word64]
+  nothing =
+    M.batchByTickList
+      ~> mapping (concatMap M.heapProfSamples)
+  byBatch :: Process (Tick M.HeapProfSampleData) [Metric Word64]
+  byBatch =
+    -- TODO: emit group sample counts as separate metric
+    mapping (fmap (DG.singleton . Last))
+      ~> M.aggregateByTick @(GroupedBy (Last M.HeapProfSampleData))
+      ~> mapping (concatMap (M.heapProfSamples . getLast) . DG.elems)
+
 processHeapProfSample ::
   (MonadIO m) =>
   Config ->
@@ -450,7 +496,7 @@ processHeapProfSample ::
 processHeapProfSample config verbosity maybeHeapProfBreakdown =
   runIf (C.processorEnabled (.metrics) (.heapProfSample) config) $
     M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown)
-      ~> aggregate viaLast (C.processorMetricAggregation (.heapProfSample) config)
+      ~> aggregate heapProfSampleDataAggregators (C.processorAggregationStrategy (.metrics) (.heapProfSample) config)
       ~> mapping (fmap toNumberDataPoint)
       ~> asGauge
       ~> asMetricWith config (.heapProfSample) [OM.unit .~ "By"]
