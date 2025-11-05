@@ -9,7 +9,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   Processors (..),
   Metrics (..),
   Spans (..),
-  MetricAggregation (..),
+  AggregationStrategy (..),
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -113,19 +113,19 @@ instance ToJSON Spans where
 {- |
 The options for metric aggregation.
 -}
-data MetricAggregation
-  = MetricAggregationByBatch
+data AggregationStrategy
+  = AggregationStrategyByBatch
   deriving (Generic, Lift)
 
-instance FromJSON MetricAggregation where
-  parseJSON :: Value -> Parser MetricAggregation
-  parseJSON = genericParseJSON metricAggregationEncodingOptions
+instance FromJSON AggregationStrategy where
+  parseJSON :: Value -> Parser AggregationStrategy
+  parseJSON = genericParseJSON aggregationStrategyEncodingOptions
 
-instance ToJSON MetricAggregation where
-  toJSON :: MetricAggregation -> Value
-  toJSON = genericToJSON metricAggregationEncodingOptions
-  toEncoding :: MetricAggregation -> Encoding
-  toEncoding = genericToEncoding metricAggregationEncodingOptions
+instance ToJSON AggregationStrategy where
+  toJSON :: AggregationStrategy -> Value
+  toJSON = genericToJSON aggregationStrategyEncodingOptions
+  toEncoding :: AggregationStrategy -> Encoding
+  toEncoding = genericToEncoding aggregationStrategyEncodingOptions
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapAllocatedData`.
@@ -134,7 +134,7 @@ data HeapAllocatedMetric = HeapAllocatedMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -155,7 +155,7 @@ data HeapSizeMetric = HeapSizeMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -176,7 +176,7 @@ data BlocksSizeMetric = BlocksSizeMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -197,7 +197,7 @@ data HeapLiveMetric = HeapLiveMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -218,7 +218,7 @@ data MemCurrentMetric = MemCurrentMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -239,7 +239,7 @@ data MemNeededMetric = MemNeededMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -260,7 +260,7 @@ data MemReturnedMetric = MemReturnedMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -281,7 +281,7 @@ data HeapProfSampleMetric = HeapProfSampleMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -302,7 +302,7 @@ data CapabilityUsageMetric = CapabilityUsageMetric
   { description :: Maybe Text
   , enabled :: Bool
   , name :: Text
-  , aggregate :: Maybe MetricAggregation
+  , aggregate :: Maybe AggregationStrategy
   }
   deriving (Generic, Lift)
 
@@ -378,14 +378,14 @@ encodingOptions =
 
 {- |
 Internal helper.
-The encoding options that should be used by the `FromJSON` and `ToJSON` instances for `MetricAggregation`.
+The encoding options that should be used by the `FromJSON` and `ToJSON` instances for `AggregationStrategy`.
 -}
-metricAggregationEncodingOptions :: Options
-metricAggregationEncodingOptions =
+aggregationStrategyEncodingOptions :: Options
+aggregationStrategyEncodingOptions =
   encodingOptions
-    { constructorTagModifier = camelTo2 '_' . stripMetricAggregation
+    { constructorTagModifier = camelTo2 '_' . stripAggregationStrategy
     , tagSingleConstructors = True
     }
  where
-  stripMetricAggregation :: String -> String
-  stripMetricAggregation = drop (length ("MetricAggregation" :: String))
+  stripAggregationStrategy :: String -> String
+  stripAggregationStrategy = drop (length ("AggregationStrategy" :: String))

@@ -14,7 +14,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Processors (..),
   Metrics (..),
   Spans (..),
-  MetricAggregation (..),
+  AggregationStrategy (..),
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -29,7 +29,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   processorEnabled,
   processorDescription,
   processorName,
-  processorMetricAggregation,
+  processorAggregationStrategy,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -155,13 +155,14 @@ processorName group field =
 {- |
 Get the aggregation strategy corresponding to a metric processor.
 -}
-processorMetricAggregation ::
-  (Default b, HasField "aggregate" b (Maybe MetricAggregation)) =>
-  (Metrics -> Maybe b) ->
+processorAggregationStrategy ::
+  (Default b, HasField "aggregate" b (Maybe AggregationStrategy)) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
   Config ->
-  Maybe MetricAggregation
-processorMetricAggregation field =
-  (.aggregate) . fromMaybe def . getFirst . with (.processors) (with (.metrics) (First . field))
+  Maybe AggregationStrategy
+processorAggregationStrategy group field =
+  (.aggregate) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
 
 {- |
 Internal helper.
