@@ -22,8 +22,6 @@ module GHC.Eventlog.Live.Machine.Core (
   -- * Debug
   counterBy,
   counterByTick,
-  averageCounterBy,
-  averageCounterByTick,
 
   -- * Routers
   liftRouter,
@@ -60,7 +58,6 @@ import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
 import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityWarning)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
-import StrictList qualified as SL
 import Text.Printf (printf)
 
 -------------------------------------------------------------------------------
@@ -197,56 +194,6 @@ counterByTick verbosity label
     await >>= \case
       Item _ -> go (count + 1)
       Tick -> logDebug verbosity (T.pack (show count) <> " " <> label) >> go 0
-
-{- |
-This machine counts the number of inputs it received,
-using the given function, and logs the running average.
--}
-averageCounterBy ::
-  forall m a x.
-  (MonadIO m) =>
-  Verbosity ->
-  Text ->
-  Int ->
-  (a -> Word) ->
-  ProcessT m a x
-averageCounterBy verbosity label windowSize counter
-  | verbosityDebug >= verbosity = construct $ go SL.Nil
-  | otherwise = stopped
- where
-  go :: SL.List Word -> PlanT (Is a) x m ()
-  go counts =
-    await >>= \a -> do
-      let !count = counter a
-      let !window = SL.take windowSize (SL.Cons count counts)
-      let !averageCount = sum window `div` fromIntegral (length window)
-      logDebug verbosity (T.pack (show averageCount) <> " " <> label)
-      go window
-
-{- |
-This machine counts the number of inputs it received,
-and logs a running average on every tick.
--}
-averageCounterByTick ::
-  forall m a x.
-  (MonadIO m) =>
-  Verbosity ->
-  Text ->
-  Int ->
-  ProcessT m (Tick a) x
-averageCounterByTick verbosity label windowSize
-  | verbosityDebug >= verbosity = construct $ go (0, SL.Nil)
-  | otherwise = stopped
- where
-  go :: (Word, SL.List Word) -> PlanT (Is (Tick a)) x m ()
-  go (count, counts) =
-    await >>= \case
-      Item _ -> go (count + 1, counts)
-      Tick -> do
-        let !window = SL.take windowSize (SL.Cons count counts)
-        let !averageCount = sum window `div` fromIntegral (length window)
-        logDebug verbosity (T.pack (show averageCount) <> " " <> label)
-        go (0, window)
 
 -------------------------------------------------------------------------------
 -- Machine combinators

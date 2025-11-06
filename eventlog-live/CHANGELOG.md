@@ -1,9 +1,9 @@
 ### 0.4.0.0
 
-- Add `averageCounterBy` and `averageCounterByTick`.
-- Add `statsParser`.
-- Add `aggregateByTick`.
-- Add `GHC.Eventlog.Live.Machine.Group` module for aggregation.
+- Add parser for `--stats` flag (`statsParser`).
+- Add support for aggregation:
+  - Add `aggregateByTick`.
+  - Add `GHC.Eventlog.Live.Machine.Group` module for aggregation.
 - **BREAKING**: Change `processHeapProfSampleData` to yield all the metrics
   from a single garbage collection pass at once as `HeapProfSampleData`.
 - **BREAKING**: Replace `[Attr]` with opaque `Attrs` type.

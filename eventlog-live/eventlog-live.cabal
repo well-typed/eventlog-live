@@ -121,7 +121,6 @@ library
     , machines              >=0.7.4  && <0.8
     , network               >=3.2.7  && <3.3
     , optparse-applicative  >=0.17   && <0.20
-    , strict-list           >=0.1    && <0.2
     , text                  >=1.2    && <2.2
     , unliftio-core         >=0.2.1  && <0.3
     , unordered-containers  >=0.2.20 && <0.3
