@@ -13,11 +13,15 @@ description:
   >                              [--batch-interval NUM] [--eventlog-log-file FILE]
   >                              [-h Tcmdyrbi] [--service-name STRING]
   >                              [-v|--verbosity quiet|error|warning|info|debug|0-4]
-  >                              [--config FILE] --otelcol-host HOST
+  >                              [-s|--stats] [--config FILE] --otelcol-host HOST
   >                              [--otelcol-port PORT] [--otelcol-authority HOST]
   >                              [--otelcol-ssl] [--otelcol-certificate-store FILE]
   >                              [--otelcol-ssl-key-log FILE |
   >                                --otelcol-ssl-key-log-from-env]
+  >                              [--enable-my-eventlog-socket-unix SOCKET]
+  >                              [--enable-my-ghc-debug-socket |
+  >                                --enable-my-ghc-debug-socket-unix SOCKET |
+  >                                --enable-my-ghc-debug-socket-tcp ADDRESS]
   >                              [--print-defaults]
   >
   > Available options:
@@ -35,6 +39,7 @@ description:
   >   --service-name STRING    The name of the profiled service.
   >   -v,--verbosity quiet|error|warning|info|debug|0-4
   >                            The verbosity threshold for logging.
+  >   -s,--stats               Display runtime statistics.
   >   --config FILE            The path to a detailed configuration file.
   >   --print-defaults         Print default configuration options that can be used
   >                            in config.yaml
@@ -52,6 +57,19 @@ description:
   >                            Use file to log SSL keys.
   >   --otelcol-ssl-key-log-from-env
   >                            Use SSLKEYLOGFILE to log SSL keys.
+  >
+  > Debug Options
+  >   --enable-my-eventlog-socket-unix SOCKET
+  >                            Enable the eventlog socket for this program on the
+  >                            given Unix socket.
+  >   --enable-my-ghc-debug-socket
+  >                            Enable ghc-debug for this program.
+  >   --enable-my-ghc-debug-socket-unix SOCKET
+  >                            Enable ghc-debug for this program on the given Unix
+  >                            socket.
+  >   --enable-my-ghc-debug-socket-tcp ADDRESS
+  >                            Enable ghc-debug for this program on the given TCP
+  >                            socket specified as 'host:port'.
 
 license:            BSD-3-Clause
 license-file:       LICENSE
