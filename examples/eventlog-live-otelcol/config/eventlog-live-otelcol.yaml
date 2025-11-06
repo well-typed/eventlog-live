@@ -1,0 +1,56 @@
+processors:
+  metrics:
+    blocks_size:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_BlocksSize
+    capability_usage:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_CapabilityUsageDuration
+    heap_allocated:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_HeapAllocated
+    heap_live:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_HeapLive
+    heap_prof_sample:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_HeapProfSample
+    heap_size:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_HeapSize
+    mem_current:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_MemCurrent
+    mem_needed:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_MemNeeded
+    mem_returned:
+      aggregate: null
+      description: null
+      enabled: true
+      name: ghc_eventlog_MemReturned
+  spans:
+    capability_usage:
+      description: null
+      enabled: true
+      name: ghc_eventlog_CapabilityUsage
+    thread_state:
+      description: null
+      enabled: true
+      name: ghc_eventlog_ThreadState
