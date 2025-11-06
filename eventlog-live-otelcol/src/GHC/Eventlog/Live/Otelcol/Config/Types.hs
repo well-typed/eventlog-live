@@ -26,7 +26,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
 import Data.Aeson.Types (Encoding, FromJSON (..), Options (..), Parser, SumEncoding (..), ToJSON (..), Value (..), camelTo2, defaultOptions, genericParseJSON, genericToEncoding, genericToJSON)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Language.Haskell.TH.Lift (Lift)
+import Language.Haskell.TH.Lift.Compat (Lift)
 
 {- |
 The configuration for @eventlog-live-otelcol@.

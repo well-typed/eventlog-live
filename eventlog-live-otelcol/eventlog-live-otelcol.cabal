@@ -88,6 +88,14 @@ source-repository head
   location: https://github.com/well-typed/eventlog-live.git
   subdir:   eventlog-live-otelcol
 
+-- 2025-11-06:
+-- This flag should enable switching between template-haskell and
+-- template-haskell-lift, because the latter is not on nixpkgs.
+flag use-template-haskell-lift
+  description: Use template-haskell-lift in place of template-haskell
+  default:     False
+  manual:      False
+
 common language
   ghc-options:
     -Wall -Wcompat -Widentities -Wprepositive-qualified-module
@@ -140,6 +148,7 @@ library
     GHC.Eventlog.Live.Otelcol.Config.Default
     GHC.Eventlog.Live.Otelcol.Config.Default.Raw
     GHC.Eventlog.Live.Otelcol.Config.Types
+    Language.Haskell.TH.Lift.Compat
     Options.Applicative.Compat
     Paths_eventlog_live_otelcol
     System.Random.Compat
@@ -167,11 +176,17 @@ library
     , random                 >=1.2    && <1.4
     , strict-list            >=0.1    && <0.2
     , table-layout           >=1.0    && <1.1
-    , template-haskell-lift  >=0.1    && <0.2
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
     , yaml                   >=0.11   && <0.12
+
+  if flag(use-template-haskell-lift)
+    build-depends: template-haskell-lift >=0.1 && <0.2
+    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
+
+  else
+    build-depends: template-haskell >=2.2 && <3.0
 
 executable eventlog-live-otelcol
   import:         language

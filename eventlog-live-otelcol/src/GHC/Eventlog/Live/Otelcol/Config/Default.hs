@@ -27,7 +27,7 @@ import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigByteString)
 import GHC.Eventlog.Live.Otelcol.Config.Types (Config)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
-import Language.Haskell.TH.Lift (Exp, Lift (..), Q)
+import Language.Haskell.TH.Lift.Compat (Exp, Lift (..), Q)
 
 {- |
 Internal helper.
