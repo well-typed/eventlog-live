@@ -1,7 +1,27 @@
 ### 0.3.0.0
 
+- Support configuration files (via `--config`; see `--print-defaults`).
+- Support aggregation (via configuration files).
+- Support statistics with the `--stats` flag:
+
+  ```
+  ┌────────┬──────────┬──────────────┬───────────────┬───────────────────┐
+  │  Item  │  Action  │ Total (item) │ Rate (item/s) │ Peak (item/batch) │
+  ╞════════╪══════════╪══════════════╪═══════════════╪═══════════════════╡
+  │ Event  │ Received │        66036 │        6603/s │           22197/s │
+  ├────────┼──────────┼──────────────┼───────────────┼───────────────────┤
+  │ Metric │ Exported │          274 │          45/s │              59/s │
+  ├────────┼──────────┼──────────────┼───────────────┼───────────────────┤
+  │        │ Rejected │            0 │           0/s │               0/s │
+  ├────────┼──────────┼──────────────┼───────────────┼───────────────────┤
+  │ Span   │ Exported │        19372 │        3228/s │            5979/s │
+  ├────────┼──────────┼──────────────┼───────────────┼───────────────────┤
+  │        │ Rejected │            0 │           0/s │               0/s │
+  └────────┴──────────┴──────────────┴───────────────┴───────────────────┘
+  ```
+
 - **BREAKING**: Remove `--otelcol-no-metrics` and `--otelcol-no-traces` flags.
-- Support configuration file.
+  The behaviour of these flags is superceded by the configuration files.
 
 ### 0.2.0.0
 
