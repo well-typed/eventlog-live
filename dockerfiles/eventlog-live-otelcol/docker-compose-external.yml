@@ -22,8 +22,6 @@ services:
     depends_on:
       prometheus:
         condition: "service_started"
-      jaeger:
-        condition: "service_started"
       tempo:
         condition: "service_started"
     command:
@@ -44,20 +42,6 @@ services:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
       - "9090:9090" # Prometheus
-
-  jaeger:
-    # container_name: jaeger
-    image: jaegertracing/jaeger:latest
-    command:
-      - "--config=/etc/jaeger/config.yaml"
-    volumes:
-      - "./config/jaeger.yaml:/etc/jaeger/config.yaml"
-    environment:
-      - "OTEL_ENABLED=true"
-    ports:
-      - "14317:14317" # OTLP gRPC receiver
-      - "14318:14318" # OTLP HTTP receiver
-      - "16686:16686" # Jaeger
 
   tempo:
     # container_name: tempo
