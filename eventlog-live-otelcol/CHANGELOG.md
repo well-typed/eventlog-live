@@ -1,6 +1,6 @@
-### 0.3.0.0
+### 0.4.0.0
 
-- Support configuration files (via `--config`; see `--print-defaults`).
+- Fix space leak in `processHeapProfSampleData`.
 - Support aggregation (via configuration files).
 - Support statistics with the `--stats` flag:
 
@@ -20,6 +20,9 @@
   └────────┴──────────┴──────────────┴───────────────┴───────────────────┘
   ```
 
+### 0.3.0.0
+
+- Support configuration files (via `--config`; see `--print-defaults`).
 - **BREAKING**: Remove `--otelcol-no-metrics` and `--otelcol-no-traces` flags.
   The behaviour of these flags is superceded by the configuration files.
 
