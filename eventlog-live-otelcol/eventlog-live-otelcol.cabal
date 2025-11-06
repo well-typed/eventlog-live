@@ -135,7 +135,9 @@ library
     , data-default           >=0.2    && <0.9
     , dlist                  >=1.0    && <1.1
     , eventlog-live          >=0.4    && <0.5
+    , eventlog-socket        >=0.1.0  && <0.2
     , file-embed             >=0.0.16 && <0.1
+    , ghc-debug-stub         >=0.1    && <1.0
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
@@ -158,3 +160,4 @@ executable eventlog-live-otelcol
   main-is:        Main.hs
   hs-source-dirs: app
   build-depends:  eventlog-live-otelcol
+  ghc-options:    -threaded -rtsopts -finfo-table-map
