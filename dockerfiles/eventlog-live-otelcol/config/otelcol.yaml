@@ -11,10 +11,6 @@ receivers:
 exporters:
   debug:
     verbosity: detailed
-  otlp/jaeger:
-    endpoint: "jaeger:14317"
-    tls:
-      insecure: true
   otlp/tempo:
     endpoint: "tempo:24317"
     tls:
@@ -26,7 +22,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [debug, otlp/jaeger, otlp/tempo]
+      exporters: [debug, otlp/tempo]
     metrics:
       receivers: [otlp]
       exporters: [debug, prometheus]
