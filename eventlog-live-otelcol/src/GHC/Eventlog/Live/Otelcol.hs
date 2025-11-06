@@ -830,9 +830,10 @@ data MyDebugOptions = MyDebugOptions
 
 myDebugOptionsParser :: O.Parser MyDebugOptions
 myDebugOptionsParser =
-  MyDebugOptions
-    <$> O.optional myEventlogSocketParser
-    <*> O.optional myGhcDebugSocketParser
+  OC.parserOptionGroup "Debug Options" $
+    MyDebugOptions
+      <$> O.optional myEventlogSocketParser
+      <*> O.optional myGhcDebugSocketParser
 
 --------------------------------------------------------------------------------
 -- My Eventlog Socket
