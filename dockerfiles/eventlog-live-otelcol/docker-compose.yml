@@ -71,14 +71,6 @@ services:
     ports:
       - "9090:9090" # Prometheus
 
-  jaeger:
-    # container_name: jaeger
-    image: jaegertracing/jaeger
-    ports:
-      - "14317:4317" # OTLP gRPC receiver
-      - "14318:4318" # OTLP HTTP receiver
-      - "16686:16686" # Jaeger
-
   tempo:
     # container_name: tempo
     image: grafana/tempo:latest
