@@ -1,0 +1,56 @@
+processors:
+  metrics:
+    blocks_size:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__BlocksSize
+    capability_usage:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__CapabilityUsageDuration
+    heap_allocated:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__HeapAllocated
+    heap_live:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__HeapLive
+    heap_prof_sample:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__HeapProfSample
+    heap_size:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__HeapSize
+    mem_current:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__MemCurrent
+    mem_needed:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__MemNeeded
+    mem_returned:
+      aggregate: null
+      description: null
+      enabled: true
+      name: oddball__MemReturned
+  spans:
+    capability_usage:
+      description: null
+      enabled: true
+      name: oddball__CapabilityUsage
+    thread_state:
+      description: null
+      enabled: true
+      name: oddball__ThreadState
