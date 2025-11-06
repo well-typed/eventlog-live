@@ -11,7 +11,7 @@ module GHC.Eventlog.Live.Otelcol (
   main,
 ) where
 
-import Control.Applicative (asum)
+import Control.Applicative (Alternative (..), asum)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.Coerce (Coercible, coerce)
@@ -35,11 +35,12 @@ import Data.Text.Encoding qualified as TE
 import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
+import GHC.Debug.Stub qualified as GHC.Debug (withGhcDebug, withGhcDebugTCP, withGhcDebugUnix)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
-import GHC.Eventlog.Live.Logger (logDebug)
+import GHC.Eventlog.Live.Logger (logDebug, logError)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -58,6 +59,7 @@ import GHC.Eventlog.Live.Otelcol.Exporter (exportResourceMetrics, exportResource
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
+import GHC.Eventlog.Socket qualified as Eventlog.Socket
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField)
 import Lens.Family2 ((&), (.~))
@@ -76,8 +78,10 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
+import System.Exit (exitFailure)
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
+import Text.Read (readEither)
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -85,65 +89,75 @@ The main function for @eventlog-live-otelcol@.
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
-  -- Read the configuration file:
-  config <- flip (maybe (pure def)) maybeConfigFile $ \configFile -> do
-    logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
-    config <- C.readConfig configFile
-    logDebug verbosity $ "Configuration file:\n" <> (TE.decodeUtf8Lenient . Y.encode $ config)
-    pure config
-  let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
-  G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-    runWithEventlogSource
-      verbosity
-      eventlogSocket
-      eventlogSocketTimeout
-      eventlogSocketTimeoutExponent
-      batchInterval
-      Nothing
-      maybeEventlogLogFile
-      $ fanout
-        [ M.validateInput verbosity 10
-        , eventCountTick ~> mapping (D.singleton . EventCountStat)
-        , M.liftTick M.withStartTime
-            ~> fanout
-              [ processHeapEvents config verbosity maybeHeapProfBreakdown
-                  ~> mapping (fmap Left)
-              , processThreadEvents config verbosity
-              ]
-            ~> mapping (partitionEithers . D.toList)
-            ~> fanout
-              [ runIf (shouldExportMetrics config) $
-                  mapping fst
-                    ~> fanout
-                      [ asScopeMetrics
-                          [ OM.scope .~ eventlogLiveScope
-                          ]
-                          ~> asResourceMetric []
-                          ~> asExportMetricServiceRequest
-                          ~> exportResourceMetrics conn
-                          ~> mapping (D.singleton . ExportMetricsResultStat)
-                      ]
-              , runIf (shouldExportSpans config) $
-                  mapping snd
-                    ~> fanout
-                      [ asScopeSpans
-                          [ OT.scope .~ eventlogLiveScope
-                          ]
-                          ~> asResourceSpan
-                            [ OT.resource
-                                .~ messageWith
-                                  [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                                  ]
+
+  -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
+  let MyDebugOptions{..} = myDebugOptions
+  withMyEventlogSocket maybeMyEventlogSocket
+  withMyGhcDebug verbosity maybeMyGhcDebugSocket $ do
+    --
+    -- Read the configuration file.
+    config <- flip (maybe (pure def)) maybeConfigFile $ \configFile -> do
+      logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
+      config <- C.readConfig configFile
+      logDebug verbosity $ "Configuration file:\n" <> (TE.decodeUtf8Lenient . Y.encode $ config)
+      pure config
+
+    -- Create the service name attribute.
+    let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
+
+    -- Open a connection to the OpenTelemetry Collector.
+    let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
+    G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
+      runWithEventlogSource
+        verbosity
+        eventlogSocket
+        eventlogSocketTimeout
+        eventlogSocketTimeoutExponent
+        batchInterval
+        Nothing
+        maybeEventlogLogFile
+        $ fanout
+          [ M.validateInput verbosity 10
+          , eventCountTick ~> mapping (D.singleton . EventCountStat)
+          , M.liftTick M.withStartTime
+              ~> fanout
+                [ processHeapEvents config verbosity maybeHeapProfBreakdown
+                    ~> mapping (fmap Left)
+                , processThreadEvents config verbosity
+                ]
+              ~> mapping (partitionEithers . D.toList)
+              ~> fanout
+                [ runIf (shouldExportMetrics config) $
+                    mapping fst
+                      ~> fanout
+                        [ asScopeMetrics
+                            [ OM.scope .~ eventlogLiveScope
                             ]
-                          ~> asExportTraceServiceRequest
-                          ~> exportResourceSpans conn
-                          ~> mapping (D.singleton . ExportTraceResultStat)
-                      ]
-              ]
-        ]
-        ~> asParts
-        ~> processStats verbosity stats batchInterval 10
+                            ~> asResourceMetric []
+                            ~> asExportMetricServiceRequest
+                            ~> exportResourceMetrics conn
+                            ~> mapping (D.singleton . ExportMetricsResultStat)
+                        ]
+                , runIf (shouldExportSpans config) $
+                    mapping snd
+                      ~> fanout
+                        [ asScopeSpans
+                            [ OT.scope .~ eventlogLiveScope
+                            ]
+                            ~> asResourceSpan
+                              [ OT.resource
+                                  .~ messageWith
+                                    [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
+                                    ]
+                              ]
+                            ~> asExportTraceServiceRequest
+                            ~> exportResourceSpans conn
+                            ~> mapping (D.singleton . ExportTraceResultStat)
+                        ]
+                ]
+          ]
+          ~> asParts
+          ~> processStats verbosity stats batchInterval 10
 
 {- |
 Internal helper.
@@ -787,6 +801,7 @@ data Options = Options
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
+  , myDebugOptions :: MyDebugOptions
   }
 
 optionsParser :: O.Parser Options
@@ -803,6 +818,102 @@ optionsParser =
     <*> statsParser
     <*> O.optional configFileParser
     <*> openTelemetryCollectorOptionsParser
+    <*> myDebugOptionsParser
+
+--------------------------------------------------------------------------------
+-- Debug Options
+
+data MyDebugOptions = MyDebugOptions
+  { maybeMyEventlogSocket :: Maybe MyEventlogSocket
+  , maybeMyGhcDebugSocket :: Maybe MyGhcDebugSocket
+  }
+
+myDebugOptionsParser :: O.Parser MyDebugOptions
+myDebugOptionsParser =
+  MyDebugOptions
+    <$> O.optional myEventlogSocketParser
+    <*> O.optional myGhcDebugSocketParser
+
+--------------------------------------------------------------------------------
+-- My Eventlog Socket
+
+newtype MyEventlogSocket
+  = MyEventlogSocketUnix FilePath
+
+myEventlogSocketParser :: O.Parser MyEventlogSocket
+myEventlogSocketParser =
+  MyEventlogSocketUnix
+    <$> O.strOption
+      ( O.long "enable-my-eventlog-socket-unix"
+          <> O.metavar "SOCKET"
+          <> O.help "Enable the eventlog socket for this program on the given Unix socket."
+      )
+
+{- |
+Set @eventlog-socket@ as the eventlog writer.
+-}
+withMyEventlogSocket :: Maybe MyEventlogSocket -> IO ()
+withMyEventlogSocket maybeMyEventlogSocket =
+  for_ maybeMyEventlogSocket $ \(MyEventlogSocketUnix myEventlogSocket) ->
+    Eventlog.Socket.startWait myEventlogSocket
+
+--------------------------------------------------------------------------------
+-- My GHC Debug
+
+data MyGhcDebugSocket
+  = MyGhcDebugSocketDefault
+  | MyGhcDebugSocketUnix FilePath
+  | MyGhcDebugSocketTcp String
+  deriving (Show)
+
+myGhcDebugSocketParser :: O.Parser MyGhcDebugSocket
+myGhcDebugSocketParser =
+  myGhcDebugSocketDefaultParser
+    <|> myGhcDebugSocketUnixParser
+    <|> myGhcDebugSocketTcpParser
+ where
+  myGhcDebugSocketDefaultParser =
+    O.flag'
+      MyGhcDebugSocketDefault
+      ( O.long "enable-my-ghc-debug-socket"
+          <> O.help "Enable ghc-debug for this program."
+      )
+  myGhcDebugSocketUnixParser =
+    MyGhcDebugSocketUnix
+      <$> O.strOption
+        ( O.long "enable-my-ghc-debug-socket-unix"
+            <> O.metavar "SOCKET"
+            <> O.help "Enable ghc-debug for this program on the given Unix socket."
+        )
+  myGhcDebugSocketTcpParser =
+    MyGhcDebugSocketUnix
+      <$> O.strOption
+        ( O.long "enable-my-ghc-debug-socket-tcp"
+            <> O.metavar "ADDRESS"
+            <> O.help "Enable ghc-debug for this program on the given TCP socket specified as 'host:port'."
+        )
+
+{- |
+Internal helper.
+Start @ghc-debug@ on the given `MyGhcDebugSocket`.
+-}
+withMyGhcDebug :: Verbosity -> Maybe MyGhcDebugSocket -> IO a -> IO a
+withMyGhcDebug verbosity maybeMyGhcDebugSocket action =
+  case maybeMyGhcDebugSocket of
+    Nothing -> action
+    Just MyGhcDebugSocketDefault ->
+      GHC.Debug.withGhcDebug action
+    Just (MyGhcDebugSocketUnix myGhcDebugSocketUnix) ->
+      GHC.Debug.withGhcDebugUnix myGhcDebugSocketUnix action
+    Just (MyGhcDebugSocketTcp myGhcDebugSocketTcp) -> do
+      let (host, port) = break (== ':') myGhcDebugSocketTcp
+      case readEither port of
+        Left _parseError -> do
+          logError verbosity $
+            "Could not parse ghc-debug TCP address " <> T.pack myGhcDebugSocketTcp <> "."
+          exitFailure
+        Right portWord16 ->
+          GHC.Debug.withGhcDebugTCP host portWord16 action
 
 --------------------------------------------------------------------------------
 -- Configuration
