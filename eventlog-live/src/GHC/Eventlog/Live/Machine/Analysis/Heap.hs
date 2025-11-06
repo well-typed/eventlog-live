@@ -232,13 +232,13 @@ Internal helper.
 The type of an info table entry, as produced by the `E.InfoTableProv` event.
 -}
 data InfoTable = InfoTable
-  { infoTablePtr :: InfoTablePtr
-  , infoTableName :: Text
-  , infoTableClosureDesc :: Int
-  , infoTableTyDesc :: Text
-  , infoTableLabel :: Text
-  , infoTableModule :: Text
-  , infoTableSrcLoc :: Text
+  { infoTablePtr :: !InfoTablePtr
+  , infoTableName :: !Text
+  , infoTableClosureDesc :: !Int
+  , infoTableTyDesc :: !Text
+  , infoTableLabel :: !Text
+  , infoTableModule :: !Text
+  , infoTableSrcLoc :: !Text
   }
   deriving (Show)
 
@@ -247,10 +247,10 @@ Internal helper.
 The type of the state kept by `processHeapProfSampleData`.
 -}
 data HeapProfSampleState = HeapProfSampleState
-  { eitherShouldWarnOrHeapProfBreakdown :: Either Bool HeapProfBreakdown
-  , infoTableMap :: HashMap InfoTablePtr InfoTable
-  , heapProfSampleEraStack :: [Word64]
-  , maybeHeapProfSampleData :: Maybe HeapProfSampleData
+  { eitherShouldWarnOrHeapProfBreakdown :: !(Either Bool HeapProfBreakdown)
+  , infoTableMap :: !(HashMap InfoTablePtr InfoTable)
+  , heapProfSampleEraStack :: ![Word64]
+  , maybeHeapProfSampleData :: !(Maybe HeapProfSampleData)
   }
   deriving (Show)
 

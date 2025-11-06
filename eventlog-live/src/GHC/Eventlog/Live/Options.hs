@@ -25,7 +25,7 @@ import Options.Applicative qualified as O
 import Text.Read (readEither)
 
 --------------------------------------------------------------------------------
--- Eventlog Socket
+-- Eventlog Source
 
 {- |
 The type of eventlog sockets.
