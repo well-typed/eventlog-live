@@ -339,7 +339,7 @@ optionsParser :: O.Parser Options
 optionsParser =
   Options
     <$> eventlogSourceParser
-    <*> eventlogSocketTimeoutParser
+    <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
     <*> batchIntervalParser
     <*> O.optional eventlogLogFileParser
