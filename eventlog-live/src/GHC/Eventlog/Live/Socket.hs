@@ -46,7 +46,7 @@ runWithEventlogSource ::
   Verbosity ->
   -- | The eventlog socket handle.
   EventlogSource ->
-  -- | The initial timeout in microseconds for exponential backoff.
+  -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
   Double ->
@@ -59,8 +59,8 @@ runWithEventlogSource ::
   -- | The event processor.
   ProcessT m (Tick Event) Void ->
   m ()
-runWithEventlogSource verbosity eventlogSocket timeoutExponent initialTimeoutMcs batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
-  withEventlogSource verbosity timeoutExponent initialTimeoutMcs eventlogSocket $ \eventlogSource -> do
+runWithEventlogSource verbosity eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  withEventlogSource verbosity timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
     let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
     let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSource
     case maybeOutputFile of
@@ -84,7 +84,7 @@ withEventlogSource ::
   (MonadUnliftIO m) =>
   -- | The logging verbosity.
   Verbosity ->
-  -- | The initial timeout in microseconds for exponential backoff.
+  -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
   Double ->
@@ -92,7 +92,7 @@ withEventlogSource ::
   EventlogSource ->
   (Handle -> m ()) ->
   m ()
-withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource action = do
+withEventlogSource verbosity initialTimeoutS timeoutExponent eventlogSource action = do
   withRunInIO $ \runInIO ->
     case eventlogSource of
       EventlogStdin -> do
@@ -111,7 +111,7 @@ withEventlogSource verbosity initialTimeoutMcs timeoutExponent eventlogSource ac
           runInIO $ action handle
       EventlogSocketUnix eventlogSocketUnix -> do
         logInfo verbosity $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-        E.bracket (connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
+        E.bracket (connectRetry verbosity initialTimeoutS timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
           runInIO $ action handle
 
 {- |
@@ -120,21 +120,21 @@ Connect to an `EventlogSource` with retries and non-randomised exponential backo
 connectRetry ::
   -- | The logging verbosity.
   Verbosity ->
-  -- | The initial timeout in microseconds for exponential backoff.
+  -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
   Double ->
   -- | The eventlog socket.
   FilePath ->
   IO Handle
-connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix =
-  connectLoop initialTimeoutMcs
+connectRetry verbosity initialTimeoutS timeoutExponent eventlogSocketUnix =
+  connectLoop initialTimeoutS
  where
   waitFor :: Double -> IO ()
-  waitFor timeoutMcs = threadDelay $ round $ timeoutMcs * 1_000_000
+  waitFor timeoutS = threadDelay $ round $ timeoutS * 1e6
 
   connectLoop :: Double -> IO Handle
-  connectLoop timeoutMcs = do
+  connectLoop timeoutS = do
     let connect = do
           logDebug verbosity $ "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
           handle <- tryConnect eventlogSocketUnix
@@ -142,9 +142,9 @@ connectRetry verbosity initialTimeoutMcs timeoutExponent eventlogSocketUnix =
           pure handle
     let cleanup (e :: E.IOException) = do
           logDebug verbosity $ "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
-          logDebug verbosity $ "Waiting " <> prettyTimeoutMcs timeoutMcs <> " to retry..."
-          waitFor timeoutMcs
-          connectLoop (timeoutMcs * timeoutExponent)
+          logDebug verbosity $ "Waiting " <> prettyTimeoutMcs timeoutS <> " to retry..."
+          waitFor timeoutS
+          connectLoop (timeoutS * timeoutExponent)
     E.catch connect cleanup
 
 {- |
@@ -162,13 +162,15 @@ tryConnect eventlogSocketUnix =
 Interal helper. Pretty-printer for timeout values in microseconds.
 -}
 prettyTimeoutMcs :: Double -> Text
-prettyTimeoutMcs timeoutMcs
-  | timeoutMcs > 8.64e10 = T.pack $ printf "%.2f days" (timeoutMcs / 8.64e10)
-  | timeoutMcs > 3.6e9 = T.pack $ printf "%.2f hours" (timeoutMcs / 3.6e9)
-  | timeoutMcs > 6e7 = T.pack $ printf "%.2f minutes" (timeoutMcs / 6e7)
-  | timeoutMcs > 1e6 = T.pack $ printf "%.2f seconds" (timeoutMcs / 1e6)
-  | timeoutMcs > 1e3 = T.pack $ printf "%.2f milliseconds" (timeoutMcs / 1e3)
-  | otherwise = T.pack $ printf "%.2f microseconds" timeoutMcs
+prettyTimeoutMcs timeoutS
+  | timeoutS > 86400 = T.pack $ printf "%.2f days" (timeoutS / 86400)
+  | timeoutS > 3600 = T.pack $ printf "%.2f hours" (timeoutS / 3600)
+  | timeoutS > 60 = T.pack $ printf "%.2f minutes" (timeoutS / 60)
+  | timeoutS > 1 = T.pack $ printf "%.2f seconds" timeoutS
+  | timeoutS > 1e-3 = T.pack $ printf "%.2f milliseconds" (timeoutS / 1e-3)
+  | timeoutS > 1e-6 = T.pack $ printf "%.2f microseconds" (timeoutS / 1e-6)
+  | timeoutS > 1e-9 = T.pack $ printf "%.2f nanoseconds" (timeoutS / 1e-9)
+  | otherwise = T.pack $ printf "%.2f seconds" timeoutS
 
 {- |
 Internal helper. Pretty-printer for eventlog sockets.
