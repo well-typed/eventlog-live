@@ -35,12 +35,12 @@ import Data.Text.Encoding qualified as TE
 import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
-import GHC.Debug.Stub qualified as GHC.Debug (withGhcDebug, withGhcDebugTCP, withGhcDebugUnix)
+import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
-import GHC.Eventlog.Live.Logger (logDebug, logError)
+import GHC.Eventlog.Live.Logger (logDebug)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -78,10 +78,8 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
-import System.Exit (exitFailure)
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
-import Text.Read (readEither)
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -861,12 +859,6 @@ withMyEventlogSocket maybeMyEventlogSocket =
 --------------------------------------------------------------------------------
 -- My GHC Debug
 
-data MyGhcDebugSocket
-  = MyGhcDebugSocketDefault
-  | MyGhcDebugSocketUnix FilePath
-  | MyGhcDebugSocketTcp String
-  deriving (Show)
-
 myGhcDebugSocketParser :: O.Parser MyGhcDebugSocket
 myGhcDebugSocketParser =
   myGhcDebugSocketDefaultParser
@@ -893,28 +885,6 @@ myGhcDebugSocketParser =
             <> O.metavar "ADDRESS"
             <> O.help "Enable ghc-debug for this program on the given TCP socket specified as 'host:port'."
         )
-
-{- |
-Internal helper.
-Start @ghc-debug@ on the given `MyGhcDebugSocket`.
--}
-withMyGhcDebug :: Verbosity -> Maybe MyGhcDebugSocket -> IO a -> IO a
-withMyGhcDebug verbosity maybeMyGhcDebugSocket action =
-  case maybeMyGhcDebugSocket of
-    Nothing -> action
-    Just MyGhcDebugSocketDefault ->
-      GHC.Debug.withGhcDebug action
-    Just (MyGhcDebugSocketUnix myGhcDebugSocketUnix) ->
-      GHC.Debug.withGhcDebugUnix myGhcDebugSocketUnix action
-    Just (MyGhcDebugSocketTcp myGhcDebugSocketTcp) -> do
-      let (host, port) = break (== ':') myGhcDebugSocketTcp
-      case readEither port of
-        Left _parseError -> do
-          logError verbosity $
-            "Could not parse ghc-debug TCP address " <> T.pack myGhcDebugSocketTcp <> "."
-          exitFailure
-        Right portWord16 ->
-          GHC.Debug.withGhcDebugTCP host portWord16 action
 
 --------------------------------------------------------------------------------
 -- Configuration

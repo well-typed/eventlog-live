@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               eventlog-live-otelcol
-version:            0.4.0.0
+version:            0.5.0.0
 synopsis:           Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into
@@ -88,6 +88,15 @@ source-repository head
   location: https://github.com/well-typed/eventlog-live.git
   subdir:   eventlog-live-otelcol
 
+-- 2025-11-10:
+-- This flag should enable switching the use of ghc-debug-stub on
+-- and off, since it may cause issues with certain versions of GHC.
+-- See https://github.com/well-typed/eventlog-live/issues/88
+flag use-ghc-debug-stub
+  description: Use ghc-debug-stub
+  default:     False
+  manual:      True
+
 -- 2025-11-06:
 -- This flag should enable switching between template-haskell and
 -- template-haskell-lift, because the latter is not on nixpkgs.
@@ -145,6 +154,7 @@ library
     GHC.Eventlog.Live.Otelcol.Stats
 
   other-modules:
+    GHC.Debug.Stub.Compat
     GHC.Eventlog.Live.Otelcol.Config.Default
     GHC.Eventlog.Live.Otelcol.Config.Default.Raw
     GHC.Eventlog.Live.Otelcol.Config.Types
@@ -164,7 +174,6 @@ library
     , eventlog-live          >=0.4    && <0.5
     , eventlog-socket        >=0.1.0  && <0.2
     , file-embed             >=0.0.16 && <0.1
-    , ghc-debug-stub         >=0.1    && <1.0
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
@@ -180,6 +189,10 @@ library
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
     , yaml                   >=0.11   && <0.12
+
+  if flag(use-ghc-debug-stub)
+    build-depends: ghc-debug-stub >=0.1 && <1.0
+    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
 
   if flag(use-template-haskell-lift)
     build-depends: template-haskell-lift >=0.1 && <0.2
