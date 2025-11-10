@@ -111,7 +111,7 @@ main = do
         eventlogSocket
         eventlogSocketTimeoutS
         eventlogSocketTimeoutExponent
-        batchInterval
+        eventlogFlushIntervalS
         Nothing
         maybeEventlogLogFile
         $ fanout
@@ -160,7 +160,7 @@ main = do
                 ]
           ]
           ~> asParts
-          ~> processStats verbosity stats batchInterval 10
+          ~> processStats verbosity stats eventlogFlushIntervalS 10
 
 {- |
 Internal helper.
@@ -796,7 +796,7 @@ data Options = Options
   { eventlogSocket :: EventlogSource
   , eventlogSocketTimeoutS :: Double
   , eventlogSocketTimeoutExponent :: Double
-  , batchInterval :: Int
+  , eventlogFlushIntervalS :: Double
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
@@ -813,7 +813,7 @@ optionsParser =
     <$> eventlogSourceParser
     <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
-    <*> batchIntervalParser
+    <*> eventlogFlushIntervalSParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
