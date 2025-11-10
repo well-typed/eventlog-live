@@ -9,12 +9,12 @@ export MY_GHC_EVENTLOG_SOCKET="/tmp/eventlog_live_otelcol__ghc_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
-cabal build oddball -v0
+cabal build oddball -v0 -f+use-ghc-debug-stub
 ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
-cabal build eventlog-live-otelcol -v0
+cabal build eventlog-live-otelcol -v0 -f+use-ghc-debug-stub
 EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -v0 | head -n1)
 
 # Run oddball
@@ -28,8 +28,8 @@ echo "Start eventlog-live-otelcol (for oddball)"
 	--stats \
 	--config="$DIR/config/oddball.yaml" \
     --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
-	--my-eventlog-socket "$MY_GHC_EVENTLOG_SOCKET" \
-	--my-ghc-debug \
+	--enable-my-eventlog-socket-unix "$MY_GHC_EVENTLOG_SOCKET" \
+	--enable-my-ghc-debug-socket \
     -hT \
     --otelcol-host=localhost \
 	+RTS -l -hT --eventlog-flush-interval=1 -RTS &
