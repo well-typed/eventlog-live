@@ -1,47 +1,47 @@
 processors:
   metrics:
     blocks_size:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The current heap size, calculated by the allocated number of blocks.
       enabled: true
       name: ghc_eventlog_BlocksSize
     capability_usage:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The duration of each capability usage span.
       enabled: true
       name: ghc_eventlog_CapabilityUsageDuration
     heap_allocated:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The size of a newly allocated chunk of heap.
       enabled: true
       name: ghc_eventlog_HeapAllocated
     heap_live:
-      aggregate: by_batch
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The current heap size, calculated by the allocated number of megablocks.
       enabled: true
       name: ghc_eventlog_HeapLive
     heap_prof_sample:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: A heap profile sample.
       enabled: true
       name: ghc_eventlog_HeapProfSample
     heap_size:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The current heap size, calculated by the allocated number of megablocks.
       enabled: true
       name: ghc_eventlog_HeapSize
     mem_current:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The number of megablocks currently allocated.
       enabled: true
       name: ghc_eventlog_MemCurrent
     mem_needed:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The number of megablocks currently needed.
       enabled: true
       name: ghc_eventlog_MemNeeded
     mem_returned:
-      aggregate: by_batch # one of [null, by_batch]
+      aggregate: by_batch # one of [null, by_batch, {by_batches: N}]
       description: The number of megablocks currently being returned to the OS.
       enabled: true
       name: ghc_eventlog_MemReturned
