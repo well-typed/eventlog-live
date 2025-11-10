@@ -787,6 +787,7 @@ options =
   O.info
     ( optionsParser
         O.<**> defaultsPrinter
+        O.<**> debugDefaultsPrinter
         O.<**> OE.helperWith (O.long "help" <> O.help "Show this help text.")
         O.<**> OC.simpleVersioner (showVersion EventlogLive.version)
     )
@@ -878,6 +879,17 @@ defaultsPrinter =
     [ O.long "print-defaults"
     , O.help "Print default configuration options that can be used in config.yaml"
     ]
+
+debugDefaultsPrinter :: O.Parser (a -> a)
+debugDefaultsPrinter =
+  O.infoOption defaultConfigDebugString . mconcat $
+    [ O.long "print-defaults-debug"
+    , O.help "Print default configuration options using the parsed representation."
+    , O.internal
+    ]
+ where
+  defaultConfigDebugString =
+    T.unpack . TE.decodeUtf8Lenient . Y.encode $ (def :: Config)
 
 --------------------------------------------------------------------------------
 -- Service Name
