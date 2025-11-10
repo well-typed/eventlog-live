@@ -103,12 +103,14 @@ Parser for the heap profile breakdown.
 -}
 heapProfBreakdownParser :: O.Parser HeapProfBreakdown
 heapProfBreakdownParser =
-  O.option
-    (O.eitherReader heapProfBreakdownEitherReader)
-    ( O.short 'h'
-        <> O.metavar "Tcmdyrbi"
-        <> O.help "Heap profile breakdown."
-    )
+  O.option (O.eitherReader heapProfBreakdownEitherReader) . mconcat $
+    [ O.short 'h'
+    , O.metavar "Tcmdyrbi"
+    , O.helpDoc . Just . OP.vcat . fmap OP.pretty $
+        [ "Heap profile breakdown."
+        , "Should match the option passed to the application."
+        ]
+    ]
 
 --------------------------------------------------------------------------------
 -- Eventlog Log File
