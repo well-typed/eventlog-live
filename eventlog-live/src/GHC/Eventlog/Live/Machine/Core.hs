@@ -10,12 +10,17 @@ module GHC.Eventlog.Live.Machine.Core (
   -- * Ticks
   Tick (..),
   batchByTick,
+  batchByTicks,
   batchToTick,
-  batchListToTick,
+  batchToTicks,
   batchByTickList,
+  batchByTicksList,
+  batchListToTick,
+  batchListToTicks,
   dropTick,
   onlyTick,
   aggregateByTick,
+  aggregateByTicks,
   liftTick,
   liftBatch,
 
@@ -39,7 +44,7 @@ module GHC.Eventlog.Live.Machine.Core (
   validateOrder,
 ) where
 
-import Control.Monad (when)
+import Control.Monad (replicateM_, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList qualified as D
 import Data.Foldable (for_)
@@ -85,21 +90,48 @@ batchByTickList =
 {- |
 Generalised version of `batchByTickList`.
 -}
+batchByTicksList ::
+  -- | The number of ticks per batch.
+  Int ->
+  Process (Tick a) [a]
+batchByTicksList ticks =
+  mapping (fmap D.singleton)
+    ~> batchByTicks ticks
+    ~> mapping D.toList
+
+{- |
+Generalised version of `batchByTickList`.
+-}
 batchByTick ::
   forall a.
   (Monoid a) => Process (Tick a) a
-batchByTick = batchByTickWith mempty
+batchByTick = batchByTicks 1
+
+{- |
+Generalised version of `batchByTick`.
+-}
+batchByTicks ::
+  forall a.
+  (Monoid a) =>
+  -- | The number of ticks per batch.
+  Int ->
+  Process (Tick a) a
+batchByTicks ticks = batchByTicksWith ticks mempty
  where
-  batchByTickWith ::
+  batchByTicksWith ::
     forall m.
     (Monad m) =>
-    a -> MachineT m (Is (Tick a)) a
-  batchByTickWith acc = MachineT $ pure $ Await onNext Refl onStop
+    Int ->
+    a ->
+    MachineT m (Is (Tick a)) a
+  batchByTicksWith ticksRemaining acc = MachineT $ pure $ Await onNext Refl onStop
    where
     onNext :: Tick a -> MachineT m (Is (Tick a)) a
     onNext = \case
-      Item a -> batchByTickWith (a <> acc)
-      Tick -> MachineT $ pure $ Yield acc batchByTick
+      Item a -> batchByTicksWith ticksRemaining (a <> acc)
+      Tick
+        | ticksRemaining <= 1 -> MachineT $ pure $ Yield acc $ batchByTicksWith ticks mempty
+        | otherwise -> batchByTicksWith (ticksRemaining - 1) acc
     onStop :: MachineT m (Is (Tick a)) a
     onStop = MachineT $ pure $ Yield acc stopped
 
@@ -107,16 +139,41 @@ batchByTick = batchByTickWith mempty
 This machine streams a list of items into a series of items
 separated by ticks.
 -}
-batchListToTick :: Process [a] (Tick a)
+batchListToTick ::
+  Process [a] (Tick a)
 batchListToTick = batchToTick
+
+{- |
+This machine streams a list of items into a series of items
+separated by the given number of ticks.
+-}
+batchListToTicks ::
+  -- | The number of ticks per batch.
+  Int ->
+  Process [a] (Tick a)
+batchListToTicks = batchToTicks
 
 {- |
 Generalised version of `batchListToTick`.
 -}
-batchToTick :: (Foldable f) => Process (f a) (Tick a)
-batchToTick = repeatedly go
+batchToTick ::
+  (Foldable f) =>
+  Process (f a) (Tick a)
+batchToTick = batchToTicks 1
+
+{- |
+Generalised version of `batchToTicks`.
+
+__Warning:__ This machine yields all items between the penultimate and the last tick.
+-}
+batchToTicks ::
+  (Foldable f) =>
+  -- | The number of ticks per batch.
+  Int ->
+  Process (f a) (Tick a)
+batchToTicks ticks = repeatedly go
  where
-  go = await >>= \xs -> for_ xs (yield . Item) >> yield Tick
+  go = await >>= \xs -> replicateM_ (ticks - 1) (yield Tick) >> for_ xs (yield . Item) >> yield Tick
 
 {- |
 This machine drops all ticks.
@@ -149,6 +206,19 @@ aggregateByTick :: (Semigroup a) => Process (Tick a) a
 aggregateByTick =
   mapping (fmap Just)
     ~> batchByTick
+    ~> asParts
+
+{- |
+Generalised variant of `aggregateByTick`.
+-}
+aggregateByTicks ::
+  (Semigroup a) =>
+  -- | The number of ticks per batch.
+  Int ->
+  Process (Tick a) a
+aggregateByTicks ticks =
+  mapping (fmap Just)
+    ~> batchByTicks ticks
     ~> asParts
 
 -------------------------------------------------------------------------------
