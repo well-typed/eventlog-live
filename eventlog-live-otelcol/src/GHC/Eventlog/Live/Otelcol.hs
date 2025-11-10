@@ -109,7 +109,7 @@ main = do
       runWithEventlogSource
         verbosity
         eventlogSocket
-        eventlogSocketTimeout
+        eventlogSocketTimeoutS
         eventlogSocketTimeoutExponent
         batchInterval
         Nothing
@@ -794,7 +794,7 @@ options =
 
 data Options = Options
   { eventlogSocket :: EventlogSource
-  , eventlogSocketTimeout :: Double
+  , eventlogSocketTimeoutS :: Double
   , eventlogSocketTimeoutExponent :: Double
   , batchInterval :: Int
   , maybeEventlogLogFile :: Maybe FilePath
@@ -811,7 +811,7 @@ optionsParser :: O.Parser Options
 optionsParser =
   Options
     <$> eventlogSourceParser
-    <*> eventlogSocketTimeoutParser
+    <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
     <*> batchIntervalParser
     <*> O.optional eventlogLogFileParser
