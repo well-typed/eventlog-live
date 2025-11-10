@@ -115,6 +115,7 @@ The options for metric aggregation.
 -}
 data AggregationStrategy
   = AggregationStrategyByBatch
+  | AggregationStrategyByBatches {byBatches :: !Int}
   deriving (Generic, Lift)
 
 instance FromJSON AggregationStrategy where
