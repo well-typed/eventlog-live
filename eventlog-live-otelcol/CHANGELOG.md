@@ -1,3 +1,7 @@
+### 0.5.0.0
+
+- **BREAKING**: Put `ghc-debug-stub` support behind `use-ghc-debug-stub` feature flag.
+
 ### 0.4.0.0
 
 - Fix space leak in `processHeapProfSampleData`.
