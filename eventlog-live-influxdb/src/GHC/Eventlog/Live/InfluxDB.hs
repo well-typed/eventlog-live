@@ -76,7 +76,7 @@ main = do
     eventlogSource
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
-    batchInterval
+    eventlogFlushIntervalS
     Nothing -- chunk size (bytes)
     maybeEventlogLogFile
     toInfluxDB
@@ -328,7 +328,7 @@ data Options = Options
   { eventlogSource :: EventlogSource
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
-  , batchInterval :: Int
+  , eventlogFlushIntervalS :: Double
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , verbosity :: Verbosity
@@ -341,7 +341,7 @@ optionsParser =
     <$> eventlogSourceParser
     <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
-    <*> batchIntervalParser
+    <*> eventlogFlushIntervalSParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
     <*> verbosityParser
