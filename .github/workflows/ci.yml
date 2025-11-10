@@ -21,11 +21,11 @@ jobs:
   #############################################################################
   build:
     name: |
-      ${{ matrix.name
-       || format(
-            'Build on {0}{1}',
+      ${{ format(
+            'Build on {0}{1}{2}',
             startsWith(matrix.os, 'ubuntu-') && 'Linux' || startsWith(matrix.os, 'macOS-') && 'macOS',
-            matrix.ghc-version && format(' with GHC {0}', matrix.ghc-version)
+            matrix.ghc-version && format(' with GHC {0}', matrix.ghc-version),
+            matrix.cabal-flags && format(' with {0}', matrix.cabal-flags)
           )
        }}
     runs-on: ${{ matrix.os }}
@@ -53,20 +53,20 @@ jobs:
           protoc-version: ${{ steps.dev-dependencies.outputs.protoc }}
 
       - name: 🗄️ Generate Cabal plan
-        run: cabal build all --dry-run
+        run: cabal build all ${{ matrix.cabal-flags }} --dry-run
 
       - name: 💾 Restore Cabal dependencies
         uses: actions/cache/restore@v4
         id: cache-cabal
         env:
-          key: build-${{ runner.os }}-ghc-${{ steps.setup-haskell.outputs.ghc-version }}-cabal-${{ steps.setup-haskell.outputs.cabal-version }}
+          key: build-${{ runner.os }}-ghc-${{ steps.setup-haskell.outputs.ghc-version }}-cabal-${{ steps.setup-haskell.outputs.cabal-version }}-flags-${{ matrix.cabal-flags }}
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('dist-newstyle/cache/plan.json') }}
           restore-keys: ${{ env.key }}-
 
       - name: 🛠️ Build Cabal dependencies
-        run: cabal build all --only-dependencies
+        run: cabal build all ${{ matrix.cabal-flags }} --only-dependencies
 
       - name: 💾 Save Cabal dependencies
         uses: actions/cache/save@v4
@@ -76,7 +76,7 @@ jobs:
           key: ${{ steps.cache-cabal.outputs.cache-primary-key }}
 
       - name: 🏗️ Build
-        run: cabal build all
+        run: cabal build all ${{ matrix.cabal-flags }}
 
       - name: 🧪 Test fibber-dumper
         run: ./examples/fibber/fibber-dumper.sh
@@ -92,11 +92,17 @@ jobs:
           - "9.10.2"
           - "9.12.2"
         include:
-          - name: false
+          - cabal-flags: ""
           - os: "ubuntu-latest"
             ghc-version: "9.4.8"
           - os: "ubuntu-latest"
             ghc-version: "9.6.7"
+          - os: "ubuntu-latest"
+            ghc-version: "9.10.2"
+            cabal-flags: "-f+use-ghc-debug-stub"
+          - os: "ubuntu-latest"
+            ghc-version: "9.10.2"
+            cabal-flags: "-f+use-template-haskell-lift"
 
   #############################################################################
   # Build dockerfiles
