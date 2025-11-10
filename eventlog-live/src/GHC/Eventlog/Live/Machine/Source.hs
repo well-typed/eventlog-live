@@ -63,15 +63,18 @@ It yields a v`Tick` at each increment of the batch interval.
 -}
 sourceHandleBatch ::
   (MonadIO m) =>
-  -- | The batch interval in milliseconds.
-  Int ->
+  -- | The eventlog flush interval in seconds.
+  Double ->
   -- | The number of bytes to read.
   Int ->
   -- | The eventlog socket handle.
   Handle ->
   MachineT m k (Tick BS.ByteString)
-sourceHandleBatch batchIntervalMs chunkSizeBytes handle = construct start
+sourceHandleBatch eventlogFlushIntervalS chunkSizeBytes handle = construct start
  where
+  eventlogFlushIntervalMs :: Int
+  eventlogFlushIntervalMs = round (eventlogFlushIntervalS * 1_000)
+
   start = do
     startTimeMs <- liftIO getMonotonicTimeMilli
     batch startTimeMs
@@ -79,7 +82,7 @@ sourceHandleBatch batchIntervalMs chunkSizeBytes handle = construct start
    where
     getRemainingTimeMilli = do
       currentTimeMilli <- liftIO getMonotonicTimeMilli
-      pure $ (startTimeMs + batchIntervalMs) - currentTimeMilli
+      pure $ (startTimeMs + eventlogFlushIntervalMs) - currentTimeMilli
     waitForInput = do
       remainingTimeMilli <- getRemainingTimeMilli
       if remainingTimeMilli <= 0
