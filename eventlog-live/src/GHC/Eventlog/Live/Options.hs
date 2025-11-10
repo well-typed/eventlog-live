@@ -77,7 +77,7 @@ eventlogSocketTimeoutSParser =
   O.option
     O.auto
     ( O.long "eventlog-socket-timeout"
-        <> O.metavar "NUM"
+        <> O.metavar "SECONDS"
         <> O.help "Eventlog socket connection retry timeout in seconds."
         <> O.value 1
     )
@@ -90,7 +90,7 @@ eventlogSocketTimeoutExponentParser =
   O.option
     O.auto
     ( O.long "eventlog-socket-exponent"
-        <> O.metavar "NUM"
+        <> O.metavar "NUMBER"
         <> O.help "Eventlog socket connection retry timeout exponent."
         <> O.value 1
     )
@@ -136,7 +136,7 @@ eventlogFlushIntervalSParser :: O.Parser Double
 eventlogFlushIntervalSParser =
   O.option O.auto . mconcat $
     [ O.long "eventlog-flush-interval"
-    , O.metavar "NUM"
+    , O.metavar "SECONDS"
     , O.helpDoc . Just . OP.vcat . fmap OP.pretty $
         [ "Eventlog flush interval in seconds."
         , "Should match the option passed to the application."
