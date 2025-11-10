@@ -215,16 +215,16 @@ processStats ::
   (MonadIO m) =>
   Verbosity ->
   Bool ->
-  Int ->
+  Double ->
   Int ->
   ProcessT m Stat Void
-processStats verbosity stats batchIntervalMs windowSize
+processStats verbosity stats eventlogFlushIntervalS windowSize
   | stats =
       -- If --stats is ENABLED, maintain and display `Stats`.
       let go stats0 =
             await >>= \stat -> do
               let stats1 = updateStats windowSize stats0 stat
-              stats2 <- liftIO (displayStats verbosity batchIntervalMs stats1)
+              stats2 <- liftIO (displayStats verbosity eventlogFlushIntervalS stats1)
               go stats2
        in construct $ go def
   | otherwise =
@@ -277,8 +277,8 @@ This is intented to be the *only* function printing to the terminal.
 
 TODO: The stats printer should only overwrite the numbers.
 -}
-displayStats :: Verbosity -> Int -> Stats -> IO Stats
-displayStats verbosity intervalMs stats = do
+displayStats :: Verbosity -> Double -> Stats -> IO Stats
+displayStats verbosity eventlogFlushIntervalS stats = do
   -- Check if `displayedLines` is empty...
   case stats.displayedLines of
     First Nothing ->
@@ -293,13 +293,9 @@ displayStats verbosity intervalMs stats = do
   -- Compute the moving average count of items _per second_,
   -- by computing the adjusted average of counts over n batches.
   let rate :: Row -> Text
-      rate row =
-        let !r = (row.ratePerBatch * 1_000) `div` fromIntegral intervalMs
-         in showText r <> "/s"
+      rate row = showText $ realToFrac row.ratePerBatch / eventlogFlushIntervalS
   let peak :: Row -> Text
-      peak row =
-        let !r = row.peakRatePerBatch
-         in showText r <> "/s"
+      peak row = showText row.peakRatePerBatch
 
   let cSpec :: [TBL.ColSpec]
       cSpec = [TBL.defColSpec, TBL.defColSpec, TBL.numCol, TBL.numCol, TBL.numCol]
