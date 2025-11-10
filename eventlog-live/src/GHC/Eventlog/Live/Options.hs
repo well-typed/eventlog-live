@@ -7,7 +7,7 @@ Portability : portable
 module GHC.Eventlog.Live.Options (
   EventlogSource (..),
   eventlogSourceParser,
-  eventlogSocketTimeoutParser,
+  eventlogSocketTimeoutSParser,
   eventlogSocketTimeoutExponentParser,
   heapProfBreakdownParser,
   eventlogLogFileParser,
@@ -71,13 +71,13 @@ eventlogSourceParser =
 {- |
 Parser for the intial timeout for exponential backoff.
 -}
-eventlogSocketTimeoutParser :: O.Parser Double
-eventlogSocketTimeoutParser =
+eventlogSocketTimeoutSParser :: O.Parser Double
+eventlogSocketTimeoutSParser =
   O.option
     O.auto
     ( O.long "eventlog-socket-timeout"
         <> O.metavar "NUM"
-        <> O.help "Eventlog socket connection retry timeout in microseconds."
+        <> O.help "Eventlog socket connection retry timeout in seconds."
         <> O.value 1
     )
 
