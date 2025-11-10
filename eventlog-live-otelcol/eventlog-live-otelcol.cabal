@@ -8,10 +8,11 @@ description:
 
   > Usage: eventlog-live-otelcol (--eventlog-stdin | --eventlog-file FILE |
   >                                --eventlog-socket SOCKET)
-  >                              [--eventlog-socket-timeout NUM]
-  >                              [--eventlog-socket-exponent NUM]
-  >                              [--batch-interval NUM] [--eventlog-log-file FILE]
-  >                              [-h Tcmdyrbi] [--service-name STRING]
+  >                              [--eventlog-socket-timeout SECONDS]
+  >                              [--eventlog-socket-exponent NUMBER]
+  >                              [--eventlog-flush-interval SECONDS]
+  >                              [--eventlog-log-file FILE] [-h Tcmdyrbi]
+  >                              [--service-name STRING]
   >                              [-v|--verbosity quiet|error|warning|info|debug|0-4]
   >                              [-s|--stats] [--config FILE] --otelcol-host HOST
   >                              [--otelcol-port PORT] [--otelcol-authority HOST]
@@ -28,14 +29,16 @@ description:
   >   --eventlog-stdin         Read the eventlog from stdin.
   >   --eventlog-file FILE     Read the eventlog from a file.
   >   --eventlog-socket SOCKET Read the eventlog from a Unix socket.
-  >   --eventlog-socket-timeout NUM
-  >                            Eventlog socket connection retry timeout in
-  >                            microseconds.
-  >   --eventlog-socket-exponent NUM
+  >   --eventlog-socket-timeout SECONDS
+  >                            Eventlog socket connection retry timeout in seconds.
+  >   --eventlog-socket-exponent NUMBER
   >                            Eventlog socket connection retry timeout exponent.
-  >   --batch-interval NUM     Batch interval in milliseconds.
+  >   --eventlog-flush-interval SECONDS
+  >                            Eventlog flush interval in seconds.
+  >                            Should match the option passed to the application.
   >   --eventlog-log-file FILE Use file to log binary eventlog data.
   >   -h Tcmdyrbi              Heap profile breakdown.
+  >                            Should match the option passed to the application.
   >   --service-name STRING    The name of the profiled service.
   >   -v,--verbosity quiet|error|warning|info|debug|0-4
   >                            The verbosity threshold for logging.
