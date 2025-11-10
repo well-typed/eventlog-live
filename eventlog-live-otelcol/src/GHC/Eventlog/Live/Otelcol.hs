@@ -11,7 +11,7 @@ module GHC.Eventlog.Live.Otelcol (
   main,
 ) where
 
-import Control.Applicative (Alternative (..), asum)
+import Control.Applicative (asum)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.Coerce (Coercible, coerce)
@@ -35,7 +35,7 @@ import Data.Text.Encoding qualified as TE
 import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
 import Data.Yaml qualified as Y
-import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), withMyGhcDebug)
+import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), maybeMyGhcDebugSocketParser, withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
@@ -831,7 +831,7 @@ myDebugOptionsParser =
   OC.parserOptionGroup "Debug Options" $
     MyDebugOptions
       <$> O.optional myEventlogSocketParser
-      <*> O.optional myGhcDebugSocketParser
+      <*> maybeMyGhcDebugSocketParser
 
 --------------------------------------------------------------------------------
 -- My Eventlog Socket
@@ -855,36 +855,6 @@ withMyEventlogSocket :: Maybe MyEventlogSocket -> IO ()
 withMyEventlogSocket maybeMyEventlogSocket =
   for_ maybeMyEventlogSocket $ \(MyEventlogSocketUnix myEventlogSocket) ->
     Eventlog.Socket.startWait myEventlogSocket
-
---------------------------------------------------------------------------------
--- My GHC Debug
-
-myGhcDebugSocketParser :: O.Parser MyGhcDebugSocket
-myGhcDebugSocketParser =
-  myGhcDebugSocketDefaultParser
-    <|> myGhcDebugSocketUnixParser
-    <|> myGhcDebugSocketTcpParser
- where
-  myGhcDebugSocketDefaultParser =
-    O.flag'
-      MyGhcDebugSocketDefault
-      ( O.long "enable-my-ghc-debug-socket"
-          <> O.help "Enable ghc-debug for this program."
-      )
-  myGhcDebugSocketUnixParser =
-    MyGhcDebugSocketUnix
-      <$> O.strOption
-        ( O.long "enable-my-ghc-debug-socket-unix"
-            <> O.metavar "SOCKET"
-            <> O.help "Enable ghc-debug for this program on the given Unix socket."
-        )
-  myGhcDebugSocketTcpParser =
-    MyGhcDebugSocketUnix
-      <$> O.strOption
-        ( O.long "enable-my-ghc-debug-socket-tcp"
-            <> O.metavar "ADDRESS"
-            <> O.help "Enable ghc-debug for this program on the given TCP socket specified as 'host:port'."
-        )
 
 --------------------------------------------------------------------------------
 -- Configuration
