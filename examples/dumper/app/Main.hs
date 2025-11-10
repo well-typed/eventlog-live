@@ -28,7 +28,7 @@ import qualified Text.Regex.TDFA as RE
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchInterval Nothing Nothing $
+  runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent eventlogFlushIntervalS Nothing Nothing $
     sortByBatchTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
@@ -63,7 +63,7 @@ data Options = Options
   { eventlogSocket :: EventlogSource
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
-  , batchInterval :: Int
+  , eventlogFlushIntervalS :: Double
   , eventlogPattern :: Maybe ByteString
   }
 
@@ -73,7 +73,7 @@ optionsParser =
     <$> eventlogSourceParser
     <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
-    <*> batchIntervalParser
+    <*> eventlogFlushIntervalSParser
     <*> O.optional
       ( O.strOption
           ( O.short 'P'
