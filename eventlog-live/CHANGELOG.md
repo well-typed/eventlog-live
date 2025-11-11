@@ -1,3 +1,20 @@
+### 0.5.0.0
+
+- Overhaul documentation for `GHC.Eventlog.Live.Machine.Core`.
+- **BREAKING**: Drop `counterBy` and `counterByTick`.
+- **BREAKING**: Drop `batchListToTick`.
+- **BREAKING**: Drop `batchListToTicks`.
+- **BREAKING**: Drop `aggregateByTick`.
+- **BREAKING**: Drop `aggregateByTicks`.
+- **BREAKING**: Drop `liftBatch`.
+- **BREAKING**: Rename `sortByBatchTick` to `sortByTick`.
+- **BREAKING**: Change `batchByTick` and `batchByTicks` to preserve ticks.
+- **BREAKING**: Generalise `sortByBatch`, `sortByTick`, and `validateOrder` to work on arbitrary keys.
+- **BREAKING**: Rename `between` to `betweenFirst`.
+- **BREAKING**: Generalise `betweenFirst` and `delimit` to work on arbitrary items.
+- Add `betweenEach`.
+- **BREAKING**: Change `liftRouter` to ignore inputs after the child process stops.
+
 ### 0.4.0.0
 
 - Add parser for `--stats` flag (`statsParser`).
