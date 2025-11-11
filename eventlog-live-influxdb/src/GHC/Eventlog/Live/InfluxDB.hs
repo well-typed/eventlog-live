@@ -61,7 +61,7 @@ main = do
   Options{..} <- O.execParser optionsInfo
   let toInfluxDB =
         liftTick withStartTime
-          ~> sortByBatchTick (.value.evTime)
+          ~> sortByTick (.value.evTime)
           ~> liftTick
             ( fanout
                 [ processThreadEvents verbosity
@@ -69,6 +69,7 @@ main = do
                 ]
             )
           ~> batchByTick
+          ~> dropTick
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSource
