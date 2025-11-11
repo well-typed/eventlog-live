@@ -73,7 +73,7 @@ executable collatzer
     , containers              >=0.6     && <0.8
     , ekg                     >=0.4.1   && <0.5
     , ekg-core                >=0.1.2   && <0.2
-    , eventlog-live           >=0.1     && <0.5
+    , eventlog-live           >=0.4     && <0.6
     , ghc-events              >=0.20.0  && <0.21
     , machines                >=0.7.4   && <0.8
     , network                 >=3.2.7   && <3.3
