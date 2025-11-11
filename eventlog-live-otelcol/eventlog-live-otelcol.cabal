@@ -174,7 +174,7 @@ library
     , bytestring             >=0.11   && <0.13
     , data-default           >=0.2    && <0.9
     , dlist                  >=1.0    && <1.1
-    , eventlog-live          >=0.4    && <0.5
+    , eventlog-live          >=0.5    && <0.6
     , eventlog-socket        >=0.1.0  && <0.2
     , file-embed             >=0.0.16 && <0.1
     , ghc-events             >=0.20   && <0.21

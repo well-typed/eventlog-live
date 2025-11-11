@@ -202,7 +202,7 @@ processThreadEvents ::
   ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
 processThreadEvents config verbosity =
   runIf (shouldProcessThreadEvents config) $
-    M.sortByBatchTick (.value.evTime)
+    M.sortByTick (.value.evTime)
       ~> M.liftTick
         ( fanout
             [ M.validateOrder verbosity (.value.evTime)
@@ -246,6 +246,7 @@ processThreadEvents config verbosity =
                         ~> mapping (D.singleton . Right)
                     )
                     ~> M.batchByTick
+                    ~> M.dropTick
               ]
         , runIf (C.processorEnabled (.spans) (.threadState) config) $
             M.liftTick
@@ -255,6 +256,7 @@ processThreadEvents config verbosity =
                   ~> mapping (D.singleton . Right)
               )
               ~> M.batchByTick
+              ~> M.dropTick
         ]
  where
   repackCapabilityUsageSpanOrThreadStateSpan = \case
@@ -385,7 +387,8 @@ byBatchesVia ::
   Process (Tick a) [Group a]
 byBatchesVia ticks (Proxy :: Proxy b) =
   mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
-    ~> M.aggregateByTicks @(GroupedBy b) ticks
+    ~> M.batchByTicks @(GroupedBy b) ticks
+    ~> M.dropTick
     ~> mapping (coerce @[Group b] @[Group a] . DG.groups)
 
 --------------------------------------------------------------------------------
@@ -510,9 +513,8 @@ heapProfSampleDataAggregators =
     , byBatches = \ticks ->
         -- TODO: emit group sample counts as separate metric
         mapping (fmap (DG.singleton . Last))
-          ~> M.aggregateByTicks @(GroupedBy (Last M.HeapProfSampleData)) ticks
-          ~> mapping (concatMap (M.heapProfSamples . getLast) . DG.elems)
-          ~> M.batchListToTicks ticks
+          ~> M.batchByTicks @(GroupedBy (Last M.HeapProfSampleData)) ticks
+          ~> M.liftTick (mapping (concatMap (M.heapProfSamples . getLast) . DG.elems) ~> asParts)
     }
 
 processHeapProfSample ::
