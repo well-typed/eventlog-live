@@ -2,10 +2,9 @@
 
 - Overhaul documentation for `GHC.Eventlog.Live.Machine.Core`.
 - **BREAKING**: Drop `counterBy` and `counterByTick`.
-- **BREAKING**: Drop `batchListToTick`.
-- **BREAKING**: Drop `batchListToTicks`.
-- **BREAKING**: Drop `aggregateByTick`.
-- **BREAKING**: Drop `aggregateByTicks`.
+- **BREAKING**: Drop `batchListToTick` and `batchListToTicks`.
+- **BREAKING**: Drop `batchToTick` and `batchToTicks`.
+- **BREAKING**: Drop `aggregateByTick` and `aggregateByTicks`.
 - **BREAKING**: Drop `liftBatch`.
 - **BREAKING**: Rename `sortByBatchTick` to `sortByTick`.
 - **BREAKING**: Change `batchByTick` and `batchByTicks` to preserve ticks.

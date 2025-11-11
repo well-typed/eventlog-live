@@ -13,8 +13,6 @@ module GHC.Eventlog.Live.Machine.Core (
   batchByTicksList,
   batchByTick,
   batchByTicks,
-  batchToTick,
-  batchToTicks,
   dropTick,
   onlyTick,
   liftTick,
@@ -36,10 +34,10 @@ module GHC.Eventlog.Live.Machine.Core (
   validateOrder,
 ) where
 
-import Control.Monad (replicateM_, when)
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList qualified as D
-import Data.Foldable (Foldable (..), for_)
+import Data.Foldable (Foldable (..))
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
@@ -201,55 +199,6 @@ batchByTicks ticks = batchByTicksWith ticks mempty
       maybe id yieldItem maybeAcc $
         -- Stop.
         stopped
-
-{- |
-Streams batches of items as items and ticks.
-
-The process @`batchToTick`@ consumes a stream of batches of items
-and produces a stream of items and with a tick separating each batch.
-
-__Warning:__ The process @`batchByTickList` `~>` `batchToTick`@ is not the identity!
-
-==== __Examples__
-
->>> run $ batchToTick <~ source [[1,2],[3,4]]
-[Item 1,Item 2,Tick,Item 3,Item 4,Tick]
-
->>> run $ batchToTick <~ batchByTickList <~ source [Item 1,Item 2,Tick,Tick]
-[Item 1,Item 2,Tick]
--}
-batchToTick ::
-  (Foldable f) =>
-  Process (f a) (Tick a)
-batchToTick = batchToTicks 1
-
-{- |
-Streams batches of items as items and ticks.
-
-The process @`batchToTicks` n@ consumes a stream of lists of items
-and produces a stream of items and with @n@ ticks separating each list.
-
-To mirror the batches created by @`batchByTicks` n@, each list is
-opened with @n - 1@ ticks and closed by the @n@'th tick.
-
-__Warning:__ The process @`batchByTicks` n `~>` `batchToTicks` n@ is not the identity!
-
-==== __Examples__
-
->>> run $ batchToTicks 2 <~ source [[1,2],[3,4]]
-[Tick,Item 1,Item 2,Tick,Tick,Item 3,Item 4,Tick]
-
->>> run $ batchToTicks 2 <~ batchByTicksList 2 <~ source [Item 1,Item 2,Tick,Tick]
-[Tick,Item 1,Item 2,Tick]
--}
-batchToTicks ::
-  (Foldable f) =>
-  -- | The number of ticks per batch.
-  Int ->
-  Process (f a) (Tick a)
-batchToTicks ticks = repeatedly go
- where
-  go = await >>= \xs -> replicateM_ (ticks - 1) (yield Tick) >> for_ xs (yield . Item) >> yield Tick
 
 {- |
 This machine drops all ticks.
