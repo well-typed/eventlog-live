@@ -9,7 +9,7 @@ import Data.Machine.Runner (runT_)
 import Data.Machine.Type (MachineT, repeatedly)
 import Data.Void (Void)
 import Data.Word (Word64)
-import GHC.Eventlog.Live.Machine.Core (sortByBatchTick)
+import GHC.Eventlog.Live.Machine.Core (sortByTick)
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
 import GHC.Eventlog.Live.Verbosity (verbosityInfo)
@@ -29,7 +29,7 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
   runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent eventlogFlushIntervalS Nothing Nothing $
-    sortByBatchTick E.evTime
+    sortByTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
 -- | Filter entries and print them to standard output.
