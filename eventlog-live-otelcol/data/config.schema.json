@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "title": "Config",
+  "description": "Configuration for the eventlog-live-otelcol program",
+  "type": "object",
+  "properties": {
+    "processors": {
+      "type": "object",
+      "properties": {
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "blocks_size": { "$ref": "#/definitions/metric" },
+            "capability_usage": { "$ref": "#/definitions/metric" },
+            "heap_allocated": { "$ref": "#/definitions/metric" },
+            "heap_live": { "$ref": "#/definitions/metric" },
+            "heap_prof_sample": { "$ref": "#/definitions/metric" },
+            "heap_size": { "$ref": "#/definitions/metric" },
+            "mem_current": { "$ref": "#/definitions/metric" },
+            "mem_needed": { "$ref": "#/definitions/metric" },
+            "mem_returned": { "$ref": "#/definitions/metric" }
+          }
+        },
+        "spans": {
+          "type": "object",
+          "properties": {
+            "capability_usage": { "$ref": "#/definitions/span" },
+            "thread_state": { "$ref": "#/definitions/span" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "aggregation_strategy": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": ["by_batch"]
+        }
+      ]
+    },
+    "processor": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "name": { "type": "string" }
+      }
+    },
+    "metric": {
+      "allOf": [
+        { "$ref": "#/definitions/processor" },
+        {
+          "properties": {
+            "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
+          }
+        }
+      ]
+    },
+    "span": {
+      "allOf": [{ "$ref": "#/definitions/processor" }]
+    }
+  }
+}
