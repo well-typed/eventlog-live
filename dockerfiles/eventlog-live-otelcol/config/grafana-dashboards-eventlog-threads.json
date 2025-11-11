@@ -69,13 +69,13 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "12.2.0",
+      "pluginVersion": "12.2.1",
       "targets": [
         {
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{category!=\"Idle\"}[$__interval]))",
+          "expr": "sum by(category) (avg_over_time({\"${metric_name_prefix}CapabilityUsageDuration_nanoseconds_total\", category!=\"Idle\"}[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -287,13 +287,13 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.0",
+      "pluginVersion": "12.2.1",
       "targets": [
         {
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total[$__interval]))",
+          "expr": "sum by(category) (avg_over_time({\"${metric_name_prefix}CapabilityUsageDuration_nanoseconds_total\"}[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -346,7 +346,26 @@
   "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": "ghc_eventlog_",
+          "value": "ghc_eventlog_"
+        },
+        "description": "The prefix used for the metric names in visualisations on this dashboard.",
+        "label": "Metric Name Prefix",
+        "name": "metric_name_prefix",
+        "options": [
+          {
+            "selected": true,
+            "text": "ghc_eventlog_",
+            "value": "ghc_eventlog_"
+          }
+        ],
+        "query": "ghc_eventlog_",
+        "type": "textbox"
+      }
+    ]
   },
   "time": {
     "from": "now-5m",
