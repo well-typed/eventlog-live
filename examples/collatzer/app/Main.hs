@@ -30,7 +30,7 @@ import qualified System.Remote.Monitoring
 
 import GHC.Eventlog.Counters (Counters (..), ThreadState (..), count, newCounters)
 import GHC.Eventlog.Counters.EKG (registerCounters)
-import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, sortByBatchTick)
+import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, sortByTick)
 import GHC.Eventlog.Live.Machine.Decoder (decodeEventBatch)
 import GHC.Eventlog.Live.Machine.Sink (fileSinkBatch)
 import GHC.Eventlog.Live.Machine.Source (defaultChunkSizeBytes, sourceHandleBatch)
@@ -57,7 +57,7 @@ main = displayConsoleRegions $ do
   let events :: ProcessT IO (Tick BS.ByteString) Event
       events =
         decodeEventBatch
-          ~> sortByBatchTick evTime
+          ~> sortByTick evTime
           ~> dropTick
 
   counters <- atomically newCounters
