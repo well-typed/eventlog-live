@@ -19,10 +19,11 @@ import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Either (partitionEithers)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
+import Data.Kind (Type)
 import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, echo, mapping, repeatedly, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -61,7 +62,8 @@ import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
-import GHC.Records (HasField)
+import GHC.Records (HasField (..))
+import GHC.TypeLits (Symbol)
 import Lens.Family2 ((&), (.~))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
@@ -114,53 +116,50 @@ main = do
         eventlogFlushIntervalS
         Nothing
         maybeEventlogLogFile
-        $ fanout
-          [ M.validateInput verbosity 10
-          , eventCountTick ~> mapping (D.singleton . EventCountStat)
-          , M.liftTick M.withStartTime
-              ~> fanout
-                [ processHeapEvents config verbosity maybeHeapProfBreakdown
-                    ~> mapping (fmap Left)
-                , processThreadEvents config verbosity
+        $ M.fanoutTick
+          [ -- Log a warning if no input has been received after 10 ticks.
+            M.validateInput verbosity 10
+          , -- Count the number of input events between each tick.
+            eventCountTick
+              ~> mapping (fmap (D.singleton . EventCountStat))
+          , -- Process the input events.
+            M.liftTick M.withStartTime
+              ~> M.fanoutTick
+                [ -- Process the heap events.
+                  processHeapEvents verbosity maybeHeapProfBreakdown config
+                    ~> mapping (fmap (fmap Left))
+                , -- Process the thread events.
+                  processThreadEvents verbosity config
                 ]
-              ~> mapping (partitionEithers . D.toList)
-              ~> fanout
-                [ runIf (shouldExportMetrics config) $
+              ~> mapping (fmap (partitionEithers . D.toList))
+              ~> M.fanoutTick
+                [ -- Export metrics.
+                  runIf (shouldExportMetrics config) . M.liftTick $
                     mapping fst
-                      ~> fanout
-                        [ asScopeMetrics
-                            [ OM.scope .~ eventlogLiveScope
-                            ]
-                            ~> asResourceMetric
-                              [ OT.resource
-                                  .~ messageWith
-                                    [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                                    ]
-                              ]
-                            ~> asExportMetricServiceRequest
-                            ~> exportResourceMetrics conn
-                            ~> mapping (D.singleton . ExportMetricsResultStat)
-                        ]
-                , runIf (shouldExportSpans config) $
+                      ~> asScopeMetrics
+                        [OM.scope .~ eventlogLiveScope]
+                      ~> asResourceMetric
+                        [OM.resource .~ messageWith [OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
+                      ~> asExportMetricServiceRequest
+                      ~> exportResourceMetrics conn
+                      ~> mapping (D.singleton . ExportMetricsResultStat)
+                , -- Export spans.
+                  runIf (shouldExportSpans config) . M.liftTick $
                     mapping snd
-                      ~> fanout
-                        [ asScopeSpans
-                            [ OT.scope .~ eventlogLiveScope
-                            ]
-                            ~> asResourceSpan
-                              [ OT.resource
-                                  .~ messageWith
-                                    [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
-                                    ]
-                              ]
-                            ~> asExportTraceServiceRequest
-                            ~> exportResourceSpans conn
-                            ~> mapping (D.singleton . ExportTraceResultStat)
-                        ]
+                      ~> asScopeSpans
+                        [OM.scope .~ eventlogLiveScope]
+                      ~> asResourceSpan
+                        [OT.resource .~ messageWith [OT.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
+                      ~> asExportTraceServiceRequest
+                      ~> exportResourceSpans conn
+                      ~> mapping (D.singleton . ExportTraceResultStat)
                 ]
           ]
-          ~> asParts
-          ~> processStats verbosity stats eventlogFlushIntervalS 10
+          -- Process the statistics
+          ~> M.liftTick (asParts ~> processStats verbosity stats eventlogFlushIntervalS 10)
+          -- Validate the consistency of the tick
+          ~> M.validateTicks verbosity
+          ~> M.dropTick
 
 {- |
 Internal helper.
@@ -197,10 +196,10 @@ data OneOf a b c = A !a | B !b | C !c
 
 processThreadEvents ::
   (MonadIO m) =>
-  Config ->
   Verbosity ->
-  ProcessT m (Tick (WithStartTime Event)) (DList (Either OM.Metric OT.Span))
-processThreadEvents config verbosity =
+  Config ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either OM.Metric OT.Span)))
+processThreadEvents verbosity config =
   runIf (shouldProcessThreadEvents config) $
     M.sortByTick (.value.evTime)
       ~> M.liftTick
@@ -227,18 +226,22 @@ processThreadEvents config verbosity =
             ( mapping leftToMaybe
                 ~> asParts
             )
-            ~> fanout
-              [ runIf (C.processorEnabled (.metrics) (.capabilityUsage) config) $
-                  M.liftTick M.processCapabilityUsageMetrics
-                    ~> aggregate viaSum (C.processorAggregationStrategy (.metrics) (.capabilityUsage) config)
-                    ~> M.batchByTickList
-                    ~> mapping (fmap toNumberDataPoint)
-                    ~> asSum
-                      [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
-                      , OM.isMonotonic .~ True
-                      ]
-                    ~> asMetricWith config (.capabilityUsage) [OM.unit .~ "ns"]
-                    ~> mapping (D.singleton . Left)
+            ~> M.fanoutTick
+              [ runMetricProcessor
+                  MetricProcessor
+                    { metricProcessorProxy = Proxy @"capabilityUsage"
+                    , dataProcessor = M.processCapabilityUsageMetrics
+                    , aggregators = viaSum
+                    , postProcessor = echo
+                    , unit = "ns"
+                    , asMetric'Data =
+                        asSum
+                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+                          , OM.isMonotonic .~ True
+                          ]
+                    }
+                  config
+                  ~> mapping (fmap (fmap Left))
               , runIf (C.processorEnabled (.spans) (.capabilityUsage) config) $
                   M.liftTick
                     ( M.dropStartTime
@@ -246,7 +249,6 @@ processThreadEvents config verbosity =
                         ~> mapping (D.singleton . Right)
                     )
                     ~> M.batchByTick
-                    ~> M.dropTick
               ]
         , runIf (C.processorEnabled (.spans) (.threadState) config) $
             M.liftTick
@@ -256,7 +258,6 @@ processThreadEvents config verbosity =
                   ~> mapping (D.singleton . Right)
               )
               ~> M.batchByTick
-              ~> M.dropTick
         ]
  where
   repackCapabilityUsageSpanOrThreadStateSpan = \case
@@ -312,33 +313,33 @@ shouldComputeThreadStateSpan config =
 
 processHeapEvents ::
   (MonadIO m) =>
-  Config ->
   Verbosity ->
   Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapEvents config verbosity maybeHeapProfBreakdown =
-  fanout
+  Config ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processHeapEvents verbosity maybeHeapProfBreakdown config =
+  M.fanoutTick
     [ processHeapAllocated config
     , processBlocksSize config
     , processHeapSize config
     , processHeapLive config
     , processMemReturn config
-    , processHeapProfSample config verbosity maybeHeapProfBreakdown
+    , processHeapProfSample verbosity maybeHeapProfBreakdown config
     ]
 
 --------------------------------------------------------------------------------
 -- Metric Aggregation
 
 data Aggregators a b = Aggregators
-  { nothing :: Process (Tick a) b
-  , byBatches :: Int -> Process (Tick a) b
+  { nothing :: Process (Tick a) (Tick b)
+  , byBatches :: Int -> Process (Tick a) (Tick b)
   }
 
 {- |
 Internal helper.
 Aggregate items based on the provided aggregators and aggregation strategy.
 -}
-aggregate :: Aggregators a b -> Maybe C.AggregationStrategy -> Process (Tick a) b
+aggregate :: Aggregators a b -> Maybe C.AggregationStrategy -> Process (Tick a) (Tick b)
 aggregate Aggregators{..} = \case
   Nothing -> nothing
   Just C.AggregationStrategyByBatch -> byBatches 1
@@ -348,140 +349,148 @@ aggregate Aggregators{..} = \case
 Internal helper.
 Metric aggregators via the `Semigroup` instance for `Sum`.
 -}
-viaSum :: forall a. (Num a) => Aggregators (Metric a) (Tick (Metric a))
+viaSum :: forall a. (Num a) => Aggregators (Metric a) (Metric a)
 viaSum =
   Aggregators
     { nothing = echo
     , byBatches = \ticks ->
-        -- TODO: emit group sample counts as separate metric
-        byBatchesVia ticks (Proxy @(Metric (Sum a)))
-          ~> mapping (fmap (.representative))
-          ~> M.batchToTicks ticks
+        -- TODO: Yield group sample counts as separate metric.
+        batchByTicksVia ticks (Proxy @(Metric (Sum a)))
+          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
     }
 
 {- |
 Internal helper.
 Metric aggregators via the `Semigroup` instance for `Last`.
 -}
-viaLast :: forall a. (GroupBy a) => Aggregators a (Tick a)
+viaLast :: forall a. (GroupBy a) => Aggregators a a
 viaLast =
   Aggregators
     { nothing = echo
     , byBatches = \ticks ->
-        -- TODO: emit group sample counts as separate metric
-        byBatchesVia ticks (Proxy @(Last a))
-          ~> mapping (fmap (.representative))
-          ~> M.batchToTicks ticks
+        -- TODO: Yield group sample counts as separate metric.
+        batchByTicksVia ticks (Proxy @(Last a))
+          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
     }
 
 {- |
 Internal helper.
 This function aggregates items via a `Semigroup` instance and grouped by the `GroupBy` instance.
 -}
-byBatchesVia ::
+batchByTicksVia ::
   forall a b.
   (Coercible a b, GroupBy b, Semigroup b) =>
   -- | The number of ticks per batch.
   Int ->
   Proxy b ->
-  Process (Tick a) [Group a]
-byBatchesVia ticks (Proxy :: Proxy b) =
+  Process (Tick a) (Tick [Group a])
+batchByTicksVia ticks (Proxy :: Proxy b) =
   mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
     ~> M.batchByTicks @(GroupedBy b) ticks
-    ~> M.dropTick
-    ~> mapping (coerce @[Group b] @[Group a] . DG.groups)
+    ~> M.liftTick (mapping (coerce @[Group b] @[Group a] . DG.groups))
 
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocated :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapAllocated config =
-  runIf (C.processorEnabled (.metrics) (.heapAllocated) config) $
-    M.liftTick M.processHeapAllocatedData
-      ~> aggregate viaSum (C.processorAggregationStrategy (.metrics) (.heapAllocated) config)
-      ~> M.batchByTickList
-      ~> mapping (fmap toNumberDataPoint)
-      ~> asSum
-        [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
-        , OM.isMonotonic .~ True
-        ]
-      ~> asMetricWith config (.heapAllocated) [OM.unit .~ "By"]
-      ~> mapping D.singleton
+processHeapAllocated :: Config -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processHeapAllocated =
+  runMetricProcessor
+    MetricProcessor
+      { metricProcessorProxy = Proxy @"heapAllocated"
+      , dataProcessor = M.processHeapAllocatedData
+      , aggregators = viaSum
+      , postProcessor = echo
+      , unit = "By"
+      , asMetric'Data =
+          asSum
+            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+            , OM.isMonotonic .~ True
+            ]
+      }
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapSize config =
-  runIf (C.processorEnabled (.metrics) (.heapSize) config) $
-    M.liftTick M.processHeapSizeData
-      ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.heapSize) config)
-      ~> M.batchByTickList
-      ~> mapping (fmap toNumberDataPoint)
-      ~> asGauge
-      ~> asMetricWith config (.heapSize) [OM.unit .~ "By"]
-      ~> mapping D.singleton
+processHeapSize :: Config -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processHeapSize =
+  runMetricProcessor
+    MetricProcessor
+      { metricProcessorProxy = Proxy @"heapSize"
+      , dataProcessor = M.processHeapSizeData
+      , aggregators = viaLast
+      , postProcessor = echo
+      , unit = "By"
+      , asMetric'Data = asGauge
+      }
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSize :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processBlocksSize config =
-  runIf (C.processorEnabled (.metrics) (.blocksSize) config) $
-    M.liftTick M.processBlocksSizeData
-      ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.blocksSize) config)
-      ~> M.batchByTickList
-      ~> mapping (fmap toNumberDataPoint)
-      ~> asGauge
-      ~> asMetricWith config (.blocksSize) [OM.unit .~ "By"]
-      ~> mapping D.singleton
+processBlocksSize :: Config -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processBlocksSize =
+  runMetricProcessor
+    MetricProcessor
+      { metricProcessorProxy = Proxy @"blocksSize"
+      , dataProcessor = M.processBlocksSizeData
+      , aggregators = viaLast
+      , postProcessor = echo
+      , unit = "By"
+      , asMetric'Data = asGauge
+      }
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLive :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapLive config =
-  runIf (C.processorEnabled (.metrics) (.heapLive) config) $
-    M.liftTick M.processHeapLiveData
-      ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.heapLive) config)
-      ~> M.batchByTickList
-      ~> mapping (fmap toNumberDataPoint)
-      ~> asGauge
-      ~> asMetricWith config (.heapLive) [OM.unit .~ "By"]
-      ~> mapping D.singleton
+processHeapLive :: Config -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processHeapLive =
+  runMetricProcessor
+    MetricProcessor
+      { metricProcessorProxy = Proxy @"heapLive"
+      , dataProcessor = M.processHeapLiveData
+      , aggregators = viaLast
+      , postProcessor = echo
+      , unit = "By"
+      , asMetric'Data = asGauge
+      }
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-processMemReturn :: Config -> Process (Tick (WithStartTime Event)) (DList OM.Metric)
+processMemReturn :: Config -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
 processMemReturn config =
   runIf (shouldComputeMemReturn config) $
     M.liftTick M.processMemReturnData
-      ~> fanout
-        [ runIf (C.processorEnabled (.metrics) (.memCurrent) config) $
-            M.liftTick asMemCurrent
-              ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.memCurrent) config)
-              ~> M.batchByTickList
-              ~> mapping (fmap toNumberDataPoint)
-              ~> asGauge
-              ~> asMetricWith config (.memCurrent) [OM.unit .~ "{mblock}"]
-              ~> mapping D.singleton
-        , runIf (C.processorEnabled (.metrics) (.memNeeded) config) $
-            M.liftTick asMemNeeded
-              ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.memNeeded) config)
-              ~> M.batchByTickList
-              ~> mapping (fmap toNumberDataPoint)
-              ~> asGauge
-              ~> asMetricWith config (.memNeeded) [OM.unit .~ "{mblock}"]
-              ~> mapping D.singleton
-        , runIf (C.processorEnabled (.metrics) (.memReturned) config) $
-            M.liftTick asMemReturned
-              ~> aggregate viaLast (C.processorAggregationStrategy (.metrics) (.memReturned) config)
-              ~> M.batchByTickList
-              ~> mapping (fmap toNumberDataPoint)
-              ~> asGauge
-              ~> asMetricWith config (.memReturned) [OM.unit .~ "{mblock}"]
-              ~> mapping D.singleton
+      ~> M.fanoutTick
+        [ runMetricProcessor
+            MetricProcessor
+              { metricProcessorProxy = Proxy @"memCurrent"
+              , dataProcessor = mapping (fmap (.current))
+              , aggregators = viaLast
+              , postProcessor = echo
+              , unit = "{mblock}"
+              , asMetric'Data = asGauge
+              }
+            config
+        , runMetricProcessor
+            MetricProcessor
+              { metricProcessorProxy = Proxy @"memNeeded"
+              , dataProcessor = mapping (fmap (.needed))
+              , aggregators = viaLast
+              , postProcessor = echo
+              , unit = "{mblock}"
+              , asMetric'Data = asGauge
+              }
+            config
+        , runMetricProcessor
+            MetricProcessor
+              { metricProcessorProxy = Proxy @"memReturned"
+              , dataProcessor = mapping (fmap (.returned))
+              , aggregators = viaLast
+              , postProcessor = echo
+              , unit = "{mblock}"
+              , asMetric'Data = asGauge
+              }
+            config
         ]
 
 {- |
@@ -494,44 +503,76 @@ shouldComputeMemReturn config =
     || C.processorEnabled (.metrics) (.memNeeded) config
     || C.processorEnabled (.metrics) (.memReturned) config
 
-asMemCurrent :: Process (Metric MemReturnData) (Metric Word32)
-asMemCurrent = mapping (fmap (.current))
-
-asMemNeeded :: Process (Metric MemReturnData) (Metric Word32)
-asMemNeeded = mapping (fmap (.needed))
-
-asMemReturned :: Process (Metric MemReturnData) (Metric Word32)
-asMemReturned = mapping (fmap (.returned))
-
 --------------------------------------------------------------------------------
 -- HeapProfSample
 
-heapProfSampleDataAggregators :: Aggregators M.HeapProfSampleData (Tick (Metric Word64))
-heapProfSampleDataAggregators =
-  Aggregators
-    { nothing = M.liftTick (repeatedly $ await >>= traverse_ yield . M.heapProfSamples)
-    , byBatches = \ticks ->
-        -- TODO: emit group sample counts as separate metric
-        mapping (fmap (DG.singleton . Last))
-          ~> M.batchByTicks @(GroupedBy (Last M.HeapProfSampleData)) ticks
-          ~> M.liftTick (mapping (concatMap (M.heapProfSamples . getLast) . DG.elems) ~> asParts)
-    }
-
 processHeapProfSample ::
   (MonadIO m) =>
-  Config ->
   Verbosity ->
   Maybe HeapProfBreakdown ->
-  ProcessT m (Tick (WithStartTime Event)) (DList OM.Metric)
-processHeapProfSample config verbosity maybeHeapProfBreakdown =
-  runIf (C.processorEnabled (.metrics) (.heapProfSample) config) $
-    M.liftTick (M.processHeapProfSampleData verbosity maybeHeapProfBreakdown)
-      ~> aggregate heapProfSampleDataAggregators (C.processorAggregationStrategy (.metrics) (.heapProfSample) config)
-      ~> M.batchByTickList
-      ~> mapping (fmap toNumberDataPoint)
-      ~> asGauge
-      ~> asMetricWith config (.heapProfSample) [OM.unit .~ "By"]
-      ~> mapping D.singleton
+  Config ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processHeapProfSample verbosity maybeHeapProfBreakdown =
+  runMetricProcessor
+    MetricProcessor
+      { metricProcessorProxy = Proxy @"heapProfSample"
+      , dataProcessor = M.processHeapProfSampleData verbosity maybeHeapProfBreakdown
+      , aggregators = viaLast
+      , postProcessor = mapping M.heapProfSamples ~> asParts
+      , unit = "By"
+      , asMetric'Data = asGauge
+      }
+
+--------------------------------------------------------------------------------
+-- Generic Metric Processor
+
+type MetricProcessor :: Symbol -> Type -> (Type -> Type) -> Type -> Type -> Type -> Type -> Type
+data MetricProcessor metricProcessor metricProcessorConfig m a b c d
+  = ( Monad m
+    , HasField metricProcessor C.Metrics (Maybe metricProcessorConfig)
+    , C.IsMetricProcessorConfig metricProcessorConfig
+    , IsNumberDataPoint'Value d
+    ) =>
+  MetricProcessor
+  { metricProcessorProxy :: !(Proxy metricProcessor)
+  -- ^ The metric's field name in `C.Metrics`.
+  , dataProcessor :: !(ProcessT m a b)
+  -- ^ The metric's data processor
+  , aggregators :: !(Aggregators b c)
+  -- ^ The metric's aggregator
+  , postProcessor :: !(Process c (Metric d))
+  -- ^ The metric's post processor
+  , unit :: !Text
+  -- ^ The metric's unit (in UCUM format).
+  , asMetric'Data :: !(Process [OM.NumberDataPoint] OM.Metric'Data)
+  -- ^ A process to wrap data points as `OM.Metric'Data`.
+  }
+
+{- |
+Internal helper.
+Run a `MetricProcessor`.
+-}
+runMetricProcessor ::
+  forall metricProcessor metricProcessorConfig m a b c d.
+  MetricProcessor metricProcessor metricProcessorConfig m a b c d ->
+  Config ->
+  ProcessT m (Tick a) (Tick (DList OM.Metric))
+runMetricProcessor MetricProcessor{..} config =
+  let metricProcessorConfig :: C.Metrics -> Maybe metricProcessorConfig
+      metricProcessorConfig = getField @metricProcessor
+   in runIf (C.processorEnabled (.metrics) metricProcessorConfig config) $
+        M.liftTick dataProcessor
+          ~> aggregate aggregators (C.processorAggregationStrategy (.metrics) metricProcessorConfig config)
+          ~> M.liftTick postProcessor
+          ~> mapping (fmap (D.singleton . toNumberDataPoint))
+          ~> M.batchByTick -- <-- EXPORT INTERVAL GOES HERE
+          ~> M.liftTick
+            ( mapping D.toList
+                ~> asMetric'Data
+                ~> asMetricWith config metricProcessorConfig [OM.unit .~ unit]
+                ~> mapping D.singleton
+            )
+{-# INLINE runMetricProcessor #-}
 
 --------------------------------------------------------------------------------
 -- Machines

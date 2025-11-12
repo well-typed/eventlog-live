@@ -19,7 +19,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Default (Default (..))
 import Data.Foldable (for_)
 import Data.Int (Int64)
-import Data.Machine (ProcessT, await, construct, mapping, repeatedly, (~>))
+import Data.Machine (ProcessT, await, construct, repeatedly, yield)
 import Data.Monoid (First (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -40,13 +40,20 @@ import Text.Layout.Table qualified as TBL
 {- |
 This type represents a count of input events.
 -}
-newtype EventCount = EventCount {value :: Int64}
+newtype EventCount
+  = EventCount {value :: Int64}
+  deriving (Show)
 
 {- |
 Count the number of events seen between each tick.
 -}
-eventCountTick :: (Monad m) => ProcessT m (Tick a) EventCount
-eventCountTick = M.batchByTickList ~> mapping (EventCount . fromIntegral . length)
+eventCountTick :: (Monad m) => ProcessT m (Tick a) (Tick EventCount)
+eventCountTick = construct $ go 0
+ where
+  go acc =
+    await >>= \case
+      M.Tick -> yield (M.Item $ EventCount acc) >> yield M.Tick >> go 0
+      M.Item{} -> go (acc + 1)
 
 {- |
 This type represents the various stats produced by the pipeline.
@@ -55,6 +62,7 @@ data Stat
   = EventCountStat !EventCount
   | ExportMetricsResultStat !ExportMetricsResult
   | ExportTraceResultStat !ExportTraceResult
+  deriving (Show)
 
 {- |
 Internal helper.
@@ -248,24 +256,24 @@ Log a statistic.
 logStat :: (MonadIO m) => Verbosity -> Stat -> m ()
 logStat verbosity = \case
   EventCountStat eventCount ->
-    logDebug verbosity $ "received " <> showText eventCount.value <> " events"
+    logDebug verbosity $ "Received " <> showText eventCount.value <> " events."
   ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
-    logDebug verbosity $ "exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics"
+    logDebug verbosity $ "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
     -- Log rejected events.
     when (exportMetricsResult.rejectedDataPoints > 0) $
       logError verbosity $
-        "rejected " <> showText exportMetricsResult.rejectedDataPoints <> " metrics"
+        "Rejected " <> showText exportMetricsResult.rejectedDataPoints <> " metrics."
     -- Log exception.
     for_ exportMetricsResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
   ExportTraceResultStat exportTraceResult -> do
     -- Log exported events.
-    logDebug verbosity $ "exported " <> showText exportTraceResult.exportedSpans <> " metrics"
+    logDebug verbosity $ "Exported " <> showText exportTraceResult.exportedSpans <> " metrics."
     -- Log rejected events.
     when (exportTraceResult.rejectedSpans > 0) $
       logError verbosity $
-        "rejected " <> showText exportTraceResult.rejectedSpans <> " metrics"
+        "Rejected " <> showText exportTraceResult.rejectedSpans <> " metrics."
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
