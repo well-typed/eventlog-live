@@ -14,11 +14,10 @@ module GHC.Eventlog.Live.Machine.Source (
 import Control.Exception (catch, throwIO)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString qualified as BS
-import Data.Function (fix)
-import Data.Machine (MachineT (..), construct, yield)
+import Data.Machine (MachineT (..), PlanT, construct, yield)
 import Data.Word (Word64)
 import GHC.Clock (getMonotonicTimeNSec)
-import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Machine.Core (Tick (..), TickInfo (..))
 import System.IO (Handle, hWaitForInput)
 import System.IO.Error (isEOFError)
 
@@ -31,6 +30,7 @@ When an input is available, it yields an v`Item`.
 When the timeout is reached, it yields a v`Tick`.
 -}
 sourceHandleWait ::
+  forall m k.
   (MonadIO m) =>
   -- | The wait timeout in milliseconds.
   Int ->
@@ -40,16 +40,19 @@ sourceHandleWait ::
   Handle ->
   MachineT m k (Tick BS.ByteString)
 sourceHandleWait timeoutMilli chunkSizeBytes handle =
-  construct $ fix $ \loop -> do
+  construct $ go 0
+ where
+  go :: Word -> PlanT k (Tick BS.ByteString) m ()
+  go tick = do
     ready <- liftIO $ hWaitForInput' handle timeoutMilli
     case ready of
       Ready -> do
         bs <- liftIO $ BS.hGetSome handle chunkSizeBytes
         yield (Item bs)
-        loop
+        go tick
       NotReady -> do
-        yield Tick
-        loop
+        yield TickWithInfo{tickInfo = TickInfo{tick}}
+        go (tick + 1)
       EOF ->
         pure ()
 
@@ -70,15 +73,16 @@ sourceHandleBatch ::
   -- | The eventlog socket handle.
   Handle ->
   MachineT m k (Tick BS.ByteString)
-sourceHandleBatch eventlogFlushIntervalS chunkSizeBytes handle = construct start
+sourceHandleBatch eventlogFlushIntervalS chunkSizeBytes handle =
+  construct $ start 0
  where
   eventlogFlushIntervalMs :: Int
   eventlogFlushIntervalMs = round (eventlogFlushIntervalS * 1_000)
 
-  start = do
+  start tick = do
     startTimeMs <- liftIO getMonotonicTimeMilli
-    batch startTimeMs
-  batch startTimeMs = waitForInput
+    batch tick startTimeMs
+  batch tick startTimeMs = waitForInput
    where
     getRemainingTimeMilli = do
       currentTimeMilli <- liftIO getMonotonicTimeMilli
@@ -87,8 +91,8 @@ sourceHandleBatch eventlogFlushIntervalS chunkSizeBytes handle = construct start
       remainingTimeMilli <- getRemainingTimeMilli
       if remainingTimeMilli <= 0
         then do
-          yield Tick
-          start
+          yield TickWithInfo{tickInfo = TickInfo{tick}}
+          start (tick + 1)
         else do
           ready <- liftIO (hWaitForInput' handle remainingTimeMilli)
           case ready of
