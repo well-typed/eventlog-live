@@ -61,8 +61,27 @@ import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError, verbosityWarning)
 import Text.Printf (printf)
 
 {- $setup
->>> import Data.Machine ((<~), auto, echo, fold, taking, run, runT_, scan, source)
+>>> :set -XFlexibleContexts
+>>> :set -XImplicitParams
+>>> :set -XImportQualifiedPost
+>>> :set -XLambdaCase
+>>> :set -XRankNTypes
+>>> :set -XTypeApplications
+>>> import Data.Functor.Identity (Identity)
+>>> import Data.Machine qualified as M
+>>> import Data.Machine hiding (run, runT_)
+>>> import Data.Machine.Fanout (fanout)
 >>> import Data.Semigroup (Sum (..))
+
+>>> :{
+run :: (HasTickInfo => MachineT Identity k b) -> [b]
+run = let ?tickInfo = TickInfo { tick = 0 } in M.run
+:}
+
+>>> :{
+runT_ :: Monad m => (HasTickInfo => MachineT m k b) -> m ()
+runT_ = let ?tickInfo = TickInfo { tick = 0 } in M.runT_
+:}
 -}
 
 -------------------------------------------------------------------------------
@@ -92,6 +111,18 @@ but with the caveat that v`Tick` does not represent failure.
 data Tick a
   = Item !a
   | (HasTickInfo) => Tick
+
+{- |
+__Warning:__
+This instance loses ticks and should only be used with `fanout` to combine
+streams which pass on ticks.
+-}
+instance (Semigroup a) => Semigroup (Tick a) where
+  (<>) :: Tick a -> Tick a -> Tick a
+  t@Tick <> Tick = t
+  i@Item{} <> Tick = i
+  Tick <> i@Item{} = i
+  Item a <> Item a' = Item (a <> a')
 
 deriving instance (Eq a) => Eq (Tick a)
 deriving instance Functor Tick
