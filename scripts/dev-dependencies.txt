@@ -1,5 +1,6 @@
 actionlint=1.7.7
 cabal=3.12.1.0
+cabal-docspec=0.0.0.20240703
 cabal-fmt=0.1.12
 fourmolu=0.16.2.0
 ghc=9.8.4
