@@ -190,6 +190,29 @@ jobs:
           - "eventlog-live-otelcol"
 
   #############################################################################
+  # Test with cabal-docspec
+  #############################################################################
+
+  test-cabal-docspec:
+    name: "Test with cabal-docspec"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Setup cabal-docspec
+        uses: ./.github/actions/setup-cabal-docspec
+
+      - name: 🧪 Test with cabal-docspec
+        run: ./scripts/test-cabal-docspec.sh
+
+  #############################################################################
   # Lint with actionlint
   #############################################################################
 
