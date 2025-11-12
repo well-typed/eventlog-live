@@ -26,6 +26,13 @@ module GHC.Eventlog.Live.Otelcol.Config (
   CapabilityUsageMetric (..),
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
+
+  -- * Configuration types
+  IsProcessorConfig,
+  IsMetricProcessorConfig,
+  IsSpanProcessorConfig,
+
+  -- * Accessors
   processorEnabled,
   processorDescription,
   processorName,
@@ -34,6 +41,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Default (Default (..))
+import Data.Kind (Constraint, Type)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Any (..), First (..))
 import Data.Text (Text)
@@ -111,6 +119,37 @@ instance Default CapabilityUsageSpan where
 instance Default ThreadStateSpan where
   def :: ThreadStateSpan
   def = $(getDefault @'["processors", "spans", "threadState"] defaultConfig)
+
+-------------------------------------------------------------------------------
+-- Configuration types
+-------------------------------------------------------------------------------
+
+{- |
+The structural type of processor configurations.
+-}
+type IsProcessorConfig :: Type -> Constraint
+type IsProcessorConfig config =
+  ( Default config
+  , HasField "description" config (Maybe Text)
+  , HasField "enabled" config Bool
+  , HasField "name" config Text
+  )
+
+{- |
+The structural type of metric processor configurations.
+-}
+type IsMetricProcessorConfig :: Type -> Constraint
+type IsMetricProcessorConfig config =
+  ( IsProcessorConfig config
+  , HasField "aggregate" config (Maybe AggregationStrategy)
+  )
+
+{- |
+The structural type of span processor configurations.
+-}
+type IsSpanProcessorConfig :: Type -> Constraint
+type IsSpanProcessorConfig config =
+  (IsProcessorConfig config)
 
 -------------------------------------------------------------------------------
 -- Accessors
