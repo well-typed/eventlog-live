@@ -13,6 +13,9 @@
 - **BREAKING**: Generalise `betweenFirst` and `delimit` to work on arbitrary items.
 - Add `betweenEach`.
 - **BREAKING**: Change `liftRouter` to ignore inputs after the child process stops.
+- Add `fanoutTick`.
+- **BREAKING**: Add implicit `TickInfo` to each `Tick` via `HasTickInfo`.
+- **BREAKING**: Change `onlyTick` to yield actual `Tick` values.
 
 ### 0.4.0.0
 

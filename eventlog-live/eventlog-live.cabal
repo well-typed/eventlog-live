@@ -82,13 +82,16 @@ common language
     NoFieldSelectors
     NumericUnderscores
     OverloadedRecordDot
+    PatternSynonyms
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
+    StandaloneKindSignatures
     TupleSections
     TypeApplications
     TypeFamilies
+    ViewPatterns
 
 library
   import:          language

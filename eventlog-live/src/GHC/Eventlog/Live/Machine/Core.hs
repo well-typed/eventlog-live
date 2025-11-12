@@ -1,3 +1,4 @@
+{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
@@ -8,7 +9,10 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.Core (
   -- * Ticks
-  Tick (..),
+  TickInfo (..),
+  HasTickInfo,
+  Tick (Item, Tick, TickWithInfo, tickInfo),
+  fanoutTick,
   batchByTickList,
   batchByTicksList,
   batchByTick,
@@ -32,19 +36,22 @@ module GHC.Eventlog.Live.Machine.Core (
   -- * Validation
   validateInput,
   validateOrder,
+  validateTicks,
 ) where
 
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList qualified as D
-import Data.Foldable (Foldable (..))
+import Data.Foldable (Foldable (..), for_)
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
+import Data.Kind (Constraint)
 import Data.List qualified as L
 import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
+import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text qualified as T
@@ -63,13 +70,82 @@ import Text.Printf (printf)
 -------------------------------------------------------------------------------
 
 {- |
+The type of v`Tick` information.
+-}
+newtype TickInfo = TickInfo
+  { tick :: Word
+  }
+
+{- |
+The constraint that adds information to each v`Tick`.
+This should be treated as opaque.
+-}
+type HasTickInfo :: Constraint
+type HasTickInfo = (?tickInfo :: TickInfo)
+
+{- |
 The type of data on a stream of items and ticks.
 
 The t`Tick` type is isomorphic to `Maybe` modulo strictness,
 but with the caveat that v`Tick` does not represent failure.
 -}
-data Tick a = Item !a | Tick
-  deriving (Eq, Functor, Foldable, Traversable, Show)
+data Tick a
+  = Item !a
+  | (HasTickInfo) => Tick
+
+deriving instance (Eq a) => Eq (Tick a)
+deriving instance Functor Tick
+deriving instance Foldable Tick
+deriving instance Traversable Tick
+deriving instance (Show a) => Show (Tick a)
+
+{- |
+Internal helper.
+Get `TickInfo` from a t`Tick`.
+-}
+toTickInfo :: Tick x -> Maybe TickInfo
+toTickInfo Item{} = Nothing
+toTickInfo Tick = Just ?tickInfo
+
+{- |
+Internal helper.
+Lift `TickInfo` to a constraint.
+-}
+withTickInfo :: TickInfo -> ((HasTickInfo) => a) -> a
+withTickInfo tickInfo action =
+  let ?tickInfo = tickInfo in action
+
+pattern TickWithInfo :: TickInfo -> Tick a
+pattern TickWithInfo{tickInfo} <- (toTickInfo -> Just tickInfo)
+  where
+    TickWithInfo tickInfo = withTickInfo tickInfo Tick
+
+{-# COMPLETE Item, TickWithInfo #-}
+
+{- |
+Variant of `fanout` for processes that act on t`Tick` streams.
+
+==== __Examples__
+
+>>> run $ fanoutTick [echo, echo] <~ source [Item [1], Tick, Item [2]]
+[Item [1,1],Tick,Item [2,2]]
+-}
+fanoutTick ::
+  forall m a b.
+  (Monad m, Semigroup b) =>
+  [ProcessT m (Tick a) (Tick b)] ->
+  ProcessT m (Tick a) (Tick b)
+fanoutTick processes =
+  fanout
+    [ fanout
+        [ process ~> dropTick
+        | process <- processes
+        ]
+        ~> mapping (D.singleton . Item)
+    , onlyTick
+        ~> mapping D.singleton
+    ]
+    ~> asParts
 
 {- |
 Batches items to lists.
@@ -173,7 +249,7 @@ batchByTicks ticks = batchByTicksWith ticks mempty
     yieldItem :: a -> ProcessT m (Tick a) (Tick a) -> ProcessT m (Tick a) (Tick a)
     yieldItem a = MachineT . pure . Yield (Item a)
 
-    yieldTick :: ProcessT m (Tick a) (Tick a) -> ProcessT m (Tick a) (Tick a)
+    yieldTick :: (HasTickInfo) => ProcessT m (Tick a) (Tick a) -> ProcessT m (Tick a) (Tick a)
     yieldTick = MachineT . pure . Yield Tick
 
     onNext :: Tick a -> MachineT m (Is (Tick a)) (Tick a)
@@ -213,11 +289,11 @@ dropTick =
 {- |
 This machine drops all items.
 -}
-onlyTick :: Process (Tick a) ()
+onlyTick :: Process (Tick a) (Tick b)
 onlyTick =
   repeatedly $
     await >>= \case
-      Tick -> yield ()
+      Tick -> yield Tick
       Item{} -> pure ()
 
 -------------------------------------------------------------------------------
@@ -593,10 +669,10 @@ validateOrder ::
   (a -> k) ->
   ProcessT m a x
 validateOrder verbosity timestamp
-  | verbosityError >= verbosity = construct $ start Nothing
+  | verbosityError >= verbosity = construct $ go Nothing
   | otherwise = stopped
  where
-  start maybeOld =
+  go maybeOld =
     await >>= \new ->
       case maybeOld of
         Just old
@@ -614,4 +690,30 @@ validateOrder verbosity timestamp
                   (show new)
               pure ()
         _otherwise -> do
-          start (Just new)
+          go (Just new)
+
+{- |
+This machine validates that ticks are unique and increasing.
+-}
+validateTicks ::
+  (MonadIO m) =>
+  Verbosity ->
+  ProcessT m (Tick a) (Tick a)
+validateTicks verbosity
+  | verbosityError >= verbosity = construct $ go Nothing
+  | otherwise = stopped
+ where
+  go maybeTick =
+    await >>= \case
+      Item _ ->
+        go maybeTick
+      TickWithInfo{tickInfo = TickInfo{tick = tick'}} -> do
+        for_ maybeTick $ \case
+          tick
+            | tick' == tick + 1 ->
+                logDebug verbosity $
+                  "Saw tick " <> T.pack (show tick) <> "."
+            | otherwise ->
+                logError verbosity $
+                  "Encountered non-increasing ticks " <> T.pack (show tick) <> " and " <> T.pack (show tick') <> "."
+        go (Just tick')
