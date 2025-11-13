@@ -13,7 +13,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Config (..),
   Processors (..),
   Metrics (..),
-  Spans (..),
+  Traces (..),
   AggregationStrategy (..),
   ExportStrategy (..),
   HeapAllocatedMetric (..),
@@ -78,9 +78,9 @@ instance Default Metrics where
   def :: Metrics
   def = $(getDefault @'["processors", "metrics"] defaultConfig)
 
-instance Default Spans where
-  def :: Spans
-  def = $(getDefault @'["processors", "spans"] defaultConfig)
+instance Default Traces where
+  def :: Traces
+  def = $(getDefault @'["processors", "traces"] defaultConfig)
 
 instance Default HeapAllocatedMetric where
   def :: HeapAllocatedMetric
@@ -120,11 +120,11 @@ instance Default CapabilityUsageMetric where
 
 instance Default CapabilityUsageSpan where
   def :: CapabilityUsageSpan
-  def = $(getDefault @'["processors", "spans", "capabilityUsage"] defaultConfig)
+  def = $(getDefault @'["processors", "traces", "capabilityUsage"] defaultConfig)
 
 instance Default ThreadStateSpan where
   def :: ThreadStateSpan
-  def = $(getDefault @'["processors", "spans", "threadState"] defaultConfig)
+  def = $(getDefault @'["processors", "traces", "threadState"] defaultConfig)
 
 -------------------------------------------------------------------------------
 -- Configuration types
@@ -286,8 +286,8 @@ maximumExportBatches config =
     , processorExportBatches (.metrics) (.memReturned) config
     , processorExportBatches (.metrics) (.heapProfSample) config
     , processorExportBatches (.metrics) (.capabilityUsage) config
-    , processorExportBatches (.spans) (.capabilityUsage) config
-    , processorExportBatches (.spans) (.threadState) config
+    , processorExportBatches (.traces) (.capabilityUsage) config
+    , processorExportBatches (.traces) (.threadState) config
     ]
 
 {- |
