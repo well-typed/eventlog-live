@@ -8,7 +8,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   Config (..),
   Processors (..),
   Metrics (..),
-  Spans (..),
+  Traces (..),
   AggregationStrategy (..),
   toAggregationBatches,
   ExportStrategy (..),
@@ -61,7 +61,7 @@ The configuration options for the processors.
 -}
 data Processors = Processors
   { metrics :: Maybe Metrics
-  , spans :: Maybe Spans
+  , traces :: Maybe Traces
   }
   deriving (Generic, Lift)
 
@@ -104,20 +104,20 @@ instance ToJSON Metrics where
 {- |
 The configuration options for the span processors.
 -}
-data Spans = Spans
+data Traces = Traces
   { capabilityUsage :: Maybe CapabilityUsageSpan
   , threadState :: Maybe ThreadStateSpan
   }
   deriving (Generic, Lift)
 
-instance FromJSON Spans where
-  parseJSON :: Value -> Parser Spans
+instance FromJSON Traces where
+  parseJSON :: Value -> Parser Traces
   parseJSON = genericParseJSON encodingOptions
 
-instance ToJSON Spans where
-  toJSON :: Spans -> Value
+instance ToJSON Traces where
+  toJSON :: Traces -> Value
   toJSON = genericToJSON encodingOptions
-  toEncoding :: Spans -> Encoding
+  toEncoding :: Traces -> Encoding
   toEncoding = genericToEncoding encodingOptions
 
 {- |
@@ -455,7 +455,7 @@ instance ToJSON CapabilityUsageMetric where
   toEncoding = genericToEncoding encodingOptions
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageSpans`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageTraces`.
 -}
 data CapabilityUsageSpan = CapabilityUsageSpan
   { description :: Maybe Text
@@ -479,7 +479,7 @@ instance ToJSON CapabilityUsageSpan where
   toEncoding = genericToEncoding encodingOptions
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadStateSpans`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadStateTraces`.
 -}
 data ThreadStateSpan = ThreadStateSpan
   { description :: Maybe Text

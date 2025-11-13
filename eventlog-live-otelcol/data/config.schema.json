@@ -21,7 +21,7 @@
             "mem_returned": { "$ref": "#/definitions/metric" }
           }
         },
-        "spans": {
+        "traces": {
           "type": "object",
           "properties": {
             "capability_usage": { "$ref": "#/definitions/span" },

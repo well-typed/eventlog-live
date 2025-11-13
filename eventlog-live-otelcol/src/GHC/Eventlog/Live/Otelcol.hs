@@ -194,8 +194,8 @@ Determine whether or not any spans should be exported.
 -}
 shouldExportSpans :: Config -> Bool
 shouldExportSpans config =
-  C.processorEnabled (.spans) (.capabilityUsage) config
-    || C.processorEnabled (.spans) (.threadState) config
+  C.processorEnabled (.traces) (.capabilityUsage) config
+    || C.processorEnabled (.traces) (.threadState) config
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
@@ -251,7 +251,7 @@ processThreadEvents verbosity config =
                     }
                   config
                   ~> mapping (fmap (fmap Left))
-              , runIf (C.processorEnabled (.spans) (.capabilityUsage) config) $
+              , runIf (C.processorEnabled (.traces) (.capabilityUsage) config) $
                   M.liftTick
                     ( M.dropStartTime
                         ~> asSpan config
@@ -259,7 +259,7 @@ processThreadEvents verbosity config =
                     )
                     ~> M.batchByTick
               ]
-        , runIf (C.processorEnabled (.spans) (.threadState) config) $
+        , runIf (C.processorEnabled (.traces) (.threadState) config) $
             M.liftTick
               ( mapping rightToMaybe
                   ~> asParts
@@ -295,8 +295,8 @@ Determine whether or not any thread events should be processed at all.
 shouldProcessThreadEvents :: Config -> Bool
 shouldProcessThreadEvents config =
   C.processorEnabled (.metrics) (.capabilityUsage) config
-    || C.processorEnabled (.spans) (.capabilityUsage) config
-    || C.processorEnabled (.spans) (.threadState) config
+    || C.processorEnabled (.traces) (.capabilityUsage) config
+    || C.processorEnabled (.traces) (.threadState) config
 
 {- |
 Internal helper.
@@ -304,7 +304,7 @@ Determine whether or not the capability usage spans should be computed.
 -}
 shouldComputeCapabilityUsageSpan :: Config -> Bool
 shouldComputeCapabilityUsageSpan config =
-  C.processorEnabled (.spans) (.capabilityUsage) config
+  C.processorEnabled (.traces) (.capabilityUsage) config
     || C.processorEnabled (.metrics) (.capabilityUsage) config
 
 {- |
@@ -313,7 +313,7 @@ Determine whether or not the thread state spans should be computed.
 -}
 shouldComputeThreadStateSpan :: Config -> Bool
 shouldComputeThreadStateSpan config =
-  C.processorEnabled (.spans) (.threadState) config
+  C.processorEnabled (.traces) (.threadState) config
     || shouldComputeCapabilityUsageSpan config
 
 --------------------------------------------------------------------------------
@@ -734,7 +734,7 @@ instance AsSpan CapabilityUsageSpan where
     messageWith
       [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
-      , OT.name .~ C.processorName (.spans) (.capabilityUsage) config <> " " <> M.showCapabilityUserCategory user
+      , OT.name .~ C.processorName (.traces) (.capabilityUsage) config <> " " <> M.showCapabilityUserCategory user
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
@@ -766,7 +766,7 @@ instance AsSpan ThreadStateSpan where
     messageWith
       [ OT.traceId .~ traceId
       , OT.spanId .~ spanId
-      , OT.name .~ C.processorName (.spans) (.threadState) config <> " " <> M.showThreadStateCategory i.threadState
+      , OT.name .~ C.processorName (.traces) (.threadState) config <> " " <> M.showThreadStateCategory i.threadState
       , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
       , OT.startTimeUnixNano .~ i.startTimeUnixNano
       , OT.endTimeUnixNano .~ i.endTimeUnixNano
