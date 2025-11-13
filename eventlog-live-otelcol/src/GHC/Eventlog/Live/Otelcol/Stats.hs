@@ -261,9 +261,11 @@ logStat verbosity = \case
   EventCountStat eventCount
     | eventCount.value > 0 ->
         logDebug verbosity $ "Received " <> showText eventCount.value <> " events."
-  ExportMetricsResultStat exportMetricsResult | exportMetricsResult.exportedDataPoints > 0 -> do
+  ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
-    logDebug verbosity $ "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
+    when (exportMetricsResult.exportedDataPoints > 0) $
+      logDebug verbosity $
+        "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
     -- Log rejected events.
     when (exportMetricsResult.rejectedDataPoints > 0) $
       logError verbosity $
@@ -273,7 +275,9 @@ logStat verbosity = \case
       logError verbosity . T.pack $ displayException someException
   ExportTraceResultStat exportTraceResult | exportTraceResult.exportedSpans > 0 -> do
     -- Log exported events.
-    logDebug verbosity $ "Exported " <> showText exportTraceResult.exportedSpans <> " metrics."
+    when (exportTraceResult.exportedSpans > 0) $
+      logDebug verbosity $
+        "Exported " <> showText exportTraceResult.exportedSpans <> " metrics."
     -- Log rejected events.
     when (exportTraceResult.rejectedSpans > 0) $
       logError verbosity $
