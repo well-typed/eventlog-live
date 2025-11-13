@@ -97,7 +97,7 @@ exportResourceMetrics conn =
  where
   sendResourceMetrics :: OMS.ExportMetricsServiceRequest -> IO ExportMetricsResult
   sendResourceMetrics exportMetricsServiceRequest =
-    doGrpc `catch` handleGrpcError
+    doGrpc `catch` handleSomeException
    where
     !exportedDataPoints = countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest
 
@@ -112,8 +112,11 @@ exportResourceMetrics conn =
               let !rejectedMetricsError = RejectedMetricsError{errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage, ..}
               pure $ ExportMetricsError exportedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
 
-    handleGrpcError :: G.GrpcError -> IO ExportMetricsResult
-    handleGrpcError grpcError = pure $ ExportMetricsError 0 exportedDataPoints (SomeException grpcError)
+    -- handleGrpcError :: G.GrpcError -> IO ExportMetricsResult
+    -- handleGrpcError grpcError = pure $ ExportMetricsError 0 exportedDataPoints (SomeException grpcError)
+
+    handleSomeException :: SomeException -> IO ExportMetricsResult
+    handleSomeException someException = pure $ ExportMetricsError 0 exportedDataPoints someException
 
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata

@@ -1,3 +1,8 @@
+### 0.6.0.0
+
+- **BREAKING**: Drop `enabled` from configuration files.
+- **BREAKING**: Change value of `aggregate` in configuration files to ``(boolean | `${number}x`)``.
+
 ### 0.5.0.0
 
 - **BREAKING**: Put `ghc-debug-stub` support behind `use-ghc-debug-stub` feature flag.

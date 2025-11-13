@@ -15,6 +15,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Metrics (..),
   Spans (..),
   AggregationStrategy (..),
+  ExportStrategy (..),
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -37,6 +38,9 @@ module GHC.Eventlog.Live.Otelcol.Config (
   processorDescription,
   processorName,
   processorAggregationStrategy,
+  processorExportStrategy,
+  processorExportBatches,
+  maximumExportBatches,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -132,6 +136,7 @@ type IsProcessorConfig config =
   ( Default config
   , HasField "description" config (Maybe Text)
   , HasField "enabled" config Bool
+  , HasField "export" config (Maybe ExportStrategy)
   , HasField "name" config Text
   )
 
@@ -202,6 +207,53 @@ processorAggregationStrategy ::
   Maybe AggregationStrategy
 processorAggregationStrategy group field =
   (.aggregate) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+
+{- |
+Get the aggregation strategy corresponding to a metric processor.
+-}
+processorExportStrategy ::
+  (Default b, HasField "export" b (Maybe ExportStrategy)) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Maybe ExportStrategy
+processorExportStrategy group field =
+  (.export) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+
+{- |
+Get the aggregation strategy corresponding to a metric processor.
+-}
+processorExportBatches ::
+  (Default b, HasField "export" b (Maybe ExportStrategy)) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Int
+processorExportBatches group field =
+  toExportBatches . processorExportStrategy group field
+
+{- |
+Get the aggregation strategy corresponding to a metric processor.
+-}
+maximumExportBatches ::
+  Config ->
+  Int
+maximumExportBatches config =
+  -- NOTE: This list should be kept in sync with the fields of `Processors`.
+  -- TODO: This is not checked for completeness, which is a shame.
+  maximum
+    [ processorExportBatches (.metrics) (.heapAllocated) config
+    , processorExportBatches (.metrics) (.blocksSize) config
+    , processorExportBatches (.metrics) (.heapSize) config
+    , processorExportBatches (.metrics) (.heapLive) config
+    , processorExportBatches (.metrics) (.memCurrent) config
+    , processorExportBatches (.metrics) (.memNeeded) config
+    , processorExportBatches (.metrics) (.memReturned) config
+    , processorExportBatches (.metrics) (.heapProfSample) config
+    , processorExportBatches (.metrics) (.capabilityUsage) config
+    , processorExportBatches (.spans) (.capabilityUsage) config
+    , processorExportBatches (.spans) (.threadState) config
+    ]
 
 {- |
 Internal helper.

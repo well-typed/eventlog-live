@@ -60,7 +60,11 @@ __Warning:__ Compile-time only.
 Internal helper.
 Get the default value under the given path of accessors and `lift` it.
 -}
-getDefault :: forall xs a b. (GetDefault xs a b, Lift b) => a -> Q Exp
+getDefault ::
+  forall xs a b.
+  (GetDefault xs a b, Lift b) =>
+  a ->
+  Q Exp
 getDefault a = either throw lift (getDefaultEither @xs @a @b a)
 
 {- |
@@ -70,7 +74,12 @@ Internal helper.
 Get the default value under the given accessor after calling a recursor.
 This function is used to implement the `GetDefault` instances.
 -}
-getDefaultEither' :: forall x a b c. (KnownSymbol x, HasField x a (Maybe b)) => (b -> Either MissingDefaultException c) -> a -> Either MissingDefaultException c
+getDefaultEither' ::
+  forall x a b c.
+  (KnownSymbol x, HasField x a (Maybe b)) =>
+  (b -> Either MissingDefaultException c) ->
+  a ->
+  Either MissingDefaultException c
 getDefaultEither' rec a =
   first addAccessor . maybe (Left $ MissingDefaultException []) rec $ getField @x a
  where

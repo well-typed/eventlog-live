@@ -342,7 +342,8 @@ Aggregate items based on the provided aggregators and aggregation strategy.
 aggregate :: Aggregators a b -> Maybe C.AggregationStrategy -> Process (Tick a) (Tick b)
 aggregate Aggregators{..} = \case
   Nothing -> nothing
-  Just C.AggregationStrategyByBatch -> byBatches 1
+  Just (C.AggregationStrategyBool False) -> nothing
+  Just (C.AggregationStrategyBool True) -> byBatches 1
   Just (C.AggregationStrategyByBatches ticks) -> byBatches ticks
 
 {- |
