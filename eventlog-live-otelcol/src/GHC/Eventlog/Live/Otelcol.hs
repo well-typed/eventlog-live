@@ -134,28 +134,33 @@ main = do
               ~> mapping (fmap (partitionEithers . D.toList))
               ~> M.fanoutTick
                 [ -- Export metrics.
-                  runIf (shouldExportMetrics config) . M.liftTick $
-                    mapping fst
-                      ~> asScopeMetrics
-                        [OM.scope .~ eventlogLiveScope]
-                      ~> asResourceMetric
-                        [OM.resource .~ messageWith [OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
-                      ~> asExportMetricServiceRequest
+                  runIf (shouldExportMetrics config) $
+                    M.liftTick
+                      ( mapping fst
+                          ~> asScopeMetrics
+                            [OM.scope .~ eventlogLiveScope]
+                          ~> asResourceMetric
+                            [OM.resource .~ messageWith [OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
+                          ~> asExportMetricServiceRequest
+                      )
                       ~> exportResourceMetrics conn
-                      ~> mapping (D.singleton . ExportMetricsResultStat)
+                      ~> mapping (fmap (D.singleton . ExportMetricsResultStat))
                 , -- Export spans.
-                  runIf (shouldExportSpans config) . M.liftTick $
-                    mapping snd
-                      ~> asScopeSpans
-                        [OM.scope .~ eventlogLiveScope]
-                      ~> asResourceSpan
-                        [OT.resource .~ messageWith [OT.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
-                      ~> asExportTraceServiceRequest
+                  runIf (shouldExportSpans config) $
+                    M.liftTick
+                      ( mapping snd
+                          ~> asScopeSpans
+                            [OM.scope .~ eventlogLiveScope]
+                          ~> asResourceSpan
+                            [OT.resource .~ messageWith [OT.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
+                          ~> asExportTraceServiceRequest
+                      )
                       ~> exportResourceSpans conn
-                      ~> mapping (D.singleton . ExportTraceResultStat)
+                      ~> mapping (fmap (D.singleton . ExportTraceResultStat))
                 ]
           ]
           -- Process the statistics
+          -- TODO: windowSize should be the maximum of all aggregation and export intervals
           ~> M.liftTick (asParts ~> processStats verbosity stats eventlogFlushIntervalS 10)
           -- Validate the consistency of the tick
           ~> M.validateTicks verbosity
