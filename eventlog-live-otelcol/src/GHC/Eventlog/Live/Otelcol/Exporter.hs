@@ -99,22 +99,21 @@ exportResourceMetrics conn =
   sendResourceMetrics exportMetricsServiceRequest =
     doGrpc `catch` handleGrpcError
    where
-    !totalDataPoints = countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest
+    !exportedDataPoints = countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest
 
     doGrpc :: IO ExportMetricsResult
     doGrpc = do
       G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest) >>= \case
         G.Proto resp
           | resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0 -> do
-              pure $ ExportMetricsSuccess totalDataPoints
+              pure $ ExportMetricsSuccess exportedDataPoints
           | otherwise -> do
               let !rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-              let !exportedDataPoints = totalDataPoints - rejectedDataPoints
               let !rejectedMetricsError = RejectedMetricsError{errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage, ..}
               pure $ ExportMetricsError exportedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
 
     handleGrpcError :: G.GrpcError -> IO ExportMetricsResult
-    handleGrpcError grpcError = pure $ ExportMetricsError 0 totalDataPoints (SomeException grpcError)
+    handleGrpcError grpcError = pure $ ExportMetricsError 0 exportedDataPoints (SomeException grpcError)
 
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
@@ -167,22 +166,21 @@ exportResourceSpans conn =
   sendResourceSpans exportTraceServiceRequest =
     doGrpc `catch` handleGrpcError
    where
-    !totalSpans = countSpansInExportTraceServiceRequest exportTraceServiceRequest
+    !exportedSpans = countSpansInExportTraceServiceRequest exportTraceServiceRequest
 
     doGrpc :: IO ExportTraceResult
     doGrpc = do
       G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest) >>= \case
         G.Proto resp
           | resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0 ->
-              pure $ ExportTraceSuccess totalSpans
+              pure $ ExportTraceSuccess exportedSpans
           | otherwise -> do
               let !rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
-              let !exportedSpans = totalSpans - rejectedSpans
               let !rejectedMetricsError = RejectedSpansError{errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage, ..}
               pure $ ExportTraceError exportedSpans rejectedSpans (SomeException rejectedMetricsError)
 
     handleGrpcError :: G.GrpcError -> IO ExportTraceResult
-    handleGrpcError grpcError = pure $ ExportTraceError 0 totalSpans (SomeException grpcError)
+    handleGrpcError grpcError = pure $ ExportTraceError 0 exportedSpans (SomeException grpcError)
 
 type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
