@@ -25,7 +25,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (logDebug, logError)
+import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otelcol.Exporter (ExportMetricsResult (..), ExportTraceResult (..))
@@ -333,7 +333,7 @@ warnIfStderrSupportsANSI :: Verbosity -> IO ()
 warnIfStderrSupportsANSI verbosity = do
   supportsANSI <- hNowSupportsANSI IO.stderr
   when supportsANSI $ do
-    logError verbosity $
+    logWarning verbosity $
       "When statistics are enabled, stderr should be redirected to a file."
 
 -------------------------------------------------------------------------------
