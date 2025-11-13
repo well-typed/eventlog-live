@@ -1,3 +1,52 @@
+# Configuration for the eventlog processors, organised by the type of telemetry
+# data they produce. Every processor shares certain properties. Let's look at
+# the default configuration for the `blocks_size` metrics processor:
+#
+#     blocks_size:
+#       name: ghc_eventlog_BlocksSize
+#       description: The current heap size, calculated by the allocated number of blocks.
+#       aggregate: 1x
+#       export: 60x
+#
+# - The `name` property is added to each piece of telemetry data,
+#   and determines the name under which the data becomes available in your
+#   data source, such as Prometheus.
+#
+#   The data produced by our example `blocks_size` processor will be available
+#   in Prometheus as `ghc_eventlog_BlocksSize`.
+#
+# - The `description` property is added to each piece of telemetry data,
+#   and may be used to describe it. In most cases, this can be safely set
+#   to `null` to save bandwidth.
+#
+#   The data produced by our example `blocks_size` processor will be given the
+#   above description.
+#
+# - The `export` property determines whether or not the telemetry data is
+#   exported to the OpenTelemetry Collector and, if so, with what frequency.
+#   The export interval is given as a number followed by an "x", e.g. "60x",
+#   which exports the data every 60 batches. The batch interval is determined
+#   by the interval with which the RTS of the monitored process flushes the
+#   eventlog, and is given by `--eventlog-flush-interval=SECONDS`.
+#   If `export` is set to true, this is interpreted as "1x", i.e., every batch.
+#
+#   The data produced by our example `blocks_size` processor will be exported
+#   every 60 batches. If you pass `--eventlog-flush-interval=1` to both the RTS
+#   and eventlog-live-otelcol, the data will be exported every minute. If you
+#   pass `--eventlog-flush-interval=2`, it will be exported every 2 minutes.
+#
+# - The `aggregate` property determines whether or not the telemetry data is
+#   aggregated over time, and, if so, over what interval. Only metrics support
+#   aggregation. The aggregation interval follows the same format as the export
+#   interval, e.g., 30x means aggregation over 30 batches and true means 1x.
+#   Aggregation follows the OpenTelemetry specification. Sums are aggregated by
+#   summation. Gauges are aggregated by taking the most recent data point.
+#   The `heap_allocated` and `capability_usage` metrics are aggregated as sums.
+#   All other metrics are aggregated as gauges.
+#
+#   The data produced by our example `blocks_size` processor will be aggregated
+#   over each batch, i.e., only the last metric produced in each batch is kept.
+#
 processors:
   metrics:
     blocks_size:
