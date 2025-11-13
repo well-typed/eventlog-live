@@ -40,6 +40,101 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "mblock"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.1",
+      "targets": [
+        {
+          "editorMode": "builder",
+          "expr": "max by(exported_job) ({\"${metric_name_prefix}MemCurrent\"})",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage by Service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
             "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
@@ -84,7 +179,7 @@
         "h": 24,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 6
       },
       "id": 4,
       "options": {
@@ -107,7 +202,7 @@
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "{\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$job_name\"}",
+          "expr": "{\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -195,7 +290,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 6
       },
       "id": 1,
       "options": {
@@ -220,7 +315,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}HeapSize_bytes\", exported_job=\"$job_name\"})",
+          "expr": "avg({\"${metric_name_prefix}HeapSize_bytes\", exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapSize",
@@ -235,7 +330,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}BlocksSize_bytes\"})",
+          "expr": "avg({\"${metric_name_prefix}BlocksSize_bytes\", exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -252,7 +347,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}HeapLive_bytes\"})",
+          "expr": "avg({\"${metric_name_prefix}HeapLive_bytes\", exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -329,7 +424,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 14
       },
       "id": 3,
       "options": {
@@ -350,7 +445,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "avg({\"${metric_name_prefix}MemCurrent\", exported_job=\"$job_name\"})",
+          "expr": "avg({\"${metric_name_prefix}MemCurrent\", exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "MemCurrent",
@@ -365,7 +460,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}MemNeeded\"})",
+          "expr": "avg({\"${metric_name_prefix}MemNeeded\", exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -382,7 +477,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}MemReturned\"})",
+          "expr": "avg({\"${metric_name_prefix}MemReturned\", exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -445,7 +540,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 22
       },
       "id": 2,
       "options": {
@@ -474,8 +569,8 @@
       "targets": [
         {
           "disableTextWrap": false,
-          "editorMode": "code",
-          "expr": "{\"${metric_name_prefix}HeapAllocated_bytes_total\", exported_job=\"$job_name\"}",
+          "editorMode": "builder",
+          "expr": "{\"${metric_name_prefix}HeapAllocated_bytes_total\", exported_job=\"$service_name\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapAllocated",
@@ -495,17 +590,17 @@
     "list": [
       {
         "current": {
-          "text": "hls-cabal-bytecode",
-          "value": "hls-cabal-bytecode"
+          "text": "oddball",
+          "value": "oddball"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "query_result(count by (exported_job)(count_over_time(ghc_eventlog_BlocksSize_bytes[$__range])))",
-        "description": "",
-        "label": "Exported Job",
-        "name": "job_name",
+        "description": "The service name used for the visualisations on this dashboard.",
+        "label": "Service Name",
+        "name": "service_name",
         "options": [],
         "query": {
           "qryType": 5,
@@ -514,6 +609,7 @@
         },
         "refresh": 2,
         "regex": "/.*exported_job=\"([^\"]*).*/",
+        "sort": 1,
         "type": "query"
       },
       {
@@ -544,5 +640,5 @@
   "timezone": "browser",
   "title": "Eventlog Heap",
   "uid": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
-  "version": 1
+  "version": 3
 }
