@@ -10,6 +10,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   Metrics (..),
   Spans (..),
   AggregationStrategy (..),
+  toAggregationBatches,
   ExportStrategy (..),
   toExportBatches,
   HeapAllocatedMetric (..),
@@ -126,6 +127,15 @@ data AggregationStrategy
   = AggregationStrategyBool {isOn :: !Bool}
   | AggregationStrategyByBatches {byBatches :: !Int}
   deriving (Generic, Lift)
+
+{- |
+Convert an `ExportStrategy` to a number of batches.
+-}
+toAggregationBatches :: Maybe AggregationStrategy -> Int
+toAggregationBatches = \case
+  Nothing -> 0
+  Just AggregationStrategyBool{..} -> if isOn then 1 else 0
+  Just AggregationStrategyByBatches{..} -> byBatches
 
 {- |
 Internal helper.

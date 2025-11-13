@@ -344,12 +344,10 @@ data Aggregators a b = Aggregators
 Internal helper.
 Aggregate items based on the provided aggregators and aggregation strategy.
 -}
-aggregate :: Aggregators a b -> Maybe C.AggregationStrategy -> Process (Tick a) (Tick b)
-aggregate Aggregators{..} = \case
-  Nothing -> nothing
-  Just (C.AggregationStrategyBool False) -> nothing
-  Just (C.AggregationStrategyBool True) -> byBatches 1
-  Just (C.AggregationStrategyByBatches ticks) -> byBatches ticks
+aggregate :: Aggregators a b -> Int -> Process (Tick a) (Tick b)
+aggregate Aggregators{..} aggregationBatches
+  | aggregationBatches >= 1 = byBatches aggregationBatches
+  | otherwise = nothing
 
 {- |
 Internal helper.
@@ -568,7 +566,7 @@ runMetricProcessor MetricProcessor{..} config =
       metricProcessorConfig = getField @metricProcessor
    in runIf (C.processorEnabled (.metrics) metricProcessorConfig config) $
         M.liftTick dataProcessor
-          ~> aggregate aggregators (C.processorAggregationStrategy (.metrics) metricProcessorConfig config)
+          ~> aggregate aggregators (C.processorAggregationBatches (.metrics) metricProcessorConfig config)
           ~> M.liftTick postProcessor
           ~> mapping (fmap (D.singleton . toNumberDataPoint))
           ~> M.batchByTicks (C.processorExportBatches (.metrics) metricProcessorConfig config)

@@ -38,6 +38,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   processorDescription,
   processorName,
   processorAggregationStrategy,
+  processorAggregationBatches,
   processorExportStrategy,
   processorExportBatches,
   maximumExportBatches,
@@ -207,6 +208,18 @@ processorAggregationStrategy ::
   Maybe AggregationStrategy
 processorAggregationStrategy group field =
   (.aggregate) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+
+{- |
+Get the aggregation strategy corresponding to a metric processor.
+-}
+processorAggregationBatches ::
+  (Default b, HasField "aggregate" b (Maybe AggregationStrategy)) =>
+  (Processors -> Maybe a) ->
+  (a -> Maybe b) ->
+  Config ->
+  Int
+processorAggregationBatches group field =
+  toAggregationBatches . processorAggregationStrategy group field
 
 {- |
 Get the aggregation strategy corresponding to a metric processor.
