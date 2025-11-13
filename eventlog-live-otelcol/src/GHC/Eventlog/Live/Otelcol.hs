@@ -566,7 +566,7 @@ runMetricProcessor MetricProcessor{..} config =
           ~> aggregate aggregators (C.processorAggregationStrategy (.metrics) metricProcessorConfig config)
           ~> M.liftTick postProcessor
           ~> mapping (fmap (D.singleton . toNumberDataPoint))
-          ~> M.batchByTick -- <-- EXPORT INTERVAL GOES HERE
+          ~> M.batchByTicks (C.processorExportBatches (.metrics) metricProcessorConfig config)
           ~> M.liftTick
             ( mapping D.toList
                 ~> asMetric'Data
