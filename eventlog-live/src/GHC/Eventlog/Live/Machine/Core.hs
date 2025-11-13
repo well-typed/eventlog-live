@@ -679,12 +679,11 @@ validateInput verbosity ticks
             ticks
     | otherwise = do
         logDebug verbosity $
-          T.pack (show remaining) <> " ticks remaining."
+          "Waiting for " <> T.pack (show remaining) <> " more ticks before showing input warning."
         await >>= \case
           Item{} -> do
-            logDebug verbosity "Received item."
-          Tick -> do
-            logDebug verbosity "Received tick."
+            logDebug verbosity "Received item. Cancelled input warning."
+          Tick ->
             start (pred remaining)
 
 {- |
