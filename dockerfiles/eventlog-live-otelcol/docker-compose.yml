@@ -48,6 +48,7 @@ services:
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
       - "./config/grafana-dashboards-eventlog-heap.json:/var/lib/grafana/dashboards/eventlog-heap.json"
       - "./config/grafana-dashboards-eventlog-threads.json:/var/lib/grafana/dashboards/eventlog-threads.json"
+      - "./config/grafana-dashboards-process-overview.json:/var/lib/grafana/dashboards/process-overview.json"
 
   otelcol:
     # container_name: otelcol
