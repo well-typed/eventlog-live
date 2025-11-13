@@ -1,56 +1,56 @@
 processors:
   metrics:
     blocks_size:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__BlocksSize
+      name: oddball_BlocksSize
     capability_usage:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__CapabilityUsageDuration
+      name: oddball_CapabilityUsageDuration
     heap_allocated:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__HeapAllocated
+      name: oddball_HeapAllocated
     heap_live:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__HeapLive
+      name: oddball_HeapLive
     heap_prof_sample:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__HeapProfSample
+      name: oddball_HeapProfSample
     heap_size:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__HeapSize
+      name: oddball_HeapSize
     mem_current:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__MemCurrent
+      name: oddball_MemCurrent
     mem_needed:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__MemNeeded
+      name: oddball_MemNeeded
     mem_returned:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: oddball__MemReturned
+      name: oddball_MemReturned
   spans:
     capability_usage:
       description: null
-      enabled: true
-      name: oddball__CapabilityUsage
+      enabled: false
+      name: oddball_CapabilityUsage
     thread_state:
       description: null
-      enabled: true
-      name: oddball__ThreadState
+      enabled: false
+      name: oddball_ThreadState

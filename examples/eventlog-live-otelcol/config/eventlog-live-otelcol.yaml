@@ -1,56 +1,56 @@
 processors:
   metrics:
     blocks_size:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_BlocksSize
+      name: eventlog_live_BlocksSize
     capability_usage:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_CapabilityUsageDuration
+      name: eventlog_live_CapabilityUsageDuration
     heap_allocated:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_HeapAllocated
+      name: eventlog_live_HeapAllocated
     heap_live:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_HeapLive
+      name: eventlog_live_HeapLive
     heap_prof_sample:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_HeapProfSample
+      name: eventlog_live_HeapProfSample
     heap_size:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_HeapSize
+      name: eventlog_live_HeapSize
     mem_current:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_MemCurrent
+      name: eventlog_live_MemCurrent
     mem_needed:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_MemNeeded
+      name: eventlog_live_MemNeeded
     mem_returned:
-      aggregate: null
+      aggregate: by_batch
       description: null
       enabled: true
-      name: ghc_eventlog_MemReturned
+      name: eventlog_live_MemReturned
   spans:
     capability_usage:
       description: null
-      enabled: true
-      name: ghc_eventlog_CapabilityUsage
+      enabled: false
+      name: eventlog_live_CapabilityUsage
     thread_state:
       description: null
-      enabled: true
-      name: ghc_eventlog_ThreadState
+      enabled: false
+      name: eventlog_live_ThreadState
