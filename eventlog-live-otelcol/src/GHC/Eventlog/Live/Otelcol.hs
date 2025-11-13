@@ -102,6 +102,10 @@ main = do
       logDebug verbosity $ "Configuration file:\n" <> (TE.decodeUtf8Lenient . Y.encode $ config)
       pure config
 
+    -- Determine the windowSize for stats
+    let windowSize =
+          10 * (C.maximumAggregationBatches config `max` C.maximumExportBatches config)
+
     -- Create the service name attribute.
     let attrServiceName = ("service.name", maybe AttrNull (AttrText . (.serviceName)) maybeServiceName)
 
@@ -161,7 +165,7 @@ main = do
           ]
           -- Process the statistics
           -- TODO: windowSize should be the maximum of all aggregation and export intervals
-          ~> M.liftTick (asParts ~> processStats verbosity stats eventlogFlushIntervalS 10)
+          ~> M.liftTick (asParts ~> processStats verbosity stats eventlogFlushIntervalS windowSize)
           -- Validate the consistency of the tick
           ~> M.validateTicks verbosity
           ~> M.dropTick

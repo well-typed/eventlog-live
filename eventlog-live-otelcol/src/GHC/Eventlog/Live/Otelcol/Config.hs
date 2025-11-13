@@ -39,6 +39,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   processorName,
   processorAggregationStrategy,
   processorAggregationBatches,
+  maximumAggregationBatches,
   processorExportStrategy,
   processorExportBatches,
   maximumExportBatches,
@@ -220,6 +221,27 @@ processorAggregationBatches ::
   Int
 processorAggregationBatches group field =
   toAggregationBatches . processorAggregationStrategy group field
+
+{- |
+Get the aggregation strategy corresponding to a metric processor.
+-}
+maximumAggregationBatches ::
+  Config ->
+  Int
+maximumAggregationBatches config =
+  -- NOTE: This list should be kept in sync with the fields of `Processors`.
+  -- TODO: This is not checked for completeness, which is a shame.
+  maximum
+    [ processorAggregationBatches (.metrics) (.heapAllocated) config
+    , processorAggregationBatches (.metrics) (.blocksSize) config
+    , processorAggregationBatches (.metrics) (.heapSize) config
+    , processorAggregationBatches (.metrics) (.heapLive) config
+    , processorAggregationBatches (.metrics) (.memCurrent) config
+    , processorAggregationBatches (.metrics) (.memNeeded) config
+    , processorAggregationBatches (.metrics) (.memReturned) config
+    , processorAggregationBatches (.metrics) (.heapProfSample) config
+    , processorAggregationBatches (.metrics) (.capabilityUsage) config
+    ]
 
 {- |
 Get the aggregation strategy corresponding to a metric processor.
