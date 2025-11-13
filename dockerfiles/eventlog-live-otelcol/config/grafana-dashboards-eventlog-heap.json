@@ -495,24 +495,6 @@
     "list": [
       {
         "current": {
-          "text": "ghc_eventlog_",
-          "value": "ghc_eventlog_"
-        },
-        "description": "The prefix used for the metric names in visualisations on this dashboard.",
-        "label": "Metric Name Prefix",
-        "name": "metric_name_prefix",
-        "options": [
-          {
-            "selected": true,
-            "text": "ghc_eventlog_",
-            "value": "ghc_eventlog_"
-          }
-        ],
-        "query": "ghc_eventlog_",
-        "type": "textbox"
-      },
-      {
-        "current": {
           "text": "hls-cabal-bytecode",
           "value": "hls-cabal-bytecode"
         },
@@ -533,6 +515,24 @@
         "refresh": 2,
         "regex": "/.*exported_job=\"([^\"]*).*/",
         "type": "query"
+      },
+      {
+        "current": {
+          "text": "ghc_eventlog_",
+          "value": "ghc_eventlog_"
+        },
+        "description": "The prefix used for the metric names in visualisations on this dashboard.",
+        "label": "Metric Name Prefix",
+        "name": "metric_name_prefix",
+        "options": [
+          {
+            "selected": true,
+            "text": "ghc_eventlog_",
+            "value": "ghc_eventlog_"
+          }
+        ],
+        "query": "ghc_eventlog_",
+        "type": "textbox"
       }
     ]
   },
@@ -544,5 +544,5 @@
   "timezone": "browser",
   "title": "Eventlog Heap",
   "uid": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
-  "version": 2
+  "version": 1
 }
