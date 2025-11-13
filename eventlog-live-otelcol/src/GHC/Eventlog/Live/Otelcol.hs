@@ -132,11 +132,11 @@ main = do
                             [ OM.scope .~ eventlogLiveScope
                             ]
                             ~> asResourceMetric
-                                  [ OT.resource
-                                    .~ messageWith
+                              [ OT.resource
+                                  .~ messageWith
                                     [ OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]
                                     ]
-                                  ]
+                              ]
                             ~> asExportMetricServiceRequest
                             ~> exportResourceMetrics conn
                             ~> mapping (D.singleton . ExportMetricsResultStat)
