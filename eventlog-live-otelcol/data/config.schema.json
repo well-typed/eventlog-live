@@ -34,19 +34,38 @@
   "definitions": {
     "aggregation_strategy": {
       "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "enum": ["by_batch"]
-        }
+        { "type": "null" },
+        { "$ref": "#/definitions/aggregation_strategy_bool" },
+        { "$ref": "#/definitions/aggregation_strategy_by_batches" }
       ]
+    },
+    "aggregation_strategy_bool": {
+      "type": "boolean"
+    },
+    "aggregation_strategy_by_batches": {
+      "type": "string",
+      "pattern": "^([0-9]+)(x)$"
+    },
+    "export_strategy": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/export_strategy_bool" },
+        { "$ref": "#/definitions/export_strategy_by_batches" }
+      ]
+    },
+    "export_strategy_bool": {
+      "type": "boolean"
+    },
+    "export_strategy_by_batches": {
+      "type": "string",
+      "pattern": "^([0-9]+)(x)$"
     },
     "processor": {
       "type": "object",
       "properties": {
         "description": { "type": "string" },
         "enabled": { "type": "boolean" },
+        "export": { "$ref": "#/definitions/export_strategy" },
         "name": { "type": "string" }
       }
     },
