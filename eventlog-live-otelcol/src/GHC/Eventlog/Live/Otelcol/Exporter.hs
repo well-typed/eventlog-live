@@ -26,12 +26,14 @@ module GHC.Eventlog.Live.Otelcol.Exporter (
 ) where
 
 import Control.Exception (Exception (..), SomeException (..), catch)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int64)
-import Data.Machine (ProcessT, await, repeatedly, yield)
+import Data.Machine (ProcessT, await, construct, yield)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import Lens.Family2 ((^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -88,13 +90,21 @@ instance Exception RejectedMetricsError where
 
 exportResourceMetrics ::
   G.Connection ->
-  ProcessT IO OMS.ExportMetricsServiceRequest ExportMetricsResult
-exportResourceMetrics conn =
-  repeatedly $
-    await >>= \exportMetricsServiceRequest ->
-      liftIO (sendResourceMetrics exportMetricsServiceRequest)
-        >>= yield
+  ProcessT IO (Tick OMS.ExportMetricsServiceRequest) (Tick ExportMetricsResult)
+exportResourceMetrics conn = construct $ go False
  where
+  go exportedResourceMetrics =
+    await >>= \case
+      Tick -> do
+        unless exportedResourceMetrics $
+          yield (Item $ ExportMetricsSuccess 0)
+        yield Tick
+        go False
+      Item exportMetricsServiceRequest -> do
+        exportMetricsResult <- liftIO (sendResourceMetrics exportMetricsServiceRequest)
+        yield (Item exportMetricsResult)
+        go True
+
   sendResourceMetrics :: OMS.ExportMetricsServiceRequest -> IO ExportMetricsResult
   sendResourceMetrics exportMetricsServiceRequest =
     doGrpc `catch` handleSomeException
@@ -158,13 +168,22 @@ instance Exception RejectedSpansError where
 
 exportResourceSpans ::
   G.Connection ->
-  ProcessT IO OTS.ExportTraceServiceRequest ExportTraceResult
+  ProcessT IO (Tick OTS.ExportTraceServiceRequest) (Tick ExportTraceResult)
 exportResourceSpans conn =
-  repeatedly $
-    await >>= \exportTraceServiceRequest ->
-      liftIO (sendResourceSpans exportTraceServiceRequest)
-        >>= yield
+  construct $ go False
  where
+  go exportedResourceSpans =
+    await >>= \case
+      Tick -> do
+        unless exportedResourceSpans $
+          yield (Item $ ExportTraceSuccess 0)
+        yield Tick
+        go False
+      Item exportTraceServiceRequest -> do
+        exportTraceResult <- liftIO (sendResourceSpans exportTraceServiceRequest)
+        yield (Item exportTraceResult)
+        go True
+
   sendResourceSpans :: OTS.ExportTraceServiceRequest -> IO ExportTraceResult
   sendResourceSpans exportTraceServiceRequest =
     doGrpc `catch` handleGrpcError

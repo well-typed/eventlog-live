@@ -231,6 +231,9 @@ processStats verbosity stats eventlogFlushIntervalS windowSize
       -- If --stats is ENABLED, maintain and display `Stats`.
       let go stats0 =
             await >>= \stat -> do
+              -- Log the incoming `Stat` value.
+              logStat verbosity stat
+              -- Maintain and display the `Stats`.
               let stats1 = updateStats windowSize stats0 stat
               stats2 <- liftIO (displayStats verbosity eventlogFlushIntervalS stats1)
               go stats2
@@ -255,9 +258,10 @@ Log a statistic.
 -}
 logStat :: (MonadIO m) => Verbosity -> Stat -> m ()
 logStat verbosity = \case
-  EventCountStat eventCount ->
-    logDebug verbosity $ "Received " <> showText eventCount.value <> " events."
-  ExportMetricsResultStat exportMetricsResult -> do
+  EventCountStat eventCount
+    | eventCount.value > 0 ->
+        logDebug verbosity $ "Received " <> showText eventCount.value <> " events."
+  ExportMetricsResultStat exportMetricsResult | exportMetricsResult.exportedDataPoints > 0 -> do
     -- Log exported events.
     logDebug verbosity $ "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
     -- Log rejected events.
@@ -267,7 +271,7 @@ logStat verbosity = \case
     -- Log exception.
     for_ exportMetricsResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
-  ExportTraceResultStat exportTraceResult -> do
+  ExportTraceResultStat exportTraceResult | exportTraceResult.exportedSpans > 0 -> do
     -- Log exported events.
     logDebug verbosity $ "Exported " <> showText exportTraceResult.exportedSpans <> " metrics."
     -- Log rejected events.
@@ -277,6 +281,7 @@ logStat verbosity = \case
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
+  _otherwise -> pure ()
 
 {- |
 Internal helper.
