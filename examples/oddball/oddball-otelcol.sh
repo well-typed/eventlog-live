@@ -24,7 +24,8 @@ trap "trap - TERM && kill -- -$$" INT TERM EXIT
 # Run eventlog-live-otelcol
 echo "Start eventlog-live-otelcol"
 "${EVENTLOG_LIVE_OTELCOL_BIN}" \
-	--verbosity=quiet \
+	--verbosity=debug \
+	--service-name='oddball' \
     --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
     -hT \
     --otelcol-host=localhost
