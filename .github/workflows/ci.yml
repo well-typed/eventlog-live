@@ -209,6 +209,12 @@ jobs:
       - name: 🛠️ Setup cabal-docspec
         uses: ./.github/actions/setup-cabal-docspec
 
+      - name: 🛠️ Update package list for Hackage
+        run: |
+          mkdir ~/.cabal
+          cabal user-config update
+          cabal update
+
       - name: 🧪 Test with cabal-docspec
         run: ./scripts/test-cabal-docspec.sh
 
