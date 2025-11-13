@@ -1,68 +1,56 @@
-# yaml-language-server: $schema=./config.schema.json
 processors:
   metrics:
     blocks_size:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The current heap size, calculated by the allocated number of blocks.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_BlocksSize
+      description: The current heap size, calculated by the allocated number of blocks.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
     capability_usage:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The duration of each capability usage span.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_CapabilityUsageDuration
+      description: The duration of each capability usage span.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
     heap_allocated:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The size of a newly allocated chunk of heap.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_HeapAllocated
+      description: The size of a newly allocated chunk of heap.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
     heap_live:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The current heap size, calculated by the allocated number of megablocks.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_HeapLive
-    heap_prof_sample:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: A heap profile sample.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
-      name: ghc_eventlog_HeapProfSample
-    heap_size:
-      aggregate: 1x # one of [boolean, "Nx"]
       description: The current heap size, calculated by the allocated number of megablocks.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
+    heap_prof_sample:
+      name: ghc_eventlog_HeapProfSample
+      description: A heap profile sample.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
+    heap_size:
       name: ghc_eventlog_HeapSize
+      description: The current heap size, calculated by the allocated number of megablocks.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
     mem_current:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The number of megablocks currently allocated.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_MemCurrent
+      description: The number of megablocks currently allocated.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
     mem_needed:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The number of megablocks currently needed.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_MemNeeded
+      description: The number of megablocks currently needed.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
     mem_returned:
-      aggregate: 1x # one of [boolean, "Nx"]
-      description: The number of megablocks currently being returned to the OS.
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_MemReturned
+      description: The number of megablocks currently being returned to the OS.
+      aggregate: 1x # one of [boolean, `${number}x`]
+      export: 60x # one of [boolean, `${number}x`]
   spans:
     capability_usage:
-      description: A span of capability usage (either mutator thread or garbage collection).
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_CapabilityUsage
+      description: A span of capability usage (either mutator thread or garbage collection).
+      export: false # one of [boolean, `${number}x`]
     thread_state:
-      description: A span of thread state changes (either running or stopped).
-      enabled: true
-      export: true # one of [boolean, "Nx"]
       name: ghc_eventlog_ThreadState
+      description: A span of thread state changes (either running or stopped).
+      export: false # one of [boolean, `${number}x`]
