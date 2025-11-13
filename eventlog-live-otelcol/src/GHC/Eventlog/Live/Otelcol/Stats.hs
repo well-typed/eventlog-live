@@ -313,7 +313,7 @@ displayStats verbosity eventlogFlushIntervalS stats = do
   let cSpec :: [TBL.ColSpec]
       cSpec = [TBL.defColSpec, TBL.defColSpec, TBL.numCol, TBL.numCol, TBL.numCol]
   let hSpec :: TBL.HeaderSpec TBL.LineStyle (Maybe Text)
-      hSpec = TBL.titlesH [Just "Item", Just "Action", Just "Total (item)", Just "Rate (item/s)", Just "Peak (item/batch)"]
+      hSpec = TBL.titlesH [Just "Item", Just "Action", Just "Total (item)", Just "Rate (item/s)", Just "Peak (item/x)"]
   let mkRow :: Maybe Text -> Maybe Text -> Row -> TBL.RowGroup (Maybe Text)
       mkRow item result row = TBL.rowG [item, result, Just (showText row.total), Just (rate row), Just (peak row)]
   let rSpec :: [TBL.RowGroup (Maybe Text)]
