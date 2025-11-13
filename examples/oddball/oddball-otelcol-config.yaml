@@ -1,56 +1,56 @@
 processors:
   metrics:
     blocks_size:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The current heap size, calculated by the allocated number of blocks.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_BlocksSize
     capability_usage:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The duration of each capability usage span.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_CapabilityUsageDuration
     heap_allocated:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The size of a newly allocated chunk of heap.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_HeapAllocated
     heap_live:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The current heap size, calculated by the allocated number of megablocks.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_HeapLive
     heap_prof_sample:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: A heap profile sample.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_HeapProfSample
     heap_size:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The current heap size, calculated by the allocated number of megablocks.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_HeapSize
     mem_current:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The number of megablocks currently allocated.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_MemCurrent
     mem_needed:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The number of megablocks currently needed.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_MemNeeded
     mem_returned:
-      aggregate: by_batch
-      description: null
-      enabled: true
+      aggregate: 1x # one of [boolean, "Nx"]
+      description: The number of megablocks currently being returned to the OS.
+      export: 30x # one of [boolean, "Nx"]
       name: ghc_eventlog_MemReturned
   spans:
     capability_usage:
-      description: null
-      enabled: false
+      description: A span of capability usage (either mutator thread or garbage collection).
+      export: false # one of [boolean, "Nx"]
       name: ghc_eventlog_CapabilityUsage
     thread_state:
-      description: null
-      enabled: false
+      description: A span of thread state changes (either running or stopped).
+      export: false # one of [boolean, "Nx"]
       name: ghc_eventlog_ThreadState
