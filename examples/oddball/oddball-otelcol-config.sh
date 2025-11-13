@@ -48,6 +48,7 @@ echo 'Start eventlog-live-otelcol (for oddball)' && \
 		--verbosity=debug \
 		--stats \
 		--config='$DIR/oddball-otelcol-config.yaml' \
+		--service-name='oddball' \
 	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
 	    -hT \
 	    --otelcol-host=localhost \
