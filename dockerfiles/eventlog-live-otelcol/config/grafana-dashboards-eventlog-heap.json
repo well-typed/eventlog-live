@@ -80,7 +80,7 @@
               }
             ]
           },
-          "unit": "mblock"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -108,7 +108,7 @@
       "targets": [
         {
           "editorMode": "builder",
-          "expr": "max by(exported_job) ({\"${metric_name_prefix}MemCurrent\"})",
+          "expr": "max by(exported_job) ({\"${metric_name_prefix}HeapSize_bytes\"})",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
