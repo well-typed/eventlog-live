@@ -173,7 +173,6 @@ library
 
   autogen-modules: Paths_eventlog_live_otelcol
   build-depends:
-    , aeson                  >=2.2    && <2.3
     , ansi-terminal          >=1.1    && <1.2
     , base                   >=4.16   && <4.22
     , bytestring             >=0.11   && <0.13
@@ -186,6 +185,7 @@ library
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
     , hs-opentelemetry-otlp  >=0.1.0  && <0.2
+    , HsYAML                 >=0.2    && <0.3
     , lens-family            >=2.1.3  && <2.2
     , machines               >=0.7.4  && <0.8
     , optparse-applicative   >=0.17   && <0.20
@@ -196,7 +196,6 @@ library
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
-    , yaml                   >=0.11   && <0.12
 
   if flag(use-ghc-debug-stub)
     build-depends: ghc-debug-stub >=0.1 && <1.0
