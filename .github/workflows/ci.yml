@@ -52,6 +52,9 @@ jobs:
         with:
           protoc-version: ${{ steps.dev-dependencies.outputs.protoc }}
 
+      - name: 🛠️ Setup snappy
+        uses: ./.github/actions/setup-snappy
+
       - name: 🗄️ Generate Cabal plan
         run: cabal build all ${{ matrix.cabal-flags }} --dry-run
 

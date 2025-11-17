@@ -23,3 +23,12 @@ source-repository-package
 if impl(ghc >=9.12)
   allow-newer:
     , influxdb-1.9.3.2:base
+
+-- 2025-11-16:
+-- conditionally add Homebrew lib and include dirs to snappy-c.
+if os(darwin)
+  package snappy-c
+    extra-lib-dirs:
+      /opt/homebrew/lib
+    extra-include-dirs:
+      /opt/homebrew/include

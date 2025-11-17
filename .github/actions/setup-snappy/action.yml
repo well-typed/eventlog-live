@@ -1,0 +1,14 @@
+name: "Setup snappy"
+description: "Install the latest available snappy version"
+runs:
+  using: composite
+  steps:
+    - name: 🛠️ Install snappy (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get install libsnappy-dev
+      shell: sh
+
+    - name: 🛠️ Install snappy (macOS)
+      if: runner.os == 'macOS'
+      run: brew install snappy
+      shell: sh
