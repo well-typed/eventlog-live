@@ -7,9 +7,11 @@
     "processors": {
       "type": "object",
       "properties": {
+        "defaults": { "#ref": "#/definitions/processor_defaults" },
         "metrics": {
           "type": "object",
           "properties": {
+            "defaults": { "#ref": "#/definitions/metric_defaults" },
             "blocks_size": { "$ref": "#/definitions/metric" },
             "capability_usage": { "$ref": "#/definitions/metric" },
             "heap_allocated": { "$ref": "#/definitions/metric" },
@@ -19,14 +21,17 @@
             "mem_current": { "$ref": "#/definitions/metric" },
             "mem_needed": { "$ref": "#/definitions/metric" },
             "mem_returned": { "$ref": "#/definitions/metric" }
-          }
+          },
+          "additionalProperties": false
         },
         "traces": {
           "type": "object",
           "properties": {
-            "capability_usage": { "$ref": "#/definitions/span" },
-            "thread_state": { "$ref": "#/definitions/span" }
-          }
+            "defaults": { "#ref": "#/definitions/trace_defaults" },
+            "capability_usage": { "$ref": "#/definitions/trace" },
+            "thread_state": { "$ref": "#/definitions/trace" }
+          },
+          "additionalProperties": false
         }
       }
     }
@@ -60,27 +65,46 @@
       "type": "string",
       "pattern": "^([0-9]+)(x)$"
     },
-    "processor": {
-      "type": "object",
+    "processor_defaults": {
+      "description": "An optional 'defaults' block for defining YAML anchors.",
       "properties": {
-        "description": { "type": "string" },
-        "enabled": { "type": "boolean" },
         "export": { "$ref": "#/definitions/export_strategy" },
-        "name": { "type": "string" }
-      }
+        "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
+      },
+      "additionalProperties": false
     },
     "metric": {
-      "allOf": [
-        { "$ref": "#/definitions/processor" },
-        {
-          "properties": {
-            "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
-          }
-        }
-      ]
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "export": { "$ref": "#/definitions/export_strategy" },
+        "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
+      },
+      "additionalProperties": false
     },
-    "span": {
-      "allOf": [{ "$ref": "#/definitions/processor" }]
+    "metric_defaults": {
+      "description": "An optional 'defaults' block for defining YAML anchors.",
+      "properties": {
+        "export": { "$ref": "#/definitions/export_strategy" },
+        "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
+      },
+      "additionalProperties": false
+    },
+    "trace": {
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "export": { "$ref": "#/definitions/export_strategy" }
+      },
+      "additionalProperties": false
+    },
+    "trace_defaultss": {
+      "description": "An optional 'defaults' block for defining YAML anchors.",
+      "properties": {
+        "export": { "$ref": "#/definitions/export_strategy" },
+        "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
+      },
+      "additionalProperties": false
     }
   }
 }
