@@ -9,13 +9,21 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Otelcol.Config (
-  readConfig,
+  -- * Configuration type
   Config (..),
+  readConfigFile,
+  prettyConfig,
+
+  -- ** Processor configuration types
+  IsProcessorConfig,
   Processors (..),
+  processorEnabled,
+  processorDescription,
+  processorName,
+
+  -- *** Metric processor configuration types
   Metrics (..),
-  Traces (..),
-  AggregationStrategy (..),
-  ExportStrategy (..),
+  IsMetricProcessorConfig,
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -25,42 +33,81 @@ module GHC.Eventlog.Live.Otelcol.Config (
   MemReturnedMetric (..),
   HeapProfSampleMetric (..),
   CapabilityUsageMetric (..),
+
+  -- *** Trace processor configuration types
+  Traces (..),
+  IsTraceProcessorConfig,
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
 
-  -- * Configuration types
-  IsProcessorConfig,
-  IsMetricProcessorConfig,
-  IsSpanProcessorConfig,
+  -- ** Property types
 
-  -- * Accessors
-  processorEnabled,
-  processorDescription,
-  processorName,
+  -- *** Aggregation strategy
+  AggregationStrategy (..),
+  toAggregationBatches,
   processorAggregationStrategy,
   processorAggregationBatches,
   maximumAggregationBatches,
+
+  -- *** Export strategy
+  ExportStrategy (..),
+  toExportBatches,
   processorExportStrategy,
   processorExportBatches,
   maximumExportBatches,
 ) where
 
+import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.ByteString.Lazy qualified as BSL
 import Data.Default (Default (..))
-import Data.Kind (Constraint, Type)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Any (..), First (..))
 import Data.Text (Text)
-import Data.Yaml qualified as Y
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
+import Data.YAML qualified as YAML
+import GHC.Eventlog.Live.Logger (logError)
 import GHC.Eventlog.Live.Otelcol.Config.Default (defaultConfig, getDefault)
 import GHC.Eventlog.Live.Otelcol.Config.Types
+import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Records (HasField)
+import GHC.Stack.Types (HasCallStack)
+import System.Exit (exitFailure)
 
 {- |
 Read a `Config` from a configuration file.
 -}
-readConfig :: (MonadIO m) => FilePath -> m Config
-readConfig = Y.decodeFileThrow
+readConfigFile ::
+  (MonadIO m) =>
+  Verbosity ->
+  FilePath ->
+  m Config
+readConfigFile verbosity filePath =
+  readConfig verbosity =<< liftIO (BSL.readFile filePath)
+
+{- |
+Read a `Config` from a `BSL.ByteString`.
+-}
+readConfig ::
+  (MonadIO m) =>
+  Verbosity ->
+  BSL.ByteString ->
+  m Config
+readConfig verbosity fileContents =
+  liftIO $ do
+    case YAML.decode1 fileContents of
+      Left (pos, errorMessage) -> do
+        logError verbosity . T.pack $
+          YAML.prettyPosWithSource pos fileContents " error" <> errorMessage
+        exitFailure
+      Right config -> pure config
+
+{- |
+Pretty-print a `Config` to YAML.
+-}
+prettyConfig :: Config -> Text
+prettyConfig = TE.decodeUtf8Lenient . BSL.toStrict . YAML.encode1
 
 -------------------------------------------------------------------------------
 -- Default Instances
@@ -81,6 +128,9 @@ instance Default Metrics where
 instance Default Traces where
   def :: Traces
   def = $(getDefault @'["processors", "traces"] defaultConfig)
+
+-- NOTE: This should be kept in sync with the list of metrics.
+--       Specifically, there should be a `Default` instance for every metric.
 
 instance Default HeapAllocatedMetric where
   def :: HeapAllocatedMetric
@@ -118,6 +168,9 @@ instance Default CapabilityUsageMetric where
   def :: CapabilityUsageMetric
   def = $(getDefault @'["processors", "metrics", "capabilityUsage"] defaultConfig)
 
+-- NOTE: This should be kept in sync with the list of traces.
+--       Specifically, there should be a `Default` instance for every trace.
+
 instance Default CapabilityUsageSpan where
   def :: CapabilityUsageSpan
   def = $(getDefault @'["processors", "traces", "capabilityUsage"] defaultConfig)
@@ -125,38 +178,6 @@ instance Default CapabilityUsageSpan where
 instance Default ThreadStateSpan where
   def :: ThreadStateSpan
   def = $(getDefault @'["processors", "traces", "threadState"] defaultConfig)
-
--------------------------------------------------------------------------------
--- Configuration types
--------------------------------------------------------------------------------
-
-{- |
-The structural type of processor configurations.
--}
-type IsProcessorConfig :: Type -> Constraint
-type IsProcessorConfig config =
-  ( Default config
-  , HasField "description" config (Maybe Text)
-  , HasField "enabled" config Bool
-  , HasField "export" config (Maybe ExportStrategy)
-  , HasField "name" config Text
-  )
-
-{- |
-The structural type of metric processor configurations.
--}
-type IsMetricProcessorConfig :: Type -> Constraint
-type IsMetricProcessorConfig config =
-  ( IsProcessorConfig config
-  , HasField "aggregate" config (Maybe AggregationStrategy)
-  )
-
-{- |
-The structural type of span processor configurations.
--}
-type IsSpanProcessorConfig :: Type -> Constraint
-type IsSpanProcessorConfig config =
-  (IsProcessorConfig config)
 
 -------------------------------------------------------------------------------
 -- Accessors
@@ -188,15 +209,23 @@ processorDescription group field =
 
 {- |
 Get the name corresponding to a processor.
+
+__Warning:__ This assumes the value of @`def`.`name`@ is `Just` some `Text`.
 -}
 processorName ::
-  (Default b, HasField "name" b Text) =>
+  forall a b.
+  (HasCallStack, Default b, HasField "name" b (Maybe Text)) =>
   (Processors -> Maybe a) ->
   (a -> Maybe b) ->
   Config ->
   Text
 processorName group field =
-  (.name) . fromMaybe def . getFirst . with (.processors) (with group (First . field))
+  fromMaybe defaultName . ((.name) <=< getFirst) . with (.processors) (with group (First . field))
+ where
+  defaultName :: (HasCallStack) => Text
+  defaultName = case (def :: b).name of
+    Nothing -> error "The default configuration for this metric has no name."
+    Just name -> name
 
 {- |
 Get the aggregation strategy corresponding to a metric processor.
@@ -229,10 +258,9 @@ maximumAggregationBatches ::
   Config ->
   Int
 maximumAggregationBatches config =
-  -- NOTE: This list should be kept in sync with the fields of `Processors`.
-  -- TODO: This is not checked for completeness, which is a shame.
   maximum
-    [ processorAggregationBatches (.metrics) (.heapAllocated) config
+    [ -- NOTE: This should be kept in sync with the list of metrics.
+      processorAggregationBatches (.metrics) (.heapAllocated) config
     , processorAggregationBatches (.metrics) (.blocksSize) config
     , processorAggregationBatches (.metrics) (.heapSize) config
     , processorAggregationBatches (.metrics) (.heapLive) config
@@ -274,10 +302,9 @@ maximumExportBatches ::
   Config ->
   Int
 maximumExportBatches config =
-  -- NOTE: This list should be kept in sync with the fields of `Processors`.
-  -- TODO: This is not checked for completeness, which is a shame.
   maximum
-    [ processorExportBatches (.metrics) (.heapAllocated) config
+    [ -- NOTE: This should be kept in sync with the list of metrics
+      processorExportBatches (.metrics) (.heapAllocated) config
     , processorExportBatches (.metrics) (.blocksSize) config
     , processorExportBatches (.metrics) (.heapSize) config
     , processorExportBatches (.metrics) (.heapLive) config
@@ -286,7 +313,8 @@ maximumExportBatches config =
     , processorExportBatches (.metrics) (.memReturned) config
     , processorExportBatches (.metrics) (.heapProfSample) config
     , processorExportBatches (.metrics) (.capabilityUsage) config
-    , processorExportBatches (.traces) (.capabilityUsage) config
+    , -- NOTE: This should be kept in sync with the list of traces.
+      processorExportBatches (.traces) (.capabilityUsage) config
     , processorExportBatches (.traces) (.threadState) config
     ]
 

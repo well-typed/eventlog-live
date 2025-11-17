@@ -32,10 +32,8 @@ import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Version (showVersion)
 import Data.Word (Word32, Word64)
-import Data.Yaml qualified as Y
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), maybeMyGhcDebugSocketParser, withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
@@ -55,7 +53,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config)
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigByteString, defaultConfigJSONSchemaByteString)
+import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
 import GHC.Eventlog.Live.Otelcol.Exporter (exportResourceMetrics, exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
@@ -98,8 +96,8 @@ main = do
     -- Read the configuration file.
     config <- flip (maybe (pure def)) maybeConfigFile $ \configFile -> do
       logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
-      config <- C.readConfig configFile
-      logDebug verbosity $ "Configuration file:\n" <> (TE.decodeUtf8Lenient . Y.encode $ config)
+      config <- C.readConfigFile verbosity configFile
+      logDebug verbosity $ "Configuration file:\n" <> C.prettyConfig config
       pure config
 
     -- Determine the windowSize for stats
@@ -562,6 +560,7 @@ Run a `MetricProcessor`.
 -}
 runMetricProcessor ::
   forall metricProcessor metricProcessorConfig m a b c d.
+  (Default metricProcessorConfig) =>
   MetricProcessor metricProcessor metricProcessorConfig m a b c d ->
   Config ->
   ProcessT m (Tick a) (Tick (DList OM.Metric))
@@ -634,7 +633,7 @@ asScopeMetrics mod = mapping $ \metrics ->
   messageWith ((OM.metrics .~ metrics) : mod)
 
 asMetricWith ::
-  (Default a, HasField "description" a (Maybe Text), HasField "name" a Text) =>
+  (Default a, HasField "description" a (Maybe Text), HasField "name" a (Maybe Text)) =>
   Config ->
   (C.Metrics -> Maybe a) ->
   [OM.Metric -> OM.Metric] ->
@@ -939,14 +938,14 @@ configFileParser =
 
 defaultsPrinter :: O.Parser (a -> a)
 defaultsPrinter =
-  O.infoOption (fromByteString defaultConfigByteString) . mconcat $
+  O.infoOption defaultConfigString . mconcat $
     [ O.long "print-defaults"
     , O.help "Print default configuration options."
     ]
 
 configJSONSchemaPrinter :: O.Parser (a -> a)
 configJSONSchemaPrinter =
-  O.infoOption (fromByteString defaultConfigJSONSchemaByteString) . mconcat $
+  O.infoOption defaultConfigJSONSchemaString . mconcat $
     [ O.long "print-config-json-schema"
     , O.help "Print JSON Schema for configuration format."
     ]
@@ -960,14 +959,7 @@ debugDefaultsPrinter =
     ]
  where
   defaultConfigDebugString =
-    fromByteString . Y.encode $ (def :: Config)
-
-{- |
-Internal helper.
-Decode a `ByteString` to a `String`.
--}
-fromByteString :: ByteString -> String
-fromByteString = T.unpack . TE.decodeUtf8Lenient
+    T.unpack . C.prettyConfig $ (def :: Config)
 
 --------------------------------------------------------------------------------
 -- Service Name

@@ -22,8 +22,7 @@ import Data.Bifunctor (Bifunctor (..))
 import Data.Kind (Type)
 import Data.List (intercalate)
 import Data.Proxy (Proxy (..))
-import Data.Yaml qualified as Y
-import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigByteString)
+import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (decodeThrow, defaultConfigByteString)
 import GHC.Eventlog.Live.Otelcol.Config.Types (Config)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
@@ -34,7 +33,7 @@ Internal helper.
 The default configuration.
 -}
 defaultConfig :: Config
-defaultConfig = $(lift =<< Y.decodeThrow @Q @Config defaultConfigByteString)
+defaultConfig = $(lift =<< decodeThrow @Q @Config defaultConfigByteString)
 
 {- |
 __Warning:__ Compile-time only.
