@@ -23,3 +23,8 @@ source-repository-package
 if impl(ghc >=9.12)
   allow-newer:
     , influxdb-1.9.3.2:base
+
+-- 2025-11-17:
+-- disable snappy support in grpc-spec
+package grpc-spec
+  flags: -snappy

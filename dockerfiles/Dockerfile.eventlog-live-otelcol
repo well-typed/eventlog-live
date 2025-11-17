@@ -18,6 +18,11 @@ COPY --parents \
 COPY <<EOF /eventlog-live/cabal.project
 packages: eventlog-live
 packages: eventlog-live-otelcol
+
+-- 2025-11-17:
+-- disable snappy support in grpc-spec
+package grpc-spec
+  flags: -snappy
 EOF
 
 # Install protoc
