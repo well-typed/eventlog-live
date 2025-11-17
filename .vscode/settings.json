@@ -1,0 +1,5 @@
+{
+  "yaml.schemas": {
+    "./eventlog-live-otelcol/data/config.schema.json": "./eventlog-live-otelcol/data/default.yaml"
+  }
+}
