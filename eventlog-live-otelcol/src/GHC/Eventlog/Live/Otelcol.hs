@@ -55,7 +55,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config)
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigString)
+import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigByteString, defaultConfigJSONSchemaByteString)
 import GHC.Eventlog.Live.Otelcol.Exporter (exportResourceMetrics, exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
@@ -851,6 +851,7 @@ options =
     ( optionsParser
         O.<**> defaultsPrinter
         O.<**> debugDefaultsPrinter
+        O.<**> configJSONSchemaPrinter
         O.<**> OE.helperWith (O.long "help" <> O.help "Show this help text.")
         O.<**> OC.simpleVersioner (showVersion EventlogLive.version)
     )
@@ -938,9 +939,16 @@ configFileParser =
 
 defaultsPrinter :: O.Parser (a -> a)
 defaultsPrinter =
-  O.infoOption defaultConfigString . mconcat $
+  O.infoOption (fromByteString defaultConfigByteString) . mconcat $
     [ O.long "print-defaults"
-    , O.help "Print default configuration options that can be used in config.yaml"
+    , O.help "Print default configuration options."
+    ]
+
+configJSONSchemaPrinter :: O.Parser (a -> a)
+configJSONSchemaPrinter =
+  O.infoOption (fromByteString defaultConfigJSONSchemaByteString) . mconcat $
+    [ O.long "print-config-json-schema"
+    , O.help "Print JSON Schema for configuration format."
     ]
 
 debugDefaultsPrinter :: O.Parser (a -> a)
@@ -952,7 +960,14 @@ debugDefaultsPrinter =
     ]
  where
   defaultConfigDebugString =
-    T.unpack . TE.decodeUtf8Lenient . Y.encode $ (def :: Config)
+    fromByteString . Y.encode $ (def :: Config)
+
+{- |
+Internal helper.
+Decode a `ByteString` to a `String`.
+-}
+fromByteString :: ByteString -> String
+fromByteString = T.unpack . TE.decodeUtf8Lenient
 
 --------------------------------------------------------------------------------
 -- Service Name

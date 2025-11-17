@@ -82,7 +82,10 @@ copyright:          (c) 2025 Well-Typed
 build-type:         Simple
 category:           Debug, Monitoring, System
 extra-doc-files:    CHANGELOG.md
-extra-source-files: data/default.yaml
+extra-source-files:
+  data/config.schema.json
+  data/default.yaml
+
 tested-with:
   GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
