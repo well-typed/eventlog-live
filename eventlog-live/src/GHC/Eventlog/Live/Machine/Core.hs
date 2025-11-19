@@ -690,8 +690,8 @@ validateInput verbosity ticks
 This machine validates that the inputs are received in order.
 
 If an out-of-order input is encountered, the machine prints an error message
-that directs the user to check that the @--eventlog-flush-interval@ and the
-@--batch-interval@ flags are set correctly.
+that directs the user to check that the @--eventlog-flush-interval@ flag is
+set correctly.
 -}
 validateOrder ::
   (MonadIO m, Ord k, Show a) =>
@@ -709,8 +709,8 @@ validateOrder verbosity timestamp
           | timestamp new < timestamp old -> do
               logError verbosity . T.pack $
                 "Encountered two out-of-order inputs.\n\
-                \Did you pass --eventlog-flush-interval to the GHC RTS?\n\
-                \Did you set --batch-interval to be at least as big as the value of --eventlog-flush-interval?"
+                \Did you pass --eventlog-flush-interval=SECONDS to the GHC RTS?\n\
+                \Did you pass the same flag to this program?"
               logDebug verbosity . T.pack $
                 printf
                   "Out-of-order inputs:\n\
