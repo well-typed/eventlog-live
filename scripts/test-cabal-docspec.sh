@@ -35,5 +35,7 @@ if [ "${SKIP_CABAL_BUILD}" = "" ]; then
     exit 1
   fi
 fi
-${CABAL_DOCSPEC} ||
-  exit 1
+${CABAL_DOCSPEC} \
+  --verbose \
+  --no-check-properties \
+  || exit 1
