@@ -28,3 +28,13 @@ if impl(ghc >=9.12)
 -- disable snappy support in grpc-spec
 package grpc-spec
   flags: -snappy
+
+-- 2025-11-20:
+-- http2 >=5.3.5 && <5.3.11 declare compatibility with network-semantics
+-- 0.3>= && <0.4, but they do not build with network-semantics-0.3.1, which
+-- introduces a breaking change on a minor version bump.
+-- there isn't a way to fix this is a cabal.project file without restricting
+-- the version range of http2, so I've restricted it downwards to <5.3.11.
+constraints:
+  , http2 <5.3.11
+  , http-semantics >=0.3 && <0.3.1
