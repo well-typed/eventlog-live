@@ -24,89 +24,95 @@
 #
 # - The `export` property determines whether or not the telemetry data is
 #   exported to the OpenTelemetry Collector and, if so, with what frequency.
-#   The export interval is given as a number followed by an "x", e.g. "60x",
-#   which exports the data every 60 batches. The batch interval is determined
-#   by the interval with which the RTS of the monitored process flushes the
-#   eventlog, and is given by `--eventlog-flush-interval=SECONDS`.
-#   If `export` is set to true, this is interpreted as "1x", i.e., every batch.
 #
-#   The data produced by our example `blocks_size` processor will be exported
-#   every 60 batches. If you pass `--eventlog-flush-interval=1` to both the RTS
-#   and eventlog-live-otelcol, the data will be exported every minute. If you
-#   pass `--eventlog-flush-interval=2`, it will be exported every 2 minutes.
+#   There are three ways to configure the `export` property:
+#
+#   - A duration in seconds, given as "Ns". For instance, if `export` is "30s"
+#     then the processor exports a batch of telemetry data every 30 seconds.
+#
+#   - A duration in batches, given as "Nx". The length of one batch interval
+#     is determined by the `--eventlog-flush-interval=SECONDS` flag, as passed
+#     to the RTS of the monitored process and to this program. For instance,
+#     if `export` is "2x" and the eventlog flush interval is 30 seconds, then
+#     the processor exports a batch of telemetery data every minute.
+#
+#   - A boolean flag, i.e., `true` or `false`. If `export` is `false`, then the
+#     processor will not export data and, if its output is not needed by some
+#     other processor, it will not run either. If `export` is `true`, then the
+#     processor exports telemetry data as if configured with "1x" (see above).
+#
+#   The example `blocks_size` processor exports a batch of telemetry data every
+#   30 seconds.
 #
 # - The `aggregate` property determines whether or not the telemetry data is
 #   aggregated over time, and, if so, over what interval. Only metrics support
-#   aggregation. The aggregation interval follows the same format as the export
-#   interval, e.g., 30x means aggregation over 30 batches and true means 1x.
+#   aggregation.
+#
+#   The aggregation interval uses the same format as the export interval (see
+#   above). For instance, if `aggregate` is 5s, the processor aggregates data
+#   over 5 second intervals.
+#
 #   Aggregation follows the OpenTelemetry specification. Sums are aggregated by
 #   summation. Gauges are aggregated by taking the most recent data point.
 #   The `heap_allocated` and `capability_usage` metrics are aggregated as sums.
 #   All other metrics are aggregated as gauges.
 #
-#   The data produced by our example `blocks_size` processor will be aggregated
-#   over each batch, i.e., only the last metric produced in each batch is kept.
+#   The data produced by our example `blocks_size` processor aggregates data
+#   over 1 second intervals and only keeps the last metric in each interval.
 #
 processors:
   metrics:
-    defaults:
-      aggregate:
-        # one of [boolean, `${number}x`]
-        &default_aggregate 1x
-      export:
-        # one of [boolean, `${number}x`]
-        &default_export 60x
     blocks_size:
       name: ghc_eventlog_BlocksSize
       description: The current heap size, calculated by the allocated number of blocks.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     capability_usage:
       name: ghc_eventlog_CapabilityUsageDuration
       description: The duration of each capability usage span.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     heap_allocated:
       name: ghc_eventlog_HeapAllocated
       description: The size of a newly allocated chunk of heap.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     heap_live:
       name: ghc_eventlog_HeapLive
       description: The current heap size, calculated by the allocated number of megablocks.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     heap_prof_sample:
       name: ghc_eventlog_HeapProfSample
       description: A heap profile sample.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     heap_size:
       name: ghc_eventlog_HeapSize
       description: The current heap size, calculated by the allocated number of megablocks.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     mem_current:
       name: ghc_eventlog_MemCurrent
       description: The number of megablocks currently allocated.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     mem_needed:
       name: ghc_eventlog_MemNeeded
       description: The number of megablocks currently needed.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
     mem_returned:
       name: ghc_eventlog_MemReturned
       description: The number of megablocks currently being returned to the OS.
-      aggregate: *default_aggregate
-      export: *default_export
+      aggregate: 1s
+      export: 30s
   traces:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
       description: A trace of capability usage (either mutator thread or garbage collection).
-      export: false # one of [boolean, `${number}x`]
+      export: false
     thread_state:
       name: ghc_eventlog_ThreadState
       description: A trace of thread state changes (either running or stopped).
-      export: false # one of [boolean, `${number}x`]
+      export: false
