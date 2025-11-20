@@ -27,6 +27,7 @@ module GHC.Eventlog.Live.Machine.Core (
   -- * Event sorting
   sortByBatch,
   sortByTick,
+  sortByTicks,
 
   -- * Delimiting
   delimit,
@@ -74,7 +75,7 @@ import Text.Printf (printf)
 >>> import Data.Semigroup (Sum (..))
 
 >>> :{
-run :: (HasTickInfo => MachineT Identity k b) -> [b]
+run :: (HasTickInfo => M.MachineT Identity k b) -> [b]
 run = let ?tickInfo = TickInfo { tick = 0 } in M.run
 :}
 
@@ -468,12 +469,12 @@ data Child a
 -------------------------------------------------------------------------------
 
 {- |
-Sort items in successive batches.
+Sort items in @N@ successive batches.
 
 If the maximum key in batch @i@ is guaranteed to be smaller than the minimum
-key in batch @i + 2@, this process produces a totally ordered stream of items.
+key in batch @i + 2N@, this process produces a totally ordered stream of items.
 
-The process @`sortByBatch` key@ caches two batches of items, sorts them
+The process @`sortByBatch` key@ caches @N@ batches of items, sorts them
 together, and yields only those items whose key is less than or equal
 to the maximum key in the first batch.
 
@@ -503,7 +504,7 @@ sortByBatch key = sortByBatchWith Nothing
       onNext :: [a] -> ProcessT m [a] [a]
       onNext new = sortByBatchWith (Just sortedNew)
        where
-        sortedNew = sortByTime new
+        sortedNew = sortByKey new
       onStop :: ProcessT m [a] [a]
       onStop = stopped
     Just sortedOld -> MachineT $ pure $ Await onNext Refl onStop
@@ -515,24 +516,24 @@ sortByBatch key = sortByBatchWith Nothing
        where
         -- NOTE: use of partial @maximum@ is guarded by the check @null old@.
         cutoff = getMax (foldMap (Max . key) sortedOld)
-        sortedNew = sortByTime new
-        sorted = joinByTime sortedOld sortedNew
+        sortedNew = sortByKey new
+        sorted = joinByKey sortedOld sortedNew
         (sortedBeforeCutoff, sortedAfterCutoff) = L.partition ((<= cutoff) . key) sorted
       onStop :: ProcessT m [a] [a]
       onStop = MachineT $ pure $ Yield sortedOld $ stopped
 
-  compByTime :: a -> a -> Ordering
-  compByTime = compare `on` key
+  compByKey :: a -> a -> Ordering
+  compByKey = compare `on` key
 
-  sortByTime :: [a] -> [a]
-  sortByTime = L.sortBy compByTime
+  sortByKey :: [a] -> [a]
+  sortByKey = L.sortBy compByKey
 
-  joinByTime {- Sorted -} :: [a {- Sorted -}] -> [a {- Sorted -}] -> [a]
-  joinByTime [] ys = ys
-  joinByTime xs [] = xs
-  joinByTime (x : xs) (y : ys)
-    | compByTime x y == LT = x : joinByTime xs (y : ys)
-    | otherwise = y : joinByTime (x : xs) ys
+  joinByKey {- Sorted -} :: [a {- Sorted -}] -> [a {- Sorted -}] -> [a]
+  joinByKey [] ys = ys
+  joinByKey xs [] = xs
+  joinByKey (x : xs) (y : ys)
+    | compByKey x y == LT = x : joinByKey xs (y : ys)
+    | otherwise = y : joinByKey (x : xs) ys
 
 {- |
 Sort items between successive ticks.
@@ -556,6 +557,35 @@ sortByTick ::
 sortByTick key =
   mapping (fmap D.singleton)
     ~> batchByTick
+    ~> mapping (fmap D.toList)
+    ~> liftTick (sortByBatch key ~> asParts)
+
+{- |
+Sort items between @2*K@ successive ticks.
+
+If the maximum key in batch @i@ is guaranteed to be smaller than the minimum
+key in batch @i + K@, this process produces a totally ordered stream of items.
+
+==== __Examples__
+
+>>> run $ sortByTicks @Int id 2 <~ source [Item 2,Tick,Item 1,Tick,Item 4,Tick,Item 3,Tick]
+[Tick,Tick,Tick,Item 1,Item 2,Tick,Item 3,Item 4]
+
+>>> run $ sortByTicks @Int id 2 <~ source [Item 1,Tick,Item 3,Tick,Item 2,Tick,Item 4,Tick]
+[Tick,Tick,Tick,Item 1,Item 2,Item 3,Tick,Item 4]
+
+>>> run $ sortByTicks @Int id 2 <~ source [Item 1,Tick,Item 4,Tick,Item 2,Tick,Item 3,Tick]
+[Tick,Tick,Tick,Item 1,Item 2,Item 3,Item 4,Tick]
+-}
+sortByTicks ::
+  forall a k.
+  (Bounded k, Ord k) =>
+  (a -> k) ->
+  Int ->
+  Process (Tick a) (Tick a)
+sortByTicks key ticks =
+  mapping (fmap D.singleton)
+    ~> batchByTicks ticks
     ~> mapping (fmap D.toList)
     ~> liftTick (sortByBatch key ~> asParts)
 
