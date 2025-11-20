@@ -1,7 +1,6 @@
 services:
   oddball:
     # container_name: oddball
-    image: "well-typed/eventlog-live-example-oddball:0.1.0.0"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.oddball"
@@ -17,7 +16,6 @@ services:
 
   eventlog-live-otelcol:
     # container_name: eventlog-live-otelcol
-    image: "well-typed/eventlog-live-otelcol:0.1.0.0"
     build:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.eventlog-live-otelcol"
