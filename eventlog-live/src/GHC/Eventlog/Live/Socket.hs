@@ -50,8 +50,8 @@ runWithEventlogSource ::
   Double ->
   -- | The timeout exponent for exponential backoff.
   Double ->
-  -- | The eventlog flush interval in seconds.
-  Double ->
+  -- | The batch interval in milliseconds.
+  Int ->
   -- | The number of bytes to read (defaults to 4KiB).
   Maybe Int ->
   -- | An optional file to which to stream binary eventlog data.
@@ -59,10 +59,10 @@ runWithEventlogSource ::
   -- | The event processor.
   ProcessT m (Tick Event) Void ->
   m ()
-runWithEventlogSource verbosity eventlogSocket timeoutExponent initialTimeoutS eventlogFlushIntervalS maybeChuckSizeBytes maybeOutputFile toEventSink = do
+runWithEventlogSource verbosity eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
   withEventlogSource verbosity timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
     let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
-    let fromSocket = sourceHandleBatch eventlogFlushIntervalS chuckSizeBytes eventlogSource
+    let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSource
     case maybeOutputFile of
       Nothing ->
         runT_ $
