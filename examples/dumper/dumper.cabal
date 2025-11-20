@@ -22,6 +22,7 @@ executable dumper
   default-language:   Haskell2010
   default-extensions:
     LambdaCase
+    NumericUnderscores
     RecordWildCards
 
   main-is:            Main.hs
