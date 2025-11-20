@@ -45,7 +45,7 @@ processors:
       description: null
       export: true
       name: eventlog_live_MemReturned
-  spans:
+  traces:
     capability_usage:
       description: null
       export: false

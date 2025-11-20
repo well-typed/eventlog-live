@@ -45,7 +45,7 @@ processors:
       description: null
       export: true
       name: oddball_MemReturned
-  spans:
+  traces:
     capability_usage:
       description: null
       export: false
