@@ -45,12 +45,12 @@ processors:
       description: The number of megablocks currently being returned to the OS.
       export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_MemReturned
-  spans:
+  traces:
     capability_usage:
       description: A span of capability usage (either mutator thread or garbage collection).
-      export: false # one of [boolean, "Nx", "Ns"]
+      export: 1x # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_CapabilityUsage
     thread_state:
       description: A span of thread state changes (either running or stopped).
-      export: false # one of [boolean, "Nx", "Ns"]
+      export: 1x # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_ThreadState
