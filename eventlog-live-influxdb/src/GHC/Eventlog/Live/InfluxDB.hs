@@ -59,6 +59,10 @@ The main function for @eventlog-live-influxdb@.
 main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
+
+  -- Convert the eventlog flush interval to milliseconds
+  let batchIntervalMs = round (eventlogFlushIntervalS * 1_000)
+
   let toInfluxDB =
         liftTick withStartTime
           ~> sortByTick (.value.evTime)
@@ -77,7 +81,7 @@ main = do
     eventlogSource
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
-    eventlogFlushIntervalS
+    batchIntervalMs
     Nothing -- chunk size (bytes)
     maybeEventlogLogFile
     toInfluxDB
