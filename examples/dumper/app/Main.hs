@@ -28,7 +28,11 @@ import qualified Text.Regex.TDFA as RE
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent eventlogFlushIntervalS Nothing Nothing $
+
+  -- Convert the eventlog flush interval to milliseconds
+  let batchIntervalMs = round (eventlogFlushIntervalS * 1_000)
+
+  runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchIntervalMs Nothing Nothing $
     sortByTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
