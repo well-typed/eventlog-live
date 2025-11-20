@@ -9,10 +9,11 @@ Portability : portable
 module GHC.Eventlog.Live.Otelcol.Config.Types (
   -- * Configuration type
   Config (..),
+  FullConfig (..),
 
   -- ** Processor configuration types
-  IsProcessorConfig,
   Processors (..),
+  IsProcessorConfig,
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -34,23 +35,36 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   ThreadStateSpan (..),
 
   -- ** Property types
+  Duration (..),
   AggregationStrategy (..),
-  toAggregationBatches,
+  toAggregationSeconds,
   ExportStrategy (..),
-  toExportBatches,
+  toExportSeconds,
 ) where
 
+import Control.Applicative (asum)
 import Data.Char (isDigit)
 import Data.Kind (Constraint, Type)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.YAML (FromYAML (..), ToYAML, (.:?), (.=))
 import Data.YAML qualified as YAML
-import GHC.Generics (Generic)
 import GHC.Records (HasField (..))
 import Language.Haskell.TH.Lift.Compat (Lift)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
+import Text.Read (readEither)
+
+{- |
+The extended configuration with derived fields.
+-}
+data FullConfig = FullConfig
+  { batchIntervalMs :: !Int
+  -- ^ The batch interval in milliseconds.
+  , eventlogFlushIntervalX :: !Int
+  -- ^ The @--eventlog-flush-interval@ in /batches/.
+  , config :: !Config
+  }
 
 {- |
 The configuration for @eventlog-live-otelcol@.
@@ -58,7 +72,7 @@ The configuration for @eventlog-live-otelcol@.
 newtype Config = Config
   { processors :: Maybe Processors
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML Config where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Config
@@ -80,7 +94,7 @@ data Processors = Processors
   { metrics :: Maybe Metrics
   , traces :: Maybe Traces
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML Processors where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Processors
@@ -118,7 +132,7 @@ data Metrics = Metrics
   , heapProfSample :: Maybe HeapProfSampleMetric
   , capabilityUsage :: Maybe CapabilityUsageMetric
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML Metrics where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Metrics
@@ -166,7 +180,7 @@ data Traces = Traces
   { capabilityUsage :: Maybe CapabilityUsageSpan
   , threadState :: Maybe ThreadStateSpan
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML Traces where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Traces
@@ -186,30 +200,72 @@ instance ToYAML Traces where
       , "thread_state" .= traces.threadState
       ]
 
-{- |
-The options for metric aggregation strategies.
--}
-data AggregationStrategy
-  = AggregationStrategyBool {isOn :: !Bool}
-  | AggregationStrategyByBatches {byBatches :: !Int}
-  deriving (Generic, Lift)
+--------------------------------------------------------------------------------
+-- Duration
 
-{- |
-Convert an `ExportStrategy` to a number of batches.
--}
-toAggregationBatches :: Maybe AggregationStrategy -> Int
-toAggregationBatches = \case
-  Nothing -> 0
-  Just AggregationStrategyBool{..} -> if isOn then 1 else 0
-  Just AggregationStrategyByBatches{..} -> byBatches
+data Duration
+  = DurationByBatches {batches :: !Int}
+  | DurationBySeconds {seconds :: !Double}
+  deriving (Lift)
 
 {- |
 Internal helper.
 A `ReadP` style parser for `AggregationStrategy`.
 -}
-readPAggregationStrategy :: ReadP AggregationStrategy
-readPAggregationStrategy =
-  AggregationStrategyByBatches . read <$> P.munch1 isDigit <* P.char 'x'
+readPDuration :: ReadP Duration
+readPDuration = do
+  -- Parse the number
+  integerPart <- P.munch1 isDigit
+  maybeFractionPart <- P.option Nothing (Just <$ P.char '.' <*> P.munch1 isDigit)
+
+  -- Make a duration by batches
+  let byBatches =
+        case maybeFractionPart of
+          Nothing ->
+            case readEither integerPart of
+              Left errorMsg -> fail $ "Could not parse duration: " <> errorMsg
+              Right batches -> pure DurationByBatches{..}
+          Just fractionPart -> fail $ "Fractional batches are unsupported; found " <> integerPart <> "." <> fractionPart <> "x"
+
+  -- Make a duration by seconds
+  let bySeconds =
+        case readEither $ integerPart <> maybe "" ('.' :) maybeFractionPart of
+          Left errorMsg -> fail $ "Could not parse duration: " <> errorMsg
+          Right seconds -> pure DurationBySeconds{..}
+
+  -- Parse the unit
+  asum
+    [ P.char 'x' >> byBatches
+    , P.char 's' >> bySeconds
+    ]
+
+{- |
+Internal helper.
+Pretty-print a duration.
+-}
+prettyDuration :: Duration -> String
+prettyDuration = \case
+  DurationByBatches{..} -> show batches <> "x"
+  DurationBySeconds{..} -> show seconds <> "s"
+
+--------------------------------------------------------------------------------
+-- Aggregation Strategy
+
+{- |
+The options for metric aggregation strategies.
+-}
+data AggregationStrategy
+  = AggregationStrategyBool {isOn :: !Bool}
+  | AggregationStrategyDuration {duration :: !Duration}
+  deriving (Lift)
+
+{- |
+Convert an `AggregationStrategy` to a number of seconds, if specified in seconds.
+-}
+toAggregationSeconds :: AggregationStrategy -> Maybe Double
+toAggregationSeconds aggregationStrategy
+  | AggregationStrategyDuration DurationBySeconds{..} <- aggregationStrategy = Just seconds
+  | otherwise = Nothing
 
 instance FromYAML AggregationStrategy where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser AggregationStrategy
@@ -218,8 +274,8 @@ instance FromYAML AggregationStrategy where
     parseYAMLScalar = \case
       YAML.SBool isOn -> pure AggregationStrategyBool{..}
       YAML.SStr str
-        | [(aggregationStrategy, "")] <- P.readP_to_S readPAggregationStrategy (T.unpack str) ->
-            pure aggregationStrategy
+        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
+            pure AggregationStrategyDuration{..}
       _otherwise -> YAML.typeMismatch "AggregationStrategy" node
 
 instance ToYAML AggregationStrategy where
@@ -227,16 +283,16 @@ instance ToYAML AggregationStrategy where
   toYAML = \case
     AggregationStrategyBool{..} ->
       YAML.Scalar () (YAML.SBool isOn)
-    AggregationStrategyByBatches{..} ->
-      YAML.Scalar () (YAML.SStr . T.pack $ show byBatches <> "x")
+    AggregationStrategyDuration{..} ->
+      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
 
 {- |
 The options for export strategies.
 -}
 data ExportStrategy
-  = ExportStrategyBool {isOn :: Bool}
-  | ExportStrategyByBatches {byBatches :: Int}
-  deriving (Generic, Lift)
+  = ExportStrategyBool {isOn :: !Bool}
+  | ExportStrategyDuration {duration :: !Duration}
+  deriving (Lift)
 
 {- |
 Check whether or not a processor is enabled based on its export strategy.
@@ -245,24 +301,18 @@ isEnabled :: Maybe ExportStrategy -> Bool
 isEnabled = \case
   Nothing -> False
   Just ExportStrategyBool{..} -> isOn
-  Just ExportStrategyByBatches{..} -> byBatches >= 1
+  Just ExportStrategyDuration{..} ->
+    case duration of
+      DurationByBatches{..} -> batches > 0
+      DurationBySeconds{..} -> seconds > 0
 
 {- |
-Convert an `ExportStrategy` to a number of batches.
+Convert an `ExportStrategy` to a number of seconds, if specified in seconds.
 -}
-toExportBatches :: Maybe ExportStrategy -> Int
-toExportBatches = \case
-  Nothing -> 0
-  Just ExportStrategyBool{..} -> if isOn then 1 else 0
-  Just ExportStrategyByBatches{..} -> byBatches
-
-{- |
-Internal helper.
-A `ReadP` style parser for `ExportStrategy`.
--}
-readPExportStrategy :: ReadP ExportStrategy
-readPExportStrategy =
-  ExportStrategyByBatches . read <$> P.munch1 isDigit <* P.char 'x'
+toExportSeconds :: ExportStrategy -> Maybe Double
+toExportSeconds exportStrategy
+  | ExportStrategyDuration DurationBySeconds{..} <- exportStrategy = Just seconds
+  | otherwise = Nothing
 
 instance FromYAML ExportStrategy where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ExportStrategy
@@ -271,8 +321,8 @@ instance FromYAML ExportStrategy where
     parseYAMLScalar = \case
       YAML.SBool isOn -> pure ExportStrategyBool{..}
       YAML.SStr str
-        | [(exportStrategy, "")] <- P.readP_to_S readPExportStrategy (T.unpack str) ->
-            pure exportStrategy
+        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
+            pure ExportStrategyDuration{..}
       _otherwise -> YAML.typeMismatch "ExportStrategy" node
 
 instance ToYAML ExportStrategy where
@@ -280,8 +330,8 @@ instance ToYAML ExportStrategy where
   toYAML = \case
     ExportStrategyBool{..} ->
       YAML.Scalar () (YAML.SBool isOn)
-    ExportStrategyByBatches{..} ->
-      YAML.Scalar () (YAML.SStr . T.pack $ show byBatches <> "x")
+    ExportStrategyDuration{..} ->
+      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapAllocatedData`.
@@ -292,7 +342,7 @@ data HeapAllocatedMetric = HeapAllocatedMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML HeapAllocatedMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapAllocatedMetric
@@ -315,7 +365,7 @@ data HeapSizeMetric = HeapSizeMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML HeapSizeMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapSizeMetric
@@ -338,7 +388,7 @@ data BlocksSizeMetric = BlocksSizeMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML BlocksSizeMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser BlocksSizeMetric
@@ -361,7 +411,7 @@ data HeapLiveMetric = HeapLiveMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML HeapLiveMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapLiveMetric
@@ -384,7 +434,7 @@ data MemCurrentMetric = MemCurrentMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML MemCurrentMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemCurrentMetric
@@ -407,7 +457,7 @@ data MemNeededMetric = MemNeededMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML MemNeededMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemNeededMetric
@@ -430,7 +480,7 @@ data MemReturnedMetric = MemReturnedMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML MemReturnedMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemReturnedMetric
@@ -453,7 +503,7 @@ data HeapProfSampleMetric = HeapProfSampleMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML HeapProfSampleMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapProfSampleMetric
@@ -476,7 +526,7 @@ data CapabilityUsageMetric = CapabilityUsageMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML CapabilityUsageMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CapabilityUsageMetric
@@ -498,7 +548,7 @@ data CapabilityUsageSpan = CapabilityUsageSpan
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML CapabilityUsageSpan where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CapabilityUsageSpan
@@ -520,7 +570,7 @@ data ThreadStateSpan = ThreadStateSpan
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Generic, Lift)
+  deriving (Lift)
 
 instance FromYAML ThreadStateSpan where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadStateSpan

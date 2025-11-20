@@ -37,33 +37,46 @@
     }
   },
   "definitions": {
+    "duration": {},
+    "duration_by_batches": {
+      "type": "string",
+      "pattern": "^([0-9]+)(x)$"
+    },
+    "duration_by_seconds": {
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?)(s)$"
+    },
     "aggregation_strategy": {
       "oneOf": [
         { "type": "null" },
         { "$ref": "#/definitions/aggregation_strategy_bool" },
-        { "$ref": "#/definitions/aggregation_strategy_by_batches" }
+        { "$ref": "#/definitions/aggregation_strategy_duration" }
       ]
     },
     "aggregation_strategy_bool": {
       "type": "boolean"
     },
-    "aggregation_strategy_by_batches": {
-      "type": "string",
-      "pattern": "^([0-9]+)(x)$"
+    "aggregation_strategy_duration": {
+      "oneOf": [
+        { "$ref": "#/definitions/duration_by_batches" },
+        { "$ref": "#/definitions/duration_by_seconds" }
+      ]
     },
     "export_strategy": {
       "oneOf": [
         { "type": "null" },
         { "$ref": "#/definitions/export_strategy_bool" },
-        { "$ref": "#/definitions/export_strategy_by_batches" }
+        { "$ref": "#/definitions/export_strategy_duration" }
       ]
     },
     "export_strategy_bool": {
       "type": "boolean"
     },
-    "export_strategy_by_batches": {
-      "type": "string",
-      "pattern": "^([0-9]+)(x)$"
+    "export_strategy_duration": {
+      "oneOf": [
+        { "$ref": "#/definitions/duration_by_batches" },
+        { "$ref": "#/definitions/duration_by_seconds" }
+      ]
     },
     "processor_defaults": {
       "description": "An optional 'defaults' block for defining YAML anchors.",
