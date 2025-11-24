@@ -32,6 +32,7 @@ processUserMessageData =
             yield $
               logRecord i msg $
                 [ "evCap" ~= i.value.evCap
+                , "kind" ~= ("UserMessage" :: Text)
                 ]
         | otherwise -> pure ()
 
@@ -50,7 +51,7 @@ processUserMarkerData =
             yield $
               logRecord i markername $
                 [ "evCap" ~= i.value.evCap
-                , "marker" ~= True
+                , "kind" ~= ("UserMarker" :: Text)
                 ]
         | otherwise -> pure ()
 
