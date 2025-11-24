@@ -69,7 +69,7 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "$tag_category",
@@ -287,13 +287,13 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time({\"${metric_name_prefix}CapabilityUsageDuration_nanoseconds_total\", exported_job=\"$service_name\"}[$__interval]))",
+          "expr": "sum by(category) (avg_over_time({\"${metric_name_prefix}CapabilityUsageDuration_nanoseconds_total\"}[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -352,18 +352,22 @@
           "text": "oddball",
           "value": "oddball"
         },
-        "definition": "query_result(count by (exported_job)(count_over_time(ghc_eventlog_BlocksSize_bytes[$__range])))",
+        "datasource": {
+          "type": "tempo",
+          "uid": "P214B5B846CF3925F"
+        },
+        "definition": "",
         "description": "The service name used for the visualisations on this dashboard.",
         "label": "Service Name",
         "name": "service_name",
         "options": [],
         "query": {
-          "qryType": 5,
-          "query": "query_result(count by (exported_job)(count_over_time(ghc_eventlog_BlocksSize_bytes[$__range])))",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+          "label": "service.name",
+          "refId": "TempoDatasourceVariableQueryEditor-VariableQuery",
+          "type": 1
         },
         "refresh": 2,
-        "regex": "/.*exported_job=\"([^\"]*).*/",
+        "regex": "",
         "sort": 1,
         "type": "query"
       },
