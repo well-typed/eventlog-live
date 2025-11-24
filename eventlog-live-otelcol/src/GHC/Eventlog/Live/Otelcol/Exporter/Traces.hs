@@ -57,7 +57,7 @@ data RejectedSpansError
 instance Exception RejectedSpansError where
   displayException :: RejectedSpansError -> String
   displayException RejectedSpansError{..} =
-    printf "Error: OpenTelemetry Collector rejectedSpans %d data points with message: %s" rejectedSpans errorMessage
+    printf "Error: OpenTelemetry Collector rejectedSpans %d spans with message: %s" rejectedSpans errorMessage
 
 --------------------------------------------------------------------------------
 -- OpenTelemetry gRPC Exporter for Traces
