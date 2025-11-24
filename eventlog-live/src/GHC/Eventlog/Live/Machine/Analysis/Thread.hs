@@ -12,7 +12,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Thread (
 
   -- ** Thread Labels
   ThreadLabel (..),
-  processThreadLabels,
+  processThreadLabelData,
 
   -- ** Thread State Spans
   ThreadState (..),
@@ -57,8 +57,8 @@ data ThreadLabel
 {- |
 This machine processes `E.ThreadLabel` events and yields t`ThreadLabel` values.
 -}
-processThreadLabels :: Process (WithStartTime Event) ThreadLabel
-processThreadLabels = repeatedly go
+processThreadLabelData :: Process (WithStartTime Event) ThreadLabel
+processThreadLabelData = repeatedly go
  where
   go =
     await >>= \i -> case i.value.evSpec of
