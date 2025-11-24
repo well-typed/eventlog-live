@@ -82,7 +82,7 @@ exportResourceSpans conn =
 
   sendResourceSpans :: OTS.ExportTraceServiceRequest -> IO ExportTraceResult
   sendResourceSpans exportTraceServiceRequest =
-    doGrpc `catch` handleGrpcError
+    doGrpc `catch` handleSomeException
    where
     !exportedSpans = countSpansInExportTraceServiceRequest exportTraceServiceRequest
 
@@ -97,8 +97,8 @@ exportResourceSpans conn =
               let !rejectedMetricsError = RejectedSpansError{errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage, ..}
               pure $ ExportTraceError exportedSpans rejectedSpans (SomeException rejectedMetricsError)
 
-    handleGrpcError :: G.GrpcError -> IO ExportTraceResult
-    handleGrpcError grpcError = pure $ ExportTraceError 0 exportedSpans (SomeException grpcError)
+    handleSomeException :: SomeException -> IO ExportTraceResult
+    handleSomeException someException = pure $ ExportTraceError 0 exportedSpans someException
 
 type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
