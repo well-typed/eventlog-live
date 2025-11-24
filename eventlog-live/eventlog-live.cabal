@@ -99,11 +99,14 @@ library
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
     GHC.Eventlog.Live.Data.Group
+    GHC.Eventlog.Live.Data.LogRecord
     GHC.Eventlog.Live.Data.Metric
+    GHC.Eventlog.Live.Data.Severity
     GHC.Eventlog.Live.Data.Span
     GHC.Eventlog.Live.Logger
     GHC.Eventlog.Live.Machine.Analysis.Capability
     GHC.Eventlog.Live.Machine.Analysis.Heap
+    GHC.Eventlog.Live.Machine.Analysis.Log
     GHC.Eventlog.Live.Machine.Analysis.Thread
     GHC.Eventlog.Live.Machine.Core
     GHC.Eventlog.Live.Machine.Decoder

@@ -18,6 +18,7 @@
 - **BREAKING**: Change `onlyTick` to yield actual `Tick` values.
 - **BREAKING**: Change interval argument for `runWithEventlogSource` and `sourceHandleBatch` to batch in milliseconds.
 - **BREAKING**: Add `AttrBoot` to `AttrValue`.
+- Add support for user messages and markers.
 
 ### 0.4.0.0
 
