@@ -47,6 +47,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   toAggregationSeconds,
   ExportStrategy (..),
   toExportSeconds,
+  isEnabled,
 ) where
 
 import Control.Applicative (asum)
