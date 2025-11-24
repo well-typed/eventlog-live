@@ -45,12 +45,29 @@ services:
       - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
       - "./config/grafana-dashboards-eventlog-heap.json:/var/lib/grafana/dashboards/eventlog-heap.json"
+      - "./config/grafana-dashboards-eventlog-logs.json:/var/lib/grafana/dashboards/eventlog-logs.json"
       - "./config/grafana-dashboards-eventlog-threads.json:/var/lib/grafana/dashboards/eventlog-threads.json"
-      - "./config/grafana-dashboards-process-overview.json:/var/lib/grafana/dashboards/process-overview.json"
+
+  loki:
+    # container_name: loki
+    image: grafana/loki:latest
+    command:
+      - "--config.file=/etc/loki/config.yaml"
+    ports:
+      - "3100"
+    volumes:
+      - "./config/loki.yaml:/etc/loki/config.yaml"
 
   otelcol:
     # container_name: otelcol
     image: otel/opentelemetry-collector-contrib:latest
+    depends_on:
+      loki:
+        condition: "service_started"
+      prometheus:
+        condition: "service_started"
+      tempo:
+        condition: "service_started"
     command:
       - "--config=/etc/otelcol/config.yaml"
     volumes:
