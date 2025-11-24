@@ -17,15 +17,24 @@ module GHC.Eventlog.Live.Otelcol.Config (
   toFullConfig,
 
   -- ** Processor configuration types
-  IsProcessorConfig,
   Processors (..),
+  IsProcessorConfig,
+  forEachProcessor,
   processorEnabled,
   processorDescription,
   processorName,
 
+  -- *** Log processor configuration types
+  Logs (..),
+  IsLogProcessorConfig,
+  forEachLogProcessor,
+  UserMessage (..),
+  UserMarker (..),
+
   -- *** Metric processor configuration types
   Metrics (..),
   IsMetricProcessorConfig,
+  forEachMetricProcessor,
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -39,6 +48,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   -- *** Trace processor configuration types
   Traces (..),
   IsTraceProcessorConfig,
+  forEachTraceProcessor,
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
 
@@ -145,6 +155,10 @@ instance Default Processors where
   def :: Processors
   def = $(getDefault @'["processors"] defaultConfig)
 
+instance Default Logs where
+  def :: Logs
+  def = $(getDefault @'["processors", "logs"] defaultConfig)
+
 instance Default Metrics where
   def :: Metrics
   def = $(getDefault @'["processors", "metrics"] defaultConfig)
@@ -152,6 +166,17 @@ instance Default Metrics where
 instance Default Traces where
   def :: Traces
   def = $(getDefault @'["processors", "traces"] defaultConfig)
+
+-- NOTE: This should be kept in sync with the list of logs.
+--       Specifically, there should be a `Default` instance for every log.
+
+instance Default UserMessage where
+  def :: UserMessage
+  def = $(getDefault @'["processors", "logs", "userMessage"] defaultConfig)
+
+instance Default UserMarker where
+  def :: UserMarker
+  def = $(getDefault @'["processors", "logs", "userMarker"] defaultConfig)
 
 -- NOTE: This should be kept in sync with the list of metrics.
 --       Specifically, there should be a `Default` instance for every metric.
@@ -455,8 +480,27 @@ forEachProcessor ::
   Processors ->
   [a]
 forEachProcessor f processors =
-  forEachMetricProcessor f (fromMaybe def processors.metrics)
-    <> forEachTraceProcessor f (fromMaybe def processors.traces)
+  mconcat
+    [ forEachLogProcessor f (fromMaybe def processors.logs)
+    , forEachMetricProcessor f (fromMaybe def processors.metrics)
+    , forEachTraceProcessor f (fromMaybe def processors.traces)
+    ]
+
+{- |
+Apply a function to each metric processor.
+-}
+forEachLogProcessor ::
+  ( forall traceProcessorConfig.
+    (IsLogProcessorConfig traceProcessorConfig) =>
+    traceProcessorConfig -> a
+  ) ->
+  Logs ->
+  [a]
+forEachLogProcessor f logs =
+  [ -- NOTE: This should be kept in sync with the list of logs.
+    f $ fromMaybe def logs.userMessage
+  , f $ fromMaybe def logs.userMarker
+  ]
 
 {- |
 Apply a function to each metric processor.
@@ -469,7 +513,7 @@ forEachMetricProcessor ::
   Metrics ->
   [a]
 forEachMetricProcessor f metrics =
-  [ -- NOTE: This should be kept in sync with the list of metrics
+  [ -- NOTE: This should be kept in sync with the list of metrics.
     f $ fromMaybe def metrics.heapAllocated
   , f $ fromMaybe def metrics.blocksSize
   , f $ fromMaybe def metrics.heapSize
@@ -492,7 +536,7 @@ forEachTraceProcessor ::
   Traces ->
   [a]
 forEachTraceProcessor f traces =
-  [ -- NOTE: This should be kept in sync with the list of traces
+  [ -- NOTE: This should be kept in sync with the list of traces.
     f $ fromMaybe def traces.capabilityUsage
   , f $ fromMaybe def traces.threadState
   ]

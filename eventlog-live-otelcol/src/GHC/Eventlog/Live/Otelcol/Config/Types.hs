@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol.Config.Types
@@ -14,6 +15,12 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   -- ** Processor configuration types
   Processors (..),
   IsProcessorConfig,
+
+  -- *** Log processor configuration types
+  Logs (..),
+  IsLogProcessorConfig,
+  UserMessage (..),
+  UserMarker (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -91,7 +98,8 @@ instance ToYAML Config where
 The configuration options for the processors.
 -}
 data Processors = Processors
-  { metrics :: Maybe Metrics
+  { logs :: Maybe Logs
+  , metrics :: Maybe Metrics
   , traces :: Maybe Traces
   }
   deriving (Lift)
@@ -100,15 +108,51 @@ instance FromYAML Processors where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Processors
   parseYAML = YAML.withMap "Processors" $ \m ->
     Processors
-      <$> m .:? "metrics"
+      <$> m .:? "logs"
+      <*> m .:? "metrics"
       <*> m .:? "traces"
 
 instance ToYAML Processors where
   toYAML :: Processors -> YAML.Node ()
   toYAML processors =
     YAML.mapping
-      [ "metrics" .= processors.metrics
+      [ "logs" .= processors.logs
+      , "metrics" .= processors.metrics
       , "traces" .= processors.traces
+      ]
+
+{- |
+The configuration options for the span processors.
+-}
+
+-- NOTE:
+-- If you add a new log, search for the string...
+--
+--   This should be kept in sync with the list of logs.
+--
+-- ...and update all the relevant locations.
+data Logs = Logs
+  { userMessage :: Maybe UserMessage
+  , userMarker :: Maybe UserMarker
+  }
+  deriving (Lift)
+
+instance FromYAML Logs where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Logs
+  parseYAML =
+    -- NOTE: This should be kept in sync with the list of logs.
+    YAML.withMap "Logs" $ \m ->
+      Logs
+        <$> m .:? "user_message"
+        <*> m .:? "user_marker"
+
+instance ToYAML Logs where
+  toYAML :: Logs -> YAML.Node ()
+  toYAML logs =
+    -- NOTE: This should be kept in sync with the list of logs.
+    YAML.mapping
+      [ "user_message" .= logs.userMessage
+      , "user_marker" .= logs.userMarker
       ]
 
 {- |
@@ -200,138 +244,57 @@ instance ToYAML Traces where
       , "thread_state" .= traces.threadState
       ]
 
---------------------------------------------------------------------------------
--- Duration
+-------------------------------------------------------------------------------
+-- Logs
+-------------------------------------------------------------------------------
 
-data Duration
-  = DurationByBatches {batches :: !Int}
-  | DurationBySeconds {seconds :: !Double}
+{- |
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessageData`.
+-}
+data UserMessage = UserMessage
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , export :: Maybe ExportStrategy
+  }
   deriving (Lift)
 
-{- |
-Internal helper.
-A `ReadP` style parser for `AggregationStrategy`.
--}
-readPDuration :: ReadP Duration
-readPDuration = do
-  -- Parse the number
-  integerPart <- P.munch1 isDigit
-  maybeFractionPart <- P.option Nothing (Just <$ P.char '.' <*> P.munch1 isDigit)
+instance FromYAML UserMessage where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMessage
+  parseYAML = genericParseYAMLLogProcessorConfig "UserMessage" UserMessage
 
-  -- Make a duration by batches
-  let byBatches =
-        case maybeFractionPart of
-          Nothing ->
-            case readEither integerPart of
-              Left errorMsg -> fail $ "Could not parse duration: " <> errorMsg
-              Right batches -> pure DurationByBatches{..}
-          Just fractionPart -> fail $ "Fractional batches are unsupported; found " <> integerPart <> "." <> fractionPart <> "x"
+instance ToYAML UserMessage where
+  toYAML :: UserMessage -> YAML.Node ()
+  toYAML = genericToYAMLLogProcessorConfig
 
-  -- Make a duration by seconds
-  let bySeconds =
-        case readEither $ integerPart <> maybe "" ('.' :) maybeFractionPart of
-          Left errorMsg -> fail $ "Could not parse duration: " <> errorMsg
-          Right seconds -> pure DurationBySeconds{..}
-
-  -- Parse the unit
-  asum
-    [ P.char 'x' >> byBatches
-    , P.char 's' >> bySeconds
-    ]
+instance HasField "enabled" UserMessage Bool where
+  getField :: UserMessage -> Bool
+  getField = isEnabled . (.export)
 
 {- |
-Internal helper.
-Pretty-print a duration.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMarkerData`.
 -}
-prettyDuration :: Duration -> String
-prettyDuration = \case
-  DurationByBatches{..} -> show batches <> "x"
-  DurationBySeconds{..} -> show seconds <> "s"
-
---------------------------------------------------------------------------------
--- Aggregation Strategy
-
-{- |
-The options for metric aggregation strategies.
--}
-data AggregationStrategy
-  = AggregationStrategyBool {isOn :: !Bool}
-  | AggregationStrategyDuration {duration :: !Duration}
+data UserMarker = UserMarker
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , export :: Maybe ExportStrategy
+  }
   deriving (Lift)
 
-{- |
-Convert an `AggregationStrategy` to a number of seconds, if specified in seconds.
--}
-toAggregationSeconds :: AggregationStrategy -> Maybe Double
-toAggregationSeconds aggregationStrategy
-  | AggregationStrategyDuration DurationBySeconds{..} <- aggregationStrategy = Just seconds
-  | otherwise = Nothing
+instance FromYAML UserMarker where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMarker
+  parseYAML = genericParseYAMLLogProcessorConfig "UserMarker" UserMarker
 
-instance FromYAML AggregationStrategy where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser AggregationStrategy
-  parseYAML node = YAML.withScalar "AggregationStrategy" parseYAMLScalar node
-   where
-    parseYAMLScalar = \case
-      YAML.SBool isOn -> pure AggregationStrategyBool{..}
-      YAML.SStr str
-        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
-            pure AggregationStrategyDuration{..}
-      _otherwise -> YAML.typeMismatch "AggregationStrategy" node
+instance ToYAML UserMarker where
+  toYAML :: UserMarker -> YAML.Node ()
+  toYAML = genericToYAMLLogProcessorConfig
 
-instance ToYAML AggregationStrategy where
-  toYAML :: AggregationStrategy -> YAML.Node ()
-  toYAML = \case
-    AggregationStrategyBool{..} ->
-      YAML.Scalar () (YAML.SBool isOn)
-    AggregationStrategyDuration{..} ->
-      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
+instance HasField "enabled" UserMarker Bool where
+  getField :: UserMarker -> Bool
+  getField = isEnabled . (.export)
 
-{- |
-The options for export strategies.
--}
-data ExportStrategy
-  = ExportStrategyBool {isOn :: !Bool}
-  | ExportStrategyDuration {duration :: !Duration}
-  deriving (Lift)
-
-{- |
-Check whether or not a processor is enabled based on its export strategy.
--}
-isEnabled :: Maybe ExportStrategy -> Bool
-isEnabled = \case
-  Nothing -> False
-  Just ExportStrategyBool{..} -> isOn
-  Just ExportStrategyDuration{..} ->
-    case duration of
-      DurationByBatches{..} -> batches > 0
-      DurationBySeconds{..} -> seconds > 0
-
-{- |
-Convert an `ExportStrategy` to a number of seconds, if specified in seconds.
--}
-toExportSeconds :: ExportStrategy -> Maybe Double
-toExportSeconds exportStrategy
-  | ExportStrategyDuration DurationBySeconds{..} <- exportStrategy = Just seconds
-  | otherwise = Nothing
-
-instance FromYAML ExportStrategy where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ExportStrategy
-  parseYAML node = YAML.withScalar "ExportStrategy" parseYAMLScalar node
-   where
-    parseYAMLScalar = \case
-      YAML.SBool isOn -> pure ExportStrategyBool{..}
-      YAML.SStr str
-        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
-            pure ExportStrategyDuration{..}
-      _otherwise -> YAML.typeMismatch "ExportStrategy" node
-
-instance ToYAML ExportStrategy where
-  toYAML :: ExportStrategy -> YAML.Node ()
-  toYAML = \case
-    ExportStrategyBool{..} ->
-      YAML.Scalar () (YAML.SBool isOn)
-    ExportStrategyDuration{..} ->
-      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
+-------------------------------------------------------------------------------
+-- Metrics
+-------------------------------------------------------------------------------
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapAllocatedData`.
@@ -540,6 +503,10 @@ instance HasField "enabled" CapabilityUsageMetric Bool where
   getField :: CapabilityUsageMetric -> Bool
   getField = isEnabled . (.export)
 
+-------------------------------------------------------------------------------
+-- Traces
+-------------------------------------------------------------------------------
+
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageTraces`.
 -}
@@ -585,7 +552,7 @@ instance HasField "enabled" ThreadStateSpan Bool where
   getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
--- Configuration types
+-- Configuration supertypes
 -------------------------------------------------------------------------------
 
 {- |
@@ -598,6 +565,13 @@ type IsProcessorConfig config =
   , HasField "enabled" config Bool
   , HasField "export" config (Maybe ExportStrategy)
   )
+
+{- |
+The structural type of log processor configurations.
+-}
+type IsLogProcessorConfig :: Type -> Constraint
+type IsLogProcessorConfig config =
+  (IsProcessorConfig config)
 
 {- |
 The structural type of metric processor configurations.
@@ -615,22 +589,192 @@ type IsTraceProcessorConfig :: Type -> Constraint
 type IsTraceProcessorConfig config =
   (IsProcessorConfig config)
 
+--------------------------------------------------------------------------------
+-- Duration
+--------------------------------------------------------------------------------
+
+data Duration
+  = DurationByBatches {batches :: !Int}
+  | DurationBySeconds {seconds :: !Double}
+  deriving (Lift)
+
+{- |
+Internal helper.
+A `ReadP` style parser for `AggregationStrategy`.
+-}
+readPDuration :: ReadP Duration
+readPDuration = do
+  -- Parse the number
+  integerPart <- P.munch1 isDigit
+  maybeFractionPart <- P.option Nothing (Just <$ P.char '.' <*> P.munch1 isDigit)
+
+  -- Make a duration by batches
+  let byBatches =
+        case maybeFractionPart of
+          Nothing ->
+            case readEither integerPart of
+              Left errorMsg -> fail $ "Could not parse duration: " <> errorMsg
+              Right batches -> pure DurationByBatches{..}
+          Just fractionPart -> fail $ "Fractional batches are unsupported; found " <> integerPart <> "." <> fractionPart <> "x"
+
+  -- Make a duration by seconds
+  let bySeconds =
+        case readEither $ integerPart <> maybe "" ('.' :) maybeFractionPart of
+          Left errorMsg -> fail $ "Could not parse duration: " <> errorMsg
+          Right seconds -> pure DurationBySeconds{..}
+
+  -- Parse the unit
+  asum
+    [ P.char 'x' >> byBatches
+    , P.char 's' >> bySeconds
+    ]
+
+{- |
+Internal helper.
+Pretty-print a duration.
+-}
+prettyDuration :: Duration -> String
+prettyDuration = \case
+  DurationByBatches{..} -> show batches <> "x"
+  DurationBySeconds{..} -> show seconds <> "s"
+
+--------------------------------------------------------------------------------
+-- Aggregation Strategy
+--------------------------------------------------------------------------------
+
+{- |
+The options for metric aggregation strategies.
+-}
+data AggregationStrategy
+  = AggregationStrategyBool {isOn :: !Bool}
+  | AggregationStrategyDuration {duration :: !Duration}
+  deriving (Lift)
+
+{- |
+Convert an `AggregationStrategy` to a number of seconds, if specified in seconds.
+-}
+toAggregationSeconds :: AggregationStrategy -> Maybe Double
+toAggregationSeconds aggregationStrategy
+  | AggregationStrategyDuration DurationBySeconds{..} <- aggregationStrategy = Just seconds
+  | otherwise = Nothing
+
+instance FromYAML AggregationStrategy where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser AggregationStrategy
+  parseYAML node = YAML.withScalar "AggregationStrategy" parseYAMLScalar node
+   where
+    parseYAMLScalar = \case
+      YAML.SBool isOn -> pure AggregationStrategyBool{..}
+      YAML.SStr str
+        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
+            pure AggregationStrategyDuration{..}
+      _otherwise -> YAML.typeMismatch "AggregationStrategy" node
+
+instance ToYAML AggregationStrategy where
+  toYAML :: AggregationStrategy -> YAML.Node ()
+  toYAML = \case
+    AggregationStrategyBool{..} ->
+      YAML.Scalar () (YAML.SBool isOn)
+    AggregationStrategyDuration{..} ->
+      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
+
+--------------------------------------------------------------------------------
+-- Export Strategy
+--------------------------------------------------------------------------------
+
+{- |
+The options for export strategies.
+-}
+data ExportStrategy
+  = ExportStrategyBool {isOn :: !Bool}
+  | ExportStrategyDuration {duration :: !Duration}
+  deriving (Lift)
+
+{- |
+Check whether or not a processor is enabled based on its export strategy.
+-}
+isEnabled :: Maybe ExportStrategy -> Bool
+isEnabled = \case
+  Nothing -> False
+  Just ExportStrategyBool{..} -> isOn
+  Just ExportStrategyDuration{..} ->
+    case duration of
+      DurationByBatches{..} -> batches > 0
+      DurationBySeconds{..} -> seconds > 0
+
+{- |
+Convert an `ExportStrategy` to a number of seconds, if specified in seconds.
+-}
+toExportSeconds :: ExportStrategy -> Maybe Double
+toExportSeconds exportStrategy
+  | ExportStrategyDuration DurationBySeconds{..} <- exportStrategy = Just seconds
+  | otherwise = Nothing
+
+instance FromYAML ExportStrategy where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ExportStrategy
+  parseYAML node = YAML.withScalar "ExportStrategy" parseYAMLScalar node
+   where
+    parseYAMLScalar = \case
+      YAML.SBool isOn -> pure ExportStrategyBool{..}
+      YAML.SStr str
+        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
+            pure ExportStrategyDuration{..}
+      _otherwise -> YAML.typeMismatch "ExportStrategy" node
+
+instance ToYAML ExportStrategy where
+  toYAML :: ExportStrategy -> YAML.Node ()
+  toYAML = \case
+    ExportStrategyBool{..} ->
+      YAML.Scalar () (YAML.SBool isOn)
+    ExportStrategyDuration{..} ->
+      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
+
 -------------------------------------------------------------------------------
 -- Internal Helpers
 -------------------------------------------------------------------------------
 
 {- |
 Internal helper.
-Generic parser for metric configuration.
+Generic parser for log processor configuration.
+-}
+genericParseYAMLLogProcessorConfig ::
+  String ->
+  (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> logProcessorConfig) ->
+  YAML.Node YAML.Pos ->
+  YAML.Parser logProcessorConfig
+genericParseYAMLLogProcessorConfig log mkLogProcessorConfig =
+  YAML.withMap log $ \m ->
+    mkLogProcessorConfig
+      <$> m .:? "name"
+      <*> m .:? "description"
+      <*> m .:? "export"
+
+{- |
+Internal helper.
+Generic conversion from log processor configuration to YAML mappings.
+-}
+genericToYAMLLogProcessorConfig ::
+  (IsLogProcessorConfig logProcessorConfig) =>
+  logProcessorConfig ->
+  YAML.Node ()
+genericToYAMLLogProcessorConfig logProcessorConfig =
+  YAML.mapping
+    [ "name" .= logProcessorConfig.name
+    , "description" .= logProcessorConfig.description
+    , "export" .= logProcessorConfig.export
+    ]
+
+{- |
+Internal helper.
+Generic parser for metric processor configuration.
 -}
 genericParseYAMLMetricProcessorConfig ::
   String ->
-  (Maybe Text -> Maybe Text -> Maybe AggregationStrategy -> Maybe ExportStrategy -> metricConfig) ->
+  (Maybe Text -> Maybe Text -> Maybe AggregationStrategy -> Maybe ExportStrategy -> metricProcessorConfig) ->
   YAML.Node YAML.Pos ->
-  YAML.Parser metricConfig
-genericParseYAMLMetricProcessorConfig metric mkMetricConfig =
+  YAML.Parser metricProcessorConfig
+genericParseYAMLMetricProcessorConfig metric mkMetricProcessorConfig =
   YAML.withMap metric $ \m ->
-    mkMetricConfig
+    mkMetricProcessorConfig
       <$> m .:? "name"
       <*> m .:? "description"
       <*> m .:? "aggregate"
@@ -638,47 +782,47 @@ genericParseYAMLMetricProcessorConfig metric mkMetricConfig =
 
 {- |
 Internal helper.
-Generic parser for metric configuration.
+Generic conversion from metric processor configuration to YAML mappings.
 -}
 genericToYAMLMetricProcessorConfig ::
-  (IsMetricProcessorConfig metricConfig) =>
-  metricConfig ->
+  (IsMetricProcessorConfig metricProcessorConfig) =>
+  metricProcessorConfig ->
   YAML.Node ()
-genericToYAMLMetricProcessorConfig metricConfig =
+genericToYAMLMetricProcessorConfig metricProcessorConfig =
   YAML.mapping
-    [ "name" .= metricConfig.name
-    , "description" .= metricConfig.description
-    , "aggregate" .= metricConfig.aggregate
-    , "export" .= metricConfig.export
+    [ "name" .= metricProcessorConfig.name
+    , "description" .= metricProcessorConfig.description
+    , "aggregate" .= metricProcessorConfig.aggregate
+    , "export" .= metricProcessorConfig.export
     ]
 
 {- |
 Internal helper.
-Generic parser for processor configuration.
+Generic parser for trace processor configuration.
 -}
 genericParseYAMLTraceProcessorConfig ::
   String ->
-  (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> traceConfig) ->
+  (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> traceProcessorConfig) ->
   YAML.Node YAML.Pos ->
-  YAML.Parser traceConfig
-genericParseYAMLTraceProcessorConfig trace mkTraceConfig =
+  YAML.Parser traceProcessorConfig
+genericParseYAMLTraceProcessorConfig trace mkTraceProcessorConfig =
   YAML.withMap trace $ \m ->
-    mkTraceConfig
+    mkTraceProcessorConfig
       <$> m .:? "name"
       <*> m .:? "description"
       <*> m .:? "export"
 
 {- |
 Internal helper.
-Generic parser for metric configuration.
+Generic conversion from trace processor configuration to YAML mappings.
 -}
 genericToYAMLTraceProcessorConfig ::
-  (IsTraceProcessorConfig traceConfig) =>
-  traceConfig ->
+  (IsTraceProcessorConfig traceProcessorConfig) =>
+  traceProcessorConfig ->
   YAML.Node ()
-genericToYAMLTraceProcessorConfig traceConfig =
+genericToYAMLTraceProcessorConfig traceProcessorConfig =
   YAML.mapping
-    [ "name" .= traceConfig.name
-    , "description" .= traceConfig.description
-    , "export" .= traceConfig.export
+    [ "name" .= traceProcessorConfig.name
+    , "description" .= traceProcessorConfig.description
+    , "export" .= traceProcessorConfig.export
     ]
