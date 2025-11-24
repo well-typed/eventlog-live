@@ -28,7 +28,8 @@ import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Otelcol.Exporter (ExportMetricsResult (..), ExportTraceResult (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (ExportMetricsResult (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Traces (ExportTraceResult (..))
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Records (HasField (..))
 import StrictList qualified as Strict

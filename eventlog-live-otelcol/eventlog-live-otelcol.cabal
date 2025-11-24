@@ -158,7 +158,8 @@ library
   exposed-modules:
     GHC.Eventlog.Live.Otelcol
     GHC.Eventlog.Live.Otelcol.Config
-    GHC.Eventlog.Live.Otelcol.Exporter
+    GHC.Eventlog.Live.Otelcol.Exporter.Metrics
+    GHC.Eventlog.Live.Otelcol.Exporter.Traces
     GHC.Eventlog.Live.Otelcol.Stats
 
   other-modules:
