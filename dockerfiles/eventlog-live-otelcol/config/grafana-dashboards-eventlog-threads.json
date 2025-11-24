@@ -22,6 +22,20 @@
   "links": [],
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 7,
+      "panels": [],
+      "repeat": "service_name",
+      "title": "Visualisations for ${service_name}",
+      "type": "row"
+    },
+    {
       "datasource": {
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
@@ -53,7 +67,7 @@
         "h": 8,
         "w": 4,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 6,
       "options": {
@@ -75,7 +89,7 @@
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time({\"${metric_name_prefix}CapabilityUsageDuration_nanoseconds_total\", exported_job=\"$service_name\", category!=\"Idle\"}[$__interval]))",
+          "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{exported_job=\"$service_name\", category!=\"Idle\"}[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -271,7 +285,7 @@
         "h": 8,
         "w": 20,
         "x": 4,
-        "y": 0
+        "y": 1
       },
       "id": 5,
       "options": {
@@ -293,7 +307,7 @@
           "alias": "$tag_category",
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (avg_over_time({\"${metric_name_prefix}CapabilityUsageDuration_nanoseconds_total\"}[$__interval]))",
+          "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total[$__interval]))",
           "fullMetaSearch": false,
           "groupBy": [
             {
@@ -339,6 +353,101 @@
       ],
       "title": "Productivity",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "P214B5B846CF3925F"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 8,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "P214B5B846CF3925F"
+          },
+          "filters": [
+            {
+              "id": "5e0c753b",
+              "operator": "=",
+              "scope": "span"
+            },
+            {
+              "id": "service-name",
+              "isCustomValue": false,
+              "operator": "=",
+              "scope": "resource",
+              "tag": "service.name",
+              "value": ["$service_name"],
+              "valueType": "string"
+            },
+            {
+              "id": "span-name",
+              "isCustomValue": false,
+              "operator": "=",
+              "scope": "span",
+              "tag": "name",
+              "value": [
+                "ghc_eventlog_ThreadState Running",
+                "ghc_eventlog_ThreadState Blocked"
+              ],
+              "valueType": "string"
+            }
+          ],
+          "limit": 20,
+          "metricsQueryType": "range",
+          "queryType": "traceqlSearch",
+          "refId": "A",
+          "serviceMapUseNativeHistograms": false,
+          "spss": 3,
+          "tableType": "traces"
+        }
+      ],
+      "title": "Traces",
+      "type": "table"
     }
   ],
   "preload": false,
@@ -359,6 +468,7 @@
         "definition": "",
         "description": "The service name used for the visualisations on this dashboard.",
         "label": "Service Name",
+        "multi": true,
         "name": "service_name",
         "options": [],
         "query": {
@@ -370,24 +480,6 @@
         "regex": "",
         "sort": 1,
         "type": "query"
-      },
-      {
-        "current": {
-          "text": "ghc_eventlog_",
-          "value": "ghc_eventlog_"
-        },
-        "description": "The prefix used for the metric names in visualisations on this dashboard.",
-        "label": "Metric Name Prefix",
-        "name": "metric_name_prefix",
-        "options": [
-          {
-            "selected": true,
-            "text": "ghc_eventlog_",
-            "value": "ghc_eventlog_"
-          }
-        ],
-        "query": "ghc_eventlog_",
-        "type": "textbox"
       }
     ]
   },
