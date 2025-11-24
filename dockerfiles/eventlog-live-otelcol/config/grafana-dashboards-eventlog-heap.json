@@ -19,14 +19,14 @@
           "uid": "P8E80F9AEF21F6940"
         },
         "enable": false,
-        "expr": "{service_name=\"${service_name}\"} |~ `${marker_filter}` | marker = `true`",
+        "expr": "{service_name=\"${service_name}\"} |~ `${user_marker_filter}` | kind = `UserMarker`",
         "filter": {
           "exclude": true,
           "ids": [5]
         },
         "hide": false,
         "iconColor": "red",
-        "name": "Marker",
+        "name": "UserMarker",
         "queryType": "range"
       }
     ]
@@ -37,19 +37,6 @@
   "id": 1,
   "links": [],
   "panels": [
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 7,
-      "panels": [],
-      "title": "Overview",
-      "type": "row"
-    },
     {
       "datasource": {
         "type": "prometheus",
@@ -117,7 +104,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 0
       },
       "id": 5,
       "options": {
@@ -137,13 +124,13 @@
       "targets": [
         {
           "editorMode": "builder",
-          "expr": "max by(exported_job) ({\"${metric_name_prefix}HeapSize_bytes\"})",
+          "expr": "max by(exported_job) (ghc_eventlog_HeapSize_bytes{exported_job=~\"$service_name\"})",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Memory Usage by Service",
+      "title": "HeapSize for ${service_name}",
       "type": "timeseries"
     },
     {
@@ -152,7 +139,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 7
       },
       "id": 6,
       "panels": [],
@@ -224,7 +211,7 @@
         "h": 24,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 8
       },
       "id": 4,
       "options": {
@@ -247,7 +234,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "topk(${heap_prof_sample_topk}, {\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"}) or sum by(exported_job) ({\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"} unless topk(${heap_prof_sample_topk}, {\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"}))",
+          "expr": "(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\"}\nand\ntopk(\n  ${heap_prof_sample_limit},\n  sum_over_time(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\"}[${__range}] @ ${__to:date:seconds})\n))\nor\nsum by(exported_job) ((ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\"}\nunless\ntopk(\n  ${heap_prof_sample_limit},\n  sum_over_time(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\"}[${__range}] @ ${__to:date:seconds})\n)))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -257,7 +244,7 @@
           "useBackend": false
         }
       ],
-      "title": "HeapProfSample",
+      "title": "HeapProfSample for ${service_name}",
       "transformations": [
         {
           "id": "renameByRegex",
@@ -342,7 +329,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 8
       },
       "id": 1,
       "options": {
@@ -367,7 +354,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}HeapSize_bytes\", exported_job=\"$service_name\"})",
+          "expr": "avg(ghc_eventlog_HeapSize_bytes{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapSize",
@@ -382,7 +369,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}BlocksSize_bytes\", exported_job=\"$service_name\"})",
+          "expr": "avg(ghc_eventlog_BlocksSize_bytes{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -399,7 +386,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}HeapLive_bytes\", exported_job=\"$service_name\"})",
+          "expr": "avg(ghc_eventlog_HeapLive_bytes{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -410,7 +397,7 @@
           "useBackend": false
         }
       ],
-      "title": "HeapSize",
+      "title": "HeapSize for ${service_name}",
       "type": "timeseries"
     },
     {
@@ -476,7 +463,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 17
+        "y": 16
       },
       "id": 3,
       "options": {
@@ -496,8 +483,8 @@
       "targets": [
         {
           "disableTextWrap": false,
-          "editorMode": "code",
-          "expr": "avg({\"${metric_name_prefix}MemCurrent\", exported_job=\"$service_name\"})",
+          "editorMode": "builder",
+          "expr": "avg(ghc_eventlog_MemCurrent{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "MemCurrent",
@@ -512,7 +499,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}MemNeeded\", exported_job=\"$service_name\"})",
+          "expr": "avg(ghc_eventlog_MemNeeded{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -529,7 +516,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "avg({\"${metric_name_prefix}MemReturned\", exported_job=\"$service_name\"})",
+          "expr": "avg(ghc_eventlog_MemReturned{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -540,7 +527,7 @@
           "useBackend": false
         }
       ],
-      "title": "MemReturn",
+      "title": "MemReturn for ${service_name}",
       "type": "timeseries"
     },
     {
@@ -605,7 +592,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 25
+        "y": 24
       },
       "id": 2,
       "options": {
@@ -626,7 +613,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(exported_job) (delta({\"${metric_name_prefix}HeapAllocated_bytes_total\", exported_job=\"$service_name\"}[$__interval]))",
+          "expr": "sum by(exported_job) (delta(ghc_eventlog_HeapAllocated_bytes_total{exported_job=\"$service_name\"}[$__interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapAllocated",
@@ -635,7 +622,7 @@
           "useBackend": false
         }
       ],
-      "title": "HeapAllocated",
+      "title": "HeapAllocated for ${service_name}",
       "type": "timeseries"
     }
   ],
@@ -653,38 +640,21 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "definition": "query_result(count by (exported_job)(count_over_time(ghc_eventlog_BlocksSize_bytes[$__range])))",
+        "definition": "label_values(ghc_eventlog_HeapSize_bytes,exported_job)",
         "description": "The service name used for the visualisations on this dashboard.",
         "label": "Service Name",
+        "multi": true,
         "name": "service_name",
         "options": [],
         "query": {
-          "qryType": 5,
-          "query": "query_result(count by (exported_job)(count_over_time(ghc_eventlog_BlocksSize_bytes[$__range])))",
+          "qryType": 1,
+          "query": "label_values(ghc_eventlog_HeapSize_bytes,exported_job)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
-        "regex": "/.*exported_job=\"([^\"]*).*/",
+        "regex": "",
         "sort": 1,
         "type": "query"
-      },
-      {
-        "current": {
-          "text": "ghc_eventlog_",
-          "value": "ghc_eventlog_"
-        },
-        "description": "The prefix used for the metric names in visualisations on this dashboard.",
-        "label": "Metric Name Prefix",
-        "name": "metric_name_prefix",
-        "options": [
-          {
-            "selected": true,
-            "text": "ghc_eventlog_",
-            "value": "ghc_eventlog_"
-          }
-        ],
-        "query": "ghc_eventlog_",
-        "type": "textbox"
       },
       {
         "current": {
@@ -693,7 +663,7 @@
         },
         "description": "The number of values to show in the HeapProfSample visualisation.",
         "label": "HeapProfSample Limit",
-        "name": "heap_prof_sample_topk",
+        "name": "heap_prof_sample_limit",
         "options": [
           {
             "selected": true,
@@ -710,8 +680,8 @@
           "value": ""
         },
         "description": "A regular expression to filter the user markers.",
-        "label": "Marker Filter",
-        "name": "marker_filter",
+        "label": "Filter UserMarker",
+        "name": "user_marker_filter",
         "options": [
           {
             "selected": true,

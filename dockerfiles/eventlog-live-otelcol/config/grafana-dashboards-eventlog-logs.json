@@ -22,6 +22,20 @@
   "links": [],
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "panels": [],
+      "repeat": "service_name",
+      "title": "Logs for ${service_name}",
+      "type": "row"
+    },
+    {
       "datasource": {
         "type": "loki",
         "uid": "P8E80F9AEF21F6940"
@@ -31,15 +45,15 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 31,
-        "w": 24,
+        "h": 22,
+        "w": 11,
         "x": 0,
-        "y": 0
+        "y": 1
       },
-      "id": 1,
+      "id": 3,
       "options": {
         "dedupStrategy": "none",
-        "enableInfiniteScrolling": false,
+        "enableInfiniteScrolling": true,
         "enableLogDetails": true,
         "showControls": false,
         "showTime": true,
@@ -55,12 +69,56 @@
           },
           "direction": "backward",
           "editorMode": "builder",
-          "expr": "{service_name=\"oddball\"} |= ``",
+          "expr": "{service_name=\"$service_name\"} | kind = `UserMessage`",
+          "maxLines": 30,
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "UserMarker",
+      "title": "UserMessage for ${service_name}",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 22,
+        "w": 11,
+        "x": 11,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": true,
+        "enableLogDetails": true,
+        "showControls": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af53paj34f3lse"
+          },
+          "direction": "backward",
+          "editorMode": "builder",
+          "expr": "{service_name=\"$service_name\"} | kind = `UserMarker`",
+          "maxLines": 30,
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "UserMarker for ${service_name}",
       "type": "logs"
     }
   ],
@@ -68,7 +126,28 @@
   "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": ["oddball"],
+          "value": ["oddball"]
+        },
+        "definition": "",
+        "label": "Service Name",
+        "multi": true,
+        "name": "service_name",
+        "options": [],
+        "query": {
+          "label": "service_name",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "",
+          "type": 1
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
