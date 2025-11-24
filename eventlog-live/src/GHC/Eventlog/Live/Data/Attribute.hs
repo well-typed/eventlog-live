@@ -73,7 +73,8 @@ type AttrKey =
 The type of attribute values.
 -}
 data AttrValue
-  = AttrInt !Int
+  = AttrBool !Bool
+  | AttrInt !Int
   | AttrInt8 !Int8
   | AttrInt16 !Int16
   | AttrInt32 !Int32
@@ -99,6 +100,11 @@ class IsAttrValue v where
 instance IsAttrValue AttrValue where
   toAttrValue :: AttrValue -> AttrValue
   toAttrValue = id
+  {-# INLINE toAttrValue #-}
+
+instance IsAttrValue Bool where
+  toAttrValue :: Bool -> AttrValue
+  toAttrValue = AttrBool
   {-# INLINE toAttrValue #-}
 
 instance IsAttrValue Int where
