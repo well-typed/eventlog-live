@@ -13,6 +13,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Config (..),
   readConfigFile,
   prettyConfig,
+  FullConfig (..),
   toFullConfig,
 
   -- ** Processor configuration types
