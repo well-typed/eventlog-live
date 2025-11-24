@@ -290,6 +290,7 @@ fromMetric measurement@(I.Measurement measurementName) i =
 
 fromAttrValue :: AttrValue -> Maybe I.Key
 fromAttrValue = \case
+  AttrBool v -> Just . fromString . show $ v
   AttrInt v -> Just . fromString . show $ v
   AttrInt8 v -> Just . fromString . show $ v
   AttrInt16 v -> Just . fromString . show $ v
