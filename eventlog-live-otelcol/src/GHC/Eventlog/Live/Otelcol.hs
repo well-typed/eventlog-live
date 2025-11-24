@@ -833,6 +833,7 @@ toMaybeKeyValue (k, v) =
 
 toMaybeAnyValue :: AttrValue -> Maybe OC.AnyValue
 toMaybeAnyValue = \case
+  AttrBool v -> Just $ messageWith [OC.boolValue .~ v]
   AttrInt v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
   AttrInt8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
   AttrInt16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
