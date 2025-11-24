@@ -347,8 +347,9 @@ processLogEvents ::
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
 processLogEvents fullConfig =
   M.fanoutTick
-    [ processUserMessage fullConfig
+    [ processThreadLabel fullConfig
     , processUserMarker fullConfig
+    , processUserMessage fullConfig
     ]
 
 --------------------------------------------------------------------------------
@@ -370,6 +371,16 @@ processUserMarker fullConfig =
     M.liftTick M.processUserMarkerData
       ~> M.liftTick (mapping (D.singleton . toLogRecord))
       ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMarker) fullConfig)
+
+--------------------------------------------------------------------------------
+-- ThreadLabel
+
+processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
+processThreadLabel fullConfig =
+  runIf (C.processorEnabled (.logs) (.threadLabel) fullConfig) $
+    M.liftTick M.processThreadLabelData
+      ~> M.liftTick (mapping (D.singleton . toLogRecord))
+      ~> M.batchByTicks (C.processorExportBatches (.logs) (.threadLabel) fullConfig)
 
 --------------------------------------------------------------------------------
 -- processHeapEvents
@@ -750,19 +761,39 @@ toSum mod dataPoints
 --------------------------------------------------------------------------------
 -- Interpret logs
 
-toLogRecord :: LogRecord -> OL.LogRecord
-toLogRecord i =
-  messageWith
-    [ OL.body .~ messageWith [OC.stringValue .~ i.body]
-    , OL.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , -- TODO: this could be set to the actual observed time in the processor.
-      OL.observedTimeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , OL.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
-    , OL.severityNumber .~ toSeverityNumber i.maybeSeverity
-    ]
+class ToLogRecord v where
+  toLogRecord :: v -> OL.LogRecord
 
-toSeverityNumber :: Maybe Severity -> OL.SeverityNumber
-toSeverityNumber = maybe OL.SEVERITY_NUMBER_UNSPECIFIED (toEnum . (.value) . DS.toSeverityNumber)
+instance ToLogRecord LogRecord where
+  toLogRecord :: LogRecord -> OL.LogRecord
+  toLogRecord i =
+    messageWith
+      [ OL.body .~ messageWith [OC.stringValue .~ i.body]
+      , OL.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+      , -- TODO: this could be set to the actual observed time in the processor.
+        OL.observedTimeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+      , OL.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
+      , OL.severityNumber .~ toSeverityNumber i.maybeSeverity
+      ]
+   where
+    toSeverityNumber :: Maybe Severity -> OL.SeverityNumber
+    toSeverityNumber = maybe OL.SEVERITY_NUMBER_UNSPECIFIED (toEnum . (.value) . DS.toSeverityNumber)
+
+instance ToLogRecord M.ThreadLabel where
+  toLogRecord :: M.ThreadLabel -> OL.LogRecord
+  toLogRecord i =
+    messageWith
+      [ OL.body .~ messageWith [OC.stringValue .~ i.threadlabel]
+      , OL.timeUnixNano .~ i.startTimeUnixNano
+      , -- TODO: this could be set to the actual observed time in the processor.
+        OL.observedTimeUnixNano .~ i.startTimeUnixNano
+      , OL.attributes
+          .~ mapMaybe
+            toMaybeKeyValue
+            [ "kind" ~= ("ThreadLabel" :: Text)
+            , "thread" ~= i.thread
+            ]
+      ]
 
 --------------------------------------------------------------------------------
 -- Interpret spans
@@ -866,6 +897,7 @@ instance AsSpan ThreadStateSpan where
           .~ mapMaybe
             toMaybeKeyValue
             [ "capability" ~= M.threadStateCap i.threadState
+            , "thread" ~= show i.thread
             , "status" ~= (show <$> M.threadStateStatus i.threadState)
             ]
       , OT.status

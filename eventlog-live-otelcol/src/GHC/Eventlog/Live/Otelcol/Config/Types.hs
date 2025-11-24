@@ -19,8 +19,9 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   -- *** Log processor configuration types
   Logs (..),
   IsLogProcessorConfig,
-  UserMessage (..),
+  ThreadLabel (..),
   UserMarker (..),
+  UserMessage (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -133,8 +134,9 @@ The configuration options for the span processors.
 --
 -- ...and update all the relevant locations.
 data Logs = Logs
-  { userMessage :: Maybe UserMessage
+  { threadLabel :: Maybe ThreadLabel
   , userMarker :: Maybe UserMarker
+  , userMessage :: Maybe UserMessage
   }
   deriving (Lift)
 
@@ -144,16 +146,18 @@ instance FromYAML Logs where
     -- NOTE: This should be kept in sync with the list of logs.
     YAML.withMap "Logs" $ \m ->
       Logs
-        <$> m .:? "user_message"
+        <$> m .:? "thread_label"
         <*> m .:? "user_marker"
+        <*> m .:? "user_message"
 
 instance ToYAML Logs where
   toYAML :: Logs -> YAML.Node ()
   toYAML logs =
     -- NOTE: This should be kept in sync with the list of logs.
     YAML.mapping
-      [ "user_message" .= logs.userMessage
+      [ "thread_label" .= logs.threadLabel
       , "user_marker" .= logs.userMarker
+      , "user_message" .= logs.userMessage
       ]
 
 {- |
@@ -291,6 +295,28 @@ instance ToYAML UserMarker where
 
 instance HasField "enabled" UserMarker Bool where
   getField :: UserMarker -> Bool
+  getField = isEnabled . (.export)
+
+{- |
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadLabelData`.
+-}
+data ThreadLabel = ThreadLabel
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift)
+
+instance FromYAML ThreadLabel where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabel
+  parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabel" ThreadLabel
+
+instance ToYAML ThreadLabel where
+  toYAML :: ThreadLabel -> YAML.Node ()
+  toYAML = genericToYAMLLogProcessorConfig
+
+instance HasField "enabled" ThreadLabel Bool where
+  getField :: ThreadLabel -> Bool
   getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
