@@ -17,6 +17,7 @@
 - **BREAKING**: Add implicit `TickInfo` to each `Tick` via `HasTickInfo`.
 - **BREAKING**: Change `onlyTick` to yield actual `Tick` values.
 - **BREAKING**: Change interval argument for `runWithEventlogSource` and `sourceHandleBatch` to batch in milliseconds.
+- **BREAKING**: Add `AttrBoot` to `AttrValue`.
 
 ### 0.4.0.0
 
