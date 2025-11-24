@@ -129,7 +129,7 @@ processThreadEvents verbosity =
               ~> mapping (D.singleton . fromSpan . (.value))
           ]
     , -- ThreadLabel
-      processThreadLabels
+      processThreadLabelData
         ~> mapping (D.singleton . fromThreadLabel)
     ]
  where
