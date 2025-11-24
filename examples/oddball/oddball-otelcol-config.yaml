@@ -1,56 +1,65 @@
 processors:
+  logs:
+    user_message:
+      name: ghc_eventlog_UserMessage
+      description: A user log message.
+      export: 5s
+    user_marker:
+      name: ghc_eventlog_UserMarker
+      description: A user marker.
+      export: 5s
   metrics:
     blocks_size:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The current heap size, calculated by the allocated number of blocks.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_BlocksSize
+      description: The current heap size, calculated by the allocated number of blocks.
+      aggregate: 1s
+      export: 5s
     capability_usage:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The duration of each capability usage span.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_CapabilityUsageDuration
+      description: The duration of each capability usage span.
+      aggregate: 1s
+      export: 5s
     heap_allocated:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The size of a newly allocated chunk of heap.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_HeapAllocated
+      description: The size of a newly allocated chunk of heap.
+      aggregate: 1s
+      export: 5s
     heap_live:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The current heap size, calculated by the allocated number of megablocks.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_HeapLive
-    heap_prof_sample:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: A heap profile sample.
-      export: 5s # one of [boolean, "Nx", "Ns"]
-      name: ghc_eventlog_HeapProfSample
-    heap_size:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
       description: The current heap size, calculated by the allocated number of megablocks.
-      export: 5s # one of [boolean, "Nx", "Ns"]
+      aggregate: 1s
+      export: 5s
+    heap_prof_sample:
+      name: ghc_eventlog_HeapProfSample
+      description: A heap profile sample.
+      aggregate: 1s
+      export: 5s
+    heap_size:
       name: ghc_eventlog_HeapSize
+      description: The current heap size, calculated by the allocated number of megablocks.
+      aggregate: 1s
+      export: 5s
     mem_current:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The number of megablocks currently allocated.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_MemCurrent
+      description: The number of megablocks currently allocated.
+      aggregate: 1s
+      export: 5s
     mem_needed:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The number of megablocks currently needed.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_MemNeeded
+      description: The number of megablocks currently needed.
+      aggregate: 1s
+      export: 5s
     mem_returned:
-      aggregate: 1s # one of [boolean, "Nx", "Ns"]
-      description: The number of megablocks currently being returned to the OS.
-      export: 5s # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_MemReturned
+      description: The number of megablocks currently being returned to the OS.
+      aggregate: 1s
+      export: 5s
   traces:
     capability_usage:
-      description: A span of capability usage (either mutator thread or garbage collection).
-      export: 1x # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_CapabilityUsage
+      description: A trace of capability usage (either mutator thread or garbage collection).
+      export: 5s
     thread_state:
-      description: A span of thread state changes (either running or stopped).
-      export: 1x # one of [boolean, "Nx", "Ns"]
       name: ghc_eventlog_ThreadState
+      description: A trace of thread state changes (either running or stopped).
+      export: 5s
