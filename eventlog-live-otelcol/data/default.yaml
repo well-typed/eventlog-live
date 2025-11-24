@@ -61,6 +61,15 @@
 #   over 1 second intervals and only keeps the last metric in each interval.
 #
 processors:
+  logs:
+    user_message:
+      name: ghc_eventlog_UserMessage
+      description: A user log message.
+      export: 5s
+    user_marker:
+      name: ghc_eventlog_UserMarker
+      description: A user marker.
+      export: 5s
   metrics:
     blocks_size:
       name: ghc_eventlog_BlocksSize
