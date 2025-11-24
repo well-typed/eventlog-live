@@ -19,7 +19,6 @@ module GHC.Eventlog.Live.Otelcol.Config (
   -- ** Processor configuration types
   Processors (..),
   IsProcessorConfig,
-  forEachProcessor,
   processorEnabled,
   processorDescription,
   processorName,
@@ -27,14 +26,14 @@ module GHC.Eventlog.Live.Otelcol.Config (
   -- *** Log processor configuration types
   Logs (..),
   IsLogProcessorConfig,
-  forEachLogProcessor,
+  shouldExportLogs,
   UserMessage (..),
   UserMarker (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
   IsMetricProcessorConfig,
-  forEachMetricProcessor,
+  shouldExportMetrics,
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
   HeapSizeMetric (..),
@@ -48,7 +47,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   -- *** Trace processor configuration types
   Traces (..),
   IsTraceProcessorConfig,
-  forEachTraceProcessor,
+  shouldExportTraces,
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
 
@@ -464,6 +463,43 @@ toBatches ::
   Int
 toBatches batchIntervalMs intervalS =
   toMilli intervalS `div` batchIntervalMs
+
+-------------------------------------------------------------------------------
+-- Exporters
+-------------------------------------------------------------------------------
+
+shouldExportLogs :: FullConfig -> Bool
+shouldExportLogs =
+  getAny
+    . with
+      (.processors)
+      ( with
+          (.logs)
+          (mconcat . forEachLogProcessor (Any . isEnabled . (.export)))
+      )
+    . (.config)
+
+shouldExportMetrics :: FullConfig -> Bool
+shouldExportMetrics =
+  getAny
+    . with
+      (.processors)
+      ( with
+          (.metrics)
+          (mconcat . forEachMetricProcessor (Any . isEnabled . (.export)))
+      )
+    . (.config)
+
+shouldExportTraces :: FullConfig -> Bool
+shouldExportTraces =
+  getAny
+    . with
+      (.processors)
+      ( with
+          (.traces)
+          (mconcat . forEachTraceProcessor (Any . isEnabled . (.export)))
+      )
+    . (.config)
 
 -------------------------------------------------------------------------------
 -- Functors for processor configurations

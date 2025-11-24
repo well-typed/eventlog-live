@@ -18,7 +18,6 @@ import Data.Coerce (Coercible, coerce)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
-import Data.Either (partitionEithers)
 import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
@@ -38,12 +37,16 @@ import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), maybeMyGhcDebugSocketParser
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
+import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
+import GHC.Eventlog.Live.Data.Severity (Severity)
+import GHC.Eventlog.Live.Data.Severity qualified as DS (SeverityNumber (..), toSeverityNumber)
 import GHC.Eventlog.Live.Logger (logDebug)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
+import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadStateSpan (..))
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -51,10 +54,10 @@ import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Options
-import GHC.Eventlog.Live.Otelcol.Config (Config)
+import GHC.Eventlog.Live.Otelcol.Config (Config, FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
@@ -71,11 +74,14 @@ import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
+import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
+import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
+import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
@@ -142,16 +148,32 @@ main = do
               ~> M.fanoutTick
                 [ -- Process the heap events.
                   processHeapEvents verbosity maybeHeapProfBreakdown fullConfig
-                    ~> mapping (fmap (fmap Left))
+                    ~> mapping (fmap (fmap TelemetryData'Metric))
+                , -- Process the log events.
+                  processLogEvents fullConfig
+                    ~> mapping (fmap (fmap TelemetryData'Log))
                 , -- Process the thread events.
                   processThreadEvents verbosity fullConfig
+                    ~> mapping (fmap (fmap (either TelemetryData'Metric TelemetryData'Span)))
                 ]
-              ~> mapping (fmap (partitionEithers . D.toList))
+              ~> mapping (fmap (partitionTelemetryData . D.toList))
               ~> M.fanoutTick
-                [ -- Export metrics.
-                  runIf (shouldExportMetrics fullConfig) $
+                [ -- Export logs.
+                  runIf (C.shouldExportLogs fullConfig) $
                     M.liftTick
-                      ( mapping fst
+                      ( mapping (\(logs, _metrics, _spans) -> logs)
+                          ~> asScopeLogs
+                            [OL.scope .~ eventlogLiveScope]
+                          ~> asResourceLog
+                            [OL.resource .~ messageWith [OM.attributes .~ mapMaybe toMaybeKeyValue [attrServiceName]]]
+                          ~> asExportLogServiceRequest
+                      )
+                      ~> exportResourceLogs conn
+                      ~> mapping (fmap (D.singleton . ExportLogsResultStat))
+                , -- Export metrics.
+                  runIf (C.shouldExportMetrics fullConfig) $
+                    M.liftTick
+                      ( mapping (\(_logs, metrics, _spans) -> metrics)
                           ~> asScopeMetrics
                             [OM.scope .~ eventlogLiveScope]
                           ~> asResourceMetric
@@ -160,10 +182,10 @@ main = do
                       )
                       ~> exportResourceMetrics conn
                       ~> mapping (fmap (D.singleton . ExportMetricsResultStat))
-                , -- Export spans.
-                  runIf (shouldExportSpans fullConfig) $
+                , -- Export traces.
+                  runIf (C.shouldExportTraces fullConfig) $
                     M.liftTick
-                      ( mapping snd
+                      ( mapping (\(_logs, _metrics, spans) -> spans)
                           ~> asScopeSpans
                             [OM.scope .~ eventlogLiveScope]
                           ~> asResourceSpan
@@ -181,32 +203,20 @@ main = do
           ~> M.validateTicks verbosity
           ~> M.dropTick
 
-{- |
-Internal helper.
-Determine whether or not any spans should be exported.
--}
-shouldExportMetrics :: FullConfig -> Bool
-shouldExportMetrics fullConfig =
-  or
-    [ C.processorEnabled (.metrics) (.heapAllocated) fullConfig
-    , C.processorEnabled (.metrics) (.blocksSize) fullConfig
-    , C.processorEnabled (.metrics) (.heapSize) fullConfig
-    , C.processorEnabled (.metrics) (.heapLive) fullConfig
-    , C.processorEnabled (.metrics) (.memCurrent) fullConfig
-    , C.processorEnabled (.metrics) (.memNeeded) fullConfig
-    , C.processorEnabled (.metrics) (.memReturned) fullConfig
-    , C.processorEnabled (.metrics) (.heapProfSample) fullConfig
-    , C.processorEnabled (.metrics) (.capabilityUsage) fullConfig
-    ]
+data TelemetryData
+  = TelemetryData'Log OL.LogRecord
+  | TelemetryData'Metric OM.Metric
+  | TelemetryData'Span OT.Span
 
-{- |
-Internal helper.
-Determine whether or not any spans should be exported.
--}
-shouldExportSpans :: FullConfig -> Bool
-shouldExportSpans fullConfig =
-  C.processorEnabled (.traces) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.traces) (.threadState) fullConfig
+partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span])
+partitionTelemetryData = go ([], [], [])
+ where
+  go :: ([OL.LogRecord], [OM.Metric], [OT.Span]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span])
+  go (logs, metrics, spans) = \case
+    [] -> (reverse logs, reverse metrics, reverse spans)
+    (TelemetryData'Log log : rest) -> go (log : logs, metrics, spans) rest
+    (TelemetryData'Metric metric : rest) -> go (logs, metric : metrics, spans) rest
+    (TelemetryData'Span span : rest) -> go (logs, metrics, span : spans) rest
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
@@ -328,6 +338,40 @@ shouldComputeThreadStateSpan fullConfig =
     || shouldComputeCapabilityUsageSpan fullConfig
 
 --------------------------------------------------------------------------------
+-- processLogEvents
+--------------------------------------------------------------------------------
+
+processLogEvents ::
+  (MonadIO m) =>
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
+processLogEvents fullConfig =
+  M.fanoutTick
+    [ processUserMessage fullConfig
+    , processUserMarker fullConfig
+    ]
+
+--------------------------------------------------------------------------------
+-- UserMessage
+
+processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
+processUserMessage fullConfig =
+  runIf (C.processorEnabled (.logs) (.userMessage) fullConfig) $
+    M.liftTick M.processUserMessageData
+      ~> M.liftTick (mapping (D.singleton . toLogRecord))
+      ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMessage) fullConfig)
+
+--------------------------------------------------------------------------------
+-- UserMarker
+
+processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
+processUserMarker fullConfig =
+  runIf (C.processorEnabled (.logs) (.userMarker) fullConfig) $
+    M.liftTick M.processUserMarkerData
+      ~> M.liftTick (mapping (D.singleton . toLogRecord))
+      ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMarker) fullConfig)
+
+--------------------------------------------------------------------------------
 -- processHeapEvents
 --------------------------------------------------------------------------------
 
@@ -346,67 +390,6 @@ processHeapEvents verbosity maybeHeapProfBreakdown fullConfig =
     , processMemReturn fullConfig
     , processHeapProfSample verbosity maybeHeapProfBreakdown fullConfig
     ]
-
---------------------------------------------------------------------------------
--- Metric Aggregation
-
-data Aggregators a b = Aggregators
-  { nothing :: Process (Tick a) (Tick b)
-  , byBatches :: Int -> Process (Tick a) (Tick b)
-  }
-
-{- |
-Internal helper.
-Aggregate items based on the provided aggregators and aggregation strategy.
--}
-aggregate :: Aggregators a b -> Int -> Process (Tick a) (Tick b)
-aggregate Aggregators{..} aggregationBatches
-  | aggregationBatches >= 1 = byBatches aggregationBatches
-  | otherwise = nothing
-
-{- |
-Internal helper.
-Metric aggregators via the `Semigroup` instance for `Sum`.
--}
-viaSum :: forall a. (Num a) => Aggregators (Metric a) (Metric a)
-viaSum =
-  Aggregators
-    { nothing = echo
-    , byBatches = \ticks ->
-        -- TODO: Yield group sample counts as separate metric.
-        batchByTicksVia ticks (Proxy @(Metric (Sum a)))
-          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
-    }
-
-{- |
-Internal helper.
-Metric aggregators via the `Semigroup` instance for `Last`.
--}
-viaLast :: forall a. (GroupBy a) => Aggregators a a
-viaLast =
-  Aggregators
-    { nothing = echo
-    , byBatches = \ticks ->
-        -- TODO: Yield group sample counts as separate metric.
-        batchByTicksVia ticks (Proxy @(Last a))
-          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
-    }
-
-{- |
-Internal helper.
-This function aggregates items via a `Semigroup` instance and grouped by the `GroupBy` instance.
--}
-batchByTicksVia ::
-  forall a b.
-  (Coercible a b, GroupBy b, Semigroup b) =>
-  -- | The number of ticks per batch.
-  Int ->
-  Proxy b ->
-  Process (Tick a) (Tick [Group a])
-batchByTicksVia ticks (Proxy :: Proxy b) =
-  mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
-    ~> M.batchByTicks @(GroupedBy b) ticks
-    ~> M.liftTick (mapping (coerce @[Group b] @[Group a] . DG.groups))
 
 --------------------------------------------------------------------------------
 -- HeapAllocated
@@ -596,6 +579,68 @@ runMetricProcessor MetricProcessor{..} fullConfig =
 {-# INLINE runMetricProcessor #-}
 
 --------------------------------------------------------------------------------
+-- Aggregation
+--------------------------------------------------------------------------------
+
+data Aggregators a b = Aggregators
+  { nothing :: Process (Tick a) (Tick b)
+  , byBatches :: Int -> Process (Tick a) (Tick b)
+  }
+
+{- |
+Internal helper.
+Aggregate items based on the provided aggregators and aggregation strategy.
+-}
+aggregate :: Aggregators a b -> Int -> Process (Tick a) (Tick b)
+aggregate Aggregators{..} aggregationBatches
+  | aggregationBatches >= 1 = byBatches aggregationBatches
+  | otherwise = nothing
+
+{- |
+Internal helper.
+Metric aggregators via the `Semigroup` instance for `Sum`.
+-}
+viaSum :: forall a. (Num a) => Aggregators (Metric a) (Metric a)
+viaSum =
+  Aggregators
+    { nothing = echo
+    , byBatches = \ticks ->
+        -- TODO: Yield group sample counts as separate metric.
+        batchByTicksVia ticks (Proxy @(Metric (Sum a)))
+          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
+    }
+
+{- |
+Internal helper.
+Metric aggregators via the `Semigroup` instance for `Last`.
+-}
+viaLast :: forall a. (GroupBy a) => Aggregators a a
+viaLast =
+  Aggregators
+    { nothing = echo
+    , byBatches = \ticks ->
+        -- TODO: Yield group sample counts as separate metric.
+        batchByTicksVia ticks (Proxy @(Last a))
+          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
+    }
+
+{- |
+Internal helper.
+This function aggregates items via a `Semigroup` instance and grouped by the `GroupBy` instance.
+-}
+batchByTicksVia ::
+  forall a b.
+  (Coercible a b, GroupBy b, Semigroup b) =>
+  -- | The number of ticks per batch.
+  Int ->
+  Proxy b ->
+  Process (Tick a) (Tick [Group a])
+batchByTicksVia ticks (Proxy :: Proxy b) =
+  mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
+    ~> M.batchByTicks @(GroupedBy b) ticks
+    ~> M.liftTick (mapping (coerce @[Group b] @[Group a] . DG.groups))
+
+--------------------------------------------------------------------------------
 -- Machines
 --------------------------------------------------------------------------------
 
@@ -612,17 +657,27 @@ eventlogLiveScope =
     , OC.version .~ T.pack (showVersion EventlogLive.version)
     ]
 
+asExportLogsServiceRequest :: Process [OL.ResourceLogs] OLS.ExportLogsServiceRequest
+asExportLogsServiceRequest = mapping $ (defMessage &) . (OL.resourceLogs .~)
+
 asExportMetricsServiceRequest :: Process [OM.ResourceMetrics] OMS.ExportMetricsServiceRequest
 asExportMetricsServiceRequest = mapping $ (defMessage &) . (OM.resourceMetrics .~)
 
 asExportTracesServiceRequest :: Process [OT.ResourceSpans] OTS.ExportTraceServiceRequest
 asExportTracesServiceRequest = mapping $ (defMessage &) . (OTS.resourceSpans .~)
 
+asExportLogServiceRequest :: Process OL.ResourceLogs OLS.ExportLogsServiceRequest
+asExportLogServiceRequest = mapping (: []) ~> asExportLogsServiceRequest
+
 asExportMetricServiceRequest :: Process OM.ResourceMetrics OMS.ExportMetricsServiceRequest
 asExportMetricServiceRequest = mapping (: []) ~> asExportMetricsServiceRequest
 
 asExportTraceServiceRequest :: Process OT.ResourceSpans OTS.ExportTraceServiceRequest
 asExportTraceServiceRequest = mapping (: []) ~> asExportTracesServiceRequest
+
+asResourceLogs :: [OL.ResourceLogs -> OL.ResourceLogs] -> Process [OL.ScopeLogs] OL.ResourceLogs
+asResourceLogs mod = mapping $ \scopeLogs ->
+  messageWith ((OL.scopeLogs .~ scopeLogs) : mod)
 
 asResourceMetrics :: [OM.ResourceMetrics -> OM.ResourceMetrics] -> Process [OM.ScopeMetrics] OM.ResourceMetrics
 asResourceMetrics mod = mapping $ \scopeMetrics ->
@@ -632,19 +687,26 @@ asResourceSpans :: [OT.ResourceSpans -> OT.ResourceSpans] -> Process [OT.ScopeSp
 asResourceSpans mod = mapping $ \scopeSpans ->
   messageWith ((OT.scopeSpans .~ scopeSpans) : mod)
 
-asResourceSpan :: [OT.ResourceSpans -> OT.ResourceSpans] -> Process OT.ScopeSpans OT.ResourceSpans
-asResourceSpan mod = mapping (: []) ~> asResourceSpans mod
+asResourceLog :: [OL.ResourceLogs -> OL.ResourceLogs] -> Process OL.ScopeLogs OL.ResourceLogs
+asResourceLog mod = mapping (: []) ~> asResourceLogs mod
 
 asResourceMetric :: [OM.ResourceMetrics -> OM.ResourceMetrics] -> Process OM.ScopeMetrics OM.ResourceMetrics
 asResourceMetric mod = mapping (: []) ~> asResourceMetrics mod
 
-asScopeSpans :: [OT.ScopeSpans -> OT.ScopeSpans] -> Process [OT.Span] OT.ScopeSpans
-asScopeSpans mod = mapping $ \spans ->
-  messageWith ((OT.spans .~ spans) : mod)
+asResourceSpan :: [OT.ResourceSpans -> OT.ResourceSpans] -> Process OT.ScopeSpans OT.ResourceSpans
+asResourceSpan mod = mapping (: []) ~> asResourceSpans mod
+
+asScopeLogs :: [OL.ScopeLogs -> OL.ScopeLogs] -> Process [OL.LogRecord] OL.ScopeLogs
+asScopeLogs mod = mapping $ \logRecords ->
+  messageWith ((OL.logRecords .~ logRecords) : mod)
 
 asScopeMetrics :: [OM.ScopeMetrics -> OM.ScopeMetrics] -> Process [OM.Metric] OM.ScopeMetrics
 asScopeMetrics mod = mapping $ \metrics ->
   messageWith ((OM.metrics .~ metrics) : mod)
+
+asScopeSpans :: [OT.ScopeSpans -> OT.ScopeSpans] -> Process [OT.Span] OT.ScopeSpans
+asScopeSpans mod = mapping $ \spans ->
+  messageWith ((OT.spans .~ spans) : mod)
 
 asMetricWith ::
   (Default a, HasField "description" a (Maybe Text), HasField "name" a (Maybe Text)) =>
@@ -684,6 +746,23 @@ toSum mod dataPoints
 --------------------------------------------------------------------------------
 -- Interpret data
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- Interpret logs
+
+toLogRecord :: LogRecord -> OL.LogRecord
+toLogRecord i =
+  messageWith
+    [ OL.body .~ messageWith [OC.stringValue .~ i.body]
+    , OL.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+    , -- TODO: this could be set to the actual observed time in the processor.
+      OL.observedTimeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
+    , OL.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
+    , OL.severityNumber .~ toSeverityNumber i.maybeSeverity
+    ]
+
+toSeverityNumber :: Maybe Severity -> OL.SeverityNumber
+toSeverityNumber = maybe OL.SEVERITY_NUMBER_UNSPECIFIED (toEnum . (.value) . DS.toSeverityNumber)
 
 --------------------------------------------------------------------------------
 -- Interpret spans

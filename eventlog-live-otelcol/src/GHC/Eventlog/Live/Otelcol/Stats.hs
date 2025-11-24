@@ -28,6 +28,7 @@ import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Otelcol.Exporter.Logs (ExportLogsResult (..))
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (ExportMetricsResult (..))
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (ExportTraceResult (..))
 import GHC.Eventlog.Live.Verbosity (Verbosity)
@@ -61,6 +62,7 @@ This type represents the various stats produced by the pipeline.
 -}
 data Stat
   = EventCountStat !EventCount
+  | ExportLogsResultStat !ExportLogsResult
   | ExportMetricsResultStat !ExportMetricsResult
   | ExportTraceResultStat !ExportTraceResult
   deriving (Show)
@@ -71,6 +73,8 @@ This type represents the aggregate stats kept by the stats processor.
 -}
 data Stats = Stats
   { eventCounts :: Row
+  , exportedLogRecords :: Row
+  , rejectedLogRecords :: Row
   , exportedDataPoints :: Row
   , rejectedDataPoints :: Row
   , exportedSpans :: Row
@@ -135,6 +139,8 @@ unionStats :: Int -> Stats -> Stats -> Stats
 unionStats windowSize new old = Stats{..}
  where
   eventCounts = unionRow windowSize new.eventCounts old.eventCounts
+  exportedLogRecords = unionRow windowSize new.exportedLogRecords old.exportedLogRecords
+  rejectedLogRecords = unionRow windowSize new.rejectedLogRecords old.rejectedLogRecords
   exportedDataPoints = unionRow windowSize new.exportedDataPoints old.exportedDataPoints
   rejectedDataPoints = unionRow windowSize new.rejectedDataPoints old.rejectedDataPoints
   exportedSpans = unionRow windowSize new.exportedSpans old.exportedSpans
@@ -148,6 +154,18 @@ Construct a `Stats` object from an `EventCount`.
 -}
 fromEventCount :: EventCount -> Stats
 fromEventCount eventCount = def{eventCounts = singletonRow eventCount.value}
+
+{- |
+Internal helper.
+Construct a `Stats` object from an `ExportLogsResult`.
+-}
+fromExportLogsResult :: ExportLogsResult -> Stats
+fromExportLogsResult exportLogsResult =
+  def
+    { exportedLogRecords = singletonRow exportLogsResult.exportedLogRecords
+    , rejectedLogRecords = singletonRow exportLogsResult.rejectedLogRecords
+    , errors = maybeToStrictList $ T.pack . displayException <$> exportLogsResult.maybeSomeException
+    }
 
 {- |
 Internal helper.
@@ -208,6 +226,8 @@ instance Default Stats where
   def = Stats{..}
    where
     eventCounts = def
+    exportedLogRecords = def
+    rejectedLogRecords = def
     exportedDataPoints = def
     rejectedDataPoints = def
     exportedSpans = def
@@ -250,6 +270,7 @@ Update the current stats based on new input.
 updateStats :: Int -> Stats -> Stat -> Stats
 updateStats windowSize old = \case
   EventCountStat eventCount -> unionStats windowSize (fromEventCount eventCount) old
+  ExportLogsResultStat exportLogsResults -> unionStats windowSize (fromExportLogsResult exportLogsResults) old
   ExportMetricsResultStat exportMetricsResult -> unionStats windowSize (fromExportMetricsResult exportMetricsResult) old
   ExportTraceResultStat exportTraceResult -> unionStats windowSize (fromExportTraceResult exportTraceResult) old
 
@@ -262,6 +283,18 @@ logStat verbosity = \case
   EventCountStat eventCount
     | eventCount.value > 0 ->
         logDebug verbosity $ "Received " <> showText eventCount.value <> " events."
+  ExportLogsResultStat exportLogsResult -> do
+    -- Log exported events.
+    when (exportLogsResult.exportedLogRecords > 0) $
+      logDebug verbosity $
+        "Exported " <> showText exportLogsResult.exportedLogRecords <> " logs."
+    -- Log rejected events.
+    when (exportLogsResult.rejectedLogRecords > 0) $
+      logError verbosity $
+        "Rejected " <> showText exportLogsResult.rejectedLogRecords <> " logs."
+    -- Log exception.
+    for_ exportLogsResult.maybeSomeException $ \someException -> do
+      logError verbosity . T.pack $ displayException someException
   ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
     when (exportMetricsResult.exportedDataPoints > 0) $
@@ -324,6 +357,8 @@ displayStats verbosity eventlogFlushIntervalS stats = do
   let rSpec :: [TBL.RowGroup (Maybe Text)]
       rSpec =
         [ mkRow (Just "Event") (Just "Received") stats.eventCounts
+        , mkRow (Just "Log") (Just "Exported") stats.exportedLogRecords
+        , mkRow Nothing (Just "Rejected") stats.rejectedLogRecords
         , mkRow (Just "Metric") (Just "Exported") stats.exportedDataPoints
         , mkRow Nothing (Just "Rejected") stats.rejectedDataPoints
         , mkRow (Just "Span") (Just "Exported") stats.exportedSpans
