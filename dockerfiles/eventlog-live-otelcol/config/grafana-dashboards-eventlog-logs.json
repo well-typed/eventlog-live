@@ -18,13 +18,13 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
+  "id": 2,
   "links": [],
   "panels": [
     {
       "datasource": {
         "type": "loki",
-        "uid": "af53paj34f3lse"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {},
@@ -78,5 +78,5 @@
   "timezone": "browser",
   "title": "Eventlog Logs",
   "uid": "ad5ltk7",
-  "version": 2
+  "version": 1
 }

@@ -12,6 +12,22 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "enable": false,
+        "expr": "{service_name=\"${service_name}\"} |~ `${marker_filter}` | marker = `true`",
+        "filter": {
+          "exclude": true,
+          "ids": [5]
+        },
+        "hide": false,
+        "iconColor": "red",
+        "name": "Marker",
+        "queryType": "range"
       }
     ]
   },
@@ -21,6 +37,19 @@
   "id": 1,
   "links": [],
   "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 7,
+      "panels": [],
+      "title": "Overview",
+      "type": "row"
+    },
     {
       "datasource": {
         "type": "prometheus",
@@ -88,7 +117,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 5,
       "options": {
@@ -104,7 +133,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "editorMode": "builder",
@@ -116,6 +145,20 @@
       ],
       "title": "Memory Usage by Service",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 6,
+      "panels": [],
+      "repeat": "service_name",
+      "title": "Memory Usage for ${service_name}",
+      "type": "row"
     },
     {
       "datasource": {
@@ -163,6 +206,7 @@
           },
           "fieldMinMax": false,
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -180,7 +224,7 @@
         "h": 24,
         "w": 12,
         "x": 0,
-        "y": 7
+        "y": 9
       },
       "id": 4,
       "options": {
@@ -197,13 +241,13 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "disableTextWrap": false,
-          "editorMode": "builder",
+          "editorMode": "code",
           "exemplar": false,
-          "expr": "{\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"}",
+          "expr": "topk(${heap_prof_sample_topk}, {\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"}) or sum by(exported_job) ({\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"} unless topk(${heap_prof_sample_topk}, {\"${metric_name_prefix}HeapProfSample_bytes\", exported_job=\"$service_name\"}))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -220,6 +264,13 @@
           "options": {
             "regex": "^[^:]+:(.*)$",
             "renamePattern": "$1"
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^${service_name}$",
+            "renamePattern": "Other"
           }
         }
       ],
@@ -291,7 +342,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 7
+        "y": 9
       },
       "id": 1,
       "options": {
@@ -307,7 +358,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -425,7 +476,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 15
+        "y": 17
       },
       "id": 3,
       "options": {
@@ -441,7 +492,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "disableTextWrap": false,
@@ -500,7 +551,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
           "custom": {
             "axisBorderShow": false,
@@ -508,16 +559,29 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
-            "fillOpacity": 80,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
             "lineWidth": 1,
+            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -541,37 +605,28 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 25
       },
       "id": 2,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "none",
         "tooltip": {
           "hideZeros": false,
           "mode": "single",
           "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 100
+        }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "{\"${metric_name_prefix}HeapAllocated_bytes_total\", exported_job=\"$service_name\"}",
+          "expr": "sum by(exported_job) (delta({\"${metric_name_prefix}HeapAllocated_bytes_total\", exported_job=\"$service_name\"}[$__interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "HeapAllocated",
@@ -581,7 +636,7 @@
         }
       ],
       "title": "HeapAllocated",
-      "type": "barchart"
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -630,6 +685,42 @@
         ],
         "query": "ghc_eventlog_",
         "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "10",
+          "value": "10"
+        },
+        "description": "The number of values to show in the HeapProfSample visualisation.",
+        "label": "HeapProfSample Limit",
+        "name": "heap_prof_sample_topk",
+        "options": [
+          {
+            "selected": true,
+            "text": "10",
+            "value": "10"
+          }
+        ],
+        "query": "10",
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "A regular expression to filter the user markers.",
+        "label": "Marker Filter",
+        "name": "marker_filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
       }
     ]
   },
@@ -641,5 +732,5 @@
   "timezone": "browser",
   "title": "Eventlog Heap",
   "uid": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
-  "version": 2
+  "version": 1
 }
