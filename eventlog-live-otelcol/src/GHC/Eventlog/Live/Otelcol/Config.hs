@@ -27,8 +27,9 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Logs (..),
   IsLogProcessorConfig,
   shouldExportLogs,
-  UserMessage (..),
+  ThreadLabel (..),
   UserMarker (..),
+  UserMessage (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -169,13 +170,17 @@ instance Default Traces where
 -- NOTE: This should be kept in sync with the list of logs.
 --       Specifically, there should be a `Default` instance for every log.
 
-instance Default UserMessage where
-  def :: UserMessage
-  def = $(getDefault @'["processors", "logs", "userMessage"] defaultConfig)
+instance Default ThreadLabel where
+  def :: ThreadLabel
+  def = $(getDefault @'["processors", "logs", "threadLabel"] defaultConfig)
 
 instance Default UserMarker where
   def :: UserMarker
   def = $(getDefault @'["processors", "logs", "userMarker"] defaultConfig)
+
+instance Default UserMessage where
+  def :: UserMessage
+  def = $(getDefault @'["processors", "logs", "userMessage"] defaultConfig)
 
 -- NOTE: This should be kept in sync with the list of metrics.
 --       Specifically, there should be a `Default` instance for every metric.
@@ -534,8 +539,9 @@ forEachLogProcessor ::
   [a]
 forEachLogProcessor f logs =
   [ -- NOTE: This should be kept in sync with the list of logs.
-    f $ fromMaybe def logs.userMessage
+    f $ fromMaybe def logs.threadLabel
   , f $ fromMaybe def logs.userMarker
+  , f $ fromMaybe def logs.userMessage
   ]
 
 {- |
