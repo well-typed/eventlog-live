@@ -1,12 +1,16 @@
 processors:
   logs:
-    user_message:
-      name: ghc_eventlog_UserMessage
-      description: A user log message.
+    thread_label:
+      name: ghc_eventlog_ThreadLabel
+      description: A thread label.
       export: 5s
     user_marker:
       name: ghc_eventlog_UserMarker
       description: A user marker.
+      export: 5s
+    user_message:
+      name: ghc_eventlog_UserMessage
+      description: A user log message.
       export: 5s
   metrics:
     blocks_size:
