@@ -31,9 +31,13 @@ This [Docker Compose](https://docs.docker.com/compose/) configuration builds and
   The `eventlog-live-otelcol` application, which streams eventlog data from `oddball` to the
   OpenTelemetry Collector.
 
-- [`otel/opentelemetry-collector-contrib`](https://hub.docker.com/r/otel/opentelemetry-collector-contrib)
+- [`grafana/grafana-oss`](https://hub.docker.com/r/grafana/grafana-oss)
 
-  The OpenTelemetry Collector, which streams the data to Prometheus.
+  The Grafana instance, which visualises the eventlog data.
+
+- [`grafana/loki`](https://hub.docker.com/r/grafana/loki/)
+
+  The Loki log processor and database, which acts as a log datasource for Grafana.
 
 - [`prom/prometheus`](https://hub.docker.com/r/prom/prometheus)
 
@@ -43,9 +47,9 @@ This [Docker Compose](https://docs.docker.com/compose/) configuration builds and
 
   The Tempo span processor and database, which acts as a span datasource for Grafana.
 
-- [`grafana/grafana-oss`](https://hub.docker.com/r/grafana/grafana-oss)
+- [`otel/opentelemetry-collector-contrib`](https://hub.docker.com/r/otel/opentelemetry-collector-contrib)
 
-  The Grafana instance, which visualises the eventlog data.
+  The OpenTelemetry Collector, which streams the telemetry data to the various datasources.
 
 ## Getting Started
 
