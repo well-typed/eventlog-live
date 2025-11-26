@@ -280,9 +280,11 @@ Log a statistic.
 -}
 logStat :: (MonadIO m) => Verbosity -> Stat -> m ()
 logStat verbosity = \case
-  EventCountStat eventCount
-    | eventCount.value > 0 ->
-        logDebug verbosity $ "Received " <> showText eventCount.value <> " events."
+  EventCountStat eventCount ->
+    -- Log received events.
+    when (eventCount.value > 0) $
+      logDebug verbosity $
+        "Received " <> showText eventCount.value <> " events."
   ExportLogsResultStat exportLogsResult -> do
     -- Log exported events.
     when (exportLogsResult.exportedLogRecords > 0) $
@@ -307,7 +309,7 @@ logStat verbosity = \case
     -- Log exception.
     for_ exportMetricsResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
-  ExportTraceResultStat exportTraceResult | exportTraceResult.exportedSpans > 0 -> do
+  ExportTraceResultStat exportTraceResult -> do
     -- Log exported events.
     when (exportTraceResult.exportedSpans > 0) $
       logDebug verbosity $
@@ -319,7 +321,6 @@ logStat verbosity = \case
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
-  _otherwise -> pure ()
 
 {- |
 Internal helper.
