@@ -358,12 +358,12 @@ displayStats verbosity eventlogFlushIntervalS stats = do
       mkRow item result row = TBL.rowG [item, result, Just (showText row.total), Just (rate row), Just (peak row)]
   let rSpec :: [TBL.RowGroup (Maybe Text)]
       rSpec =
-        [ mkRow (Just "Event") (Just "Received") stats.eventCounts
-        , mkRow (Just "Log") (Just "Exported") stats.exportedLogRecords
+        [ mkRow (Just "Events") (Just "Received") stats.eventCounts
+        , mkRow (Just "Logs") (Just "Exported") stats.exportedLogRecords
         , mkRow Nothing (Just "Rejected") stats.rejectedLogRecords
-        , mkRow (Just "Metric") (Just "Exported") stats.exportedDataPoints
+        , mkRow (Just "Metrics") (Just "Exported") stats.exportedDataPoints
         , mkRow Nothing (Just "Rejected") stats.rejectedDataPoints
-        , mkRow (Just "Span") (Just "Exported") stats.exportedSpans
+        , mkRow (Just "Traces") (Just "Exported") stats.exportedSpans
         , mkRow Nothing (Just "Rejected") stats.rejectedSpans
         ]
   let tSpec :: TBL.TableSpec TBL.LineStyle TBL.LineStyle String (Maybe Text) (Maybe Text)
