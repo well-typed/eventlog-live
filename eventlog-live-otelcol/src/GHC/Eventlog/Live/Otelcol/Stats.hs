@@ -38,6 +38,7 @@ import System.Console.ANSI (hNowSupportsANSI)
 import System.Console.ANSI qualified as ANSI
 import System.IO qualified as IO
 import Text.Layout.Table qualified as TBL
+import Text.Printf (printf)
 
 {- |
 This type represents a count of input events.
@@ -90,23 +91,23 @@ This type represents a single row of statistics.
 -}
 data Row = Row
   { total :: !Int64
-  , peakRatePerBatch :: !Int64
+  , peakRatePerBatch :: !Double
   , window :: !(Strict.List Int64)
   }
   deriving (Show)
 
-instance HasField "ratePerBatch" Row Int64 where
-  getField :: Row -> Int64
+instance HasField "ratePerBatch" Row Double where
+  getField :: Row -> Double
   getField row = ratePerBatch row.window
 
 {- |
 Internal helper.
 Computes the rate per batch from a window.
 -}
-ratePerBatch :: Strict.List Int64 -> Int64
+ratePerBatch :: Strict.List Int64 -> Double
 ratePerBatch window =
   let !n = length window
-   in if n <= 0 then 0 else sum window `div` fromIntegral n
+   in if n <= 0 then 0 else sum (realToFrac <$> window) / fromIntegral n
 
 {- |
 Internal helper.
@@ -115,7 +116,7 @@ Create a singleton `Row`.
 singletonRow :: Int64 -> Row
 singletonRow total = Row{..}
  where
-  peakRatePerBatch = total
+  peakRatePerBatch = realToFrac total
   window = singletonStrictList total
 
 {- |
@@ -345,9 +346,9 @@ displayStats verbosity eventlogFlushIntervalS stats = do
   -- Compute the moving average count of items _per second_,
   -- by computing the adjusted average of counts over n batches.
   let rate :: Row -> Text
-      rate row = showText $ realToFrac row.ratePerBatch / eventlogFlushIntervalS
+      rate row = T.pack . printf "%0.2f" $ row.ratePerBatch / eventlogFlushIntervalS
   let peak :: Row -> Text
-      peak row = showText row.peakRatePerBatch
+      peak row = T.pack . printf "%0.0f" $ row.peakRatePerBatch
 
   let cSpec :: [TBL.ColSpec]
       cSpec = [TBL.defColSpec, TBL.defColSpec, TBL.numCol, TBL.numCol, TBL.numCol]
