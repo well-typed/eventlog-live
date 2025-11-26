@@ -311,11 +311,11 @@ logStat verbosity = \case
     -- Log exported events.
     when (exportTraceResult.exportedSpans > 0) $
       logDebug verbosity $
-        "Exported " <> showText exportTraceResult.exportedSpans <> " metrics."
+        "Exported " <> showText exportTraceResult.exportedSpans <> " spans."
     -- Log rejected events.
     when (exportTraceResult.rejectedSpans > 0) $
       logError verbosity $
-        "Rejected " <> showText exportTraceResult.rejectedSpans <> " metrics."
+        "Rejected " <> showText exportTraceResult.rejectedSpans <> " spans."
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
