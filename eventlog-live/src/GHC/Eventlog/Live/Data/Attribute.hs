@@ -41,6 +41,9 @@ instance Semigroup Attrs where
   (<>) :: Attrs -> Attrs -> Attrs
   x <> y = Attrs{attrMap = x.attrMap <> y.attrMap}
 
+instance Monoid Attrs where
+  mempty = Attrs mempty
+
 instance IsList Attrs where
   type Item Attrs = Attr
 
