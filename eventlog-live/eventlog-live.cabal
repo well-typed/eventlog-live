@@ -131,6 +131,7 @@ library
     , bytestring               >=0.11   && <0.13
     , clock                    >=0.8    && <0.9
     , co-log-core              >=0.3    && <0.4
+    , containers               >=0.6    && <0.8
     , dlist                    >=1.0    && <1.1
     , ghc-events               >=0.20   && <0.21
     , ghc-stack-profiler-core  >=0.1    && <0.2

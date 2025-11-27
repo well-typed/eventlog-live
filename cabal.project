@@ -43,3 +43,16 @@ if impl(ghc >=9.4)
   allow-newer:
     , concurrent-machines-0.3.1.5:base
     , concurrent-machines-0.3.1.5:containers
+
+if impl(ghc >=9.12)
+  allow-newer:
+    , proto-lens-runtime:base
+    , proto-lens-runtime:containers
+    , proto-lens:base
+    , proto-lens:ghc-prim
+
+source-repository-package
+    type: git
+    location: https://github.com/fendor/hs-opentelemetry.git
+    tag: bc65d8a2e7d31f51226590d22af2a531b9363e2b
+    subdir: otlp

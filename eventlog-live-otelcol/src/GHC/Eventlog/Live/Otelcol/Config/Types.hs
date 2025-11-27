@@ -43,6 +43,11 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
 
+  -- *** Profile processor configuration types
+  Profiles (..),
+  IsProfileProcessorConfig,
+  StackSampleProfile (..),
+
   -- ** Property types
   Duration (..),
   AggregationStrategy (..),
@@ -104,6 +109,7 @@ data Processors = Processors
   { logs :: Maybe Logs
   , metrics :: Maybe Metrics
   , traces :: Maybe Traces
+  , profiles :: Maybe Profiles
   }
   deriving (Lift)
 
@@ -114,6 +120,7 @@ instance FromYAML Processors where
       <$> m .:? "logs"
       <*> m .:? "metrics"
       <*> m .:? "traces"
+      <*> m .:? "profiles"
 
 instance ToYAML Processors where
   toYAML :: Processors -> YAML.Node ()
@@ -122,6 +129,7 @@ instance ToYAML Processors where
       [ "logs" .= processors.logs
       , "metrics" .= processors.metrics
       , "traces" .= processors.traces
+      , "profiles" .= processors.profiles
       ]
 
 {- |
@@ -251,6 +259,30 @@ instance ToYAML Traces where
     YAML.mapping
       [ "capability_usage" .= traces.capabilityUsage
       , "thread_state" .= traces.threadState
+      ]
+
+{- |
+The configuration options for the profile processors.
+-}
+newtype Profiles = Profiles
+  { stackSample :: Maybe StackSampleProfile
+  }
+  deriving (Lift)
+
+instance FromYAML Profiles where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Profiles
+  parseYAML =
+    -- NOTE: This should be kept in sync with the list of profiles.
+    YAML.withMap "Profiles" $ \m ->
+      Profiles
+        <$> m .:? "stack_sample"
+
+instance ToYAML Profiles where
+  toYAML :: Profiles -> YAML.Node ()
+  toYAML profiles =
+    -- NOTE: This should be kept in sync with the list of profiles.
+    YAML.mapping
+      [ "stack_sample" .= profiles.stackSample
       ]
 
 -------------------------------------------------------------------------------
@@ -583,7 +615,7 @@ instance HasField "enabled" CapabilityUsageSpan Bool where
   getField = isEnabled . (.export)
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadStateTraces`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadStateSpan`.
 -}
 data ThreadStateSpan = ThreadStateSpan
   { name :: Maybe Text
@@ -602,6 +634,28 @@ instance ToYAML ThreadStateSpan where
 
 instance HasField "enabled" ThreadStateSpan Bool where
   getField :: ThreadStateSpan -> Bool
+  getField = isEnabled . (.export)
+
+{- |
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processStackProfSampleData`.
+-}
+data StackSampleProfile = StackSampleProfile
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift)
+
+instance FromYAML StackSampleProfile where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser StackSampleProfile
+  parseYAML = genericParseYAMLProfilerProcessorConfig "StackSampleProfile" StackSampleProfile
+
+instance ToYAML StackSampleProfile where
+  toYAML :: StackSampleProfile -> YAML.Node ()
+  toYAML = genericToYAMLProfilerProcessorConfig
+
+instance HasField "enabled" StackSampleProfile Bool where
+  getField :: StackSampleProfile -> Bool
   getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
@@ -640,6 +694,13 @@ The structural type of span processor configurations.
 -}
 type IsTraceProcessorConfig :: Type -> Constraint
 type IsTraceProcessorConfig config =
+  (IsProcessorConfig config)
+
+{- |
+The structural type of span processor configurations.
+-}
+type IsProfileProcessorConfig :: Type -> Constraint
+type IsProfileProcessorConfig config =
   (IsProcessorConfig config)
 
 --------------------------------------------------------------------------------
@@ -878,4 +939,35 @@ genericToYAMLTraceProcessorConfig traceProcessorConfig =
     [ "name" .= traceProcessorConfig.name
     , "description" .= traceProcessorConfig.description
     , "export" .= traceProcessorConfig.export
+    ]
+
+{- |
+Internal helper.
+Generic parser for processor configuration.
+-}
+genericParseYAMLProfilerProcessorConfig ::
+  String ->
+  (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> profilerConfig) ->
+  YAML.Node YAML.Pos ->
+  YAML.Parser profilerConfig
+genericParseYAMLProfilerProcessorConfig trace mkProfilerConfig =
+  YAML.withMap trace $ \m ->
+    mkProfilerConfig
+      <$> m .:? "name"
+      <*> m .:? "description"
+      <*> m .:? "export"
+
+{- |
+Internal helper.
+Generic parser for metric configuration.
+-}
+genericToYAMLProfilerProcessorConfig ::
+  (IsTraceProcessorConfig profilerConfig) =>
+  profilerConfig ->
+  YAML.Node ()
+genericToYAMLProfilerProcessorConfig profilerConfig =
+  YAML.mapping
+    [ "name" .= profilerConfig.name
+    , "description" .= profilerConfig.description
+    , "export" .= profilerConfig.export
     ]
