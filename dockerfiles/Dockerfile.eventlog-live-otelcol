@@ -23,10 +23,16 @@ packages: eventlog-live-otelcol
 -- disable snappy support in grpc-spec
 package grpc-spec
   flags: -snappy
+
+source-repository-package
+  type: git
+  location: https://github.com/well-typed/ghc-stack-profiler.git
+  tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+  subdir: ghc-stack-profiler-core
 EOF
 
 # Install protoc
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y protobuf-compiler
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y protobuf-compiler libsnappy-dev
 
 # Build eventlog-live-otelcol
 RUN <<EOF
