@@ -7,6 +7,7 @@ Portability : portable
 module GHC.Eventlog.Live.Data.Attribute (
   Attrs,
   lookup,
+  empty,
   toList,
   Attr,
   AttrKey,
@@ -35,11 +36,17 @@ newtype Attrs = Attrs {attrMap :: HashMap AttrKey AttrValue}
 lookup :: AttrKey -> Attrs -> Maybe AttrValue
 lookup attrKey attrs = M.lookup attrKey attrs.attrMap
 
+empty :: Attrs
+empty = Attrs mempty
+
 instance Hashable Attrs
 
 instance Semigroup Attrs where
   (<>) :: Attrs -> Attrs -> Attrs
   x <> y = Attrs{attrMap = x.attrMap <> y.attrMap}
+
+instance Monoid Attrs where
+  mempty = empty
 
 instance IsList Attrs where
   type Item Attrs = Attr
