@@ -133,3 +133,8 @@ processors:
       name: ghc_eventlog_ThreadState
       description: A trace of thread state changes (either running or stopped).
       export: false
+  profiles:
+    stack_sample:
+      name: ghc_eventlog_StackSampleProfile
+      description: A thread RTS callstack sample.
+      export: 5s # one of [boolean, `${number}x`]

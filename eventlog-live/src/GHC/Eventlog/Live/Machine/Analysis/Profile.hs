@@ -20,11 +20,10 @@ import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Word (Word64)
-import GHC.Eventlog.Live.Data.Attribute qualified as Attrs
 import GHC.Eventlog.Live.Data.Metric
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (InfoTable (..), InfoTablePtr (..), metric)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
@@ -69,9 +68,9 @@ Furthermore, it processes the `E.InfoTableProv` events to
 -}
 processStackProfSampleData ::
   (MonadIO m) =>
-  Verbosity ->
+  Logger m ->
   ProcessT m (WithStartTime Event) StackProfSampleData
-processStackProfSampleData _verbosityThreshold =
+processStackProfSampleData _logger =
   construct $
     go
       StackProfSampleState
@@ -108,7 +107,7 @@ processStackProfSampleData _verbosityThreshold =
                     hydrateBinaryEventlog st msg
 
                   stackProfSample =
-                    metric i callStackMessage Attrs.empty
+                    metric i callStackMessage mempty
 
               yield $ StackProfSampleData stackProfSample
               go st1
