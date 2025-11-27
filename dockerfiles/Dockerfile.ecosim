@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1.7-labs
+
+# To build this image, run:
+# docker build --tag well-typed/eventlog-live-example-ecosim:0.1.0.0 --file ./dockerfiles/Dockerfile.ecosim .
+
+# Use the Haskell image with GHC 9.10
+# See: https://hub.docker.com/_/haskell
+FROM haskell:9.10-slim-bullseye AS build
+
+# Configure eventlog-live
+ARG GHC_EVENTLOG_SOCKET="/tmp/ghc_eventlog.sock"
+ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
+
+# Copy required packages to container
+WORKDIR "/eventlog-live"
+COPY --parents \
+  "./eventlog-live/" \
+  "./examples/ecosim/" \
+  "/eventlog-live/"
+
+# Create cabal.project file
+COPY <<EOF /eventlog-live/cabal.project
+packages: examples/ecosim
+packages: eventlog-live
+EOF
+
+# Build ecosim
+RUN <<EOF
+cabal update
+mkdir "/eventlog-live/bin"
+cabal install \
+    --overwrite-policy=always \
+    --install-method=copy \
+    --installdir="/eventlog-live/bin" \
+    ecosim
+EOF
+
+# Copy ecosim to output stage
+FROM debian:bullseye-slim AS output
+COPY --from=build "/eventlog-live/bin/ecosim" "/bin/ecosim"
+
+# Run command
+CMD sleep 5 && ecosim --unix ${GHC_EVENTLOG_SOCKET} --interval=0
