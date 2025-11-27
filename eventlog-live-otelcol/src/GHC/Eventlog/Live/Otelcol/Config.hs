@@ -52,6 +52,12 @@ module GHC.Eventlog.Live.Otelcol.Config (
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
 
+  -- *** Profiler processor configuration types
+  Profiles (..),
+  IsProfileProcessorConfig,
+  shouldExportProfiles,
+  StackSampleProfile (..),
+
   -- ** Property types
 
   -- *** Aggregation strategy
@@ -182,6 +188,10 @@ instance Default UserMessage where
   def :: UserMessage
   def = $(getDefault @'["processors", "logs", "userMessage"] defaultConfig)
 
+instance Default Profiles where
+  def :: Profiles
+  def = $(getDefault @'["processors", "profiles"] defaultConfig)
+
 -- NOTE: This should be kept in sync with the list of metrics.
 --       Specifically, there should be a `Default` instance for every metric.
 
@@ -231,6 +241,10 @@ instance Default CapabilityUsageSpan where
 instance Default ThreadStateSpan where
   def :: ThreadStateSpan
   def = $(getDefault @'["processors", "traces", "threadState"] defaultConfig)
+
+instance Default StackSampleProfile where
+  def :: StackSampleProfile
+  def = $(getDefault @'["processors", "profiles", "stackSample"] defaultConfig)
 
 -------------------------------------------------------------------------------
 -- Accessors
@@ -506,6 +520,17 @@ shouldExportTraces =
       )
     . (.config)
 
+shouldExportProfiles :: FullConfig -> Bool
+shouldExportProfiles =
+  getAny
+    . with
+      (.processors)
+      ( with
+          (.profiles)
+          (mconcat . forEachProfileProcessor (Any . isEnabled . (.export)))
+      )
+    . (.config)
+
 -------------------------------------------------------------------------------
 -- Functors for processor configurations
 -------------------------------------------------------------------------------
@@ -525,6 +550,7 @@ forEachProcessor f processors =
     [ forEachLogProcessor f (fromMaybe def processors.logs)
     , forEachMetricProcessor f (fromMaybe def processors.metrics)
     , forEachTraceProcessor f (fromMaybe def processors.traces)
+    , forEachProfileProcessor f (fromMaybe def processors.profiles)
     ]
 
 {- |
@@ -581,6 +607,21 @@ forEachTraceProcessor f traces =
   [ -- NOTE: This should be kept in sync with the list of traces.
     f $ fromMaybe def traces.capabilityUsage
   , f $ fromMaybe def traces.threadState
+  ]
+
+{- |
+Apply a function to each metric processor.
+-}
+forEachProfileProcessor ::
+  ( forall profileProcessorConfig.
+    (IsProfileProcessorConfig profileProcessorConfig) =>
+    profileProcessorConfig -> a
+  ) ->
+  Profiles ->
+  [a]
+forEachProfileProcessor f profiles =
+  [ -- NOTE: This should be kept in sync with the list of traces.
+    f $ fromMaybe def profiles.stackSample
   ]
 
 -------------------------------------------------------------------------------
