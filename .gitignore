@@ -1,6 +1,8 @@
 .env
 dist-newstyle/
 *.eventlog
+*.eventlog.json
 *.hp
 *.prof
 /nix/*/result
+cabal.project.local
