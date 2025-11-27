@@ -1,0 +1,79 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Dashboard for the RTS Callstack Profile of your program",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 4,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "P02E4190217B50628"
+      },
+      "description": "Flamegraph of the RTS Callstack",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Sample"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {},
+      "pluginVersion": "12.2.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "P02E4190217B50628"
+          },
+          "groupBy": [],
+          "labelSelector": "{}",
+          "profileTypeId": "process_cpu:stack:samples::",
+          "queryType": "profile",
+          "refId": "A",
+          "spanSelector": []
+        }
+      ],
+      "title": "RTS Stack Profile",
+      "type": "flamegraph"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Eventlog Stack Profile",
+  "uid": "ad7v28q",
+  "version": 1
+}
