@@ -4,7 +4,6 @@ cabal-docspec=0.0.0.20240703
 cabal-fmt=0.1.12
 fourmolu=0.16.2.0
 ghc=9.8.4
-haddock=2.31.0
 hlint=3.10
 nixfmt=1.1.0
 prettier=3.4.1
