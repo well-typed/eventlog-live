@@ -6,6 +6,7 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Attribute (
   Attrs,
+  empty,
   toList,
   Attr,
   AttrKey,
@@ -30,11 +31,17 @@ A set of attributes is a t`HashMap`
 newtype Attrs = Attrs {attrMap :: HashMap AttrKey AttrValue}
   deriving (Eq, Generic, Show)
 
+empty :: Attrs
+empty = Attrs mempty
+
 instance Hashable Attrs
 
 instance Semigroup Attrs where
   (<>) :: Attrs -> Attrs -> Attrs
   x <> y = Attrs{attrMap = x.attrMap <> y.attrMap}
+
+instance Monoid Attrs where
+  mempty = empty
 
 instance IsList Attrs where
   type Item Attrs = Attr
