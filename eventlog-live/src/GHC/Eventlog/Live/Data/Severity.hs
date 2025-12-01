@@ -14,6 +14,7 @@ module GHC.Eventlog.Live.Data.Severity (
 ) where
 
 import Data.Char (toUpper)
+import Data.Ix (Ix)
 import Text.Read (readMaybe)
 
 {- |
@@ -53,7 +54,7 @@ data Severity
   | FATAL2
   | FATAL3
   | FATAL4
-  deriving (Enum, Bounded, Eq, Ord, Read, Show)
+  deriving (Bounded, Enum, Eq, Ord, Read, Show, Ix)
 
 {- |
 Convert from a `Severity` to a `SeverityNumber`.
