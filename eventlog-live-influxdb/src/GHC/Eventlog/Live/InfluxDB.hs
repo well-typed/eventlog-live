@@ -33,7 +33,9 @@ import Database.InfluxDB.Types qualified as I
 import Database.InfluxDB.Write qualified as I
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
+import GHC.Eventlog.Live.Data.Severity (Severity)
 import GHC.Eventlog.Live.Data.Span
+import GHC.Eventlog.Live.Logger (LogAction, filterBySeverity, stderrLogAction)
 import GHC.Eventlog.Live.Machine.Analysis.Capability
 import GHC.Eventlog.Live.Machine.Analysis.Heap
 import GHC.Eventlog.Live.Machine.Analysis.Thread
@@ -41,7 +43,6 @@ import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.WithStartTime
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
@@ -60,6 +61,9 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser optionsInfo
 
+  -- Construct logging action
+  let logAction = filterBySeverity severityThreshold stderrLogAction
+
   -- Convert the eventlog flush interval to milliseconds
   let batchIntervalMs = round (eventlogFlushIntervalS * 1_000)
 
@@ -68,8 +72,8 @@ main = do
           ~> sortByTick (.value.evTime)
           ~> liftTick
             ( fanout
-                [ processThreadEvents verbosity
-                , processHeapEvents verbosity maybeHeapProfBreakdown
+                [ processThreadEvents logAction
+                , processHeapEvents logAction maybeHeapProfBreakdown
                 ]
             )
           ~> batchByTick
@@ -77,7 +81,7 @@ main = do
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSource
-    verbosity
+    logAction
     eventlogSource
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
@@ -93,16 +97,16 @@ main = do
 data OneOf a b c = A !a | B !b | C !c
 
 processThreadEvents ::
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
-processThreadEvents verbosity =
+processThreadEvents logAction =
   fanout
     [ fanout
         [ -- GCSpan
-          processGCSpans verbosity
+          processGCSpans logAction
             ~> mapping (D.singleton . A)
-        , processThreadStateSpans' tryGetTimeUnixNano (.value) setWithStartTime'value verbosity
+        , processThreadStateSpans' tryGetTimeUnixNano (.value) setWithStartTime'value logAction
             ~> fanout
               [ -- MutatorSpan
                 asMutatorSpans' (.value) setWithStartTime'value
@@ -157,8 +161,8 @@ rightToMaybe = either (const Nothing) Just
 --------------------------------------------------------------------------------
 
 processHeapEvents ::
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processHeapEvents verbosity maybeHeapProfBreakdown =
@@ -337,7 +341,7 @@ data Options = Options
   , eventlogFlushIntervalS :: Double
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
-  , verbosity :: Verbosity
+  , severityThreshold :: Severity
   , influxDBWriteParams :: I.WriteParams
   }
 
