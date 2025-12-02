@@ -39,9 +39,10 @@ import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
-import GHC.Eventlog.Live.Data.Severity (Severity)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Severity qualified as DS (SeverityNumber (..), toSeverityNumber)
-import GHC.Eventlog.Live.Logger (logDebug)
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
@@ -62,7 +63,6 @@ import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField (..))
@@ -96,24 +96,32 @@ main :: IO ()
 main = do
   Options{..} <- O.execParser options
 
+  -- Construct the logging action
+  let logAction =
+        M.filterBySeverity severityThreshold M.stderrLogAction
+
   -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
   let MyDebugOptions{..} = myDebugOptions
   withMyEventlogSocket maybeMyEventlogSocket
-  withMyGhcDebug verbosity maybeMyGhcDebugSocket $ do
+  withMyGhcDebug logAction maybeMyGhcDebugSocket $ do
     --
     -- Read the configuration file.
     let readConfigFile configFile = do
-          logDebug verbosity $ "Reading configuration file from " <> T.pack configFile
-          config <- C.readConfigFile verbosity configFile
-          logDebug verbosity $ "Configuration file:\n" <> C.prettyConfig config
+          let msg1 = "Reading configuration file from " <> T.pack configFile
+          logAction <& DEBUG &> msg1
+          config <- C.readConfigFile logAction configFile
+          let msg2 = "Configuration file:\n" <> C.prettyConfig config
+          logAction <& DEBUG &> msg2
           pure config
 
     -- Read the configuration file and add derived settings.
     fullConfig <-
       C.toFullConfig eventlogFlushIntervalS
         <$> maybe (pure def) readConfigFile maybeConfigFile
-    logDebug verbosity $ "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
-    logDebug verbosity $ "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
+    let msg1 = "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
+    logAction <& DEBUG &> msg1
+    let msg1 = "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
+    logAction <& DEBUG &> msg1
 
     -- Determine the window size for statistics
     let windowSizeX =
@@ -130,7 +138,7 @@ main = do
     let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
     G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
       runWithEventlogSource
-        verbosity
+        logAction
         eventlogSocket
         eventlogSocketTimeoutS
         eventlogSocketTimeoutExponent
@@ -139,7 +147,7 @@ main = do
         maybeEventlogLogFile
         $ M.fanoutTick
           [ -- Log a warning if no input has been received after 10 ticks.
-            M.validateInput verbosity 10
+            M.validateInput logAction 10
           , -- Count the number of input events between each tick.
             eventCountTick
               ~> mapping (fmap (D.singleton . EventCountStat))
@@ -147,13 +155,13 @@ main = do
             M.liftTick M.withStartTime
               ~> M.fanoutTick
                 [ -- Process the heap events.
-                  processHeapEvents verbosity maybeHeapProfBreakdown fullConfig
+                  processHeapEvents logAction maybeHeapProfBreakdown fullConfig
                     ~> mapping (fmap (fmap TelemetryData'Metric))
                 , -- Process the log events.
                   processLogEvents fullConfig
                     ~> mapping (fmap (fmap TelemetryData'Log))
                 , -- Process the thread events.
-                  processThreadEvents verbosity fullConfig
+                  processThreadEvents logAction fullConfig
                     ~> mapping (fmap (fmap (either TelemetryData'Metric TelemetryData'Span)))
                 ]
               ~> mapping (fmap (partitionTelemetryData . D.toList))
@@ -198,9 +206,9 @@ main = do
           ]
           -- Process the statistics
           -- TODO: windowSize should be the maximum of all aggregation and export intervals
-          ~> M.liftTick (asParts ~> processStats verbosity stats eventlogFlushIntervalS windowSizeX)
+          ~> M.liftTick (asParts ~> processStats logAction stats eventlogFlushIntervalS windowSizeX)
           -- Validate the consistency of the tick
-          ~> M.validateTicks verbosity
+          ~> M.validateTicks logAction
           ~> M.dropTick
 
 data TelemetryData
@@ -226,7 +234,7 @@ data OneOf a b c = A !a | B !b | C !c
 
 processThreadEvents ::
   (MonadIO m) =>
-  Verbosity ->
+  LogAction m ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either OM.Metric OT.Span)))
 processThreadEvents verbosity fullConfig =
@@ -388,7 +396,7 @@ processThreadLabel fullConfig =
 
 processHeapEvents ::
   (MonadIO m) =>
-  Verbosity ->
+  LogAction m ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
@@ -521,15 +529,15 @@ shouldComputeMemReturn fullConfig =
 
 processHeapProfSample ::
   (MonadIO m) =>
-  Verbosity ->
+  LogAction m ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapProfSample verbosity maybeHeapProfBreakdown =
+processHeapProfSample logAction maybeHeapProfBreakdown =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSampleData verbosity maybeHeapProfBreakdown
+      , dataProcessor = M.processHeapProfSampleData logAction maybeHeapProfBreakdown
       , aggregators = viaLast
       , postProcessor = mapping M.heapProfSamples ~> asParts
       , unit = "By"
@@ -990,7 +998,7 @@ data Options = Options
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
-  , verbosity :: Verbosity
+  , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions

@@ -14,8 +14,8 @@ module GHC.Debug.Stub.Compat (
 
 import Control.Applicative (asum)
 import Data.Text qualified as T (pack)
-import GHC.Eventlog.Live.Logger (logError)
-import GHC.Eventlog.Live.Verbosity (Verbosity)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
 import Options.Applicative qualified as O
 
 #if defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
@@ -41,9 +41,9 @@ data MyGhcDebugSocket
 Internal helper.
 Start @ghc-debug@ on the given `MyGhcDebugSocket`.
 -}
-withMyGhcDebug :: Verbosity -> Maybe MyGhcDebugSocket -> IO a -> IO a
+withMyGhcDebug :: LogAction IO -> Maybe MyGhcDebugSocket -> IO a -> IO a
 #if defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
-withMyGhcDebug verbosity maybeMyGhcDebugSocket action =
+withMyGhcDebug logAction maybeMyGhcDebugSocket action =
   case maybeMyGhcDebugSocket of
     Nothing -> action
     Just MyGhcDebugSocketDefault ->
@@ -54,15 +54,16 @@ withMyGhcDebug verbosity maybeMyGhcDebugSocket action =
       let (host, port) = break (== ':') myGhcDebugSocketTcp
       case readEither port of
         Left _parseError -> do
-          logError verbosity . T.pack $
-            "Could not parse ghc-debug TCP address " <> myGhcDebugSocketTcp <> "."
+          let msg = T.pack $ "Could not parse ghc-debug TCP address " <> myGhcDebugSocketTcp <> "."
+          logAction <& FATAL &> msg
           exitFailure
         Right portWord16 ->
           GHC.Debug.withGhcDebugTCP host portWord16 action
 #else
-withMyGhcDebug verbosity maybeMyGhcDebugSocket action
+withMyGhcDebug logAction maybeMyGhcDebugSocket action
   | isJust maybeMyGhcDebugSocket = do
-    logError verbosity $ T.pack myGhcDebugSocketUnsupportedErrorMessage
+    let msg = T.pack myGhcDebugSocketUnsupportedErrorMessage
+    logAction <& FATAL &> msg
     exitFailure
   | otherwise = action
 #endif
