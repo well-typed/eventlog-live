@@ -208,7 +208,7 @@ main = do
                   runIf (C.shouldExportProfiles fullConfig) $
                     M.liftTick
                       ( mapping (\(_logs, _metrics, _spans, profiles) -> profiles)
-                          ~> mapping (processCallStackData eventlogLiveScope)
+                          ~> mapping (processCallStackData (toMaybeKeyValue attrServiceName) eventlogLiveScope)
                           ~> asExportProfileServiceRequest
                       )
                       ~> exportResourceProfiles conn
