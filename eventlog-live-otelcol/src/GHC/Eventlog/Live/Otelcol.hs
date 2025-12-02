@@ -360,7 +360,7 @@ asResourceTelemetryData resource instrumentationScope =
       (resourceProfile, dictionary) <-
         ifNonEmpty
           profiles
-          (processCallStackData instrumentationScope profiles)
+          (processCallStackData resource instrumentationScope profiles)
       pure $
         ResourceTelemetryData'Profile $
           messageWith
