@@ -12,6 +12,7 @@ module GHC.Eventlog.Live.Otelcol.Processor.Profiles (
 where
 
 import Control.Monad.Trans.State.Strict (State, runState)
+import Data.Maybe qualified as Maybe
 import Data.ProtoLens (Message (defMessage))
 import Data.Text (Text)
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
@@ -26,8 +27,8 @@ import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource (Resource)
 
-processCallStackData :: OC.InstrumentationScope -> [M.CallStackData] -> (OP.ResourceProfiles, OP.ProfilesDictionary)
-processCallStackData instrumentationScope callstacks =
+processCallStackData :: Maybe OC.KeyValue -> OC.InstrumentationScope -> [M.CallStackData] -> (OP.ResourceProfiles, OP.ProfilesDictionary)
+processCallStackData mserviceName instrumentationScope callstacks =
   let (profile, st) = flip runState ProfDictionary.emptyProfileDictionary $ do
         sampleNameStrId <- ProfDictionary.getString "__name__"
         sampleTypeStrId <- ProfDictionary.getString "String"
@@ -65,11 +66,7 @@ processCallStackData instrumentationScope callstacks =
       resource =
         messageWith
           [ OC.attributes
-              .~ [ messageWith
-                    [ OC.key .~ "service.name"
-                    , OC.value .~ messageWith [OC.stringValue .~ "eventlog-live"]
-                    ]
-                 ]
+              .~ Maybe.catMaybes [mserviceName]
           ]
 
       resourceProfiles =
@@ -169,13 +166,19 @@ getLocationIndexForText msg = do
 getLocationIndexForInfoTable :: M.InfoTable -> State ProfileDictionary SymbolIndex
 getLocationIndexForInfoTable infoTable = do
   infoTableNameId <- ProfDictionary.getString infoTable.infoTableName
+  let label =
+        if (infoTable.infoTableLabel) == ""
+          then infoTable.infoTableModule <> ":" <> infoTable.infoTableName
+          else infoTable.infoTableModule <> ":" <> infoTable.infoTableLabel
+  infoTableFuncNameId <- ProfDictionary.getString label
   -- tyDesc <- getText infoTable.infoTableTyDesc
+  --
   infoTableSrcLocId <- ProfDictionary.getString infoTable.infoTableSrcLoc
   funcIdx <-
     ProfDictionary.getFunction $
       messageWith
-        [ OP.nameStrindex .~ infoTableNameId
-        , OP.systemNameStrindex .~ 0 -- 0 means unset
+        [ OP.nameStrindex .~ infoTableFuncNameId
+        , OP.systemNameStrindex .~ infoTableNameId
         , OP.filenameStrindex .~ infoTableSrcLocId -- 0 means unset
         , OP.startLine .~ 0 -- 0 means unset
         ]
