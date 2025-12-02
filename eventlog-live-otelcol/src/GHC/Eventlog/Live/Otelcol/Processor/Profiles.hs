@@ -158,13 +158,19 @@ getLocationIndexForText msg = do
 getLocationIndexForInfoTable :: M.InfoTable -> State ProfileDictionary SymbolIndex
 getLocationIndexForInfoTable infoTable = do
   infoTableNameId <- ProfDictionary.getString infoTable.infoTableName
+  let label =
+        if (infoTable.infoTableLabel) == ""
+          then infoTable.infoTableModule <> ":" <> infoTable.infoTableName
+          else infoTable.infoTableModule <> ":" <> infoTable.infoTableLabel
+  infoTableFuncNameId <- ProfDictionary.getString label
   -- tyDesc <- getText infoTable.infoTableTyDesc
+  --
   infoTableSrcLocId <- ProfDictionary.getString infoTable.infoTableSrcLoc
   funcIdx <-
     ProfDictionary.getFunction $
       messageWith
-        [ OP.nameStrindex .~ infoTableNameId
-        , OP.systemNameStrindex .~ 0 -- 0 means unset
+        [ OP.nameStrindex .~ infoTableFuncNameId
+        , OP.systemNameStrindex .~ infoTableNameId
         , OP.filenameStrindex .~ infoTableSrcLocId -- 0 means unset
         , OP.startLine .~ 0 -- 0 means unset
         ]
