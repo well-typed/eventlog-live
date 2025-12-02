@@ -56,7 +56,7 @@ main = displayConsoleRegions $ do
 
   let events :: ProcessT IO (Tick BS.ByteString) Event
       events =
-        decodeEventBatch
+        decodeEventBatch mempty
           ~> sortByTick evTime
           ~> dropTick
 
