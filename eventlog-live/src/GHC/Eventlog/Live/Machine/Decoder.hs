@@ -6,15 +6,16 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.Decoder (
   -- * Event decoding
-  DecodeError (..),
   decodeEvent,
   decodeEventBatch,
 ) where
 
-import Control.Exception (Exception, throwIO)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
 import Data.Machine (Is, PlanT, ProcessT, await, construct, yield)
+import Data.Text qualified as T
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
 import GHC.Eventlog.Live.Machine.Core (Tick (..), liftTick)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
@@ -27,23 +28,26 @@ Parse t'Event's from a stream of 'BS.ByteString' chunks with ticks.
 
 Throws a t'DecodeError' on error.
 -}
-decodeEvent :: (MonadIO m) => ProcessT m BS.ByteString Event
-decodeEvent = construct $ loop decodeEventLog
+decodeEvent ::
+  forall m.
+  (Monad m) =>
+  LogAction m ->
+  ProcessT m BS.ByteString Event
+decodeEvent logAction = construct $ loop decodeEventLog
  where
-  loop :: (MonadIO m) => Decoder a -> PlanT (Is BS.ByteString) a m ()
+  loop :: Decoder a -> PlanT (Is BS.ByteString) a m ()
   loop Done{} = pure ()
   loop (Consume k) = await >>= \chunk -> loop (k chunk)
   loop (Produce a d') = yield a >> loop d'
-  loop (Error _ err) = liftIO $ throwIO $ DecodeError err
+  loop (Error _ err) = lift $ logAction <& ERROR &> T.pack err
 
 {- |
 Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.
 
 Throws 'DecodeError' on error.
 -}
-decodeEventBatch :: (MonadIO m) => ProcessT m (Tick BS.ByteString) (Tick Event)
-decodeEventBatch = liftTick decodeEvent
-
-newtype DecodeError = DecodeError String deriving (Show)
-
-instance Exception DecodeError
+decodeEventBatch ::
+  (Monad m) =>
+  LogAction m ->
+  ProcessT m (Tick BS.ByteString) (Tick Event)
+decodeEventBatch logAction = liftTick $ decodeEvent logAction

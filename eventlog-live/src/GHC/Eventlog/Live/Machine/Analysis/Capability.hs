@@ -36,7 +36,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Capability (
 ) where
 
 import Control.Monad (when)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Char (isSpace)
 import Data.Foldable (for_)
 import Data.Machine (Is (..), PlanT, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
@@ -46,12 +46,12 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
-import GHC.Eventlog.Live.Logger (logWarning)
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, Timestamp)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
@@ -67,7 +67,7 @@ between.
 -}
 processCapabilityUsageMetrics ::
   forall m.
-  (MonadIO m) =>
+  (Monad m) =>
   ProcessT m (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
 processCapabilityUsageMetrics =
   liftRouter measure spawn
@@ -172,11 +172,11 @@ the fanout yourself is more efficient.
 -}
 processCapabilityUsageSpans ::
   forall m.
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
-processCapabilityUsageSpans verbosity =
-  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value verbosity
+processCapabilityUsageSpans logAction =
+  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value logAction
     ~> mapping (either (fmap Left) (fmap Right))
 
 {- |
@@ -185,14 +185,14 @@ work on arbitrary types using a getter and a pair of lenses.
 -}
 processCapabilityUsageSpans' ::
   forall m s t1 t2.
-  (MonadIO m) =>
+  (Monad m) =>
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> GCSpan -> t1) ->
   (s -> MutatorSpan -> t2) ->
-  Verbosity ->
+  LogAction m ->
   ProcessT m s (Either t1 t2)
-processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan verbosity =
+processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan logAction =
   -- NOTE:
   -- Combining this fanout with an `Either` is risky, because it
   -- has the potential to lose information if both `processGCSpans`
@@ -200,9 +200,9 @@ processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan verb
   -- However, this shouldn't ever happen, since the two processors
   -- process disjoint sets of events.
   fanout
-    [ processGCSpans' timeUnixNano getEvent setGCSpan verbosity
+    [ processGCSpans' timeUnixNano getEvent setGCSpan logAction
         ~> mapping Left
-    , processMutatorSpans' timeUnixNano getEvent setMutatorSpan verbosity
+    , processMutatorSpans' timeUnixNano getEvent setMutatorSpan logAction
         ~> mapping Right
     ]
 
@@ -244,8 +244,8 @@ The transition from @GC@ to @Idle@ yields a GC span.
 -}
 processGCSpans ::
   forall m.
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   ProcessT m (WithStartTime Event) (WithStartTime GCSpan)
 processGCSpans =
   processGCSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
@@ -256,13 +256,13 @@ arbitrary types using a getter and a lens.
 -}
 processGCSpans' ::
   forall m s t.
-  (MonadIO m) =>
+  (Monad m) =>
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> GCSpan -> t) ->
-  Verbosity ->
+  LogAction m ->
   ProcessT m s t
-processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
+processGCSpans' timeUnixNano getEvent setGCSpan logAction =
   liftRouter measure spawn
  where
   getEventTime = (.evTime) . getEvent
@@ -301,13 +301,15 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
                 go (Just j)
             -- If the previous event was any other event, then...
             | otherwise -> do
-                -- ...emit an error, and...
-                logWarning verbosity . T.pack $
-                  printf
-                    "Capability %d: Unsupported trace %s --> %s"
-                    cap
-                    (showEventInfo (getEventInfo i))
-                    (showEventInfo (getEventInfo j))
+                -- ...emit a warning, and...
+                let msg =
+                      T.pack $
+                        printf
+                          "Capability %d: Unsupported trace %s --> %s"
+                          cap
+                          (showEventInfo (getEventInfo i))
+                          (showEventInfo (getEventInfo j))
+                lift $ logAction <& WARN &> msg
                 -- ...continue with the previous event.
                 go (Just i)
           -- If there was no previous event, then...
@@ -331,13 +333,15 @@ processGCSpans' timeUnixNano getEvent setGCSpan verbosity =
                 go (Just $ minBy getEventTime i j)
           -- If there was no previous event or it was any other event, then...
           _otherwise -> do
-            -- ...emit an error, and...
-            logWarning verbosity . T.pack $
-              printf
-                "Capability %d: Unsupported trace %s --> %s"
-                cap
-                (maybe "?" (showEventInfo . getEventInfo) mi)
-                (showEventInfo (getEventInfo j))
+            -- ...emit a warning, and...
+            let msg =
+                  T.pack $
+                    printf
+                      "Capability %d: Unsupported trace %s --> %s"
+                      cap
+                      (maybe "?" (showEventInfo . getEventInfo) mi)
+                      (showEventInfo (getEventInfo j))
+            lift $ logAction <& WARN &> msg
             -- ...continue with the previous event.
             go mi
         -- If the next event is any other event, ignore it.
@@ -393,8 +397,8 @@ is more efficient.
 -}
 processMutatorSpans ::
   forall m.
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   ProcessT m (WithStartTime Event) (WithStartTime MutatorSpan)
 processMutatorSpans =
   processMutatorSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
@@ -405,14 +409,14 @@ arbitrary types using a getter and a lens.
 -}
 processMutatorSpans' ::
   forall m s t.
-  (MonadIO m) =>
+  (Monad m) =>
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> MutatorSpan -> t) ->
-  Verbosity ->
+  LogAction m ->
   ProcessT m s t
-processMutatorSpans' timeUnixNano getEvent setMutatorSpan verbosity =
-  processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity ~> asParts
+processMutatorSpans' timeUnixNano getEvent setMutatorSpan logAction =
+  processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logAction ~> asParts
  where
   setThreadStateSpan :: s -> ThreadStateSpan -> Maybe t
   setThreadStateSpan s threadStateSpan =
@@ -423,7 +427,7 @@ This machine converts any `Running` t`ThreadStateSpan` to a t`MutatorSpan`.
 -}
 asMutatorSpans ::
   forall m.
-  (MonadIO m) =>
+  (Monad m) =>
   ProcessT m ThreadStateSpan MutatorSpan
 asMutatorSpans = asMutatorSpans' id (const id)
 
@@ -433,7 +437,7 @@ arbitrary types using a getter and a lens.
 -}
 asMutatorSpans' ::
   forall m s t.
-  (MonadIO m) =>
+  (Monad m) =>
   (s -> ThreadStateSpan) ->
   (s -> MutatorSpan -> t) ->
   ProcessT m s t

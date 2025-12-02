@@ -16,7 +16,6 @@ module GHC.Eventlog.Live.Socket (
 import Control.Concurrent (threadDelay)
 import Control.Exception (Exception (..))
 import Control.Exception qualified as E
-import Control.Monad.IO.Unlift (MonadUnliftIO (..))
 import Data.Foldable (traverse_)
 import Data.Machine (ProcessT, runT_, (~>))
 import Data.Machine.Fanout (fanout)
@@ -24,13 +23,13 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (logDebug, logInfo)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.Decoder
 import GHC.Eventlog.Live.Machine.Sink
 import GHC.Eventlog.Live.Machine.Source
 import GHC.Eventlog.Live.Options (EventlogSource (..))
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event)
 import Network.Socket qualified as S
 import System.IO (Handle)
@@ -41,9 +40,8 @@ import Text.Printf (printf)
 Run an event processor with an eventlog socket.
 -}
 runWithEventlogSource ::
-  (MonadUnliftIO m) =>
-  -- | The logging verbosity.
-  Verbosity ->
+  -- | The logging action.
+  LogAction IO ->
   -- | The eventlog socket handle.
   EventlogSource ->
   -- | The initial timeout in seconds for exponential backoff.
@@ -57,69 +55,69 @@ runWithEventlogSource ::
   -- | An optional file to which to stream binary eventlog data.
   Maybe FilePath ->
   -- | The event processor.
-  ProcessT m (Tick Event) Void ->
-  m ()
-runWithEventlogSource verbosity eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
-  withEventlogSource verbosity timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
+  ProcessT IO (Tick Event) Void ->
+  IO ()
+runWithEventlogSource logAction eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  withEventlogSource logAction timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
     let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
     let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSource
     case maybeOutputFile of
       Nothing ->
         runT_ $
-          fromSocket ~> decodeEventBatch ~> toEventSink
+          fromSocket ~> decodeEventBatch logAction ~> toEventSink
       Just outputFile ->
-        withRunInIO $ \runInIO ->
-          IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
-            runInIO . runT_ $
-              fromSocket
-                ~> fanout
-                  [ fileSinkBatch outputHandle
-                  , decodeEventBatch ~> toEventSink
-                  ]
+        IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
+          runT_ $
+            fromSocket
+              ~> fanout
+                [ fileSinkBatch outputHandle
+                , decodeEventBatch logAction ~> toEventSink
+                ]
 
 {- |
 Run an action with a `Handle` to an `EventlogSource`.
 -}
 withEventlogSource ::
-  (MonadUnliftIO m) =>
-  -- | The logging verbosity.
-  Verbosity ->
+  -- | The logging action.
+  LogAction IO ->
   -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
   Double ->
   -- | The eventlog socket.
   EventlogSource ->
-  (Handle -> m ()) ->
-  m ()
-withEventlogSource verbosity initialTimeoutS timeoutExponent eventlogSource action = do
-  withRunInIO $ \runInIO ->
-    case eventlogSource of
-      EventlogStdin -> do
-        logInfo verbosity "Reading eventlog from stdin"
-        let enter = do
-              maybeStdinTextEncoding <- IO.hGetEncoding IO.stdin
-              IO.hSetBinaryMode IO.stdin True
-              pure maybeStdinTextEncoding
-        let leave maybeStdinTextEncoding = do
-              traverse_ (IO.hSetEncoding IO.stdin) maybeStdinTextEncoding
-              IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
-        E.bracket enter leave . const . runInIO . action $ IO.stdin
-      EventlogFile eventlogFile -> do
-        logInfo verbosity $ "Reading eventlog from " <> T.pack eventlogFile
-        IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
-          runInIO $ action handle
-      EventlogSocketUnix eventlogSocketUnix -> do
-        logInfo verbosity $ "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-        E.bracket (connectRetry verbosity initialTimeoutS timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
-          runInIO $ action handle
+  (Handle -> IO ()) ->
+  IO ()
+withEventlogSource logAction initialTimeoutS timeoutExponent eventlogSource action = do
+  case eventlogSource of
+    EventlogStdin -> do
+      let msg = "Reading eventlog from stdin"
+      logAction <& INFO &> msg
+      let enter = do
+            maybeStdinTextEncoding <- IO.hGetEncoding IO.stdin
+            IO.hSetBinaryMode IO.stdin True
+            pure maybeStdinTextEncoding
+      let leave maybeStdinTextEncoding = do
+            traverse_ (IO.hSetEncoding IO.stdin) maybeStdinTextEncoding
+            IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
+      E.bracket enter leave . const . action $ IO.stdin
+    EventlogFile eventlogFile -> do
+      let msg = "Reading eventlog from " <> T.pack eventlogFile
+      logAction <& INFO &> msg
+      IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
+        action handle
+    EventlogSocketUnix eventlogSocketUnix -> do
+      let msg = "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+      logAction <& INFO &> msg
+      E.bracket (connectRetry logAction initialTimeoutS timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
+        action handle
 
 {- |
 Connect to an `EventlogSource` with retries and non-randomised exponential backoff.
 -}
 connectRetry ::
-  -- | The logging verbosity.
-  Verbosity ->
+  -- | The logging action.
+  LogAction IO ->
   -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
@@ -127,7 +125,7 @@ connectRetry ::
   -- | The eventlog socket.
   FilePath ->
   IO Handle
-connectRetry verbosity initialTimeoutS timeoutExponent eventlogSocketUnix =
+connectRetry logAction initialTimeoutS timeoutExponent eventlogSocketUnix =
   connectLoop initialTimeoutS
  where
   waitFor :: Double -> IO ()
@@ -136,13 +134,17 @@ connectRetry verbosity initialTimeoutS timeoutExponent eventlogSocketUnix =
   connectLoop :: Double -> IO Handle
   connectLoop timeoutS = do
     let connect = do
-          logDebug verbosity $ "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          let msg1 = "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          logAction <& DEBUG &> msg1
           handle <- tryConnect eventlogSocketUnix
-          logInfo verbosity $ "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          let msg2 = "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
+          logAction <& DEBUG &> msg2
           pure handle
     let cleanup (e :: E.IOException) = do
-          logDebug verbosity $ "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
-          logDebug verbosity $ "Waiting " <> prettyTimeoutMcs timeoutS <> " to retry..."
+          let msg1 = "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
+          logAction <& DEBUG &> msg1
+          let msg2 = "Waiting " <> prettyTimeoutMcs timeoutS <> " to retry..."
+          logAction <& DEBUG &> msg2
           waitFor timeoutS
           connectLoop (timeoutS * timeoutExponent)
     E.catch connect cleanup
