@@ -26,7 +26,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
 ) where
 
 import Control.Monad (unless, when)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Either (isLeft)
 import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
@@ -41,9 +41,9 @@ import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
-import GHC.Eventlog.Live.Logger (logWarning)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
 import Numeric (showHex)
@@ -195,18 +195,19 @@ Insert a heap profiling sample into the collection.
 -}
 insertHeapProfSampleString ::
   forall m.
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   Text ->
   Metric Word64 ->
   HeapProfSampleData ->
   m HeapProfSampleData
-insertHeapProfSampleString verbosityThreshold heapProfLabel heapProfSample heapProfSamples = do
+insertHeapProfSampleString logAction heapProfLabel heapProfSample heapProfSamples = do
   let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
       insert heapProfSample' = do
-        when (isJust heapProfSample') $
-          logWarning verbosityThreshold $
-            "Duplicate HeapProfSampleString for " <> heapProfLabel <> " within the same garbage collection pass."
+        when (isJust heapProfSample') $ do
+          let msg = "Duplicate HeapProfSampleString for " <> heapProfLabel <> " within the same garbage collection pass."
+          logAction <& WARN &> msg
+
         pure (Just heapProfSample)
   heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSamples.heapProfSampleMap
   pure HeapProfSampleData{heapProfSampleMap = heapProfSampleMap'}
@@ -284,11 +285,11 @@ build an info table map, if necessary, and processes `E.HeapProfSampleBegin`
 and `E.HeapProfSampleEnd` events to maintain an era stack.
 -}
 processHeapProfSampleData ::
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
-processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
+processHeapProfSampleData logAction maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
@@ -332,10 +333,11 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
       E.HeapProfSampleBegin{..} -> do
         -- Check that maybeHeapProfSampleData is Nothing.
         for_ st.maybeHeapProfSampleData $ \heapProfSampleData -> do
-          logWarning
-            verbosityThreshold
-            "Unexpected event HeapProfSampleBegin while previous garbage collection pass was left open.\n\
-            \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
+          let msg =
+                "Unexpected event HeapProfSampleBegin while previous garbage collection pass was left open.\n\
+                \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
+          lift $ logAction <& WARN &> msg
+
           -- Yield the previous sample data anyway.
           yield heapProfSampleData
         -- Start a new garbage collection pass.
@@ -352,18 +354,22 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
         heapProfSampleEraStack' <-
           case L.uncons heapProfSampleEraStack of
             Nothing -> do
-              logWarning verbosityThreshold . T.pack $
-                printf
-                  "Eventlog closed era %d, but there is no current era."
-                  heapProfSampleEra
+              let msg =
+                    T.pack $
+                      printf
+                        "Eventlog closed era %d, but there is no current era."
+                        heapProfSampleEra
+              lift $ logAction <& WARN &> msg
               pure heapProfSampleEraStack
             Just (currentEra, heapProfSampleEraStack') -> do
-              unless (currentEra == heapProfSampleEra) $
-                logWarning verbosityThreshold . T.pack $
-                  printf
-                    "Eventlog closed era %d, but the current era is era %d."
-                    heapProfSampleEra
-                    currentEra
+              unless (currentEra == heapProfSampleEra) $ do
+                let msg =
+                      T.pack $
+                        printf
+                          "Eventlog closed era %d, but the current era is era %d."
+                          heapProfSampleEra
+                          currentEra
+                lift $ logAction <& WARN &> msg
               pure heapProfSampleEraStack'
         go
           st
@@ -374,18 +380,21 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
       E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
         | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
-            logWarning verbosityThreshold $
-              "Cannot infer heap profile breakdown.\n\
-              \         If your binary was compiled with a GHC version prior to 9.14,\n\
-              \         you must also pass the heap profile type to this executable.\n\
-              \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+            let msg =
+                  "Cannot infer heap profile breakdown.\n\
+                  \         If your binary was compiled with a GHC version prior to 9.14,\n\
+                  \         you must also pass the heap profile type to this executable.\n\
+                  \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
+            lift $ logAction <& WARN &> msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
-            logWarning verbosityThreshold . T.pack $
-              printf
-                "Unsupported heap profile breakdown %s"
-                (heapProfBreakdownShow HeapProfBreakdownBiography)
+            let msg =
+                  T.pack $
+                    printf
+                      "Unsupported heap profile breakdown %s"
+                      (heapProfBreakdownShow HeapProfBreakdownBiography)
+            lift $ logAction <& WARN &> msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
@@ -399,9 +408,10 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
             heapProfSampleData <-
               case st.maybeHeapProfSampleData of
                 Nothing -> do
-                  logWarning verbosityThreshold $
-                    "Unexpected event HeapProfSampleString out of scope of HeapProfSampleBegin and HeapProfSampleEnd.\n\
-                    \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
+                  let msg =
+                        "Unexpected event HeapProfSampleString out of scope of HeapProfSampleBegin and HeapProfSampleEnd.\n\
+                        \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
+                  lift $ logAction <& WARN &> msg
                   pure mempty
                 Just heapProfSampleData ->
                   pure heapProfSampleData
@@ -421,7 +431,7 @@ processHeapProfSampleData verbosityThreshold maybeHeapProfBreakdown =
                     , "infoTableSrcLoc" ~= fmap (.infoTableSrcLoc) maybeInfoTable
                     ]
             heapProfSampleData' <-
-              insertHeapProfSampleString verbosityThreshold heapProfLabel heapProfSample heapProfSampleData
+              lift $ insertHeapProfSampleString logAction heapProfLabel heapProfSample heapProfSampleData
             -- Continue with the updated HeapProfSampleState
             go
               st

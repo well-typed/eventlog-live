@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
@@ -7,111 +8,153 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Logger (
-  logError,
-  logWarning,
-  logInfo,
-  logDebug,
+  LogAction,
+  Message,
+  (<&),
+  (&>),
+  handleLogAction,
+  stderrLogAction,
+  filterBySeverity,
 ) where
 
+import Colog.Core.Action (cfilter, (<&))
+import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Exception (bracket_)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.List qualified as L
+import Data.Ix (Ix (..))
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import GHC.Eventlog.Live.Verbosity (Verbosity, showVerbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityWarning)
-import GHC.Stack (CallStack, HasCallStack, SrcLoc (..), callStack, getCallStack)
+import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Builder qualified as TLB
+import GHC.Eventlog.Live.Data.Attribute ((~=))
+import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
+import GHC.RTS.Events (Timestamp)
+import GHC.Stack (CallStack, HasCallStack, callStack, prettyCallStack, withFrozenCallStack)
+import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
 
-{- |
-Log messages to given handle.
-Only prints a message if its verbosity level is above the verbosity threshold.
--}
-logMessage :: (MonadIO m) => IO.Handle -> CallStack -> Verbosity -> Verbosity -> Text -> m ()
-logMessage handle theCallStack verbosityLevel verbosityThreshold msg
-  | verbosityLevel >= verbosityThreshold = liftIO $ do
-      withVerbosityColor verbosityLevel handle
-        . flip TIO.hPutStrLn
-        . formatMessage verbosityLevel verbosityThreshold theCallStack
-        $ msg
-      IO.hFlush handle
-  | otherwise = pure ()
+type LogAction m = CCA.LogAction m Message
+
+data Message = Message
+  { severity :: !Severity
+  , callStack :: !CallStack
+  , body :: Text
+  }
+
+infix 6 &>
 
 {- |
-Internal helper.
-Format the `CallStack`.
+Construct a `Message` from a `Severity` and a body.
 -}
-formatCallStack :: CallStack -> Text
-formatCallStack theCallStack =
-  maybe T.empty (formatSrcLoc . snd . fst) (L.uncons (getCallStack theCallStack))
- where
-  formatSrcLoc :: SrcLoc -> Text
-  formatSrcLoc srcLoc =
-    mconcat [T.pack srcLoc.srcLocFile, ":", T.pack (show srcLoc.srcLocStartLine), ":", T.pack (show srcLoc.srcLocStartCol)]
+(&>) :: (HasCallStack) => Severity -> Text -> Message
+(&>) severity body = withFrozenCallStack Message{callStack, ..}
+
+{- |
+A `LogAction` that writes each `Message` to a `IO.stderr`.
+-}
+stderrLogAction :: LogAction IO
+stderrLogAction = handleLogAction IO.stderr
+
+{- |
+A `LogAction` that writes each `Message` to a `IO.Handle`.
+-}
+handleLogAction ::
+  IO.Handle ->
+  LogAction IO
+handleLogAction handle = CCA.LogAction $ \msg -> liftIO $ do
+  withSeverityColor msg.severity handle $ \handleWithColor ->
+    TIO.hPutStrLn handleWithColor $ formatMessage msg
+  IO.hFlush handle
+
+{- |
+Filter a @`LogAction` m `Message`@ by a `Severity`.
+-}
+filterBySeverity ::
+  (Applicative m) =>
+  Severity ->
+  LogAction m ->
+  LogAction m
+filterBySeverity severityThreshold =
+  cfilter ((>= severityThreshold) . (.severity))
 
 {- |
 Internal helper.
 Format the message appropriately for the given verbosity level and threshold.
 -}
-formatMessage :: Verbosity -> Verbosity -> CallStack -> Text -> Text
-formatMessage verbosityLevel verbosityThreshold theCallStack msg
-  | verbosityLevel == verbosityInfo && verbosityThreshold /= verbosityDebug = msg
-  | otherwise = mconcat [showVerbosity verbosityLevel, " (", formatCallStack theCallStack, "): ", msg]
+formatMessage :: Message -> Text
+formatMessage msg =
+  TL.toStrict . TLB.toLazyText . mconcat $
+    [ "["
+    , TLB.fromString (toSeverityString msg.severity)
+    , "]"
+    , " "
+    , TLB.fromText msg.body
+    , if msg.severity >= ERROR
+        then "\n" <> TLB.fromString (prettyCallStack msg.callStack)
+        else ""
+    ]
 
 {- |
 Internal helper.
-Use a handle with the color set appropriately for the given verbosity level.
+Determine the ANSI color and intensity associated with a particular `Severity`.
 -}
-withVerbosityColor :: Verbosity -> IO.Handle -> (IO.Handle -> IO a) -> IO a
-withVerbosityColor verbosity handle action = do
+severityColor :: Severity -> Maybe (Color, ColorIntensity)
+severityColor severity
+  | inRange (TRACE, TRACE4) severity = Just (Blue, Dull)
+  | inRange (DEBUG, DEBUG4) severity = Just (Blue, Vivid)
+  | inRange (WARN, WARN4) severity = Just (Yellow, Vivid)
+  | inRange (ERROR, ERROR4) severity = Just (Red, Dull)
+  | inRange (FATAL, FATAL4) severity = Just (Red, Vivid)
+  | otherwise = Nothing
+
+{- |
+Internal helper.
+Use a handle with the color set appropriately for the given `Severity`.
+-}
+withSeverityColor :: Severity -> IO.Handle -> (IO.Handle -> IO a) -> IO a
+withSeverityColor severity handle action = do
   supportsANSI <- hNowSupportsANSI handle
   if not supportsANSI
     then
       action handle
-    else case verbosityColor verbosity of
+    else case severityColor severity of
       Nothing ->
         action handle
-      Just color -> do
-        let setVerbosityColor = hSetSGR handle [SetColor Foreground Vivid color]
+      Just (color, intensity) -> do
+        let setVerbosityColor = hSetSGR handle [SetColor Foreground intensity color]
         let setDefaultColor = hSetSGR handle [SetDefaultColor Foreground]
         bracket_ setVerbosityColor setDefaultColor $ action handle
 
-{- |
-Internal helper.
-Determine the ANSI color associated with a particular verbosity level.
--}
-verbosityColor :: Verbosity -> Maybe Color
-verbosityColor verbosity
-  | verbosity == verbosityError = Just Red
-  | verbosity == verbosityWarning = Just Yellow
-  | verbosity == verbosityDebug = Just Blue
-  | otherwise = Nothing
+--------------------------------------------------------------------------------
+-- Internal helpers.
+--------------------------------------------------------------------------------
 
 {- |
-Log errors to `IO.stderr`.
+Create a `LogRecord` from a `Message`.
 -}
-logError :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
-logError = logMessage IO.stderr callStack verbosityError
+_logRecord :: Message -> IO LogRecord
+_logRecord msg = do
+  !timeUnixNano <- getTimeUnixNano
+  pure
+    LogRecord
+      { body = msg.body
+      , maybeTimeUnixNano = Just timeUnixNano
+      , maybeSeverity = Just msg.severity
+      , attrs = ["call-stack" ~= show msg.callStack]
+      }
 
 {- |
-Log warnings to `IO.stderr`.
--}
-logWarning :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
-logWarning = logMessage IO.stderr callStack verbosityWarning
+Get the current Unix time in nanoseconds.
 
-{- |
-Log info messages to `IO.stderr`.
+__Warning:__ This will start overflowing in the year 2554.
 -}
-logInfo :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
-logInfo verbosityThreshold = logMessage handle callStack verbosityInfo verbosityThreshold
+getTimeUnixNano :: IO Timestamp
+getTimeUnixNano = toNanos <$> getTime Realtime
  where
-  handle
-    | verbosityThreshold <= verbosityDebug = IO.stderr
-    | otherwise = IO.stdout
-
-{- |
-Log debug messages to `IO.stderr`.
--}
-logDebug :: (HasCallStack, MonadIO m) => Verbosity -> Text -> m ()
-logDebug = logMessage IO.stderr callStack verbosityDebug
+  -- NOTE: This will overflow if @t.sec > (2^64 - 1) `div` 10^9@,
+  --       which means you're running this code in the year 2554.
+  --       What's that like?
+  toNanos :: TimeSpec -> Timestamp
+  toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec

@@ -24,18 +24,18 @@ module GHC.Eventlog.Live.Machine.Analysis.Thread (
   processThreadStateSpans',
 ) where
 
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Char (isSpace)
 import Data.Machine (Is (..), PlanT, Process, ProcessT, await, construct, repeatedly, yield)
 import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
-import GHC.Eventlog.Live.Logger (logWarning)
+import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), Timestamp)
 import GHC.RTS.Events qualified as E
 import Text.Printf (printf)
@@ -145,8 +145,8 @@ transitions (not pictured) from either state to the final `Finished` state
 with a `E.StopThread` event with the `ThreadFinished` status.
 -}
 processThreadStateSpans ::
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  LogAction m ->
   ProcessT m (WithStartTime Event) ThreadStateSpan
 processThreadStateSpans =
   processThreadStateSpans' tryGetTimeUnixNano (.value) (const id)
@@ -157,13 +157,13 @@ on arbitrary types using a getter and a lens.
 -}
 processThreadStateSpans' ::
   forall m s t.
-  (MonadIO m) =>
+  (Monad m) =>
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> ThreadStateSpan -> t) ->
-  Verbosity ->
+  LogAction m ->
   ProcessT m s t
-processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity =
+processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logAction =
   liftRouter measure spawn
  where
   getEventTime = (.evTime) . getEvent
@@ -258,12 +258,17 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan verbosity =
           --
           -- If the current event is any other event, then...
           | otherwise -> do
-              -- ...emit an error, and...
-              logWarning verbosity . T.pack $
-                printf
-                  "Thread %d: Unexpected event %s"
-                  thread
-                  (showEventInfo (getEventInfo j))
+              -- ...emit a warning, and...
+              let msg =
+                    T.pack $
+                      printf
+                        "Thread %d: Unexpected event %s\n\
+                        \This happens once per running thread when connecting to a running process,\n\
+                        \but should not happen multiple times per thread."
+                        thread
+                        (showEventInfo (getEventInfo j))
+              lift $ logAction <& WARN &> msg
+
               --
               -- This case may trigger for any event that isn't `E.RunThread`
               -- or `E.StopThread` and for any `E.StopThread` event that comes
