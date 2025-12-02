@@ -12,7 +12,6 @@ import Data.Word (Word64)
 import GHC.Eventlog.Live.Machine.Core (sortByTick)
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Socket
-import GHC.Eventlog.Live.Verbosity (verbosityInfo)
 import GHC.RTS.Events (Event)
 import qualified GHC.RTS.Events as E
 import qualified Network.Socket as S
@@ -32,7 +31,7 @@ main = do
   -- Convert the eventlog flush interval to milliseconds
   let batchIntervalMs = round (eventlogFlushIntervalS * 1_000)
 
-  runWithEventlogSource verbosityInfo eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchIntervalMs Nothing Nothing $
+  runWithEventlogSource mempty eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchIntervalMs Nothing Nothing $
     sortByTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
