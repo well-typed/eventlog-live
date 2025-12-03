@@ -1,6 +1,6 @@
 packages: eventlog-live
 packages: eventlog-live-influxdb
-packages: eventlog-splittable-ipe
+packages: IpeDb
 
 -- 2025-09-17:
 -- proto-lens-setup-0.4.0.9 does not support GHC 9.12 or later.
