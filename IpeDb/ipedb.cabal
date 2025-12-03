@@ -14,35 +14,32 @@ common warnings
 
 common exts
   default-extensions:
-    LambdaCase
-    NoFieldSelectors
-    OverloadedRecordDot
-    TypeApplications
-    DerivingStrategies
-    GeneralizedNewtypeDeriving
-    NamedFieldPuns
     BangPatterns
     DeriveAnyClass
     DeriveGeneric
+    DerivingStrategies
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    NamedFieldPuns
+    NoFieldSelectors
+    OverloadedRecordDot
+    TypeApplications
 
 library
   import: warnings, exts
   exposed-modules:
     GHC.Eventlog.Index
-    GHC.Eventlog.Table
     GHC.Eventlog.InfoProv
+    GHC.Eventlog.Options
+    GHC.Eventlog.Table
 
   build-depends:
     base,
-    bytestring,
-    directory,
-    filepath,
-    containers,
     ghc-events,
-    machines,
-    text,
-    binary,
+    optparse-applicative,
     sqlite-simple,
+    text,
+
   hs-source-dirs: src
   default-language: Haskell2010
 
@@ -64,4 +61,4 @@ test-suite ipedb-test
   main-is: Main.hs
   build-depends:
     base ^>=4.20.2.0,
-    eventlog-splittable-ipe
+    ipedb,

@@ -1,5 +1,6 @@
-module Main where
+module Main (main) where
+
+import GHC.Eventlog.Index (defaultMain)
 
 main :: IO ()
-main = do
-  putStrLn "Hello, Haskell!"
+main = defaultMain

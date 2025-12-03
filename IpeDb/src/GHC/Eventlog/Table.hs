@@ -17,8 +17,6 @@ module GHC.Eventlog.Table (
 
 import Data.Int
 import qualified Database.SQLite.Simple as Sqlite
-import Database.SQLite.Simple.FromRow
-import Database.SQLite.Simple.ToRow
 import GHC.Eventlog.InfoProv
 import GHC.Generics (Generic)
 
@@ -32,7 +30,7 @@ data InfoProvRow = InfoProvRow
   , srcLoc :: !Int64
   }
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (FromRow, ToRow)
+  deriving anyclass (Sqlite.FromRow, Sqlite.ToRow)
 
 dropStringTableStmt :: Sqlite.Query
 dropStringTableStmt = "DROP TABLE IF EXISTS strings;"
@@ -97,20 +95,20 @@ insertOrIgnoreString :: Sqlite.Query
 insertOrIgnoreString = "INSERT OR IGNORE INTO strings(value) VALUES (?);"
 
 getIpeStrings :: Sqlite.Query
-getIpeStrings = "\
-\ SELECT                                             \
-\   table_name.id AS table_name,                     \
-\   type_desc.id AS type_desc,                       \
-\   label.id AS label,                               \
-\   module_name.id AS module_name,                   \
-\   src_loc.id AS src_loc                            \
-\ FROM strings AS table_name    \
-\ JOIN strings AS type_desc    ON ? = type_desc.value   \
-\ JOIN strings AS label        ON ? = label.value       \
-\ JOIN strings AS module_name  ON ? = module_name.value \
-\ JOIN strings AS src_loc      ON ? = src_loc.value\
-\  WHERE ? = table_name.value ;"
-
+getIpeStrings =
+  "\
+  \ SELECT                                             \
+  \   table_name.id AS table_name,                     \
+  \   type_desc.id AS type_desc,                       \
+  \   label.id AS label,                               \
+  \   module_name.id AS module_name,                   \
+  \   src_loc.id AS src_loc                            \
+  \ FROM strings AS table_name    \
+  \ JOIN strings AS type_desc    ON ? = type_desc.value   \
+  \ JOIN strings AS label        ON ? = label.value       \
+  \ JOIN strings AS module_name  ON ? = module_name.value \
+  \ JOIN strings AS src_loc      ON ? = src_loc.value\
+  \  WHERE ? = table_name.value ;"
 
 getStringEntry :: Sqlite.Query
 getStringEntry = "SELECT id, value FROM strings WHERE value = ?;"
