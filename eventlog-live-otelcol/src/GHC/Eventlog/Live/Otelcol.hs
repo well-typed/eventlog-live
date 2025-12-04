@@ -41,7 +41,7 @@ import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Severity qualified as DS (SeverityNumber (..), toSeverityNumber)
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -97,31 +97,31 @@ main = do
   Options{..} <- O.execParser options
 
   -- Construct the logging action
-  let logAction =
-        M.filterBySeverity severityThreshold M.stderrLogAction
+  let logger =
+        M.filterBySeverity severityThreshold M.stderrLogger
 
   -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
   let MyDebugOptions{..} = myDebugOptions
   withMyEventlogSocket maybeMyEventlogSocket
-  withMyGhcDebug logAction maybeMyGhcDebugSocket $ do
+  withMyGhcDebug logger maybeMyGhcDebugSocket $ do
     --
     -- Read the configuration file.
     let readConfigFile configFile = do
-          let msg1 = "Reading configuration file from " <> T.pack configFile
-          logAction <& DEBUG &> msg1
-          config <- C.readConfigFile logAction configFile
-          let msg2 = "Configuration file:\n" <> C.prettyConfig config
-          logAction <& DEBUG &> msg2
+          writeLog logger DEBUG $
+            "Reading configuration file from " <> T.pack configFile
+          config <- C.readConfigFile logger configFile
+          writeLog logger DEBUG $
+            "Configuration file:\n" <> C.prettyConfig config
           pure config
 
     -- Read the configuration file and add derived settings.
     fullConfig <-
       C.toFullConfig eventlogFlushIntervalS
         <$> maybe (pure def) readConfigFile maybeConfigFile
-    let msg1 = "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
-    logAction <& DEBUG &> msg1
-    let msg1 = "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
-    logAction <& DEBUG &> msg1
+    writeLog logger DEBUG $
+      "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
+    writeLog logger DEBUG $
+      "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
 
     -- Determine the window size for statistics
     let windowSizeX =
@@ -138,7 +138,7 @@ main = do
     let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
     G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
       runWithEventlogSource
-        logAction
+        logger
         eventlogSocket
         eventlogSocketTimeoutS
         eventlogSocketTimeoutExponent
@@ -147,7 +147,7 @@ main = do
         maybeEventlogLogFile
         $ M.fanoutTick
           [ -- Log a warning if no input has been received after 10 ticks.
-            M.validateInput logAction 10
+            M.validateInput logger 10
           , -- Count the number of input events between each tick.
             eventCountTick
               ~> mapping (fmap (D.singleton . EventCountStat))
@@ -155,13 +155,13 @@ main = do
             M.liftTick M.withStartTime
               ~> M.fanoutTick
                 [ -- Process the heap events.
-                  processHeapEvents logAction maybeHeapProfBreakdown fullConfig
+                  processHeapEvents logger maybeHeapProfBreakdown fullConfig
                     ~> mapping (fmap (fmap TelemetryData'Metric))
                 , -- Process the log events.
                   processLogEvents fullConfig
                     ~> mapping (fmap (fmap TelemetryData'Log))
                 , -- Process the thread events.
-                  processThreadEvents logAction fullConfig
+                  processThreadEvents logger fullConfig
                     ~> mapping (fmap (fmap (either TelemetryData'Metric TelemetryData'Span)))
                 ]
               ~> mapping (fmap (partitionTelemetryData . D.toList))
@@ -206,9 +206,9 @@ main = do
           ]
           -- Process the statistics
           -- TODO: windowSize should be the maximum of all aggregation and export intervals
-          ~> M.liftTick (asParts ~> processStats logAction stats eventlogFlushIntervalS windowSizeX)
+          ~> M.liftTick (asParts ~> processStats logger stats eventlogFlushIntervalS windowSizeX)
           -- Validate the consistency of the tick
-          ~> M.validateTicks logAction
+          ~> M.validateTicks logger
           ~> M.dropTick
 
 data TelemetryData
@@ -234,7 +234,7 @@ data OneOf a b c = A !a | B !b | C !c
 
 processThreadEvents ::
   (MonadIO m) =>
-  LogAction m ->
+  Logger m ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either OM.Metric OT.Span)))
 processThreadEvents verbosity fullConfig =
@@ -396,7 +396,7 @@ processThreadLabel fullConfig =
 
 processHeapEvents ::
   (MonadIO m) =>
-  LogAction m ->
+  Logger m ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
@@ -529,15 +529,15 @@ shouldComputeMemReturn fullConfig =
 
 processHeapProfSample ::
   (MonadIO m) =>
-  LogAction m ->
+  Logger m ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapProfSample logAction maybeHeapProfBreakdown =
+processHeapProfSample logger maybeHeapProfBreakdown =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSampleData logAction maybeHeapProfBreakdown
+      , dataProcessor = M.processHeapProfSampleData logger maybeHeapProfBreakdown
       , aggregators = viaLast
       , postProcessor = mapping M.heapProfSamples ~> asParts
       , unit = "By"

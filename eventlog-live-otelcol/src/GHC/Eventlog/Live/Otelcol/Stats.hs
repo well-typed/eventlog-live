@@ -26,7 +26,7 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (ExportLogsResult (..))
@@ -242,28 +242,28 @@ Process and display stats.
 __Warning:__ This machine prints to stdout and is intended to be the /only/ function printing to stdout.
 -}
 processStats ::
-  LogAction IO ->
+  Logger IO ->
   Bool ->
   Double ->
   Int ->
   ProcessT IO Stat Void
-processStats logAction stats eventlogFlushIntervalS windowSize
+processStats logger stats eventlogFlushIntervalS windowSize
   | stats =
       -- If --stats is ENABLED, maintain and display `Stats`.
       let go stats0 =
             await >>= \stat -> do
               -- Log the incoming `Stat` value.
-              liftIO $ logStat logAction stat
+              liftIO $ logStat logger stat
               -- Maintain and display the `Stats`.
               let stats1 = updateStats windowSize stats0 stat
-              stats2 <- liftIO $ displayStats logAction eventlogFlushIntervalS stats1
+              stats2 <- liftIO $ displayStats logger eventlogFlushIntervalS stats1
               go stats2
        in construct $ go def
   | otherwise =
       -- If --stats is DISABLED, log all incoming `Stat` values.
       repeatedly $
         await >>= \stat ->
-          liftIO $ logStat logAction stat
+          liftIO $ logStat logger stat
 
 {- |
 Internal helper.
@@ -281,54 +281,57 @@ Internal helper.
 Log a statistic.
 -}
 logStat ::
-  LogAction IO ->
+  Logger IO ->
   Stat ->
   IO ()
-logStat logAction = \case
+logStat logger = \case
   EventCountStat eventCount ->
     -- Log received events.
     when (eventCount.value > 0) $ do
-      let msg = "Received " <> showText eventCount.value <> " events."
-      logAction <& DEBUG &> msg
+      writeLog logger DEBUG $
+        "Received " <> showText eventCount.value <> " events."
   ExportLogsResultStat exportLogsResult -> do
     -- Log exported events.
     when (exportLogsResult.exportedLogRecords > 0) $ do
-      let msg = "Exported " <> showText exportLogsResult.exportedLogRecords <> " logs."
-      logAction <& DEBUG &> msg
+      writeLog logger DEBUG $
+        "Exported " <> showText exportLogsResult.exportedLogRecords <> " logs."
     -- Log rejected events.
     when (exportLogsResult.rejectedLogRecords > 0) $ do
-      let msg = "Rejected " <> showText exportLogsResult.rejectedLogRecords <> " logs."
-      logAction <& ERROR &> msg
+      writeLog logger ERROR $
+        "Rejected " <> showText exportLogsResult.rejectedLogRecords <> " logs."
     -- Log exception.
     for_ exportLogsResult.maybeSomeException $ \someException -> do
-      let msg = T.pack $ displayException someException
-      logAction <& ERROR &> msg
+      writeLog logger ERROR $
+        T.pack $
+          displayException someException
   ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
     when (exportMetricsResult.exportedDataPoints > 0) $ do
-      let msg = "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
-      logAction <& DEBUG &> msg
+      writeLog logger DEBUG $
+        "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
     -- Log rejected events.
     when (exportMetricsResult.rejectedDataPoints > 0) $ do
-      let msg = "Rejected " <> showText exportMetricsResult.rejectedDataPoints <> " metrics."
-      logAction <& ERROR &> msg
+      writeLog logger ERROR $
+        "Rejected " <> showText exportMetricsResult.rejectedDataPoints <> " metrics."
     -- Log exception.
     for_ exportMetricsResult.maybeSomeException $ \someException -> do
-      let msg = T.pack $ displayException someException
-      logAction <& ERROR &> msg
+      writeLog logger ERROR $
+        T.pack $
+          displayException someException
   ExportTraceResultStat exportTraceResult -> do
     -- Log exported events.
     when (exportTraceResult.exportedSpans > 0) $ do
-      let msg = "Exported " <> showText exportTraceResult.exportedSpans <> " spans."
-      logAction <& DEBUG &> msg
+      writeLog logger DEBUG $
+        "Exported " <> showText exportTraceResult.exportedSpans <> " spans."
     -- Log rejected events.
     when (exportTraceResult.rejectedSpans > 0) $ do
-      let msg = "Rejected " <> showText exportTraceResult.rejectedSpans <> " spans."
-      logAction <& ERROR &> msg
+      writeLog logger ERROR $
+        "Rejected " <> showText exportTraceResult.rejectedSpans <> " spans."
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
-      let msg = T.pack $ displayException someException
-      logAction <& ERROR &> msg
+      writeLog logger ERROR $
+        T.pack $
+          displayException someException
 
 {- |
 Internal helper.
@@ -338,17 +341,17 @@ This is intented to be the *only* function printing to the terminal.
 TODO: The stats printer should only overwrite the numbers.
 -}
 displayStats ::
-  LogAction IO ->
+  Logger IO ->
   Double ->
   Stats ->
   IO Stats
-displayStats logAction eventlogFlushIntervalS stats = do
+displayStats logger eventlogFlushIntervalS stats = do
   -- Check if `displayedLines` is empty...
   case stats.displayedLines of
     First Nothing ->
       -- ...if so, this is the first time this function has been evaluated...
       -- ...so we should perform the `warnIfStderrSupportsANSI` check...
-      warnIfStderrSupportsANSI logAction
+      warnIfStderrSupportsANSI logger
     First (Just numberOfLines) -> do
       -- ...if not, we should clear the previous lines of output...
       liftIO $ ANSI.cursorUp numberOfLines
@@ -388,13 +391,13 @@ Check if `IO.stderr` supports ANSI codes. If it does, it is likely printed to
 the same terminal as `IO.stdout`, which causes issues if @--stats@ is enabled.
 -}
 warnIfStderrSupportsANSI ::
-  LogAction IO ->
+  Logger IO ->
   IO ()
-warnIfStderrSupportsANSI logAction = do
+warnIfStderrSupportsANSI logger = do
   supportsANSI <- hNowSupportsANSI IO.stderr
   when supportsANSI $ do
-    let msg = "When statistics are enabled, stderr should be redirected to a file."
-    logAction <& WARN &> msg
+    writeLog logger WARN $
+      "When statistics are enabled, stderr should be redirected to a file."
 
 -------------------------------------------------------------------------------
 -- Internal Helpers
