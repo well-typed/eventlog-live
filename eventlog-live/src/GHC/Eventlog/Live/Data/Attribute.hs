@@ -6,6 +6,7 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Attribute (
   Attrs,
+  lookup,
   toList,
   Attr,
   AttrKey,
@@ -23,12 +24,16 @@ import Data.Text qualified as T
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Generics (Generic)
 import GHC.IsList (IsList (..))
+import Prelude hiding (lookup)
 
 {- |
 A set of attributes is a t`HashMap`
 -}
 newtype Attrs = Attrs {attrMap :: HashMap AttrKey AttrValue}
   deriving (Eq, Generic, Show)
+
+lookup :: AttrKey -> Attrs -> Maybe AttrValue
+lookup attrKey attrs = M.lookup attrKey attrs.attrMap
 
 instance Hashable Attrs
 

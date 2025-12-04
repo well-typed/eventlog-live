@@ -9,7 +9,13 @@ module GHC.Eventlog.Live.Data.Severity (
   SeverityNumber (..),
   toSeverityNumber,
   fromSeverityNumber,
+  toSeverityString,
+  fromSeverityString,
 ) where
+
+import Data.Char (toUpper)
+import Data.Ix (Ix)
+import Text.Read (readMaybe)
 
 {- |
 The severity number as specified by the OpenTelemetry specification.
@@ -48,7 +54,7 @@ data Severity
   | FATAL2
   | FATAL3
   | FATAL4
-  deriving (Enum, Bounded, Eq, Ord, Show)
+  deriving (Bounded, Enum, Eq, Ord, Read, Show, Ix)
 
 {- |
 Convert from a `Severity` to a `SeverityNumber`.
@@ -64,3 +70,15 @@ fromSeverityNumber severityNumber
   | 1 <= severityNumber.value && severityNumber.value <= 24 =
       Just (toEnum $ severityNumber.value - 1)
   | otherwise = Nothing
+
+{- |
+Convert from a `Severity` to a `String`.
+-}
+toSeverityString :: Severity -> String
+toSeverityString = show
+
+{- |
+Convert from a `String` to a `Severity`.
+-}
+fromSeverityString :: String -> Maybe Severity
+fromSeverityString = readMaybe . fmap toUpper

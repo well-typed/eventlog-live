@@ -17,13 +17,11 @@ module GHC.Eventlog.Live.Options (
 ) where
 
 import Control.Applicative (asum)
-import Data.Char (toLower)
+import GHC.Eventlog.Live.Data.Severity (Severity (..), fromSeverityString)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (heapProfBreakdownEitherReader)
-import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityDebug, verbosityError, verbosityInfo, verbosityQuiet, verbosityWarning)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 import Options.Applicative.Help.Pretty qualified as OP
-import Text.Read (readEither)
 
 --------------------------------------------------------------------------------
 -- Eventlog Source
@@ -155,44 +153,19 @@ defaultEventlogFlushIntervalS = 1
 -- Verbosity
 
 {- |
-Parser for verbosities.
-The default verbosity is `verbosityWarning`.
+Parser for `Severity`
+The default severity is `WARN`.
 -}
-verbosityParser :: O.Parser Verbosity
+verbosityParser :: O.Parser Severity
 verbosityParser =
   O.option
-    (O.eitherReader readEitherVerbosity)
+    (O.maybeReader fromSeverityString)
     ( O.short 'v'
         <> O.long "verbosity"
-        <> O.metavar "quiet|error|warning|info|debug|0-4"
-        <> O.help "The verbosity threshold for logging."
-        <> O.value verbosityWarning
+        <> O.metavar "fatal|error|warning|info|debug|trace"
+        <> O.help "The severity threshold for logging."
+        <> O.value WARN
     )
-
-{- |
-Internal helper.
-Parser for verbosities by number or name.
-Case insensitive.
--}
-readEitherVerbosity :: String -> Either String Verbosity
-readEitherVerbosity rawVerbosity =
-  -- try to parse the verbosity as a number...
-  case readEither @Word rawVerbosity of
-    -- if the verbosity string is a number, map it to a verbosity...
-    Right verbosityThreshold
-      | verbosityThreshold <= 0 -> Right verbosityQuiet
-      | verbosityThreshold == 1 -> Right verbosityError
-      | verbosityThreshold == 2 -> Right verbosityWarning
-      | verbosityThreshold == 3 -> Right verbosityInfo
-      | otherwise -> Right verbosityDebug
-    -- otherwise, match it against the literal names of the levels...
-    Left _parseError -> case toLower <$> rawVerbosity of
-      "quiet" -> Right verbosityQuiet
-      "error" -> Right verbosityError
-      "warning" -> Right verbosityWarning
-      "info" -> Right verbosityInfo
-      "debug" -> Right verbosityDebug
-      _otherwise -> Left $ "Could not parse verbosity '" <> rawVerbosity <> "'."
 
 --------------------------------------------------------------------------------
 -- Statistics

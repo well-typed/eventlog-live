@@ -25,13 +25,13 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (ExportLogsResult (..))
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (ExportMetricsResult (..))
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (ExportTraceResult (..))
-import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Records (HasField (..))
 import StrictList qualified as Strict
 import System.Console.ANSI (hNowSupportsANSI)
@@ -242,27 +242,28 @@ Process and display stats.
 __Warning:__ This machine prints to stdout and is intended to be the /only/ function printing to stdout.
 -}
 processStats ::
-  (MonadIO m) =>
-  Verbosity ->
+  Logger IO ->
   Bool ->
   Double ->
   Int ->
-  ProcessT m Stat Void
-processStats verbosity stats eventlogFlushIntervalS windowSize
+  ProcessT IO Stat Void
+processStats logger stats eventlogFlushIntervalS windowSize
   | stats =
       -- If --stats is ENABLED, maintain and display `Stats`.
       let go stats0 =
             await >>= \stat -> do
               -- Log the incoming `Stat` value.
-              logStat verbosity stat
+              liftIO $ logStat logger stat
               -- Maintain and display the `Stats`.
               let stats1 = updateStats windowSize stats0 stat
-              stats2 <- liftIO (displayStats verbosity eventlogFlushIntervalS stats1)
+              stats2 <- liftIO $ displayStats logger eventlogFlushIntervalS stats1
               go stats2
        in construct $ go def
   | otherwise =
       -- If --stats is DISABLED, log all incoming `Stat` values.
-      repeatedly $ await >>= logStat verbosity
+      repeatedly $
+        await >>= \stat ->
+          liftIO $ logStat logger stat
 
 {- |
 Internal helper.
@@ -279,49 +280,58 @@ updateStats windowSize old = \case
 Internal helper.
 Log a statistic.
 -}
-logStat :: (MonadIO m) => Verbosity -> Stat -> m ()
-logStat verbosity = \case
+logStat ::
+  Logger IO ->
+  Stat ->
+  IO ()
+logStat logger = \case
   EventCountStat eventCount ->
     -- Log received events.
-    when (eventCount.value > 0) $
-      logDebug verbosity $
+    when (eventCount.value > 0) $ do
+      writeLog logger DEBUG $
         "Received " <> showText eventCount.value <> " events."
   ExportLogsResultStat exportLogsResult -> do
     -- Log exported events.
-    when (exportLogsResult.exportedLogRecords > 0) $
-      logDebug verbosity $
+    when (exportLogsResult.exportedLogRecords > 0) $ do
+      writeLog logger DEBUG $
         "Exported " <> showText exportLogsResult.exportedLogRecords <> " logs."
     -- Log rejected events.
-    when (exportLogsResult.rejectedLogRecords > 0) $
-      logError verbosity $
+    when (exportLogsResult.rejectedLogRecords > 0) $ do
+      writeLog logger ERROR $
         "Rejected " <> showText exportLogsResult.rejectedLogRecords <> " logs."
     -- Log exception.
     for_ exportLogsResult.maybeSomeException $ \someException -> do
-      logError verbosity . T.pack $ displayException someException
+      writeLog logger ERROR $
+        T.pack $
+          displayException someException
   ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
-    when (exportMetricsResult.exportedDataPoints > 0) $
-      logDebug verbosity $
+    when (exportMetricsResult.exportedDataPoints > 0) $ do
+      writeLog logger DEBUG $
         "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
     -- Log rejected events.
-    when (exportMetricsResult.rejectedDataPoints > 0) $
-      logError verbosity $
+    when (exportMetricsResult.rejectedDataPoints > 0) $ do
+      writeLog logger ERROR $
         "Rejected " <> showText exportMetricsResult.rejectedDataPoints <> " metrics."
     -- Log exception.
     for_ exportMetricsResult.maybeSomeException $ \someException -> do
-      logError verbosity . T.pack $ displayException someException
+      writeLog logger ERROR $
+        T.pack $
+          displayException someException
   ExportTraceResultStat exportTraceResult -> do
     -- Log exported events.
-    when (exportTraceResult.exportedSpans > 0) $
-      logDebug verbosity $
+    when (exportTraceResult.exportedSpans > 0) $ do
+      writeLog logger DEBUG $
         "Exported " <> showText exportTraceResult.exportedSpans <> " spans."
     -- Log rejected events.
-    when (exportTraceResult.rejectedSpans > 0) $
-      logError verbosity $
+    when (exportTraceResult.rejectedSpans > 0) $ do
+      writeLog logger ERROR $
         "Rejected " <> showText exportTraceResult.rejectedSpans <> " spans."
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
-      logError verbosity . T.pack $ displayException someException
+      writeLog logger ERROR $
+        T.pack $
+          displayException someException
 
 {- |
 Internal helper.
@@ -330,18 +340,22 @@ This is intented to be the *only* function printing to the terminal.
 
 TODO: The stats printer should only overwrite the numbers.
 -}
-displayStats :: Verbosity -> Double -> Stats -> IO Stats
-displayStats verbosity eventlogFlushIntervalS stats = do
+displayStats ::
+  Logger IO ->
+  Double ->
+  Stats ->
+  IO Stats
+displayStats logger eventlogFlushIntervalS stats = do
   -- Check if `displayedLines` is empty...
   case stats.displayedLines of
     First Nothing ->
       -- ...if so, this is the first time this function has been evaluated...
       -- ...so we should perform the `warnIfStderrSupportsANSI` check...
-      warnIfStderrSupportsANSI verbosity
+      warnIfStderrSupportsANSI logger
     First (Just numberOfLines) -> do
       -- ...if not, we should clear the previous lines of output...
-      ANSI.cursorUp numberOfLines
-      ANSI.clearFromCursorToScreenEnd
+      liftIO $ ANSI.cursorUp numberOfLines
+      liftIO $ ANSI.clearFromCursorToScreenEnd
 
   -- Compute the moving average count of items _per second_,
   -- by computing the adjusted average of counts over n batches.
@@ -369,18 +383,20 @@ displayStats verbosity eventlogFlushIntervalS stats = do
   let tSpec :: TBL.TableSpec TBL.LineStyle TBL.LineStyle String (Maybe Text) (Maybe Text)
       tSpec = TBL.columnHeaderTableS cSpec TBL.unicodeS hSpec rSpec
   let table = TBL.tableLinesB tSpec :: [Text]
-  for_ table TIO.putStrLn
+  for_ table $ \row -> liftIO $ TIO.putStrLn row
   pure stats{displayedLines = First (Just $ length table)}
 
 {- |
 Check if `IO.stderr` supports ANSI codes. If it does, it is likely printed to
 the same terminal as `IO.stdout`, which causes issues if @--stats@ is enabled.
 -}
-warnIfStderrSupportsANSI :: Verbosity -> IO ()
-warnIfStderrSupportsANSI verbosity = do
+warnIfStderrSupportsANSI ::
+  Logger IO ->
+  IO ()
+warnIfStderrSupportsANSI logger = do
   supportsANSI <- hNowSupportsANSI IO.stderr
   when supportsANSI $ do
-    logWarning verbosity $
+    writeLog logger WARN $
       "When statistics are enabled, stderr should be redirected to a file."
 
 -------------------------------------------------------------------------------

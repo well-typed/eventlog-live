@@ -4,53 +4,53 @@ processors:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_BlocksSize
+      name: ghc_eventlog_BlocksSize
     capability_usage:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_CapabilityUsageDuration
+      name: ghc_eventlog_CapabilityUsageDuration
     heap_allocated:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_HeapAllocated
+      name: ghc_eventlog_HeapAllocated
     heap_live:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_HeapLive
+      name: ghc_eventlog_HeapLive
     heap_prof_sample:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_HeapProfSample
+      name: ghc_eventlog_HeapProfSample
     heap_size:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_HeapSize
+      name: ghc_eventlog_HeapSize
     mem_current:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_MemCurrent
+      name: ghc_eventlog_MemCurrent
     mem_needed:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_MemNeeded
+      name: ghc_eventlog_MemNeeded
     mem_returned:
       aggregate: true
       description: null
       export: true
-      name: eventlog_live_MemReturned
+      name: ghc_eventlog_MemReturned
   traces:
     capability_usage:
       description: null
       export: false
-      name: eventlog_live_CapabilityUsage
+      name: ghc_eventlog_CapabilityUsage
     thread_state:
       description: null
       export: false
-      name: eventlog_live_ThreadState
+      name: ghc_eventlog_ThreadState

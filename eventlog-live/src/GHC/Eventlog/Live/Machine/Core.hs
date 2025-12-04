@@ -41,7 +41,7 @@ module GHC.Eventlog.Live.Machine.Core (
 ) where
 
 import Control.Monad (when)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.DList qualified as D
 import Data.Foldable (Foldable (..), for_)
 import Data.Function (on)
@@ -57,8 +57,8 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (logDebug, logError, logWarning)
-import GHC.Eventlog.Live.Verbosity (Verbosity, verbosityError, verbosityWarning)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import Text.Printf (printf)
 
 {- $setup
@@ -693,26 +693,23 @@ If no input is encountered after the given number of ticks, the machine prints
 a warning that directs the user to check that the @-l@ flag was set correctly.
 -}
 validateInput ::
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  Logger m ->
   Int ->
   ProcessT m (Tick a) x
-validateInput verbosity ticks
-  | verbosityWarning >= verbosity = construct $ start ticks
-  | otherwise = stopped
+validateInput logger ticks = construct $ start ticks
  where
   start remaining
-    | remaining <= 0 = liftIO $ do
-        logWarning verbosity . T.pack $
-          printf
-            "No input after %d ticks. Did you pass -l to the GHC RTS?"
-            ticks
+    | remaining <= 0 = do
+        let msg = printf "No input after %d ticks. Did you pass -l to the GHC RTS?" ticks
+        lift $ writeLog logger WARN $ T.pack msg
+        pure ()
     | otherwise = do
-        logDebug verbosity $
-          "Waiting for " <> T.pack (show remaining) <> " more ticks before showing input warning."
+        let msg = "Waiting for " <> T.pack (show remaining) <> " more ticks before showing input warning."
+        lift $ writeLog logger DEBUG $ msg
         await >>= \case
-          Item{} -> do
-            logDebug verbosity "Received item. Cancelled input warning."
+          Item{} ->
+            lift $ writeLog logger DEBUG $ "Received item. Cancelled input warning."
           Tick ->
             start (pred remaining)
 
@@ -724,31 +721,30 @@ that directs the user to check that the @--eventlog-flush-interval@ flag is
 set correctly.
 -}
 validateOrder ::
-  (MonadIO m, Ord k, Show a) =>
-  Verbosity ->
+  (Monad m, Ord k, Show a) =>
+  Logger m ->
   (a -> k) ->
   ProcessT m a x
-validateOrder verbosity timestamp
-  | verbosityError >= verbosity = construct $ go Nothing
-  | otherwise = stopped
+validateOrder logger timestamp = construct $ go Nothing
  where
   go maybeOld =
     await >>= \new ->
       case maybeOld of
         Just old
           | timestamp new < timestamp old -> do
-              logError verbosity . T.pack $
-                "Encountered two out-of-order inputs.\n\
-                \Did you pass --eventlog-flush-interval=SECONDS to the GHC RTS?\n\
-                \Did you pass the same flag to this program?"
-              logDebug verbosity . T.pack $
-                printf
-                  "Out-of-order inputs:\n\
-                  \- %s\n\
-                  \- %s"
-                  (show old)
-                  (show new)
-              pure ()
+              let msg1 =
+                    "Encountered two out-of-order inputs.\n\
+                    \Did you pass --eventlog-flush-interval=SECONDS to the GHC RTS?\n\
+                    \Did you pass the same flag to this program?"
+              lift $ writeLog logger ERROR $ T.pack msg1
+              let msg2 =
+                    printf
+                      "Out-of-order inputs:\n\
+                      \- %s\n\
+                      \- %s"
+                      (show old)
+                      (show new)
+              lift $ writeLog logger DEBUG $ T.pack msg2
         _otherwise -> do
           go (Just new)
 
@@ -756,12 +752,10 @@ validateOrder verbosity timestamp
 This machine validates that ticks are unique and increasing.
 -}
 validateTicks ::
-  (MonadIO m) =>
-  Verbosity ->
+  (Monad m) =>
+  Logger m ->
   ProcessT m (Tick a) (Tick a)
-validateTicks verbosity
-  | verbosityError >= verbosity = construct $ go Nothing
-  | otherwise = stopped
+validateTicks logger = construct $ go Nothing
  where
   go maybeTick =
     await >>= \case
@@ -770,10 +764,10 @@ validateTicks verbosity
       TickWithInfo{tickInfo = TickInfo{tick = tick'}} -> do
         for_ maybeTick $ \case
           tick
-            | tick' == tick + 1 ->
-                logDebug verbosity $
-                  "Saw tick " <> T.pack (show tick) <> "."
-            | otherwise ->
-                logError verbosity $
-                  "Encountered non-increasing ticks " <> T.pack (show tick) <> " and " <> T.pack (show tick') <> "."
+            | tick' == tick + 1 -> do
+                let msg = "Saw tick " <> T.pack (show tick) <> "."
+                lift $ writeLog logger TRACE $ msg
+            | otherwise -> do
+                let msg = "Encountered non-increasing ticks " <> T.pack (show tick) <> " and " <> T.pack (show tick') <> "."
+                lift $ writeLog logger ERROR $ msg
         go (Just tick')
