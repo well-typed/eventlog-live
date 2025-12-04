@@ -166,6 +166,7 @@ library
   other-modules:
     Data.Machine.Concurrent.Compat
     Data.Machine.Concurrent.Compat.AsyncStep
+    Data.Machine.Concurrent.Compat.Scatter
     Data.Machine.Concurrent.Compat.Wye
     GHC.Debug.Stub.Compat
     GHC.Eventlog.Live.Otelcol.Config.Default
@@ -179,6 +180,7 @@ library
   autogen-modules: Paths_eventlog_live_otelcol
   build-depends:
     , ansi-terminal          >=1.1    && <1.2
+    , async                  >=2.0.1  && <2.3
     , base                   >=4.16   && <4.22
     , bytestring             >=0.11   && <0.13
     , data-default           >=0.2    && <0.9
@@ -202,6 +204,7 @@ library
     , strict-list            >=0.1    && <0.2
     , table-layout           >=1.0    && <1.1
     , text                   >=1.2    && <2.2
+    , transformers-base      >=0.4    && <0.5
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
 
