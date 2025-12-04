@@ -26,7 +26,9 @@ data InfoProv = InfoProv
   deriving (Show, Eq, Ord, Generic)
   deriving anyclass (Sqlite.FromRow, Sqlite.ToRow)
 
-newtype IpeId = IpeId {id :: Word64}
+newtype IpeId = IpeId
+  { id :: Word64
+  }
   deriving (Eq, Ord)
   deriving newtype (Sqlite.FromField, Sqlite.ToField)
 

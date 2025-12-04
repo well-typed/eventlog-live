@@ -1,8 +1,8 @@
 module GHC.Eventlog.Options (
   Options (..),
-  Command(..),
-  IndexOptions(..),
-  QueryOptions(..),
+  Command (..),
+  IndexOptions (..),
+  QueryOptions (..),
   parseOptions,
   options,
   commands,
@@ -36,18 +36,20 @@ data QueryOptions = QueryOptions
 
 parseOptions :: IO Options
 parseOptions = execParser opts
-  where
-    opts = info (options <**> helper)
+ where
+  opts =
+    info
+      (options <**> helper)
       ( fullDesc
-     <> progDesc "Index for Info Provenance entries"
-     <> header "ipedb - A database for info provenance entries" )
+          <> progDesc "Index for Info Provenance entries"
+          <> header "ipedb - A database for info provenance entries"
+      )
 
 options :: Parser Options
 options =
   Options
-    <$> strOption
-      ( long "db"
-          <> metavar "FILENAME"
+    <$> strArgument
+      ( metavar "FILENAME"
           <> help "Database location"
       )
     <*> commands
@@ -63,7 +65,7 @@ queryCommand :: Parser QueryOptions
 queryCommand =
   QueryOptions
     <$> ( IpeId
-            <$> option auto (long "ipe" <> short 'i' <> help "Find the info table provenance information for the given key" <> metavar "INT")
+            <$> argument auto (help "Find the info table provenance information for the given key" <> metavar "INT")
         )
 
 indexCommand :: Parser IndexOptions
