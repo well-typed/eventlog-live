@@ -1,5 +1,6 @@
 module GHC.Eventlog.Live.Machine.Analysis.Profile (
   StackProfSampleData (..),
+  InfoTableIndex (..),
   CallStackData (..),
   StackItemData (..),
   processStackProfSampleData,
@@ -7,7 +8,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Profile (
 )
 where
 
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString.Lazy qualified as LBS
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HashMap
@@ -16,10 +17,11 @@ import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Machine (ProcessT, await, construct, yield)
-import Data.Maybe (mapMaybe)
+import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Word (Word64)
+import GHC.Eventlog.Index qualified as IpeDb
 import GHC.Eventlog.Live.Data.Attribute qualified as Attrs
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Machine.Analysis.Heap (InfoTable (..), InfoTablePtr (..), metric)
@@ -38,7 +40,7 @@ data StackProfSampleState = StackProfSampleState
     -- We could report when interleaved messages are present
     stackProfSampleChunk :: ![BinaryCallStackMessage]
   , stackProfSymbolTableReader :: !SPCT.IntMapTable
-  , maybeStackProfSampleData :: !(Maybe StackProfSampleData)
+  , infoTableIndex :: Maybe InfoTableIndex
   }
   deriving (Generic)
 
@@ -60,8 +62,14 @@ data StackItemData
   | SourceLocationData !SourceLocation
   deriving (Show, Generic)
 
-shouldTrackInfoTableMap :: Bool
-shouldTrackInfoTableMap = True
+shouldTrackInfoTableMap :: Maybe InfoTableIndex -> Bool
+shouldTrackInfoTableMap Nothing = True
+shouldTrackInfoTableMap (Just _index) = False
+
+newtype InfoTableIndex = InfoTableIndex
+  { db :: IpeDb.InfoProvDb
+  }
+  deriving (Generic)
 
 {- |
 This machine processes `E.UserBinaryMessage` events into metrics.
@@ -70,22 +78,23 @@ Furthermore, it processes the `E.InfoTableProv` events to
 processStackProfSampleData ::
   (MonadIO m) =>
   Verbosity ->
+  Maybe InfoTableIndex ->
   ProcessT m (WithStartTime Event) StackProfSampleData
-processStackProfSampleData _verbosityThreshold =
+processStackProfSampleData _verbosityThreshold index =
   construct $
     go
       StackProfSampleState
         { infoTableMap = mempty
         , stackProfSampleChunk = mempty
         , stackProfSymbolTableReader = SPCT.emptyIntMapTable
-        , maybeStackProfSampleData = Nothing
+        , infoTableIndex = index
         }
  where
   go st = do
     await >>= \i -> case i.value.evSpec of
       -- Announces an info table entry.
       E.InfoTableProv{..}
-        | shouldTrackInfoTableMap -> do
+        | shouldTrackInfoTableMap st.infoTableIndex -> do
             let infoTablePtr = InfoTablePtr itInfo
                 infoTable =
                   InfoTable
@@ -104,11 +113,11 @@ processStackProfSampleData _verbosityThreshold =
             go st
           Right evMsg -> case evMsg of
             CallStackFinal msg -> do
-              let (callStackMessage, st1) =
-                    hydrateBinaryEventlog st msg
-
-                  stackProfSample =
-                    metric i callStackMessage Attrs.empty
+              (callStackMessage, st1) <-
+                liftIO $ hydrateBinaryEventlog st msg
+              let
+                stackProfSample =
+                  metric i callStackMessage Attrs.empty
 
               yield $ StackProfSampleData stackProfSample
               go st1
@@ -120,8 +129,8 @@ processStackProfSampleData _verbosityThreshold =
               go st{stackProfSymbolTableReader = SPCT.insertSourceLocationMessage msg st.stackProfSymbolTableReader}
       _otherwise -> go st
 
-hydrateBinaryEventlog :: StackProfSampleState -> BinaryCallStackMessage -> (CallStackData, StackProfSampleState)
-hydrateBinaryEventlog spst msg =
+hydrateBinaryEventlog :: StackProfSampleState -> BinaryCallStackMessage -> IO (CallStackData, StackProfSampleState)
+hydrateBinaryEventlog spst msg = do
   let chunks = spst.stackProfSampleChunk
       -- Why reverse?
       -- When decoding the stack, we walk the stack from the top down.
@@ -149,23 +158,48 @@ hydrateBinaryEventlog spst msg =
           (SPCT.mkIntMapSymbolTableReader spst.stackProfSymbolTableReader)
           fullBinaryCallStackMessage
 
-      callStackData =
-        CallStackData
-          { threadId = callThreadId callStackMessage
-          , capabilityId = callCapabilityId callStackMessage
-          , stack =
-              -- TODO: log if we are encountering unknown ipe ids
-              mapMaybe (toStackItemData spst.infoTableMap) $ callStack callStackMessage
-          }
-   in ( callStackData
-      , spst{stackProfSampleChunk = []}
-      )
+  let lookupInfoTable = getLookupInfoTableFunc spst
+  stack <- traverse (toStackItemData lookupInfoTable) (callStack callStackMessage)
 
-toStackItemData :: HashMap InfoTablePtr InfoTable -> StackItem -> Maybe StackItemData
-toStackItemData tbl = \case
-  IpeId iid -> IpeData <$> HashMap.lookup (InfoTablePtr $ getIpeId iid) tbl
-  UserMessage msg -> Just $ UserMessageData $ Text.pack msg
-  SourceLocation srcLoc -> Just $ SourceLocationData srcLoc
+  let
+    callStackData =
+      CallStackData
+        { threadId = callThreadId callStackMessage
+        , capabilityId = callCapabilityId callStackMessage
+        , stack =
+            -- TODO: log if we are encountering unknown ipe ids
+            Maybe.catMaybes stack
+        }
+
+  pure
+    ( callStackData
+    , spst{stackProfSampleChunk = []}
+    )
+
+toStackItemData :: (IpeId -> IO (Maybe InfoTable)) -> StackItem -> IO (Maybe StackItemData)
+toStackItemData lookupInfoTable = \case
+  IpeId iid -> fmap IpeData <$> lookupInfoTable iid
+  UserMessage msg -> pure $ Just $ UserMessageData $ Text.pack msg
+  SourceLocation srcLoc -> pure $ Just $ SourceLocationData srcLoc
+
+getLookupInfoTableFunc :: StackProfSampleState -> (IpeId -> IO (Maybe InfoTable))
+getLookupInfoTableFunc spst = case spst.infoTableIndex of
+  Nothing -> \iid -> pure (HashMap.lookup (InfoTablePtr $ getIpeId iid) spst.infoTableMap)
+  Just ipeIndex -> \iid -> do
+    mInfoProv <- IpeDb.lookupInfoProv ipeIndex.db (IpeDb.IpeId $ getIpeId iid)
+    pure $ fmap fromInfoProv mInfoProv
+ where
+  fromInfoProv :: IpeDb.InfoProv -> InfoTable
+  fromInfoProv prov =
+    InfoTable
+      { infoTablePtr = InfoTablePtr prov.infoId.id
+      , infoTableName = prov.tableName
+      , infoTableClosureDesc = fromIntegral prov.closureDesc
+      , infoTableTyDesc = prov.typeDesc
+      , infoTableLabel = prov.label
+      , infoTableModule = prov.moduleName
+      , infoTableSrcLoc = prov.srcLoc
+      }
 
 {- |
 Get the elements of a heap profile sample collection.

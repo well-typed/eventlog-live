@@ -99,6 +99,7 @@ import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Records (HasField)
 import GHC.Stack.Types (HasCallStack)
 import System.Exit (exitFailure)
+import GHC.Eventlog.Live.Machine.Analysis.Profile (InfoTableIndex)
 
 {- |
 Read a `Config` from a configuration file.
@@ -140,10 +141,11 @@ Create a full configuration.
 toFullConfig ::
   -- | The @--eventlog-flush-interval@ in seconds.
   Double ->
+  Maybe InfoTableIndex ->
   -- | The user configuration.
   Config ->
   FullConfig
-toFullConfig eventlogFlushIntervalS config =
+toFullConfig eventlogFlushIntervalS infoTableIndex config =
   FullConfig{..}
  where
   batchIntervalMs = toBatchIntervalMs eventlogFlushIntervalS config

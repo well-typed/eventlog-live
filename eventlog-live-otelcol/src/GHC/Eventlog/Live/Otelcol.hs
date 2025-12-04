@@ -95,6 +95,7 @@ import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
+import GHC.Eventlog.Index qualified as IpeDb
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -106,7 +107,7 @@ main = do
   -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
   let MyDebugOptions{..} = myDebugOptions
   withMyEventlogSocket maybeMyEventlogSocket
-  withMyGhcDebug verbosity maybeMyGhcDebugSocket $ do
+  withMyGhcDebug verbosity maybeMyGhcDebugSocket $ withInfoTableIndex maybeInfoTableIndex $ \ infoTableIndex -> do
     --
     -- Read the configuration file.
     let readConfigFile configFile = do
@@ -117,8 +118,9 @@ main = do
 
     -- Read the configuration file and add derived settings.
     fullConfig <-
-      C.toFullConfig eventlogFlushIntervalS
+      C.toFullConfig eventlogFlushIntervalS infoTableIndex
         <$> maybe (pure def) readConfigFile maybeConfigFile
+
     logDebug verbosity $ "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
     logDebug verbosity $ "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
 
@@ -238,6 +240,11 @@ partitionTelemetryData = go ([], [], [], [])
     (TelemetryData'Metric metric : rest) -> go (logs, metric : metrics, spans, profiles) rest
     (TelemetryData'Span span : rest) -> go (logs, metrics, span : spans, profiles) rest
     (TelemetryData'Profile profile : rest) -> go (logs, metrics, spans, profile : profiles) rest
+
+withInfoTableIndex :: Maybe FilePath -> (Maybe M.InfoTableIndex -> IO a) -> IO a
+withInfoTableIndex Nothing act = act Nothing
+withInfoTableIndex (Just fp) act =
+  IpeDb.withInfoProvDb fp (act . Just . M.InfoTableIndex)
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
@@ -638,7 +645,7 @@ processStackProfSample verbosity config = do
     dataProcessor = M.processStackProfSampleData verbosity
   -- aggregators = viaLast
   runIf (C.processorEnabled (.profiles) (.stackSample) config) $
-    M.liftTick dataProcessor
+    M.liftTick (dataProcessor config.infoTableIndex)
       -- ~> aggregate aggregators (C.processorAggregationBatches (.profiles) (.stackSample) config)
       ~> M.liftTick postProcessor
       -- TODO: do something with the Metric value, right now it is completely unused
@@ -1064,6 +1071,7 @@ data Options = Options
   , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   , myDebugOptions :: MyDebugOptions
+  , maybeInfoTableIndex :: Maybe FilePath
   }
 
 optionsParser :: O.Parser Options
@@ -1081,6 +1089,7 @@ optionsParser =
     <*> O.optional configFileParser
     <*> openTelemetryCollectorOptionsParser
     <*> myDebugOptionsParser
+    <*> infoTableIndexParser
 
 --------------------------------------------------------------------------------
 -- Debug Options
@@ -1256,6 +1265,18 @@ otelcolSslKeyLogParser =
             <> O.help "Use SSLKEYLOGFILE to log SSL keys."
         )
     ]
+
+--------------------------------------------------------------------------------
+-- Info Table Database
+
+infoTableIndexParser :: O.Parser (Maybe FilePath)
+infoTableIndexParser =
+  O.optional $
+    O.strOption
+      ( O.long "info-table-db"
+          <> O.metavar "FILE"
+          <> O.help "Use the given database for Info Tables"
+      )
 
 -------------------------------------------------------------------------------
 -- Internal Helpers

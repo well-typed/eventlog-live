@@ -68,6 +68,7 @@ import Language.Haskell.TH.Lift.Compat (Lift)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Read (readEither)
+import GHC.Eventlog.Live.Machine.Analysis.Profile (InfoTableIndex)
 
 {- |
 The extended configuration with derived fields.
@@ -77,6 +78,8 @@ data FullConfig = FullConfig
   -- ^ The batch interval in milliseconds.
   , eventlogFlushIntervalX :: !Int
   -- ^ The @--eventlog-flush-interval@ in /batches/.
+  , infoTableIndex :: !(Maybe InfoTableIndex)
+  -- ^ Optional info table index
   , config :: !Config
   }
 

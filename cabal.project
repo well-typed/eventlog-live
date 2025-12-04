@@ -60,7 +60,7 @@ if impl(ghc >=9.14)
 source-repository-package
     type: git
     location: https://github.com/well-typed/ghc-stack-profiler.git
-    tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+    tag: 12c21f7e1ba49bbc84611f789090d638e06f422d
     subdir: ghc-stack-profiler-core
 
 source-repository-package
@@ -73,7 +73,7 @@ if impl(ghc >=9.10)
   source-repository-package
       type: git
       location: https://github.com/well-typed/ghc-stack-profiler.git
-      tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+      tag: 12c21f7e1ba49bbc84611f789090d638e06f422d
       subdir: ghc-stack-profiler
 
   source-repository-package
