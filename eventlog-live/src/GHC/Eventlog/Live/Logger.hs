@@ -24,23 +24,18 @@ import Data.Text (Text)
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
-import GHC.Eventlog.Live.Data.Attribute ((~=))
+import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
+import GHC.Eventlog.Live.Data.Attribute qualified as A
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
 import GHC.RTS.Events (Timestamp)
-import GHC.Stack (CallStack, callStack, prettyCallStack, withFrozenCallStack)
+import GHC.Stack (callStack, prettyCallStack, withFrozenCallStack)
 import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
 
-type Logger m = CCA.LogAction m Message
-
-data Message = Message
-  { severity :: !Severity
-  , callStack :: !CallStack
-  , body :: Text
-  }
+type Logger m = CCA.LogAction m LogRecord
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -48,7 +43,13 @@ Use a `Logger` to log a message with a severity.
 writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity body =
   withFrozenCallStack $
-    logger <& Message{callStack, ..}
+    logger
+      <& LogRecord
+        { body
+        , maybeSeverity = Just severity
+        , maybeTimeUnixNano = Nothing
+        , attrs = ["call-stack" ~= prettyCallStack callStack]
+        }
 
 {- |
 A `LogAction` that writes each `Message` to a `IO.stderr`.
@@ -62,9 +63,9 @@ A `LogAction` that writes each `Message` to a `IO.Handle`.
 handleLogger ::
   IO.Handle ->
   Logger IO
-handleLogger handle = CCA.LogAction $ \msg -> liftIO $ do
-  withSeverityColor msg.severity handle $ \handleWithColor ->
-    TIO.hPutStrLn handleWithColor $ formatMessage msg
+handleLogger handle = CCA.LogAction $ \logRecord -> liftIO $ do
+  withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
+    TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
   IO.hFlush handle
 
 {- |
@@ -76,23 +77,25 @@ filterBySeverity ::
   Logger m ->
   Logger m
 filterBySeverity severityThreshold =
-  cfilter ((>= severityThreshold) . (.severity))
+  cfilter (maybe False (>= severityThreshold) . (.maybeSeverity))
 
 {- |
 Internal helper.
 Format the message appropriately for the given verbosity level and threshold.
 -}
-formatMessage :: Message -> Text
-formatMessage msg =
+formatLogRecord :: LogRecord -> Text
+formatLogRecord logRecord =
   TL.toStrict . TLB.toLazyText . mconcat $
-    [ "["
-    , TLB.fromString (toSeverityString msg.severity)
-    , "]"
-    , " "
-    , TLB.fromText msg.body
-    , if msg.severity >= ERROR
-        then "\n" <> TLB.fromString (prettyCallStack msg.callStack)
-        else ""
+    [ -- format the severity
+      maybe "" (\severity -> "[" <> TLB.fromString (toSeverityString severity) <> "]") logRecord.maybeSeverity
+    , -- format the body
+      TLB.fromText logRecord.body
+    , -- format the call-stack, if any
+      case A.lookup "call-stack" logRecord.attrs of
+        Just (AttrText theCallStack)
+          | maybe False (>= ERROR) logRecord.maybeSeverity ->
+              "\n" <> TLB.fromText theCallStack
+        _otherwise -> ""
     ]
 
 {- |
@@ -112,13 +115,13 @@ severityColor severity
 Internal helper.
 Use a handle with the color set appropriately for the given `Severity`.
 -}
-withSeverityColor :: Severity -> IO.Handle -> (IO.Handle -> IO a) -> IO a
-withSeverityColor severity handle action = do
+withSeverityColor :: Maybe Severity -> IO.Handle -> (IO.Handle -> IO a) -> IO a
+withSeverityColor maybeSeverity handle action = do
   supportsANSI <- hNowSupportsANSI handle
   if not supportsANSI
     then
       action handle
-    else case severityColor severity of
+    else case severityColor =<< maybeSeverity of
       Nothing ->
         action handle
       Just (color, intensity) -> do
@@ -131,26 +134,12 @@ withSeverityColor severity handle action = do
 --------------------------------------------------------------------------------
 
 {- |
-Create a `LogRecord` from a `Message`.
--}
-_logRecord :: Message -> IO LogRecord
-_logRecord msg = do
-  !timeUnixNano <- getTimeUnixNano
-  pure
-    LogRecord
-      { body = msg.body
-      , maybeTimeUnixNano = Just timeUnixNano
-      , maybeSeverity = Just msg.severity
-      , attrs = ["call-stack" ~= show msg.callStack]
-      }
-
-{- |
 Get the current Unix time in nanoseconds.
 
 __Warning:__ This will start overflowing in the year 2554.
 -}
-getTimeUnixNano :: IO Timestamp
-getTimeUnixNano = toNanos <$> getTime Realtime
+_getTimeUnixNano :: IO Timestamp
+_getTimeUnixNano = toNanos <$> getTime Realtime
  where
   -- NOTE: This will overflow if @t.sec > (2^64 - 1) `div` 10^9@,
   --       which means you're running this code in the year 2554.
