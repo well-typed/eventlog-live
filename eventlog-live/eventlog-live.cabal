@@ -128,6 +128,7 @@ library
     , machines              >=0.7.4  && <0.8
     , network               >=3.2.7  && <3.3
     , optparse-applicative  >=0.17   && <0.20
+    , stm                   >=2.5    && <2.6
     , text                  >=1.2    && <2.2
     , transformers          >=0.2    && <0.7
     , unordered-containers  >=0.2.20 && <0.3

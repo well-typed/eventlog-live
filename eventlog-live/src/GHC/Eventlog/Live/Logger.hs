@@ -12,16 +12,23 @@ module GHC.Eventlog.Live.Logger (
   MyTelemetryData (..),
   writeLog,
   writeMetric,
+  filterBySeverity,
   stderrLogger,
   handleLogger,
-  filterBySeverity,
+  chanLogger,
+  chanSource,
 ) where
 
 import Colog.Core.Action (cfilter, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TChan (TChan, readTChan, writeTChan)
 import Control.Exception (bracket_)
+import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Ix (Ix (..))
+import Data.Machine (SourceT, repeatedly, yield)
+import Data.Maybe (isNothing)
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import Data.Text.IO qualified as TIO
@@ -32,9 +39,11 @@ import GHC.Eventlog.Live.Data.Attribute qualified as A
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
+import GHC.RTS.Events (Timestamp)
 import GHC.Stack (callStack, prettyCallStack, withFrozenCallStack)
 import GHC.Stack.Types (HasCallStack)
 import GHC.TypeLits (KnownSymbol)
+import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
 import Prelude hiding (log)
@@ -179,3 +188,57 @@ withSeverityColor maybeSeverity handle action = do
         let setVerbosityColor = hSetSGR handle [SetColor Foreground intensity color]
         let setDefaultColor = hSetSGR handle [SetDefaultColor Foreground]
         bracket_ setVerbosityColor setDefaultColor $ action handle
+
+{- |
+A `Logger` that writes the internal telemetry data to a channel.
+-}
+chanLogger :: TChan MyTelemetryData -> Logger IO
+chanLogger chan =
+  CCA.LogAction $
+    atomically . writeTChan chan <=< addTimeUnixNano
+
+{- |
+A `Souce` that reads the data from a channel.
+-}
+chanSource :: (MonadIO m) => TChan a -> SourceT m a
+chanSource chan = repeatedly $ do
+  a <- liftIO $ atomically $ readTChan chan
+  yield a
+
+{- |
+Add the current Unix timestamp in nanoseconds to telemetry data.
+-}
+addTimeUnixNano :: MyTelemetryData -> IO MyTelemetryData
+addTimeUnixNano myTelemetryData =
+  case myTelemetryData of
+    MyTelemetryData'LogRecord{logRecord = LogRecord{..}}
+      | isNothing maybeTimeUnixNano -> do
+          timeUnixNano <- getTimeUnixNano
+          pure
+            MyTelemetryData'LogRecord
+              { logRecord = LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
+              }
+      | otherwise -> pure myTelemetryData
+    MyTelemetryData'Metric{metricName, metric = Metric{..}}
+      | isNothing maybeTimeUnixNano -> do
+          timeUnixNano <- getTimeUnixNano
+          pure
+            MyTelemetryData'Metric
+              { metricName
+              , metric = Metric{maybeTimeUnixNano = Just timeUnixNano, ..}
+              }
+      | otherwise -> pure myTelemetryData
+
+{- |
+Get the current Unix time in nanoseconds.
+
+__Warning:__ This will start overflowing in the year 2554.
+-}
+getTimeUnixNano :: IO Timestamp
+getTimeUnixNano = toNanos <$> getTime Realtime
+ where
+  -- NOTE: This will overflow if @t.sec > (2^64 - 1) `div` 10^9@,
+  --       which means you're running this code in the year 2554.
+  --       What's that like?
+  toNanos :: TimeSpec -> Timestamp
+  toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec
