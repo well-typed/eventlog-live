@@ -24,7 +24,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.Decoder
 import GHC.Eventlog.Live.Machine.Sink
@@ -41,7 +41,7 @@ Run an event processor with an eventlog socket.
 -}
 runWithEventlogSource ::
   -- | The logging action.
-  LogAction IO ->
+  Logger IO ->
   -- | The eventlog socket handle.
   EventlogSource ->
   -- | The initial timeout in seconds for exponential backoff.
@@ -57,21 +57,21 @@ runWithEventlogSource ::
   -- | The event processor.
   ProcessT IO (Tick Event) Void ->
   IO ()
-runWithEventlogSource logAction eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
-  withEventlogSource logAction timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
+runWithEventlogSource logger eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  withEventlogSource logger timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
     let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
     let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSource
     case maybeOutputFile of
       Nothing ->
         runT_ $
-          fromSocket ~> decodeEventBatch logAction ~> toEventSink
+          fromSocket ~> decodeEventBatch logger ~> toEventSink
       Just outputFile ->
         IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
           runT_ $
             fromSocket
               ~> fanout
                 [ fileSinkBatch outputHandle
-                , decodeEventBatch logAction ~> toEventSink
+                , decodeEventBatch logger ~> toEventSink
                 ]
 
 {- |
@@ -79,7 +79,7 @@ Run an action with a `Handle` to an `EventlogSource`.
 -}
 withEventlogSource ::
   -- | The logging action.
-  LogAction IO ->
+  Logger IO ->
   -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
@@ -88,11 +88,11 @@ withEventlogSource ::
   EventlogSource ->
   (Handle -> IO ()) ->
   IO ()
-withEventlogSource logAction initialTimeoutS timeoutExponent eventlogSource action = do
+withEventlogSource logger initialTimeoutS timeoutExponent eventlogSource action = do
   case eventlogSource of
     EventlogStdin -> do
-      let msg = "Reading eventlog from stdin"
-      logAction <& INFO &> msg
+      writeLog logger INFO $
+        "Reading eventlog from stdin"
       let enter = do
             maybeStdinTextEncoding <- IO.hGetEncoding IO.stdin
             IO.hSetBinaryMode IO.stdin True
@@ -102,14 +102,14 @@ withEventlogSource logAction initialTimeoutS timeoutExponent eventlogSource acti
             IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
       E.bracket enter leave . const . action $ IO.stdin
     EventlogFile eventlogFile -> do
-      let msg = "Reading eventlog from " <> T.pack eventlogFile
-      logAction <& INFO &> msg
+      writeLog logger INFO $
+        "Reading eventlog from " <> T.pack eventlogFile
       IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
         action handle
     EventlogSocketUnix eventlogSocketUnix -> do
-      let msg = "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-      logAction <& INFO &> msg
-      E.bracket (connectRetry logAction initialTimeoutS timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
+      writeLog logger INFO $
+        "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
+      E.bracket (connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
         action handle
 
 {- |
@@ -117,7 +117,7 @@ Connect to an `EventlogSource` with retries and non-randomised exponential backo
 -}
 connectRetry ::
   -- | The logging action.
-  LogAction IO ->
+  Logger IO ->
   -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
@@ -125,7 +125,7 @@ connectRetry ::
   -- | The eventlog socket.
   FilePath ->
   IO Handle
-connectRetry logAction initialTimeoutS timeoutExponent eventlogSocketUnix =
+connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix =
   connectLoop initialTimeoutS
  where
   waitFor :: Double -> IO ()
@@ -134,17 +134,22 @@ connectRetry logAction initialTimeoutS timeoutExponent eventlogSocketUnix =
   connectLoop :: Double -> IO Handle
   connectLoop timeoutS = do
     let connect = do
-          let msg1 = "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-          logAction <& DEBUG &> msg1
+          writeLog logger DEBUG $
+            "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
           handle <- tryConnect eventlogSocketUnix
-          let msg2 = "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
-          logAction <& DEBUG &> msg2
+          writeLog logger DEBUG $
+            "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
           pure handle
     let cleanup (e :: E.IOException) = do
-          let msg1 = "Failed to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix <> ": " <> T.pack (displayException e)
-          logAction <& DEBUG &> msg1
-          let msg2 = "Waiting " <> prettyTimeoutMcs timeoutS <> " to retry..."
-          logAction <& DEBUG &> msg2
+          writeLog logger DEBUG $
+            "Failed to connect on "
+              <> prettyEventlogSocketUnix eventlogSocketUnix
+              <> ": "
+              <> T.pack (displayException e)
+          writeLog logger DEBUG $
+            "Waiting "
+              <> prettyTimeoutMcs timeoutS
+              <> " to retry..."
           waitFor timeoutS
           connectLoop (timeoutS * timeoutExponent)
     E.catch connect cleanup

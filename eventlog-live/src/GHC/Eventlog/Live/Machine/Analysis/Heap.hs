@@ -42,7 +42,7 @@ import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
@@ -196,17 +196,17 @@ Insert a heap profiling sample into the collection.
 insertHeapProfSampleString ::
   forall m.
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   Text ->
   Metric Word64 ->
   HeapProfSampleData ->
   m HeapProfSampleData
-insertHeapProfSampleString logAction heapProfLabel heapProfSample heapProfSamples = do
+insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSamples = do
   let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
       insert heapProfSample' = do
         when (isJust heapProfSample') $ do
           let msg = "Duplicate HeapProfSampleString for " <> heapProfLabel <> " within the same garbage collection pass."
-          logAction <& WARN &> msg
+          writeLog logger WARN $ msg
 
         pure (Just heapProfSample)
   heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSamples.heapProfSampleMap
@@ -286,10 +286,10 @@ and `E.HeapProfSampleEnd` events to maintain an era stack.
 -}
 processHeapProfSampleData ::
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
-processHeapProfSampleData logAction maybeHeapProfBreakdown =
+processHeapProfSampleData logger maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
@@ -336,7 +336,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
           let msg =
                 "Unexpected event HeapProfSampleBegin while previous garbage collection pass was left open.\n\
                 \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
-          lift $ logAction <& WARN &> msg
+          lift $ writeLog logger WARN $ msg
 
           -- Yield the previous sample data anyway.
           yield heapProfSampleData
@@ -359,7 +359,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
                       printf
                         "Eventlog closed era %d, but there is no current era."
                         heapProfSampleEra
-              lift $ logAction <& WARN &> msg
+              lift $ writeLog logger WARN $ msg
               pure heapProfSampleEraStack
             Just (currentEra, heapProfSampleEraStack') -> do
               unless (currentEra == heapProfSampleEra) $ do
@@ -369,7 +369,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
                           "Eventlog closed era %d, but the current era is era %d."
                           heapProfSampleEra
                           currentEra
-                lift $ logAction <& WARN &> msg
+                lift $ writeLog logger WARN $ msg
               pure heapProfSampleEraStack'
         go
           st
@@ -385,7 +385,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
                   \         If your binary was compiled with a GHC version prior to 9.14,\n\
                   \         you must also pass the heap profile type to this executable.\n\
                   \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
-            lift $ logAction <& WARN &> msg
+            lift $ writeLog logger WARN $ msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
@@ -394,7 +394,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
                     printf
                       "Unsupported heap profile breakdown %s"
                       (heapProfBreakdownShow HeapProfBreakdownBiography)
-            lift $ logAction <& WARN &> msg
+            lift $ writeLog logger WARN $ msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
@@ -411,7 +411,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
                   let msg =
                         "Unexpected event HeapProfSampleString out of scope of HeapProfSampleBegin and HeapProfSampleEnd.\n\
                         \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
-                  lift $ logAction <& WARN &> msg
+                  lift $ writeLog logger WARN $ msg
                   pure mempty
                 Just heapProfSampleData ->
                   pure heapProfSampleData
@@ -431,7 +431,7 @@ processHeapProfSampleData logAction maybeHeapProfBreakdown =
                     , "infoTableSrcLoc" ~= fmap (.infoTableSrcLoc) maybeInfoTable
                     ]
             heapProfSampleData' <-
-              lift $ insertHeapProfSampleString logAction heapProfLabel heapProfSample heapProfSampleData
+              lift $ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData
             -- Continue with the updated HeapProfSampleState
             go
               st

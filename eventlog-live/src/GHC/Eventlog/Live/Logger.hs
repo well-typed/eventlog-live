@@ -8,12 +8,10 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Logger (
-  LogAction,
-  Message,
-  (<&),
-  (&>),
-  handleLogAction,
-  stderrLogAction,
+  Logger,
+  writeLog,
+  stderrLogger,
+  handleLogger,
   filterBySeverity,
 ) where
 
@@ -30,12 +28,13 @@ import GHC.Eventlog.Live.Data.Attribute ((~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
 import GHC.RTS.Events (Timestamp)
-import GHC.Stack (CallStack, HasCallStack, callStack, prettyCallStack, withFrozenCallStack)
+import GHC.Stack (CallStack, callStack, prettyCallStack, withFrozenCallStack)
+import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
 
-type LogAction m = CCA.LogAction m Message
+type Logger m = CCA.LogAction m Message
 
 data Message = Message
   { severity :: !Severity
@@ -43,39 +42,39 @@ data Message = Message
   , body :: Text
   }
 
-infix 6 &>
-
 {- |
-Construct a `Message` from a `Severity` and a body.
+Use a `Logger` to log a message with a severity.
 -}
-(&>) :: (HasCallStack) => Severity -> Text -> Message
-(&>) severity body = withFrozenCallStack Message{callStack, ..}
+writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
+writeLog logger severity body =
+  withFrozenCallStack $
+    logger <& Message{callStack, ..}
 
 {- |
 A `LogAction` that writes each `Message` to a `IO.stderr`.
 -}
-stderrLogAction :: LogAction IO
-stderrLogAction = handleLogAction IO.stderr
+stderrLogger :: Logger IO
+stderrLogger = handleLogger IO.stderr
 
 {- |
 A `LogAction` that writes each `Message` to a `IO.Handle`.
 -}
-handleLogAction ::
+handleLogger ::
   IO.Handle ->
-  LogAction IO
-handleLogAction handle = CCA.LogAction $ \msg -> liftIO $ do
+  Logger IO
+handleLogger handle = CCA.LogAction $ \msg -> liftIO $ do
   withSeverityColor msg.severity handle $ \handleWithColor ->
     TIO.hPutStrLn handleWithColor $ formatMessage msg
   IO.hFlush handle
 
 {- |
-Filter a @`LogAction` m `Message`@ by a `Severity`.
+Filter a @`Logger` m@ by a `Severity`.
 -}
 filterBySeverity ::
   (Applicative m) =>
   Severity ->
-  LogAction m ->
-  LogAction m
+  Logger m ->
+  Logger m
 filterBySeverity severityThreshold =
   cfilter ((>= severityThreshold) . (.severity))
 

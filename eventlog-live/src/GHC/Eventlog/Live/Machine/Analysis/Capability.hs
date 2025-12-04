@@ -48,7 +48,7 @@ import GHC.Eventlog.Live.Data.Attribute (AttrValue, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
@@ -173,10 +173,10 @@ the fanout yourself is more efficient.
 processCapabilityUsageSpans ::
   forall m.
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
-processCapabilityUsageSpans logAction =
-  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value logAction
+processCapabilityUsageSpans logger =
+  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value logger
     ~> mapping (either (fmap Left) (fmap Right))
 
 {- |
@@ -190,9 +190,9 @@ processCapabilityUsageSpans' ::
   (s -> Event) ->
   (s -> GCSpan -> t1) ->
   (s -> MutatorSpan -> t2) ->
-  LogAction m ->
+  Logger m ->
   ProcessT m s (Either t1 t2)
-processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan logAction =
+processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan logger =
   -- NOTE:
   -- Combining this fanout with an `Either` is risky, because it
   -- has the potential to lose information if both `processGCSpans`
@@ -200,9 +200,9 @@ processCapabilityUsageSpans' timeUnixNano getEvent setGCSpan setMutatorSpan logA
   -- However, this shouldn't ever happen, since the two processors
   -- process disjoint sets of events.
   fanout
-    [ processGCSpans' timeUnixNano getEvent setGCSpan logAction
+    [ processGCSpans' timeUnixNano getEvent setGCSpan logger
         ~> mapping Left
-    , processMutatorSpans' timeUnixNano getEvent setMutatorSpan logAction
+    , processMutatorSpans' timeUnixNano getEvent setMutatorSpan logger
         ~> mapping Right
     ]
 
@@ -245,7 +245,7 @@ The transition from @GC@ to @Idle@ yields a GC span.
 processGCSpans ::
   forall m.
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime GCSpan)
 processGCSpans =
   processGCSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
@@ -260,9 +260,9 @@ processGCSpans' ::
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> GCSpan -> t) ->
-  LogAction m ->
+  Logger m ->
   ProcessT m s t
-processGCSpans' timeUnixNano getEvent setGCSpan logAction =
+processGCSpans' timeUnixNano getEvent setGCSpan logger =
   liftRouter measure spawn
  where
   getEventTime = (.evTime) . getEvent
@@ -309,7 +309,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan logAction =
                           cap
                           (showEventInfo (getEventInfo i))
                           (showEventInfo (getEventInfo j))
-                lift $ logAction <& WARN &> msg
+                lift $ writeLog logger WARN $ msg
                 -- ...continue with the previous event.
                 go (Just i)
           -- If there was no previous event, then...
@@ -341,7 +341,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan logAction =
                       cap
                       (maybe "?" (showEventInfo . getEventInfo) mi)
                       (showEventInfo (getEventInfo j))
-            lift $ logAction <& WARN &> msg
+            lift $ writeLog logger WARN $ msg
             -- ...continue with the previous event.
             go mi
         -- If the next event is any other event, ignore it.
@@ -398,7 +398,7 @@ is more efficient.
 processMutatorSpans ::
   forall m.
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime MutatorSpan)
 processMutatorSpans =
   processMutatorSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
@@ -413,10 +413,10 @@ processMutatorSpans' ::
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> MutatorSpan -> t) ->
-  LogAction m ->
+  Logger m ->
   ProcessT m s t
-processMutatorSpans' timeUnixNano getEvent setMutatorSpan logAction =
-  processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logAction ~> asParts
+processMutatorSpans' timeUnixNano getEvent setMutatorSpan logger =
+  processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger ~> asParts
  where
   setThreadStateSpan :: s -> ThreadStateSpan -> Maybe t
   setThreadStateSpan s threadStateSpan =
