@@ -35,7 +35,7 @@ import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Data.Severity (Severity)
 import GHC.Eventlog.Live.Data.Span
-import GHC.Eventlog.Live.Logger (LogAction, filterBySeverity, stderrLogAction)
+import GHC.Eventlog.Live.Logger (Logger, filterBySeverity, stderrLogger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability
 import GHC.Eventlog.Live.Machine.Analysis.Heap
 import GHC.Eventlog.Live.Machine.Analysis.Thread
@@ -62,7 +62,7 @@ main = do
   Options{..} <- O.execParser optionsInfo
 
   -- Construct logging action
-  let logAction = filterBySeverity severityThreshold stderrLogAction
+  let logger = filterBySeverity severityThreshold stderrLogger
 
   -- Convert the eventlog flush interval to milliseconds
   let batchIntervalMs = round (eventlogFlushIntervalS * 1_000)
@@ -72,8 +72,8 @@ main = do
           ~> sortByTick (.value.evTime)
           ~> liftTick
             ( fanout
-                [ processThreadEvents logAction
-                , processHeapEvents logAction maybeHeapProfBreakdown
+                [ processThreadEvents logger
+                , processHeapEvents logger maybeHeapProfBreakdown
                 ]
             )
           ~> batchByTick
@@ -81,7 +81,7 @@ main = do
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
   runWithEventlogSource
-    logAction
+    logger
     eventlogSource
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
@@ -98,15 +98,15 @@ data OneOf a b c = A !a | B !b | C !c
 
 processThreadEvents ::
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
-processThreadEvents logAction =
+processThreadEvents logger =
   fanout
     [ fanout
         [ -- GCSpan
-          processGCSpans logAction
+          processGCSpans logger
             ~> mapping (D.singleton . A)
-        , processThreadStateSpans' tryGetTimeUnixNano (.value) setWithStartTime'value logAction
+        , processThreadStateSpans' tryGetTimeUnixNano (.value) setWithStartTime'value logger
             ~> fanout
               [ -- MutatorSpan
                 asMutatorSpans' (.value) setWithStartTime'value
@@ -162,7 +162,7 @@ rightToMaybe = either (const Nothing) Just
 
 processHeapEvents ::
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) (DList (I.Line TimeSpec))
 processHeapEvents verbosity maybeHeapProfBreakdown =
