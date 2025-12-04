@@ -33,7 +33,7 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), Timestamp)
@@ -146,7 +146,7 @@ with a `E.StopThread` event with the `ThreadFinished` status.
 -}
 processThreadStateSpans ::
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   ProcessT m (WithStartTime Event) ThreadStateSpan
 processThreadStateSpans =
   processThreadStateSpans' tryGetTimeUnixNano (.value) (const id)
@@ -161,9 +161,9 @@ processThreadStateSpans' ::
   (s -> Maybe Timestamp) ->
   (s -> Event) ->
   (s -> ThreadStateSpan -> t) ->
-  LogAction m ->
+  Logger m ->
   ProcessT m s t
-processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logAction =
+processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
   liftRouter measure spawn
  where
   getEventTime = (.evTime) . getEvent
@@ -267,7 +267,7 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logAction =
                         \but should not happen multiple times per thread."
                         thread
                         (showEventInfo (getEventInfo j))
-              lift $ logAction <& WARN &> msg
+              lift $ writeLog logger WARN $ msg
 
               --
               -- This case may trigger for any event that isn't `E.RunThread`

@@ -58,7 +58,7 @@ import Data.Semigroup (Max (..))
 import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import Text.Printf (printf)
 
 {- $setup
@@ -694,22 +694,22 @@ a warning that directs the user to check that the @-l@ flag was set correctly.
 -}
 validateInput ::
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   Int ->
   ProcessT m (Tick a) x
-validateInput logAction ticks = construct $ start ticks
+validateInput logger ticks = construct $ start ticks
  where
   start remaining
     | remaining <= 0 = do
         let msg = printf "No input after %d ticks. Did you pass -l to the GHC RTS?" ticks
-        lift $ logAction <& WARN &> T.pack msg
+        lift $ writeLog logger WARN $ T.pack msg
         pure ()
     | otherwise = do
         let msg = "Waiting for " <> T.pack (show remaining) <> " more ticks before showing input warning."
-        lift $ logAction <& DEBUG &> msg
+        lift $ writeLog logger DEBUG $ msg
         await >>= \case
           Item{} ->
-            lift $ logAction <& DEBUG &> "Received item. Cancelled input warning."
+            lift $ writeLog logger DEBUG $ "Received item. Cancelled input warning."
           Tick ->
             start (pred remaining)
 
@@ -722,10 +722,10 @@ set correctly.
 -}
 validateOrder ::
   (Monad m, Ord k, Show a) =>
-  LogAction m ->
+  Logger m ->
   (a -> k) ->
   ProcessT m a x
-validateOrder logAction timestamp = construct $ go Nothing
+validateOrder logger timestamp = construct $ go Nothing
  where
   go maybeOld =
     await >>= \new ->
@@ -736,7 +736,7 @@ validateOrder logAction timestamp = construct $ go Nothing
                     "Encountered two out-of-order inputs.\n\
                     \Did you pass --eventlog-flush-interval=SECONDS to the GHC RTS?\n\
                     \Did you pass the same flag to this program?"
-              lift $ logAction <& ERROR &> T.pack msg1
+              lift $ writeLog logger ERROR $ T.pack msg1
               let msg2 =
                     printf
                       "Out-of-order inputs:\n\
@@ -744,7 +744,7 @@ validateOrder logAction timestamp = construct $ go Nothing
                       \- %s"
                       (show old)
                       (show new)
-              lift $ logAction <& DEBUG &> T.pack msg2
+              lift $ writeLog logger DEBUG $ T.pack msg2
         _otherwise -> do
           go (Just new)
 
@@ -753,9 +753,9 @@ This machine validates that ticks are unique and increasing.
 -}
 validateTicks ::
   (Monad m) =>
-  LogAction m ->
+  Logger m ->
   ProcessT m (Tick a) (Tick a)
-validateTicks logAction = construct $ go Nothing
+validateTicks logger = construct $ go Nothing
  where
   go maybeTick =
     await >>= \case
@@ -766,8 +766,8 @@ validateTicks logAction = construct $ go Nothing
           tick
             | tick' == tick + 1 -> do
                 let msg = "Saw tick " <> T.pack (show tick) <> "."
-                lift $ logAction <& TRACE &> msg
+                lift $ writeLog logger TRACE $ msg
             | otherwise -> do
                 let msg = "Encountered non-increasing ticks " <> T.pack (show tick) <> " and " <> T.pack (show tick') <> "."
-                lift $ logAction <& ERROR &> msg
+                lift $ writeLog logger ERROR $ msg
         go (Just tick')
