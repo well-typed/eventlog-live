@@ -87,7 +87,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.YAML qualified as YAML
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (LogAction, (&>), (<&))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Otelcol.Config.Default (defaultConfig, getDefault)
 import GHC.Eventlog.Live.Otelcol.Config.Types
 import GHC.Records (HasField)
@@ -98,26 +98,25 @@ import System.Exit (exitFailure)
 Read a `Config` from a configuration file.
 -}
 readConfigFile ::
-  LogAction IO ->
+  Logger IO ->
   FilePath ->
   IO Config
-readConfigFile logAction filePath =
-  readConfig logAction =<< liftIO (BSL.readFile filePath)
+readConfigFile logger filePath =
+  readConfig logger =<< liftIO (BSL.readFile filePath)
 
 {- |
 Read a `Config` from a `BSL.ByteString`.
 -}
 readConfig ::
-  LogAction IO ->
+  Logger IO ->
   BSL.ByteString ->
   IO Config
-readConfig logAction fileContents = do
+readConfig logger fileContents = do
   case YAML.decode1 fileContents of
     Left (pos, errorMessage) -> do
-      let msg =
-            T.pack $
-              YAML.prettyPosWithSource pos fileContents " error" <> errorMessage
-      logAction <& FATAL &> msg
+      writeLog logger FATAL $
+        T.pack $
+          YAML.prettyPosWithSource pos fileContents " error" <> errorMessage
       liftIO exitFailure
     Right config -> pure config
 
