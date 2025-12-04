@@ -9,7 +9,9 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Logger (
   Logger,
+  MyTelemetryData (..),
   writeLog,
+  writeMetric,
   stderrLogger,
   handleLogger,
   filterBySeverity,
@@ -20,6 +22,7 @@ import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Exception (bracket_)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Ix (Ix (..))
+import Data.Proxy (Proxy)
 import Data.Text (Text)
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
@@ -27,15 +30,25 @@ import Data.Text.Lazy.Builder qualified as TLB
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Attribute qualified as A
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
-import GHC.RTS.Events (Timestamp)
 import GHC.Stack (callStack, prettyCallStack, withFrozenCallStack)
 import GHC.Stack.Types (HasCallStack)
-import System.Clock (Clock (..), TimeSpec (..), getTime)
+import GHC.TypeLits (KnownSymbol)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
+import Prelude hiding (log)
 
-type Logger m = CCA.LogAction m LogRecord
+type Logger m = CCA.LogAction m MyTelemetryData
+
+{- |
+The type of internal telemetry data.
+-}
+data MyTelemetryData
+  = MyTelemetryData'LogRecord {logRecord :: !LogRecord}
+  | forall metricName.
+    (KnownSymbol metricName, KnownMetric metricName) =>
+    MyTelemetryData'Metric {metricName :: !(Proxy metricName), metric :: !(Metric (MetricType metricName))}
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -44,29 +57,62 @@ writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity body =
   withFrozenCallStack $
     logger
-      <& LogRecord
-        { body
-        , maybeSeverity = Just severity
-        , maybeTimeUnixNano = Nothing
-        , attrs = ["call-stack" ~= prettyCallStack callStack]
+      <& MyTelemetryData'LogRecord
+        { logRecord =
+            LogRecord
+              { body
+              , maybeSeverity = Just severity
+              , maybeTimeUnixNano = Nothing
+              , attrs = ["call-stack" ~= prettyCallStack callStack]
+              }
         }
 
 {- |
-A `LogAction` that writes each `Message` to a `IO.stderr`.
+Use a `Logger` to log an internal metric.
+-}
+writeMetric ::
+  ( KnownSymbol metricName
+  , KnownMetric metricName
+  ) =>
+  Logger m ->
+  Proxy metricName ->
+  MetricType metricName ->
+  m ()
+writeMetric logger metricName value =
+  logger
+    <& MyTelemetryData'Metric
+      { metricName
+      , metric =
+          Metric
+            { value
+            , maybeTimeUnixNano = Nothing
+            , maybeStartTimeUnixNano = Nothing
+            , attrs = []
+            }
+      }
+
+{- |
+A `Logger` that writes each `LogRecord` to a `IO.stderr` and ignores all other telemetry data.
+
+__TODO:__ Support the remaining telemetry data.
 -}
 stderrLogger :: Logger IO
 stderrLogger = handleLogger IO.stderr
 
 {- |
-A `LogAction` that writes each `Message` to a `IO.Handle`.
+A `Logger` that writes each `LogRecord` to a `IO.Handle` and ignores all other telemetry data.
+
+__TODO:__ Support the remaining telemetry data.
 -}
 handleLogger ::
   IO.Handle ->
   Logger IO
-handleLogger handle = CCA.LogAction $ \logRecord -> liftIO $ do
-  withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
-    TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
-  IO.hFlush handle
+handleLogger handle = CCA.LogAction $ \case
+  MyTelemetryData'LogRecord logRecord -> liftIO $ do
+    withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
+      TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
+    IO.hFlush handle
+  MyTelemetryData'Metric{} -> pure ()
 
 {- |
 Filter a @`Logger` m@ by a `Severity`.
@@ -77,7 +123,12 @@ filterBySeverity ::
   Logger m ->
   Logger m
 filterBySeverity severityThreshold =
-  cfilter (maybe False (>= severityThreshold) . (.maybeSeverity))
+  cfilter severityFilter
+ where
+  severityFilter = \case
+    MyTelemetryData'LogRecord{..} ->
+      maybe False (>= severityThreshold) logRecord.maybeSeverity
+    _otherwise -> True
 
 {- |
 Internal helper.
@@ -128,21 +179,3 @@ withSeverityColor maybeSeverity handle action = do
         let setVerbosityColor = hSetSGR handle [SetColor Foreground intensity color]
         let setDefaultColor = hSetSGR handle [SetDefaultColor Foreground]
         bracket_ setVerbosityColor setDefaultColor $ action handle
-
---------------------------------------------------------------------------------
--- Internal helpers.
---------------------------------------------------------------------------------
-
-{- |
-Get the current Unix time in nanoseconds.
-
-__Warning:__ This will start overflowing in the year 2554.
--}
-_getTimeUnixNano :: IO Timestamp
-_getTimeUnixNano = toNanos <$> getTime Realtime
- where
-  -- NOTE: This will overflow if @t.sec > (2^64 - 1) `div` 10^9@,
-  --       which means you're running this code in the year 2554.
-  --       What's that like?
-  toNanos :: TimeSpec -> Timestamp
-  toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec
