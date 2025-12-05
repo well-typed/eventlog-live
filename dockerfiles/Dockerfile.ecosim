@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # To build this image, run:
-# docker build --tag well-typed/eventlog-live-example-dumper:0.1.0.0 --file ./dockerfiles/Dockerfile.dumper .
+# docker build --tag well-typed/eventlog-live-example-ecosim:0.1.0.0 --file ./dockerfiles/Dockerfile.ecosim .
 
 # Use the Haskell image with GHC 9.10
 # See: https://hub.docker.com/_/haskell
@@ -15,12 +15,12 @@ ENV GHC_EVENTLOG_SOCKET=${GHC_EVENTLOG_SOCKET}
 WORKDIR "/eventlog-live"
 COPY --parents \
   "./eventlog-live/" \
-  "./examples/dumper/" \
+  "./examples/ecosim/" \
   "/eventlog-live/"
 
 # Create cabal.project file
 COPY <<EOF /eventlog-live/cabal.project
-packages: examples/dumper
+packages: examples/ecosim
 packages: eventlog-live
 
 source-repository-package
@@ -28,9 +28,20 @@ source-repository-package
     location: https://github.com/well-typed/ghc-stack-profiler.git
     tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
     subdir: ghc-stack-profiler-core
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/ghc-stack-profiler.git
+    tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+    subdir: ghc-stack-profiler
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/ghc-stack-annotations.git
+    tag: 0667af1cec1b20ba7fed4a5de675afe81a8ae07d
 EOF
 
-# Build dumper
+# Build ecosim
 RUN <<EOF
 cabal update
 mkdir "/eventlog-live/bin"
@@ -38,12 +49,12 @@ cabal install \
     --overwrite-policy=always \
     --install-method=copy \
     --installdir="/eventlog-live/bin" \
-    dumper
+    ecosim
 EOF
 
-# Copy dumper to output stage
+# Copy ecosim to output stage
 FROM debian:bullseye-slim AS output
-COPY --from=build "/eventlog-live/bin/dumper" "/bin/dumper"
+COPY --from=build "/eventlog-live/bin/ecosim" "/bin/ecosim"
 
 # Run command
-CMD sleep 5 && dumper --unix ${GHC_EVENTLOG_SOCKET} --interval=0
+CMD sleep 5 && ecosim --unix ${GHC_EVENTLOG_SOCKET} --interval=0

@@ -21,6 +21,10 @@ exporters:
       insecure: true
   prometheus:
     endpoint: "0.0.0.0:9090"
+  otlp/pyroscope:
+    endpoint: "pyroscope:4040"
+    tls:
+      insecure: true
 
 service:
   pipelines:
@@ -33,3 +37,6 @@ service:
     traces:
       receivers: [otlp]
       exporters: [debug, otlp/tempo]
+    profiles:
+      receivers: [otlp]
+      exporters: [debug, otlp/pyroscope]

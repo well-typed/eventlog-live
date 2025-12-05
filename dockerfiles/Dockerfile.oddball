@@ -16,6 +16,17 @@ COPY --parents \
     "./examples/oddball/" \
     "/eventlog-live/"
 
+# Create cabal.project file
+COPY <<EOF /eventlog-live/examples/oddball/cabal.project
+packages: .
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/ghc-stack-profiler.git
+    tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+    subdir: ghc-stack-profiler-core
+EOF
+
 # Build oddball
 RUN <<EOF
 cabal update
