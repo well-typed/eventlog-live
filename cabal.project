@@ -13,6 +13,9 @@ packages: examples/oddball
 packages: examples/parfib
 packages: examples/spectral-norm
 
+if impl(ghc >=9.10)
+  packages: examples/ecosim
+
 source-repository-package
   type:     git
   location: https://github.com/well-typed/eventlog-socket
@@ -36,3 +39,43 @@ if impl(ghc >=9.14)
     , base
     , ghc-bignum
     , template-haskell
+
+-- 2025-11-27:
+-- relax constraints on base for `proto` packages
+if impl(ghc >=9.12)
+  allow-newer:
+    , proto:base
+    , proto-lens:base
+    , proto-lens:ghc-prim
+    , proto-lens-runtime:base
+
+-- 2025-11-27:
+-- relax constraints `containers` package.
+-- dependency added via `ghc-stack-profiler`
+if impl(ghc >=9.14)
+  allow-newer:
+    , containers
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/ghc-stack-profiler.git
+    tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+    subdir: ghc-stack-profiler-core
+
+source-repository-package
+    type: git
+    location: https://github.com/fendor/hs-opentelemetry.git
+    tag: bc65d8a2e7d31f51226590d22af2a531b9363e2b
+    subdir: otlp
+
+if impl(ghc >=9.10)
+  source-repository-package
+      type: git
+      location: https://github.com/well-typed/ghc-stack-profiler.git
+      tag: 2fb2410b1abffa6be7b1d5e993ae089f5a61d2c9
+      subdir: ghc-stack-profiler
+
+  source-repository-package
+      type: git
+      location: https://github.com/well-typed/ghc-stack-annotations.git
+      tag: 0667af1cec1b20ba7fed4a5de675afe81a8ae07d

@@ -30,6 +30,7 @@ services:
       - "--eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock"
       - "-hT"
       - "--otelcol-host=otelcol"
+      - "--eventlog-flush-interval=1"
 
   grafana:
     # container_name: grafana
@@ -41,11 +42,14 @@ services:
       interval: 1m
       timeout: 10s
       retries: 5
+    environment:
+      - GF_PLUGINS_PREINSTALL_SYNC=grafana-pyroscope-app
     volumes:
       - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
       - "./config/grafana-dashboards-eventlog-heap.json:/var/lib/grafana/dashboards/eventlog-heap.json"
       - "./config/grafana-dashboards-eventlog-logs.json:/var/lib/grafana/dashboards/eventlog-logs.json"
+      - "./config/grafana-dashboards-eventlog-stack-profile.json:/var/lib/grafana/dashboards/eventlog-stack-profile.json"
       - "./config/grafana-dashboards-eventlog-threads.json:/var/lib/grafana/dashboards/eventlog-threads.json"
 
   loki:
@@ -70,6 +74,7 @@ services:
         condition: "service_started"
     command:
       - "--config=/etc/otelcol/config.yaml"
+      - "--feature-gates=service.profilesSupport"
     volumes:
       - "./config/otelcol.yaml:/etc/otelcol/config.yaml"
     ports:
@@ -86,6 +91,15 @@ services:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
       - "9090:9090" # Prometheus
+
+  pyroscope:
+    # container_name: pyroscope
+    image: grafana/pyroscope:1.16.0
+    command: ["-config.file=/etc/pyroscope.yaml"]
+    volumes:
+      - "./config/pyroscope.yaml:/etc/pyroscope.yaml"
+    ports:
+      - 4040:4040 # Pyroscope
 
   tempo:
     # container_name: tempo

@@ -11,7 +11,8 @@ module GHC.Eventlog.Live.Otelcol.Stats (
   eventCountTick,
   Stat (..),
   processStats,
-) where
+)
+where
 
 import Control.Exception (Exception (..))
 import Control.Monad (when)
@@ -30,6 +31,7 @@ import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (ExportLogsResult (..))
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (ExportMetricsResult (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Profiles (ExportProfileResult (..))
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (ExportTraceResult (..))
 import GHC.Eventlog.Live.Verbosity (Verbosity)
 import GHC.Records (HasField (..))
@@ -66,6 +68,7 @@ data Stat
   | ExportLogsResultStat !ExportLogsResult
   | ExportMetricsResultStat !ExportMetricsResult
   | ExportTraceResultStat !ExportTraceResult
+  | ExportProfileResultStat !ExportProfileResult
   deriving (Show)
 
 {- |
@@ -80,6 +83,8 @@ data Stats = Stats
   , rejectedDataPoints :: Row
   , exportedSpans :: Row
   , rejectedSpans :: Row
+  , exportedProfiles :: Row
+  , rejectedProfiles :: Row
   , errors :: !(Strict.List Text)
   , displayedLines :: !(First Int)
   }
@@ -146,6 +151,8 @@ unionStats windowSize new old = Stats{..}
   rejectedDataPoints = unionRow windowSize new.rejectedDataPoints old.rejectedDataPoints
   exportedSpans = unionRow windowSize new.exportedSpans old.exportedSpans
   rejectedSpans = unionRow windowSize new.rejectedSpans old.rejectedSpans
+  exportedProfiles = unionRow windowSize new.exportedProfiles old.exportedProfiles
+  rejectedProfiles = unionRow windowSize new.rejectedProfiles old.rejectedProfiles
   errors = Strict.take windowSize (new.errors <> old.errors)
   displayedLines = new.displayedLines <> old.displayedLines
 
@@ -194,6 +201,18 @@ fromExportTraceResult exportTraceResult =
 
 {- |
 Internal helper.
+Construct a `Stats` object from an `ExportProfileResult`.
+-}
+fromExportProfileResult :: ExportProfileResult -> Stats
+fromExportProfileResult exportProfileResult =
+  def
+    { exportedProfiles = singletonRow exportProfileResult.exportedProfiles
+    , rejectedProfiles = singletonRow exportProfileResult.rejectedProfiles
+    , errors = maybeToStrictList $ T.pack . displayException <$> exportProfileResult.maybeSomeException
+    }
+
+{- |
+Internal helper.
 Construct a singleton `Strict.List`.
 -}
 singletonStrictList :: a -> Strict.List a
@@ -233,6 +252,8 @@ instance Default Stats where
     rejectedDataPoints = def
     exportedSpans = def
     rejectedSpans = def
+    exportedProfiles = def
+    rejectedProfiles = def
     errors = mempty
     displayedLines = First Nothing
 
@@ -274,6 +295,7 @@ updateStats windowSize old = \case
   ExportLogsResultStat exportLogsResults -> unionStats windowSize (fromExportLogsResult exportLogsResults) old
   ExportMetricsResultStat exportMetricsResult -> unionStats windowSize (fromExportMetricsResult exportMetricsResult) old
   ExportTraceResultStat exportTraceResult -> unionStats windowSize (fromExportTraceResult exportTraceResult) old
+  ExportProfileResultStat exportProfileResult -> unionStats windowSize (fromExportProfileResult exportProfileResult) old
 
 {- |
 Internal helper.
@@ -322,6 +344,18 @@ logStat verbosity = \case
     -- Log exception.
     for_ exportTraceResult.maybeSomeException $ \someException -> do
       logError verbosity . T.pack $ displayException someException
+  ExportProfileResultStat exportProfileResult -> do
+    -- Log exported events.
+    when (exportProfileResult.exportedProfiles > 0) $
+      logDebug verbosity $
+        "Exported " <> showText exportProfileResult.exportedProfiles <> " profiles."
+    -- Log rejected events.
+    when (exportProfileResult.rejectedProfiles > 0) $
+      logError verbosity $
+        "Rejected " <> showText exportProfileResult.rejectedProfiles <> " profiles."
+    -- Log exception.
+    for_ exportProfileResult.maybeSomeException $ \someException -> do
+      logError verbosity . T.pack $ displayException someException
 
 {- |
 Internal helper.
@@ -365,6 +399,8 @@ displayStats verbosity eventlogFlushIntervalS stats = do
         , mkRow Nothing (Just "Rejected") stats.rejectedDataPoints
         , mkRow (Just "Traces") (Just "Exported") stats.exportedSpans
         , mkRow Nothing (Just "Rejected") stats.rejectedSpans
+        , mkRow (Just "Profile") (Just "Exported") stats.exportedProfiles
+        , mkRow Nothing (Just "Rejected") stats.rejectedProfiles
         ]
   let tSpec :: TBL.TableSpec TBL.LineStyle TBL.LineStyle String (Maybe Text) (Maybe Text)
       tSpec = TBL.columnHeaderTableS cSpec TBL.unicodeS hSpec rSpec
