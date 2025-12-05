@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Profiles.Dictionary
+Module      : GHC.Eventlog.Live.Otelcol.Processor.Profiles
 Description : Profile Processors for OTLP.
 Stability   : experimental
 Portability : portable
@@ -80,21 +80,34 @@ asSample six stackData = do
         ]
 
   sampleThreadKeyStrId <- ProfDictionary.getString "thread"
-  sampleThreadUnitStrId <- ProfDictionary.getString "Number"
+  sampleCapKeyStrId <- ProfDictionary.getString "capability"
+  sampleNumberUnitStrId <- ProfDictionary.getString "Number"
 
   threadAttrId <-
     ProfDictionary.getAttribute $
       messageWith @OP.KeyValueAndUnit
         [ OP.keyStrindex .~ sampleThreadKeyStrId
-        , OP.unitStrindex .~ sampleThreadUnitStrId
-        , OP.value .~ messageWith [OC.intValue .~ fromIntegral stackData.threadId]
+        , OP.unitStrindex .~ sampleNumberUnitStrId
+        , OP.value .~ messageWith [OC.intValue .~ maybe 0 (fromIntegral . (.value)) stackData.threadId]
+        ]
+
+  capAttrId <-
+    ProfDictionary.getAttribute $
+      messageWith @OP.KeyValueAndUnit
+        [ OP.keyStrindex .~ sampleCapKeyStrId
+        , OP.unitStrindex .~ sampleNumberUnitStrId
+        , OP.value .~ messageWith [OC.intValue .~ fromIntegral stackData.capabilityId.value]
         ]
 
   pure $
     messageWith
       [ OP.values .~ [1]
       , OP.stackIndex .~ s
-      , OP.attributeIndices .~ [six, threadAttrId]
+      , OP.attributeIndices
+          .~ [ six
+             , threadAttrId
+             , capAttrId
+             ]
       ]
  where
   toIndex :: M.StackItemData -> State ProfileDictionary SymbolIndex
@@ -102,6 +115,7 @@ asSample six stackData = do
     M.IpeData infoTable -> getLocationIndexForInfoTable infoTable
     M.UserMessageData message -> getLocationIndexForText message
     M.SourceLocationData srcLoc -> getLocationIndexForSourceLocation srcLoc
+    M.CostCentreData costCentre -> getLocationIndexForCostCentre costCentre
 
 getLocationIndexForSourceLocation :: Profiler.SourceLocation -> State ProfileDictionary SymbolIndex
 getLocationIndexForSourceLocation srcLoc = do
@@ -172,6 +186,36 @@ getLocationIndexForInfoTable infoTable = do
         [ OP.nameStrindex .~ infoTableFuncNameId
         , OP.systemNameStrindex .~ infoTableNameId
         , OP.filenameStrindex .~ infoTableSrcLocId -- 0 means unset
+        , OP.startLine .~ 0 -- 0 means unset
+        ]
+
+  let line :: OP.Line
+      line =
+        messageWith
+          [ OP.functionIndex .~ funcIdx
+          , OP.line .~ 0 -- 0 means unset
+          , OP.column .~ 0 -- 0 means unset
+          ]
+
+  ProfDictionary.getLocation $
+    messageWith
+      [ OP.lines .~ [line]
+      , OP.address .~ 0 -- 0 means unset
+      ]
+
+getLocationIndexForCostCentre :: M.CostCentre -> State ProfileDictionary SymbolIndex
+getLocationIndexForCostCentre costCentre = do
+  let label = costCentre.costCentreModule <> ":" <> costCentre.costCentreLabel
+  costCentreFuncNameId <- ProfDictionary.getString label
+  -- tyDesc <- getText infoTable.infoTableTyDesc
+  --
+  costCentreSrcLocId <- ProfDictionary.getString costCentre.costCentreSrcLoc
+  funcIdx <-
+    ProfDictionary.getFunction $
+      messageWith
+        [ OP.nameStrindex .~ costCentreFuncNameId
+        , OP.systemNameStrindex .~ costCentreFuncNameId
+        , OP.filenameStrindex .~ costCentreSrcLocId -- 0 means unset
         , OP.startLine .~ 0 -- 0 means unset
         ]
 
