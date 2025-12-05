@@ -1,8 +1,13 @@
 module GHC.Eventlog.Live.Machine.Analysis.Profile (
   StackProfSampleData (..),
+  ThreadId (..),
+  CapabilityId (..),
   CallStackData (..),
   StackItemData (..),
+  CostCentreId (..),
+  CostCentre (..),
   processStackProfSampleData,
+  processCosterCentreProfSampleData,
   stackProfSamples,
 )
 where
@@ -14,6 +19,7 @@ import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HashMap
 import Data.HashMap.Strict qualified as M
+import Data.Hashable qualified as Hashable
 import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
@@ -21,7 +27,8 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Word (Word64)
+import Data.Vector.Unboxed qualified as UVector
+import Data.Word
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Logger (Logger, writeException)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (InfoTable (..), InfoTablePtr (..), metric)
@@ -29,17 +36,22 @@ import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
-import GHC.Stack.Profiler.Core.Eventlog as SPCE
-import GHC.Stack.Profiler.Core.SymbolTable qualified as SPCT
-import GHC.Stack.Profiler.Core.ThreadSample as SPCT
+import GHC.Stack.Profiler.Core.Eventlog qualified as SPCE
+import GHC.Stack.Profiler.Core.SymbolTable qualified as SPCS
+import GHC.Stack.Profiler.Core.ThreadSample qualified as SPCT
 
 data StackProfSampleState = StackProfSampleState
   { infoTableMap :: !(HashMap InfoTablePtr InfoTable)
   , -- TODO: this should probably be a maybe?
     -- We could report when interleaved messages are present
-    stackProfSampleChunk :: ![BinaryCallStackMessage]
-  , stackProfSymbolTableReader :: !SPCT.IntMapTable
+    stackProfSampleChunk :: ![SPCE.BinaryCallStackMessage]
+  , stackProfSymbolTableReader :: !SPCS.IntMapTable
   , maybeStackProfSampleData :: !(Maybe StackProfSampleData)
+  }
+  deriving (Generic)
+
+newtype CostCentreProfSampleState = CostCentreProfSampleState
+  { costCentreMap :: HashMap CostCentreId CostCentre
   }
   deriving (Generic)
 
@@ -48,21 +60,108 @@ newtype StackProfSampleData = StackProfSampleData
   }
   deriving (Show, Generic)
 
+newtype ThreadId = ThreadId
+  { value :: Word64
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+newtype CapabilityId = CapabilityId
+  { value :: Word64
+  }
+  deriving (Show, Eq, Ord, Generic)
+
 data CallStackData = CallStackData
-  { threadId :: !Word64
+  { threadId :: !(Maybe ThreadId)
   , capabilityId :: !CapabilityId
   , stack :: [StackItemData]
   }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Ord, Generic)
+
+newtype CostCentreId = CostCentreId
+  { id :: Word64
+  }
+  deriving (Show, Eq, Ord, Generic)
+  deriving newtype (Hashable.Hashable)
+
+data CostCentre = CostCentre
+  { costCentreId :: !CostCentreId
+  , costCentreLabel :: !Text
+  , costCentreModule :: !Text
+  , costCentreSrcLoc :: !Text
+  -- , heapProfFlags :: !HeapProfFlags
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 data StackItemData
   = IpeData !InfoTable
   | UserMessageData !Text
-  | SourceLocationData !SourceLocation
-  deriving (Show, Generic)
+  | SourceLocationData !SPCT.SourceLocation
+  | CostCentreData !CostCentre
+  deriving (Show, Eq, Ord, Generic)
 
 shouldTrackInfoTableMap :: Bool
 shouldTrackInfoTableMap = True
+
+shouldTrackCostCentreMap :: Bool
+shouldTrackCostCentreMap = True
+
+-- ----------------------------------------------------------------------------
+-- `cost centre stack` processor
+-- ----------------------------------------------------------------------------
+
+{- |
+This machine processes `E.UserBinaryMessage` events into metrics.
+Furthermore, it processes the `E.InfoTableProv` events to
+-}
+processCosterCentreProfSampleData ::
+  (MonadIO m) =>
+  Logger m ->
+  ProcessT m (WithStartTime Event) StackProfSampleData
+processCosterCentreProfSampleData _logger =
+  construct $
+    go
+      CostCentreProfSampleState
+        { costCentreMap = mempty
+        }
+ where
+  go st = do
+    await >>= \i -> case i.value.evSpec of
+      -- Announces an info table entry.
+      E.HeapProfCostCentre{..}
+        | shouldTrackCostCentreMap -> do
+            let costCentreId = CostCentreId $ fromIntegral heapProfCostCentreId
+                costCentre =
+                  CostCentre
+                    { costCentreId = costCentreId
+                    , costCentreLabel = heapProfLabel
+                    , costCentreModule = heapProfModule
+                    , costCentreSrcLoc = heapProfSrcLoc
+                    }
+            go st{costCentreMap = M.insert costCentreId costCentre st.costCentreMap}
+      E.ProfSampleCostCentre{..} -> do
+        let lookupCostCentreStackById :: Word32 -> Maybe StackItemData
+            lookupCostCentreStackById costCentreId32 =
+              CostCentreData <$> HashMap.lookup (CostCentreId $ fromIntegral costCentreId32) st.costCentreMap
+
+            callStackMessage =
+              CallStackData
+                { threadId = Nothing
+                , capabilityId = CapabilityId $ fromIntegral profCap
+                , stack =
+                    -- TODO: log if we are encountering unknown cost centre ids
+                    mapMaybe lookupCostCentreStackById (UVector.toList profCcsStack)
+                }
+
+            stackProfSample =
+              metric i callStackMessage mempty
+
+        yield $ StackProfSampleData stackProfSample
+        go st
+      _otherwise -> go st
+
+-- ----------------------------------------------------------------------------
+-- `ghc-stack-profiler` processor
+-- ----------------------------------------------------------------------------
 
 {- |
 This machine processes `E.UserBinaryMessage` events into metrics.
@@ -78,7 +177,7 @@ processStackProfSampleData logger =
       StackProfSampleState
         { infoTableMap = mempty
         , stackProfSampleChunk = mempty
-        , stackProfSymbolTableReader = SPCT.emptyIntMapTable
+        , stackProfSymbolTableReader = SPCS.emptyIntMapTable
         , maybeStackProfSampleData = Nothing
         }
  where
@@ -100,31 +199,31 @@ processStackProfSampleData logger =
                     }
             go st{infoTableMap = M.insert infoTablePtr infoTable st.infoTableMap}
       E.UserBinaryMessage{payload} ->
-        case deserializeEventlogMessage $ LBS.fromStrict payload of
+        case SPCT.deserializeEventlogMessage $ LBS.fromStrict payload of
           Left _err ->
             go st
           Right evMsg -> case evMsg of
-            CallStackFinal msg -> do
+            SPCE.CallStackFinal msg -> do
               let (callStackMessage, st', callStackDecodeErrors) = hydrateBinaryEventlog st msg
               for_ callStackDecodeErrors (lift . writeException logger)
               let stackProfSample = metric i callStackMessage mempty
               yield $ StackProfSampleData stackProfSample
               go st'
-            CallStackChunk msg ->
+            SPCE.CallStackChunk msg ->
               go st{stackProfSampleChunk = msg : st.stackProfSampleChunk}
-            StringDef msg ->
-              go st{stackProfSymbolTableReader = SPCT.insertTextMessage msg st.stackProfSymbolTableReader}
-            SourceLocationDef msg -> do
+            SPCE.StringDef msg ->
+              go st{stackProfSymbolTableReader = SPCS.insertTextMessage msg st.stackProfSymbolTableReader}
+            SPCE.SourceLocationDef msg -> do
               let old = st.stackProfSymbolTableReader
-              let errOrnew = SPCT.insertSourceLocationMessage msg old
+              let errOrnew = SPCS.insertSourceLocationMessage msg old
               new <- either (\err -> lift $ writeException logger err >> pure old) pure errOrnew
               go st{stackProfSymbolTableReader = new}
       _otherwise -> go st
 
 hydrateBinaryEventlog ::
   StackProfSampleState ->
-  BinaryCallStackMessage ->
-  (CallStackData, StackProfSampleState, [BinaryCallStackDecodeError])
+  SPCE.BinaryCallStackMessage ->
+  (CallStackData, StackProfSampleState, [SPCT.BinaryCallStackDecodeError])
 hydrateBinaryEventlog spst msg = (callStackData, spst{stackProfSampleChunk = []}, callStackDecodeErrors)
  where
   chunks = spst.stackProfSampleChunk
@@ -148,25 +247,25 @@ hydrateBinaryEventlog spst msg = (callStackData, spst{stackProfSampleChunk = []}
   -- 4. One reverse later: @[1,2] [3,4] [5,6]@
   -- 5. Now we can finally concat the stack frame chunks.
   orderedChunks = NonEmpty.reverse $ msg :| chunks
-  fullBinaryCallStackMessage = catCallStackMessage orderedChunks
+  fullBinaryCallStackMessage = SPCT.catCallStackMessage orderedChunks
   (callStackMessage, callStackDecodeErrors) =
-    hydrateEventlogCallStackMessage
-      (SPCT.mkIntMapSymbolTableReader spst.stackProfSymbolTableReader)
+    SPCT.hydrateEventlogCallStackMessage
+      (SPCS.mkIntMapSymbolTableReader spst.stackProfSymbolTableReader)
       fullBinaryCallStackMessage
   callStackData =
     CallStackData
-      { threadId = callThreadId callStackMessage
-      , capabilityId = callCapabilityId callStackMessage
+      { threadId = Just $ ThreadId $ SPCT.callThreadId callStackMessage
+      , capabilityId = CapabilityId $ SPCE.getCapabilityId $ SPCT.callCapabilityId callStackMessage
       , stack =
           -- TODO: log if we are encountering unknown ipe ids
-          mapMaybe (toStackItemData spst.infoTableMap) $ callStack callStackMessage
+          mapMaybe (toStackItemData spst.infoTableMap) $ SPCT.callStack callStackMessage
       }
 
-toStackItemData :: HashMap InfoTablePtr InfoTable -> StackItem -> Maybe StackItemData
+toStackItemData :: HashMap InfoTablePtr InfoTable -> SPCT.StackItem -> Maybe StackItemData
 toStackItemData tbl = \case
-  IpeId iid -> IpeData <$> HashMap.lookup (InfoTablePtr $ getIpeId iid) tbl
-  UserMessage msg -> Just $ UserMessageData $ Text.pack msg
-  SourceLocation srcLoc -> Just $ SourceLocationData srcLoc
+  SPCT.IpeId iid -> IpeData <$> HashMap.lookup (InfoTablePtr $ SPCE.getIpeId iid) tbl
+  SPCT.UserMessage msg -> Just $ UserMessageData $ Text.pack msg
+  SPCT.SourceLocation srcLoc -> Just $ SourceLocationData srcLoc
 
 {- |
 Get the elements of a heap profile sample collection.
