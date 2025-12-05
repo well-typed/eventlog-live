@@ -622,6 +622,7 @@ processProfileEvents ::
 processProfileEvents verbosity config =
   M.fanoutTick
     [ processStackProfSample verbosity config
+    , processCosterCentreProfSample verbosity config
     ]
 
 --------------------------------------------------------------------------------
@@ -644,6 +645,22 @@ processStackProfSample verbosity config = do
       -- TODO: do something with the Metric value, right now it is completely unused
       ~> M.liftTick (mapping (D.singleton . (.value)))
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.stackSample) config)
+
+processCosterCentreProfSample ::
+  (MonadIO m) =>
+  Verbosity ->
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+processCosterCentreProfSample verbosity config = do
+  let
+    postProcessor = mapping M.stackProfSamples ~> asParts
+    dataProcessor = M.processCosterCentreProfSampleData verbosity
+  -- aggregators = viaLast
+  runIf (C.processorEnabled (.profiles) (.costCentreSample) config) $
+    M.liftTick dataProcessor
+      ~> M.liftTick postProcessor
+      ~> M.liftTick (mapping (D.singleton . (.value)))
+      ~> M.batchByTicks (C.processorExportBatches (.profiles) (.costCentreSample) config)
 
 --------------------------------------------------------------------------------
 -- Aggregation

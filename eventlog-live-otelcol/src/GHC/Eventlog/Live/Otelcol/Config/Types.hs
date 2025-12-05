@@ -46,6 +46,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   Profiles (..),
   IsProfileProcessorConfig,
   StackSampleProfile (..),
+  CostCentreSampleProfile (..),
 
   -- ** Property types
   Duration (..),
@@ -260,8 +261,9 @@ instance ToYAML Traces where
 {- |
 The configuration options for the profile processors.
 -}
-newtype Profiles = Profiles
+data Profiles = Profiles
   { stackSample :: Maybe StackSampleProfile
+  , costCentreSample :: Maybe CostCentreSampleProfile
   }
   deriving (Lift)
 
@@ -272,6 +274,7 @@ instance FromYAML Profiles where
     YAML.withMap "Profiles" $ \m ->
       Profiles
         <$> m .:? "stack_sample"
+        <*> m .:? "cost_centre_sample"
 
 instance ToYAML Profiles where
   toYAML :: Profiles -> YAML.Node ()
@@ -279,6 +282,7 @@ instance ToYAML Profiles where
     -- NOTE: This should be kept in sync with the list of profiles.
     YAML.mapping
       [ "stack_sample" .= profiles.stackSample
+      , "cost_centre_sample" .= profiles.costCentreSample
       ]
 
 -------------------------------------------------------------------------------
@@ -630,6 +634,28 @@ instance ToYAML StackSampleProfile where
 
 instance HasField "enabled" StackSampleProfile Bool where
   getField :: StackSampleProfile -> Bool
+  getField = isEnabled . (.export)
+
+{- |
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processCosterCentreProfSampleData`.
+-}
+data CostCentreSampleProfile = CostCentreSampleProfile
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift)
+
+instance FromYAML CostCentreSampleProfile where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CostCentreSampleProfile
+  parseYAML = genericParseYAMLProfilerProcessorConfig "CostCentreSampleProfile" CostCentreSampleProfile
+
+instance ToYAML CostCentreSampleProfile where
+  toYAML :: CostCentreSampleProfile -> YAML.Node ()
+  toYAML = genericToYAMLProfilerProcessorConfig
+
+instance HasField "enabled" CostCentreSampleProfile Bool where
+  getField :: CostCentreSampleProfile -> Bool
   getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------

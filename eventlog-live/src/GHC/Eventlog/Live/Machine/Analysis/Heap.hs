@@ -246,7 +246,7 @@ data InfoTable = InfoTable
   , infoTableModule :: !Text
   , infoTableSrcLoc :: !Text
   }
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 {- |
 Internal helper.

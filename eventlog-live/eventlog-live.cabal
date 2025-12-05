@@ -132,3 +132,4 @@ library
     , text                     >=1.2    && <2.2
     , unliftio-core            >=0.2.1  && <0.3
     , unordered-containers     >=0.2.20 && <0.3
+    , vector
