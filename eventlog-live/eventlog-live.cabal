@@ -144,6 +144,7 @@ library
     , text                     >=1.2    && <2.2
     , transformers             >=0.2    && <0.7
     , unordered-containers     >=0.2.20 && <0.3
+    , vector                   >=0.11   && <0.14
 
   -- 2025-12-09:
   -- This configures the build requirements for the vendored copy of
