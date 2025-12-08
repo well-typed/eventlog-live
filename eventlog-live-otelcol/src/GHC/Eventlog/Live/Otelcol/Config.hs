@@ -30,6 +30,7 @@ module GHC.Eventlog.Live.Otelcol.Config (
   ThreadLabel (..),
   UserMarker (..),
   UserMessage (..),
+  InternalLogMessage (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -179,6 +180,10 @@ instance Default UserMarker where
 instance Default UserMessage where
   def :: UserMessage
   def = $(getDefault @'["processors", "logs", "userMessage"] defaultConfig)
+
+instance Default InternalLogMessage where
+  def :: InternalLogMessage
+  def = $(getDefault @'["processors", "logs", "internalLogMessage"] defaultConfig)
 
 -- NOTE: This should be kept in sync with the list of metrics.
 --       Specifically, there should be a `Default` instance for every metric.
@@ -540,6 +545,7 @@ forEachLogProcessor f logs =
     f $ fromMaybe def logs.threadLabel
   , f $ fromMaybe def logs.userMarker
   , f $ fromMaybe def logs.userMessage
+  , f $ fromMaybe def logs.internalLogMessage
   ]
 
 {- |
