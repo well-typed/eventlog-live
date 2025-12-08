@@ -22,6 +22,7 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   ThreadLabel (..),
   UserMarker (..),
   UserMessage (..),
+  InternalLogMessage (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -137,6 +138,7 @@ data Logs = Logs
   { threadLabel :: Maybe ThreadLabel
   , userMarker :: Maybe UserMarker
   , userMessage :: Maybe UserMessage
+  , internalLogMessage :: Maybe InternalLogMessage
   }
   deriving (Lift)
 
@@ -149,6 +151,7 @@ instance FromYAML Logs where
         <$> m .:? "thread_label"
         <*> m .:? "user_marker"
         <*> m .:? "user_message"
+        <*> m .:? "internal_log_message"
 
 instance ToYAML Logs where
   toYAML :: Logs -> YAML.Node ()
@@ -158,6 +161,7 @@ instance ToYAML Logs where
       [ "thread_label" .= logs.threadLabel
       , "user_marker" .= logs.userMarker
       , "user_message" .= logs.userMessage
+      , "internal_log_message" .= logs.internalLogMessage
       ]
 
 {- |
@@ -254,6 +258,28 @@ instance ToYAML Traces where
 -------------------------------------------------------------------------------
 
 {- |
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadLabelData`.
+-}
+data ThreadLabel = ThreadLabel
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift)
+
+instance FromYAML ThreadLabel where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabel
+  parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabel" ThreadLabel
+
+instance ToYAML ThreadLabel where
+  toYAML :: ThreadLabel -> YAML.Node ()
+  toYAML = genericToYAMLLogProcessorConfig
+
+instance HasField "enabled" ThreadLabel Bool where
+  getField :: ThreadLabel -> Bool
+  getField = isEnabled . (.export)
+
+{- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessageData`.
 -}
 data UserMessage = UserMessage
@@ -298,25 +324,25 @@ instance HasField "enabled" UserMarker Bool where
   getField = isEnabled . (.export)
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadLabelData`.
+The configuration options for internal log messages.
 -}
-data ThreadLabel = ThreadLabel
+data InternalLogMessage = InternalLogMessage
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift)
 
-instance FromYAML ThreadLabel where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabel
-  parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabel" ThreadLabel
+instance FromYAML InternalLogMessage where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser InternalLogMessage
+  parseYAML = genericParseYAMLLogProcessorConfig "InternalLogMessage" InternalLogMessage
 
-instance ToYAML ThreadLabel where
-  toYAML :: ThreadLabel -> YAML.Node ()
+instance ToYAML InternalLogMessage where
+  toYAML :: InternalLogMessage -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
-instance HasField "enabled" ThreadLabel Bool where
-  getField :: ThreadLabel -> Bool
+instance HasField "enabled" InternalLogMessage Bool where
+  getField :: InternalLogMessage -> Bool
   getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
