@@ -13,6 +13,7 @@ import Data.Machine (Process, await, repeatedly, yield)
 import Data.Text (Text)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events qualified as E
@@ -30,7 +31,7 @@ processUserMessageData =
       i
         | E.UserMessage{..} <- i.value.evSpec ->
             yield $
-              logRecord i msg $
+              logRecord i msg (Just DEBUG) $
                 [ "evCap" ~= i.value.evCap
                 , "kind" ~= ("UserMessage" :: Text)
                 ]
@@ -49,7 +50,7 @@ processUserMarkerData =
       i
         | E.UserMarker{..} <- i.value.evSpec ->
             yield $
-              logRecord i markername $
+              logRecord i markername (Just TRACE) $
                 [ "evCap" ~= i.value.evCap
                 , "kind" ~= ("UserMarker" :: Text)
                 ]
@@ -64,12 +65,13 @@ of the event.
 logRecord ::
   WithStartTime Event ->
   Text ->
+  Maybe Severity ->
   Attrs ->
   LogRecord
-logRecord i body attrs =
+logRecord i body maybeSeverity attrs =
   LogRecord
     { body = body
     , maybeTimeUnixNano = tryGetTimeUnixNano i
-    , maybeSeverity = Nothing
+    , maybeSeverity = maybeSeverity
     , attrs = attrs
     }
