@@ -8,6 +8,14 @@
       "type": "object",
       "properties": {
         "defaults": { "#ref": "#/definitions/processor_defaults" },
+        "logs": {
+          "type": "object",
+          "defaults": { "#ref": "#/definitions/log_defaults" },
+          "thread_label": { "#ref": "#/definitions/log" },
+          "user_marker": { "#ref": "#/definitions/log" },
+          "user_message": { "#ref": "#/definitions/log" },
+          "internal_log_message": { "#ref": "#/definitions/log" }
+        },
         "metrics": {
           "type": "object",
           "properties": {
@@ -86,6 +94,21 @@
       },
       "additionalProperties": false
     },
+    "log": {
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "export": { "$ref": "#/definitions/export_strategy" }
+      },
+      "additionalProperties": false
+    },
+    "log_defaults": {
+      "description": "An optional 'defaults' block for defining YAML anchors.",
+      "properties": {
+        "export": { "$ref": "#/definitions/export_strategy" }
+      },
+      "additionalProperties": false
+    },
     "metric": {
       "properties": {
         "name": { "type": "string" },
@@ -111,11 +134,10 @@
       },
       "additionalProperties": false
     },
-    "trace_defaultss": {
+    "trace_defaults": {
       "description": "An optional 'defaults' block for defining YAML anchors.",
       "properties": {
-        "export": { "$ref": "#/definitions/export_strategy" },
-        "aggregate": { "$ref": "#/definitions/aggregation_strategy" }
+        "export": { "$ref": "#/definitions/export_strategy" }
       },
       "additionalProperties": false
     }
