@@ -4,6 +4,10 @@
 
 The following diagram documents the information flow in the eventlog processor run by the `eventlog-live-otelcol` executable.
 
+> [!WARNING]
+> This diagram is out-of-date.
+> It does not contain information regarding logs.
+
 ```mermaid
 stateDiagram-v2
     [*]                                                 --> withStartTime                                   : Tick Event
