@@ -45,8 +45,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 22,
-        "w": 11,
+        "h": 15,
+        "w": 24,
         "x": 0,
         "y": 1
       },
@@ -58,6 +58,7 @@
         "showControls": false,
         "showTime": true,
         "sortOrder": "Descending",
+        "syntaxHighlighting": false,
         "wrapLogMessage": false
       },
       "pluginVersion": "12.3.0",
@@ -69,56 +70,13 @@
           },
           "direction": "backward",
           "editorMode": "builder",
-          "expr": "{service_name=\"$service_name\"} | kind = `UserMessage`",
+          "expr": "{service_name=\"$service_name\"}",
           "maxLines": 30,
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "UserMessage for ${service_name}",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 22,
-        "w": 11,
-        "x": 11,
-        "y": 1
-      },
-      "id": 1,
-      "options": {
-        "dedupStrategy": "none",
-        "enableInfiniteScrolling": true,
-        "enableLogDetails": true,
-        "showControls": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "af53paj34f3lse"
-          },
-          "direction": "backward",
-          "editorMode": "builder",
-          "expr": "{service_name=\"$service_name\"} | kind = `UserMarker`",
-          "maxLines": 30,
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "UserMarker for ${service_name}",
+      "title": "Logs for ${service_name}",
       "type": "logs"
     }
   ],
