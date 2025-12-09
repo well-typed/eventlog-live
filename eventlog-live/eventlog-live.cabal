@@ -51,6 +51,14 @@ source-repository head
   location: https://github.com/well-typed/eventlog-live.git
   subdir:   eventlog-live
 
+-- 2025-12-09:
+-- This flag should enable switching between concurrent-machines and the
+-- vendored copy of the packages, as it currently does not easily build.
+flag use-concurrent-machines
+  description: Use concurrent-machines in place of the vendored copy
+  default:     False
+  manual:      False
+
 common language
   ghc-options:
     -Wall -Wcompat -Widentities -Wprepositive-qualified-module
@@ -126,9 +134,36 @@ library
     , ghc-events            >=0.20   && <0.21
     , hashable              >=1.4    && <1.6
     , machines              >=0.7.4  && <0.8
+    , monad-control         >=1.0    && <1.1
     , network               >=3.2.7  && <3.3
     , optparse-applicative  >=0.17   && <0.20
     , stm                   >=2.5    && <2.6
     , text                  >=1.2    && <2.2
     , transformers          >=0.2    && <0.7
     , unordered-containers  >=0.2.20 && <0.3
+
+  -- 2025-12-09:
+  -- This configures the build requirements for the vendored copy of
+  -- the concurrent-machines package version 0.3.1.5.
+  if flag(use-concurrent-machines)
+    build-depends: concurrent-machines >=0.1 && <0.4
+
+  else
+    ghc-options:    -Wno-prepositive-qualified-module
+    hs-source-dirs: vendor/concurrent-machines-0.3.1.5/src
+    other-modules:
+      Data.Machine.Concurrent
+      Data.Machine.Concurrent.AsyncStep
+      Data.Machine.Concurrent.Buffer
+      Data.Machine.Concurrent.Fanout
+      Data.Machine.Concurrent.Scatter
+      Data.Machine.Concurrent.Tee
+      Data.Machine.Concurrent.Wye
+      Data.Machine.Regulated
+
+    build-depends:
+      , async              >=2.0.1 && <2.3
+      , containers         >=0.5   && <0.8
+      , lifted-async       >=0.10  && <0.12
+      , time               >=1.4   && <1.16
+      , transformers-base  >=0.4   && <0.5
