@@ -193,6 +193,7 @@ library
     , optparse-applicative   >=0.17   && <0.20
     , proto-lens             >=0.7.1  && <0.8
     , random                 >=1.2    && <1.4
+    , stm                    >=2.5    && <2.6
     , strict-list            >=0.1    && <0.2
     , table-layout           >=1.0    && <1.1
     , text                   >=1.2    && <2.2
