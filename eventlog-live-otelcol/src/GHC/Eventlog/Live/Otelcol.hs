@@ -25,6 +25,7 @@ import Data.Foldable qualified as F
 import Data.Functor ((<&>))
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
+import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Kind (Type)
 import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, echo, mapping, repeatedly, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
@@ -35,7 +36,7 @@ import Data.Semigroup (Last (..), Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Version (showVersion)
-import Data.Word (Word32, Word64)
+import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), maybeMyGhcDebugSocketParser, withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
@@ -386,9 +387,18 @@ _fromKnownMetric (metricName :: Proxy metricName) metric =
   numberDataPoint :: OM.NumberDataPoint
   numberDataPoint =
     case metricTypeSing metricName of
+      M.MetricTypeSingFloat -> toNumberDataPoint metric
       M.MetricTypeSingDouble -> toNumberDataPoint metric
+      M.MetricTypeSingWord -> toNumberDataPoint metric
+      M.MetricTypeSingWord8 -> toNumberDataPoint metric
+      M.MetricTypeSingWord16 -> toNumberDataPoint metric
       M.MetricTypeSingWord32 -> toNumberDataPoint metric
       M.MetricTypeSingWord64 -> toNumberDataPoint metric
+      M.MetricTypeSingInt -> toNumberDataPoint metric
+      M.MetricTypeSingInt8 -> toNumberDataPoint metric
+      M.MetricTypeSingInt16 -> toNumberDataPoint metric
+      M.MetricTypeSingInt32 -> toNumberDataPoint metric
+      M.MetricTypeSingInt64 -> toNumberDataPoint metric
 
   metric'Data :: OM.Metric'Data
   metric'Data =
@@ -1100,9 +1110,21 @@ instance AsSpan ThreadStateSpan where
 class IsNumberDataPoint'Value v where
   toNumberDataPoint'Value :: v -> OM.NumberDataPoint'Value
 
+instance IsNumberDataPoint'Value Float where
+  toNumberDataPoint'Value :: Float -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble . realToFrac
+
 instance IsNumberDataPoint'Value Double where
   toNumberDataPoint'Value :: Double -> OM.NumberDataPoint'Value
   toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble
+
+instance IsNumberDataPoint'Value Word8 where
+  toNumberDataPoint'Value :: Word8 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
+
+instance IsNumberDataPoint'Value Word16 where
+  toNumberDataPoint'Value :: Word16 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
 
 instance IsNumberDataPoint'Value Word32 where
   toNumberDataPoint'Value :: Word32 -> OM.NumberDataPoint'Value
@@ -1111,6 +1133,31 @@ instance IsNumberDataPoint'Value Word32 where
 -- | __Warning__: This instance may cause overflow.
 instance IsNumberDataPoint'Value Word64 where
   toNumberDataPoint'Value :: Word64 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
+
+-- | __Warning__: This instance may cause overflow.
+instance IsNumberDataPoint'Value Word where
+  toNumberDataPoint'Value :: Word -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
+
+instance IsNumberDataPoint'Value Int8 where
+  toNumberDataPoint'Value :: Int8 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
+
+instance IsNumberDataPoint'Value Int16 where
+  toNumberDataPoint'Value :: Int16 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
+
+instance IsNumberDataPoint'Value Int32 where
+  toNumberDataPoint'Value :: Int32 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
+
+instance IsNumberDataPoint'Value Int64 where
+  toNumberDataPoint'Value :: Int64 -> OM.NumberDataPoint'Value
+  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt
+
+instance IsNumberDataPoint'Value Int where
+  toNumberDataPoint'Value :: Int -> OM.NumberDataPoint'Value
   toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
 
 toNumberDataPoint :: (IsNumberDataPoint'Value v) => Metric v -> OM.NumberDataPoint
