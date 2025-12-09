@@ -20,6 +20,7 @@
 - **BREAKING**: Add `AttrBoot` to `AttrValue`.
 - Add support for user messages and markers.
 - **BREAKING**: Replace logging with `co-log-core` contravariant `LogAction`.
+- Add support for concurrent `fanoutTickCC` and `mergeWithTickCC`.
 
 ### 0.4.0.0
 
