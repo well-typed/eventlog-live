@@ -2,6 +2,8 @@
 
 - **BREAKING**: Drop `enabled` from configuration files.
 - **BREAKING**: Change value of `aggregate` in configuration files to ``(boolean | `${number}x`)``.
+- Support logs and markers (`thread_label`, `user_marker`, `user_message`, `internal_log_message`).
+- Support internal telemetry (currently only `internal_log_message`).
 
 ### 0.5.0.0
 
