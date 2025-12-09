@@ -42,11 +42,10 @@ import GHC.Eventlog.Live.Data.Attribute
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
-import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), Metric (..))
-import GHC.Eventlog.Live.Data.Metric qualified as M
+import GHC.Eventlog.Live.Data.Metric (Metric (..), SomeMetric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Severity qualified as DS (SeverityNumber (..), toSeverityNumber)
-import GHC.Eventlog.Live.Logger (Logger, MyMetric, MyTelemetryData, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -71,7 +70,7 @@ import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import GHC.TypeLits (Symbol)
 import Lens.Family2 ((&), (.~))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
@@ -354,69 +353,10 @@ getMyLogRecord = \case
 -- 2025-12-09:
 -- This function is currently unused, but will be required when migrating
 -- the internal metrics, i.e., Stats, over to use the new internal logger.
-_getMyMetric :: MyTelemetryData -> Maybe MyMetric
-_getMyMetric = \case
+_getMySomeMetric :: MyTelemetryData -> Maybe SomeMetric
+_getMySomeMetric = \case
   M.MyTelemetryData'LogRecord{} -> Nothing
   M.MyTelemetryData'Metric{..} -> Just metric
-
-{- |
-Internal helper.
-Convert a known internal metric to an `OM.Metric`.
-
-2025-12-09:
-This function is currently unused, but will be required when migrating
-the internal metrics, i.e., Stats, over to use the new internal logger.
-
-TODO:
-This function should be used for the eventlog metrics.
--}
-_fromKnownMetric ::
-  forall metricName.
-  ( KnownSymbol metricName
-  , KnownMetric metricName
-  ) =>
-  Proxy metricName ->
-  Metric (MetricType metricName) ->
-  OM.Metric
-_fromKnownMetric (metricName :: Proxy metricName) metric =
-  toMetric
-    [ OM.name .~ T.pack (symbolVal metricName)
-    ]
-    metric'Data
- where
-  numberDataPoint :: OM.NumberDataPoint
-  numberDataPoint =
-    case metricTypeSing metricName of
-      M.MetricTypeSingFloat -> toNumberDataPoint metric
-      M.MetricTypeSingDouble -> toNumberDataPoint metric
-      M.MetricTypeSingWord -> toNumberDataPoint metric
-      M.MetricTypeSingWord8 -> toNumberDataPoint metric
-      M.MetricTypeSingWord16 -> toNumberDataPoint metric
-      M.MetricTypeSingWord32 -> toNumberDataPoint metric
-      M.MetricTypeSingWord64 -> toNumberDataPoint metric
-      M.MetricTypeSingInt -> toNumberDataPoint metric
-      M.MetricTypeSingInt8 -> toNumberDataPoint metric
-      M.MetricTypeSingInt16 -> toNumberDataPoint metric
-      M.MetricTypeSingInt32 -> toNumberDataPoint metric
-      M.MetricTypeSingInt64 -> toNumberDataPoint metric
-
-  metric'Data :: OM.Metric'Data
-  metric'Data =
-    case metricInstrumentKind metricName of
-      M.Gauge ->
-        toGauge
-          [numberDataPoint]
-      M.Sum{..} ->
-        toSum
-          [ OM.aggregationTemporality .~ fromAggregationTemporality aggregationTemporailty
-          , OM.isMonotonic .~ isMonotonic
-          ]
-          [numberDataPoint]
-
-  fromAggregationTemporality :: M.AggregationTemporailty -> OM.AggregationTemporality
-  fromAggregationTemporality = \case
-    M.Cumulative -> OM.AGGREGATION_TEMPORALITY_CUMULATIVE
-    M.Delta -> OM.AGGREGATION_TEMPORALITY_DELTA
 
 --------------------------------------------------------------------------------
 -- processThreadEvents
