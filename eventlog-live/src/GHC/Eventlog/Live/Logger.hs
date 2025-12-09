@@ -10,6 +10,7 @@ Portability : portable
 module GHC.Eventlog.Live.Logger (
   Logger,
   MyTelemetryData (..),
+  MyMetric (..),
   writeLog,
   writeMetric,
   filterBySeverity,
@@ -55,9 +56,15 @@ The type of internal telemetry data.
 -}
 data MyTelemetryData
   = MyTelemetryData'LogRecord {logRecord :: !LogRecord}
-  | forall metricName.
-    (KnownSymbol metricName, KnownMetric metricName) =>
-    MyTelemetryData'Metric {metricName :: !(Proxy metricName), metric :: !(Metric (MetricType metricName))}
+  | MyTelemetryData'Metric {metric :: !MyMetric}
+
+{- |
+The type of internal metric data.
+-}
+data MyMetric
+  = forall metricName.
+  (KnownSymbol metricName, KnownMetric metricName) =>
+  MyMetric {metricName :: !(Proxy metricName), metric :: !(Metric (MetricType metricName))}
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -90,15 +97,16 @@ writeMetric ::
 writeMetric logger metricName value =
   logger
     <& MyTelemetryData'Metric
-      { metricName
-      , metric =
-          Metric
-            { value
-            , maybeTimeUnixNano = Nothing
-            , maybeStartTimeUnixNano = Nothing
-            , attrs = []
-            }
-      }
+      MyMetric
+        { metricName
+        , metric =
+            Metric
+              { value
+              , maybeTimeUnixNano = Nothing
+              , maybeStartTimeUnixNano = Nothing
+              , attrs = []
+              }
+        }
 
 {- |
 A `Logger` that writes each `LogRecord` to a `IO.stderr` and ignores all other telemetry data.
@@ -214,19 +222,19 @@ addTimeUnixNano myTelemetryData =
     MyTelemetryData'LogRecord{logRecord = LogRecord{..}}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
-          pure
+          pure $
             MyTelemetryData'LogRecord
-              { logRecord = LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
-              }
+              LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
       | otherwise -> pure myTelemetryData
-    MyTelemetryData'Metric{metricName, metric = Metric{..}}
+    MyTelemetryData'Metric{metric = MyMetric{metricName, metric = Metric{..}}}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
-          pure
+          pure $
             MyTelemetryData'Metric
-              { metricName
-              , metric = Metric{maybeTimeUnixNano = Just timeUnixNano, ..}
-              }
+              MyMetric
+                { metricName
+                , metric = Metric{maybeTimeUnixNano = Just timeUnixNano, ..}
+                }
       | otherwise -> pure myTelemetryData
 
 {- |
