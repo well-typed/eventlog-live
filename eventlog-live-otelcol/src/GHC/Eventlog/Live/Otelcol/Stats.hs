@@ -185,11 +185,11 @@ Internal helper.
 Construct a `Stats` object from an `ExportTraceResult`.
 -}
 fromExportTraceResult :: ExportTraceResult -> Stats
-fromExportTraceResult exportTraceResult =
+fromExportTraceResult exportTracesResult =
   def
-    { exportedSpans = singletonRow exportTraceResult.exportedSpans
-    , rejectedSpans = singletonRow exportTraceResult.rejectedSpans
-    , errors = maybeToStrictList $ T.pack . displayException <$> exportTraceResult.maybeSomeException
+    { exportedSpans = singletonRow exportTracesResult.exportedSpans
+    , rejectedSpans = singletonRow exportTracesResult.rejectedSpans
+    , errors = maybeToStrictList $ T.pack . displayException <$> exportTracesResult.maybeSomeException
     }
 
 {- |
@@ -274,7 +274,7 @@ updateStats windowSize old = \case
   EventCountStat eventCount -> unionStats windowSize (fromEventCount eventCount) old
   ExportLogsResultStat exportLogsResults -> unionStats windowSize (fromExportLogsResult exportLogsResults) old
   ExportMetricsResultStat exportMetricsResult -> unionStats windowSize (fromExportMetricsResult exportMetricsResult) old
-  ExportTraceResultStat exportTraceResult -> unionStats windowSize (fromExportTraceResult exportTraceResult) old
+  ExportTraceResultStat exportTracesResult -> unionStats windowSize (fromExportTraceResult exportTracesResult) old
 
 {- |
 Internal helper.
@@ -318,17 +318,17 @@ logStat logger = \case
       writeLog logger ERROR $
         T.pack $
           displayException someException
-  ExportTraceResultStat exportTraceResult -> do
+  ExportTraceResultStat exportTracesResult -> do
     -- Log exported events.
-    when (exportTraceResult.exportedSpans > 0) $ do
+    when (exportTracesResult.exportedSpans > 0) $ do
       writeLog logger DEBUG $
-        "Exported " <> showText exportTraceResult.exportedSpans <> " spans."
+        "Exported " <> showText exportTracesResult.exportedSpans <> " spans."
     -- Log rejected events.
-    when (exportTraceResult.rejectedSpans > 0) $ do
+    when (exportTracesResult.rejectedSpans > 0) $ do
       writeLog logger ERROR $
-        "Rejected " <> showText exportTraceResult.rejectedSpans <> " spans."
+        "Rejected " <> showText exportTracesResult.rejectedSpans <> " spans."
     -- Log exception.
-    for_ exportTraceResult.maybeSomeException $ \someException -> do
+    for_ exportTracesResult.maybeSomeException $ \someException -> do
       writeLog logger ERROR $
         T.pack $
           displayException someException
