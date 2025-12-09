@@ -10,7 +10,6 @@ Portability : portable
 module GHC.Eventlog.Live.Logger (
   Logger,
   MyTelemetryData (..),
-  MyMetric (..),
   writeLog,
   writeMetric,
   filterBySeverity,
@@ -30,7 +29,6 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Ix (Ix (..))
 import Data.Machine (SourceT, repeatedly, yield)
 import Data.Maybe (isNothing)
-import Data.Proxy (Proxy)
 import Data.Text (Text)
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
@@ -38,12 +36,11 @@ import Data.Text.Lazy.Builder qualified as TLB
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Attribute qualified as A
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
-import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), Metric (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetricType, Metric (..), SomeMetric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
 import GHC.RTS.Events (Timestamp)
 import GHC.Stack (callStack, prettyCallStack, withFrozenCallStack)
 import GHC.Stack.Types (HasCallStack)
-import GHC.TypeLits (KnownSymbol)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.IO qualified as IO
@@ -56,15 +53,7 @@ The type of internal telemetry data.
 -}
 data MyTelemetryData
   = MyTelemetryData'LogRecord {logRecord :: !LogRecord}
-  | MyTelemetryData'Metric {metric :: !MyMetric}
-
-{- |
-The type of internal metric data.
--}
-data MyMetric
-  = forall metricName.
-  (KnownSymbol metricName, KnownMetric metricName) =>
-  MyMetric {metricName :: !(Proxy metricName), metric :: !(Metric (MetricType metricName))}
+  | MyTelemetryData'Metric {metric :: !SomeMetric}
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -87,17 +76,17 @@ writeLog logger severity body =
 Use a `Logger` to log an internal metric.
 -}
 writeMetric ::
-  ( KnownSymbol metricName
-  , KnownMetric metricName
-  ) =>
+  forall m metricType.
+  (KnownMetricType metricType) =>
   Logger m ->
-  Proxy metricName ->
-  MetricType metricName ->
+  -- | The metric name.
+  String ->
+  metricType ->
   m ()
 writeMetric logger metricName value =
   logger
     <& MyTelemetryData'Metric
-      MyMetric
+      SomeMetric
         { metricName
         , metric =
             Metric
@@ -226,12 +215,12 @@ addTimeUnixNano myTelemetryData =
             MyTelemetryData'LogRecord
               LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
       | otherwise -> pure myTelemetryData
-    MyTelemetryData'Metric{metric = MyMetric{metricName, metric = Metric{..}}}
+    MyTelemetryData'Metric{metric = SomeMetric{metricName, metric = Metric{..}}}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
           pure $
             MyTelemetryData'Metric
-              MyMetric
+              SomeMetric
                 { metricName
                 , metric = Metric{maybeTimeUnixNano = Just timeUnixNano, ..}
                 }

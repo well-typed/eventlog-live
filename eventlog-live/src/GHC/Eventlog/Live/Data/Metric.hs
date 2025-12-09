@@ -6,11 +6,11 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Metric (
   Metric (..),
-  KnownMetric (..),
-  MetricTypeSing (..),
-  withNum,
-  MetricInstrumentKind (..),
-  AggregationTemporailty (..),
+
+  -- * Existential wrapper
+  SomeMetric (..),
+  SMetricType (..),
+  KnownMetricType (..),
 ) where
 
 import Control.Exception (assert)
@@ -21,7 +21,6 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.RTS.Events (Timestamp)
-import GHC.TypeLits (Symbol)
 
 {- |
 Metrics combine a measurement with a timestamp representing the time of the
@@ -57,47 +56,79 @@ instance (Semigroup a) => Semigroup (Metric a) where
         , attrs = x.attrs
         }
 
-data MetricTypeSing (a :: Type) where
-  MetricTypeSingFloat :: MetricTypeSing Float
-  MetricTypeSingDouble :: MetricTypeSing Double
-  MetricTypeSingWord :: MetricTypeSing Word
-  MetricTypeSingWord8 :: MetricTypeSing Word8
-  MetricTypeSingWord16 :: MetricTypeSing Word16
-  MetricTypeSingWord32 :: MetricTypeSing Word32
-  MetricTypeSingWord64 :: MetricTypeSing Word64
-  MetricTypeSingInt :: MetricTypeSing Int
-  MetricTypeSingInt8 :: MetricTypeSing Int8
-  MetricTypeSingInt16 :: MetricTypeSing Int16
-  MetricTypeSingInt32 :: MetricTypeSing Int32
-  MetricTypeSingInt64 :: MetricTypeSing Int64
+--------------------------------------------------------------------------------
+-- Existential wrapper for Metrics
+--------------------------------------------------------------------------------
 
-{- |
-Get the `Num` instance for a metric type.
--}
-withNum :: MetricTypeSing a -> ((Num a) => r) -> r
-withNum = \case
-  MetricTypeSingFloat -> id
-  MetricTypeSingDouble -> id
-  MetricTypeSingWord -> id
-  MetricTypeSingWord8 -> id
-  MetricTypeSingWord16 -> id
-  MetricTypeSingWord32 -> id
-  MetricTypeSingWord64 -> id
-  MetricTypeSingInt -> id
-  MetricTypeSingInt8 -> id
-  MetricTypeSingInt16 -> id
-  MetricTypeSingInt32 -> id
-  MetricTypeSingInt64 -> id
+data SomeMetric
+  = forall metricType.
+  (KnownMetricType metricType) =>
+  SomeMetric
+  { metricName :: String
+  , metric :: Metric metricType
+  }
 
-data MetricInstrumentKind
-  = Sum {aggregationTemporailty :: !AggregationTemporailty, isMonotonic :: !Bool}
-  | Gauge
+data SMetricType (a :: Type) where
+  SMetricTypeFloat :: SMetricType Float
+  SMetricTypeDouble :: SMetricType Double
+  SMetricTypeWord :: SMetricType Word
+  SMetricTypeWord8 :: SMetricType Word8
+  SMetricTypeWord16 :: SMetricType Word16
+  SMetricTypeWord32 :: SMetricType Word32
+  SMetricTypeWord64 :: SMetricType Word64
+  SMetricTypeInt :: SMetricType Int
+  SMetricTypeInt8 :: SMetricType Int8
+  SMetricTypeInt16 :: SMetricType Int16
+  SMetricTypeInt32 :: SMetricType Int32
+  SMetricTypeInt64 :: SMetricType Int64
 
-data AggregationTemporailty
-  = Cumulative
-  | Delta
+class (Num a) => KnownMetricType a where
+  metricTypeSing :: Proxy a -> SMetricType a
 
-class KnownMetric (metricName :: Symbol) where
-  type MetricType metricName :: Type
-  metricTypeSing :: Proxy metricName -> MetricTypeSing (MetricType metricName)
-  metricInstrumentKind :: Proxy metricName -> MetricInstrumentKind
+instance KnownMetricType Float where
+  metricTypeSing :: Proxy Float -> SMetricType Float
+  metricTypeSing _proxy = SMetricTypeFloat
+
+instance KnownMetricType Double where
+  metricTypeSing :: Proxy Double -> SMetricType Double
+  metricTypeSing _proxy = SMetricTypeDouble
+
+instance KnownMetricType Word where
+  metricTypeSing :: Proxy Word -> SMetricType Word
+  metricTypeSing _proxy = SMetricTypeWord
+
+instance KnownMetricType Word8 where
+  metricTypeSing :: Proxy Word8 -> SMetricType Word8
+  metricTypeSing _proxy = SMetricTypeWord8
+
+instance KnownMetricType Word16 where
+  metricTypeSing :: Proxy Word16 -> SMetricType Word16
+  metricTypeSing _proxy = SMetricTypeWord16
+
+instance KnownMetricType Word32 where
+  metricTypeSing :: Proxy Word32 -> SMetricType Word32
+  metricTypeSing _proxy = SMetricTypeWord32
+
+instance KnownMetricType Word64 where
+  metricTypeSing :: Proxy Word64 -> SMetricType Word64
+  metricTypeSing _proxy = SMetricTypeWord64
+
+instance KnownMetricType Int where
+  metricTypeSing :: Proxy Int -> SMetricType Int
+  metricTypeSing _proxy = SMetricTypeInt
+
+instance KnownMetricType Int8 where
+  metricTypeSing :: Proxy Int8 -> SMetricType Int8
+  metricTypeSing _proxy = SMetricTypeInt8
+
+instance KnownMetricType Int16 where
+  metricTypeSing :: Proxy Int16 -> SMetricType Int16
+  metricTypeSing _proxy = SMetricTypeInt16
+
+instance KnownMetricType Int32 where
+  metricTypeSing :: Proxy Int32 -> SMetricType Int32
+  metricTypeSing _proxy = SMetricTypeInt32
+
+instance KnownMetricType Int64 where
+  metricTypeSing :: Proxy Int64 -> SMetricType Int64
+  metricTypeSing _proxy = SMetricTypeInt64
