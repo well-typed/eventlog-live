@@ -44,9 +44,7 @@ services:
     volumes:
       - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
-      - "./config/grafana-dashboards-eventlog-heap.json:/var/lib/grafana/dashboards/eventlog-heap.json"
-      - "./config/grafana-dashboards-eventlog-logs.json:/var/lib/grafana/dashboards/eventlog-logs.json"
-      - "./config/grafana-dashboards-eventlog-threads.json:/var/lib/grafana/dashboards/eventlog-threads.json"
+      - "./config/grafana-dashboards:/var/lib/grafana/dashboards"
 
   loki:
     # container_name: loki
