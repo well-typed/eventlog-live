@@ -155,19 +155,18 @@ common language
 library
   import:          language
   hs-source-dirs:  src
-  exposed-modules:
-    GHC.Eventlog.Live.Otelcol
+  exposed-modules: GHC.Eventlog.Live.Otelcol
+  other-modules:
+    GHC.Debug.Stub.Compat
     GHC.Eventlog.Live.Otelcol.Config
+    GHC.Eventlog.Live.Otelcol.Config.Default
+    GHC.Eventlog.Live.Otelcol.Config.Default.Raw
+    GHC.Eventlog.Live.Otelcol.Config.Types
+    GHC.Eventlog.Live.Otelcol.Control
     GHC.Eventlog.Live.Otelcol.Exporter.Logs
     GHC.Eventlog.Live.Otelcol.Exporter.Metrics
     GHC.Eventlog.Live.Otelcol.Exporter.Traces
     GHC.Eventlog.Live.Otelcol.Stats
-
-  other-modules:
-    GHC.Debug.Stub.Compat
-    GHC.Eventlog.Live.Otelcol.Config.Default
-    GHC.Eventlog.Live.Otelcol.Config.Default.Raw
-    GHC.Eventlog.Live.Otelcol.Config.Types
     Language.Haskell.TH.Lift.Compat
     Options.Applicative.Compat
     Paths_eventlog_live_otelcol
@@ -182,23 +181,32 @@ library
     , dlist                  >=1.0    && <1.1
     , eventlog-live          >=0.5    && <0.6
     , eventlog-socket        >=0.1.0  && <0.2
+    , fast-logger            >=3.0    && <3.3
     , file-embed             >=0.0.16 && <0.1
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
     , hashable               >=1.4    && <1.6
     , hs-opentelemetry-otlp  >=0.1.0  && <0.2
     , HsYAML                 >=0.2    && <0.3
+    , http-api-data          >=0.6    && <0.7
+    , http-types             >=0.12   && <0.13
     , lens-family            >=2.1.3  && <2.2
     , machines               >=0.7.4  && <0.8
     , optparse-applicative   >=0.17   && <0.20
     , proto-lens             >=0.7.1  && <0.8
     , random                 >=1.2    && <1.4
+    , servant                >=0.20   && <0.21
+    , servant-server         >=0.20   && <0.21
     , stm                    >=2.5    && <2.6
     , strict-list            >=0.1    && <0.2
     , table-layout           >=1.0    && <1.1
     , text                   >=1.2    && <2.2
     , unordered-containers   >=0.2.20 && <0.3
     , vector                 >=0.11   && <0.14
+    , wai                    >=3.2    && <3.3
+    , wai-cors               >=0.2    && <0.3
+    , wai-extra              >=3.1    && <3.2
+    , warp                   >=3.4    && <3.5
 
   if flag(use-ghc-debug-stub)
     build-depends: ghc-debug-stub >=0.1 && <1.0

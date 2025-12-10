@@ -642,18 +642,27 @@
       },
       "id": 7,
       "options": {
-        "contentType": "application/json",
+        "contentType": "application/x-www-form-urlencoded",
         "icon": "play",
         "isAuth": false,
         "method": "POST",
         "orientation": "center",
+        "payload": "service-name=$service_name",
         "text": "Start Heap Profiling",
         "type": "header",
-        "url": "http://api.example.com/",
+        "url": "http://localhost:30719/control/heap-profiling/start/",
         "variant": "destructive"
       },
       "pluginVersion": "7.0.23",
-      "targets": [],
+      "targets": [
+        {
+          "direction": "backward",
+          "editorMode": "builder",
+          "expr": "",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
       "title": "",
       "transparent": true,
       "type": "cloudspout-button-panel"
@@ -675,18 +684,27 @@
       },
       "id": 8,
       "options": {
-        "contentType": "application/json",
+        "contentType": "application/x-www-form-urlencoded",
         "icon": "square-shape",
         "isAuth": false,
         "method": "POST",
         "orientation": "center",
+        "payload": "service-name=$service_name",
         "text": "Stop Heap Profiling",
         "type": "header",
-        "url": "http://api.example.com/",
+        "url": "http://localhost:30719/control/heap-profiling/stop/",
         "variant": "destructive"
       },
       "pluginVersion": "7.0.23",
-      "targets": [],
+      "targets": [
+        {
+          "direction": "backward",
+          "editorMode": "builder",
+          "expr": "",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
       "title": "",
       "transparent": true,
       "type": "cloudspout-button-panel"
@@ -708,18 +726,27 @@
       },
       "id": 9,
       "options": {
-        "contentType": "application/json",
+        "contentType": "application/x-www-form-urlencoded",
         "icon": "wrench",
         "isAuth": false,
         "method": "POST",
         "orientation": "center",
-        "text": "Request Heap Profile",
+        "payload": "service-name=$service_name",
+        "text": "Request Heap Census",
         "type": "header",
-        "url": "http://api.example.com/",
+        "url": "http://localhost:30719/control/heap-profiling/census/",
         "variant": "destructive"
       },
       "pluginVersion": "7.0.23",
-      "targets": [],
+      "targets": [
+        {
+          "direction": "backward",
+          "editorMode": "builder",
+          "expr": "",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
       "title": "",
       "transparent": true,
       "type": "cloudspout-button-panel"
@@ -801,5 +828,5 @@
   "timezone": "browser",
   "title": "Eventlog Heap",
   "uid": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
-  "version": 1
+  "version": 4
 }

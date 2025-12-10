@@ -12,6 +12,7 @@ module GHC.Eventlog.Live.Otelcol (
 ) where
 
 import Control.Applicative (asum)
+import Control.Concurrent (forkIO)
 import Control.Concurrent.STM.TChan (newTChanIO)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -62,6 +63,7 @@ import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (Config, FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
+import GHC.Eventlog.Live.Otelcol.Control (runControlApp)
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
@@ -112,6 +114,13 @@ main = do
   withMyEventlogSocket maybeMyEventlogSocket
   withMyGhcDebug logger maybeMyGhcDebugSocket $ do
     --
+    -- Start the control server.
+    let port = 30719
+    writeLog logger DEBUG $
+      "Starting control server on port " <> T.pack (show port)
+    _controlAppThreadId <-
+      forkIO $ runControlApp logger port
+
     -- Read the configuration file.
     let readConfigFile configFile = do
           writeLog logger DEBUG $
@@ -176,7 +185,7 @@ main = do
                   [ "service.name"
                       ~= case maybeServiceName of
                         Nothing -> eventlogLiveName
-                        Just ServiceName{..} -> eventlogLiveName <> "[" <> serviceName <> "]"
+                        Just ServiceName{..} -> eventlogLiveName <> "-for-" <> serviceName
                   , "service.version" ~= eventlogLiveVersion
                   ]
             ]
