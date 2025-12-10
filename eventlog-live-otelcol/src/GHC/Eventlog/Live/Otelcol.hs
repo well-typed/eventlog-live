@@ -173,9 +173,11 @@ main = do
             [ OM.attributes
                 .~ mapMaybe
                   toMaybeKeyValue
-                  [ "service.name" ~= eventlogLiveName
+                  [ "service.name"
+                      ~= case maybeServiceName of
+                        Nothing -> eventlogLiveName
+                        Just ServiceName{..} -> eventlogLiveName <> "[" <> serviceName <> "]"
                   , "service.version" ~= eventlogLiveVersion
-                  , "service.target" ~= maybe AttrNull (AttrText . (.serviceName)) maybeServiceName
                   ]
             ]
 
