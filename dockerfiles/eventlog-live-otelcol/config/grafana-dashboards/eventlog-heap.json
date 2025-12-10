@@ -208,7 +208,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 24,
+        "h": 22,
         "w": 12,
         "x": 0,
         "y": 8
@@ -624,6 +624,105 @@
       ],
       "title": "HeapAllocated for ${service_name}",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 4,
+        "x": 0,
+        "y": 30
+      },
+      "id": 7,
+      "options": {
+        "contentType": "application/json",
+        "icon": "play",
+        "isAuth": false,
+        "method": "POST",
+        "orientation": "center",
+        "text": "Start Heap Profiling",
+        "type": "header",
+        "url": "http://api.example.com/",
+        "variant": "destructive"
+      },
+      "pluginVersion": "7.0.23",
+      "targets": [],
+      "title": "",
+      "transparent": true,
+      "type": "cloudspout-button-panel"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 4,
+        "x": 4,
+        "y": 30
+      },
+      "id": 8,
+      "options": {
+        "contentType": "application/json",
+        "icon": "square-shape",
+        "isAuth": false,
+        "method": "POST",
+        "orientation": "center",
+        "text": "Stop Heap Profiling",
+        "type": "header",
+        "url": "http://api.example.com/",
+        "variant": "destructive"
+      },
+      "pluginVersion": "7.0.23",
+      "targets": [],
+      "title": "",
+      "transparent": true,
+      "type": "cloudspout-button-panel"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 4,
+        "x": 8,
+        "y": 30
+      },
+      "id": 9,
+      "options": {
+        "contentType": "application/json",
+        "icon": "wrench",
+        "isAuth": false,
+        "method": "POST",
+        "orientation": "center",
+        "text": "Request Heap Profile",
+        "type": "header",
+        "url": "http://api.example.com/",
+        "variant": "destructive"
+      },
+      "pluginVersion": "7.0.23",
+      "targets": [],
+      "title": "",
+      "transparent": true,
+      "type": "cloudspout-button-panel"
     }
   ],
   "preload": false,
