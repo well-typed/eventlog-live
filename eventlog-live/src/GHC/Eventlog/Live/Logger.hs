@@ -144,7 +144,7 @@ formatLogRecord :: LogRecord -> Text
 formatLogRecord logRecord =
   TL.toStrict . TLB.toLazyText . mconcat $
     [ -- format the severity
-      maybe "" (\severity -> "[" <> TLB.fromString (toSeverityString severity) <> "]") logRecord.maybeSeverity
+      maybe "" (\severity -> "[" <> TLB.fromString (toSeverityString severity) <> "] ") logRecord.maybeSeverity
     , -- format the body
       TLB.fromText logRecord.body
     , -- format the call-stack, if any
