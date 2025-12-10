@@ -54,6 +54,7 @@ echo 'Start eventlog-live-otelcol (for oddball)' && \
 		--stats \
 		--service-name='oddball' \
 		--config='$DIR/config/oddball.yaml' \
+		--eventlog-flush-interval=1 \
 	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
 		--enable-my-eventlog-socket-unix '$MY_GHC_EVENTLOG_SOCKET' \
 	    -hT \
@@ -70,6 +71,7 @@ ${EVENTLOG_LIVE_OTELCOL_BIN} \
 	--stats \
 	--service-name='eventlog-live-otelcol' \
 	--config='$DIR/config/eventlog-live-otelcol.yaml' \
+	--eventlog-flush-interval=1 \
     --eventlog-socket '$MY_GHC_EVENTLOG_SOCKET' \
     -hT \
     --otelcol-host=localhost
