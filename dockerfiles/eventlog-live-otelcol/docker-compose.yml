@@ -41,6 +41,8 @@ services:
       interval: 1m
       timeout: 10s
       retries: 5
+    environment:
+      GF_INSTALL_PLUGINS: "https://github.com/cloudspout/cloudspout-button-panel/releases/download/7.0.23/cloudspout-button-panel.zip;cloudspout-button-panel"
     volumes:
       - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
