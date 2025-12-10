@@ -115,6 +115,7 @@ library
     GHC.Eventlog.Live.Machine.Analysis.Capability
     GHC.Eventlog.Live.Machine.Analysis.Heap
     GHC.Eventlog.Live.Machine.Analysis.Log
+    GHC.Eventlog.Live.Machine.Analysis.Profile
     GHC.Eventlog.Live.Machine.Analysis.Thread
     GHC.Eventlog.Live.Machine.Core
     GHC.Eventlog.Live.Machine.Decoder
@@ -125,22 +126,24 @@ library
     GHC.Eventlog.Live.Socket
 
   build-depends:
-    , ansi-terminal         >=1.1    && <1.2
-    , base                  >=4.16   && <4.22
-    , bytestring            >=0.11   && <0.13
-    , clock                 >=0.8    && <0.9
-    , co-log-core           >=0.3    && <0.4
-    , dlist                 >=1.0    && <1.1
-    , ghc-events            >=0.20   && <0.21
-    , hashable              >=1.4    && <1.6
-    , machines              >=0.7.4  && <0.8
-    , monad-control         >=1.0    && <1.1
-    , network               >=3.2.7  && <3.3
-    , optparse-applicative  >=0.17   && <0.20
-    , stm                   >=2.5    && <2.6
-    , text                  >=1.2    && <2.2
-    , transformers          >=0.2    && <0.7
-    , unordered-containers  >=0.2.20 && <0.3
+    , ansi-terminal            >=1.1    && <1.2
+    , base                     >=4.16   && <4.22
+    , bytestring               >=0.11   && <0.13
+    , clock                    >=0.8    && <0.9
+    , co-log-core              >=0.3    && <0.4
+    , containers               >=0.6    && <0.8
+    , dlist                    >=1.0    && <1.1
+    , ghc-events               >=0.20   && <0.21
+    , ghc-stack-profiler-core  >=0.1    && <0.2
+    , hashable                 >=1.4    && <1.6
+    , machines                 >=0.7.4  && <0.8
+    , monad-control            >=1.0    && <1.1
+    , network                  >=3.2.7  && <3.3
+    , optparse-applicative     >=0.17   && <0.20
+    , stm                      >=2.5    && <2.6
+    , text                     >=1.2    && <2.2
+    , transformers             >=0.2    && <0.7
+    , unordered-containers     >=0.2.20 && <0.3
 
   -- 2025-12-09:
   -- This configures the build requirements for the vendored copy of

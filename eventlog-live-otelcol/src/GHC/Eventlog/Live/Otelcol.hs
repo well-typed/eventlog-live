@@ -52,6 +52,7 @@ import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
+import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadStateSpan (..))
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -64,14 +65,16 @@ import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
+import GHC.Eventlog.Live.Otelcol.Exporter.Profiles (exportResourceProfiles)
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
+import GHC.Eventlog.Live.Otelcol.Processor.Profiles (processCallStackData)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Socket (runWithEventlogSource)
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (Symbol)
-import Lens.Family2 ((&), (.~))
+import Lens.Family2 ((&), (.~), (^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
 import Options.Applicative qualified as O
@@ -80,6 +83,8 @@ import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
+import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService qualified as OPS
+import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
@@ -88,6 +93,7 @@ import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
+import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
@@ -163,6 +169,9 @@ main = do
               , -- Process the thread events.
                 processThreadEvents logger fullConfig
                   ~> mapping (fmap (fmap (either TelemetryData'Metric TelemetryData'Span)))
+              , -- Process the thread events.
+                processProfileEvents logger fullConfig
+                  ~> mapping (fmap (fmap TelemetryData'Profile))
               ]
             ~> M.liftTick (asResourceTelemetryData eventlogResource eventlogLiveScope)
 
@@ -225,11 +234,13 @@ data TelemetryData
   = TelemetryData'Log OL.LogRecord
   | TelemetryData'Metric OM.Metric
   | TelemetryData'Span OT.Span
+  | TelemetryData'Profile M.CallStackData
 
 data ResourceTelemetryData
   = ResourceTelemetryData'Log OL.ResourceLogs
   | ResourceTelemetryData'Metric OM.ResourceMetrics
   | ResourceTelemetryData'Span OT.ResourceSpans
+  | ResourceTelemetryData'Profile OP.ProfilesData
 
 {- |
 Internal helper.
@@ -267,6 +278,12 @@ exportResourceTelemetryData fullConfig connection =
           ~> M.liftTick (mapping D.toList ~> asExportTracesServiceRequest)
           ~> exportResourceSpans connection
           ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
+    , -- Export profiles.
+      runIf (C.shouldExportProfiles fullConfig) $
+        M.liftTick (mapping getResourceProfiles ~> asParts)
+          ~> M.liftTick asExportProfileServiceRequest
+          ~> exportResourceProfiles connection
+          ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
     ]
 
 getResourceLogs :: ResourceTelemetryData -> Maybe OL.ResourceLogs
@@ -282,6 +299,11 @@ getResourceMetrics = \case
 getResourceSpans :: ResourceTelemetryData -> Maybe OT.ResourceSpans
 getResourceSpans = \case
   (ResourceTelemetryData'Span resourceSpans) -> Just resourceSpans
+  _otherwise -> Nothing
+
+getResourceProfiles :: ResourceTelemetryData -> Maybe OP.ProfilesData
+getResourceProfiles = \case
+  (ResourceTelemetryData'Profile profilesData) -> Just profilesData
   _otherwise -> Nothing
 
 {- |
@@ -300,9 +322,9 @@ asResourceTelemetryData resource instrumentationScope =
     [TelemetryData] ->
     [ResourceTelemetryData]
   toResourceTelemetryData telemetryData =
-    catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans]
+    catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
    where
-    (logRecords, metrics, spans) = partitionTelemetryData telemetryData
+    (logRecords, metrics, spans, profiles) = partitionTelemetryData telemetryData
 
     maybeResourceLogs = do
       scopeLogs <- toScopeLogs instrumentationScope logRecords
@@ -316,19 +338,31 @@ asResourceTelemetryData resource instrumentationScope =
       scopeSpans <- toScopeSpans instrumentationScope spans
       resourceSpans <- toResourceSpans resource [scopeSpans]
       pure $ ResourceTelemetryData'Span resourceSpans
+    maybeProfiles = do
+      (resourceProfile, dictionary) <-
+        ifNonEmpty
+          profiles
+          (processCallStackData resource instrumentationScope profiles)
+      pure $
+        ResourceTelemetryData'Profile $
+          messageWith
+            [ OPS.dictionary .~ dictionary
+            , OPS.resourceProfiles .~ [resourceProfile]
+            ]
 
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span])
-partitionTelemetryData = go ([], [], [])
+partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData])
+partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([OL.LogRecord], [OM.Metric], [OT.Span]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span])
-  go (logs, metrics, spans) = \case
-    [] -> (reverse logs, reverse metrics, reverse spans)
-    (TelemetryData'Log log : rest) -> go (log : logs, metrics, spans) rest
-    (TelemetryData'Metric metric : rest) -> go (logs, metric : metrics, spans) rest
-    (TelemetryData'Span span : rest) -> go (logs, metrics, span : spans) rest
+  go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData])
+  go (logs, metrics, spans, profiles) = \case
+    [] -> (reverse logs, reverse metrics, reverse spans, reverse profiles)
+    (TelemetryData'Log log : rest) -> go (log : logs, metrics, spans, profiles) rest
+    (TelemetryData'Metric metric : rest) -> go (logs, metric : metrics, spans, profiles) rest
+    (TelemetryData'Span span : rest) -> go (logs, metrics, span : spans, profiles) rest
+    (TelemetryData'Profile profile : rest) -> go (logs, metrics, spans, profile : profiles) rest
 
 {- |
 Internal helper.
@@ -730,8 +764,46 @@ runMetricProcessor MetricProcessor{..} fullConfig =
 {-# INLINE runMetricProcessor #-}
 
 --------------------------------------------------------------------------------
+-- processProfileEvents
+--------------------------------------------------------------------------------
+
+processProfileEvents ::
+  (MonadIO m) =>
+  Logger m ->
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+processProfileEvents logger config =
+  M.fanoutTick
+    [ processStackProfSample logger config
+    ]
+
+--------------------------------------------------------------------------------
+-- StackProfSample
+
+processStackProfSample ::
+  (MonadIO m) =>
+  Logger m ->
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+processStackProfSample logger config = do
+  let
+    postProcessor = mapping M.stackProfSamples ~> asParts
+    dataProcessor = M.processStackProfSampleData logger
+  -- aggregators = viaLast
+  runIf (C.processorEnabled (.profiles) (.stackSample) config) $
+    M.liftTick dataProcessor
+      -- ~> aggregate aggregators (C.processorAggregationBatches (.profiles) (.stackSample) config)
+      ~> M.liftTick postProcessor
+      -- TODO: do something with the Metric value, right now it is completely unused
+      ~> M.liftTick (mapping (D.singleton . (.value)))
+      ~> M.batchByTicks (C.processorExportBatches (.profiles) (.stackSample) config)
+
+--------------------------------------------------------------------------------
 -- Aggregation
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- Metric Aggregation
 
 data Aggregators a b = Aggregators
   { nothing :: Process (Tick a) (Tick b)
@@ -819,6 +891,13 @@ asExportMetricsServiceRequest = mapping $ (defMessage &) . (OM.resourceMetrics .
 
 asExportTracesServiceRequest :: Process [OT.ResourceSpans] OTS.ExportTraceServiceRequest
 asExportTracesServiceRequest = mapping $ (defMessage &) . (OTS.resourceSpans .~)
+
+asExportProfileServiceRequest :: Process OP.ProfilesData OPS.ExportProfilesServiceRequest
+asExportProfileServiceRequest = mapping $ \profilesData ->
+  messageWith
+    [ OPS.resourceProfiles .~ profilesData ^. OPS.resourceProfiles
+    , OPS.dictionary .~ profilesData ^. OPS.dictionary
+    ]
 
 toResourceLogs :: OR.Resource -> [OL.ScopeLogs] -> Maybe OL.ResourceLogs
 toResourceLogs resource scopeLogs =

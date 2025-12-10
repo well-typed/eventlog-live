@@ -23,6 +23,11 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   -- ** Heap Profile Breakdown
   heapProfBreakdownEitherReader,
   heapProfBreakdownShow,
+
+  -- ** Things fendor doesn't want to reimplement
+  InfoTable (..),
+  InfoTablePtr (..),
+  metric,
 ) where
 
 import Control.Monad (unless, when)

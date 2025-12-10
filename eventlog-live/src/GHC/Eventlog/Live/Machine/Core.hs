@@ -281,7 +281,8 @@ It preserves ticks but batches items between ticks using `sconcat`.
 -}
 batchByTick ::
   forall a.
-  (Monoid a) => Process (Tick a) (Tick a)
+  (Monoid a) =>
+  Process (Tick a) (Tick a)
 batchByTick = batchByTicks 1
 
 {- |
