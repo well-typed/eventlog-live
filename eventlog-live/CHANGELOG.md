@@ -21,6 +21,13 @@
 - Add support for user messages and markers.
 - **BREAKING**: Replace logging with `co-log-core` contravariant `LogAction`.
 - Add support for concurrent `fanoutTickCC` and `mergeWithTickCC`.
+- **BREAKING**: Rename `EventlogSource` to `EventlogSourceOptions`.
+- **BREAKING**: Rename `GHC.Eventlog.Live.Socket` to `GHC.Eventlog.Live.Source`.
+- Add `GHC.Eventlog.Live.Source.Core`.
+- **BREAKING**: Move `EventlogSourceOptions` to `GHC.Eventlog.Live.Source.Core`.
+- Add `EventlogSourceHandle`.
+- **BREAKING**: Rename `runWithEventlogSource` to `runWithEventlogSourceOptions`.
+- Add `withEventlogSourceHandle` and `runWithEventlogSourceHandle` to `GHC.Eventlog.Live.Source`.
 
 ### 0.4.0.0
 

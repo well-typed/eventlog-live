@@ -1,16 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Socket
+Module      : GHC.Eventlog.Live.Source
 Description : Utilities for running eventlog machines with sockets.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Socket (
-  EventlogSource (..),
+module GHC.Eventlog.Live.Source (
   Tick (..),
   tryConnect,
-  runWithEventlogSource,
+  withEventlogSourceHandle,
+  runWithEventlogSourceHandle,
+  runWithEventlogSourceOptions,
 ) where
 
 import Control.Concurrent (threadDelay)
@@ -29,21 +30,21 @@ import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.Decoder
 import GHC.Eventlog.Live.Machine.Sink
 import GHC.Eventlog.Live.Machine.Source
-import GHC.Eventlog.Live.Options (EventlogSource (..))
+import GHC.Eventlog.Live.Source.Core
 import GHC.RTS.Events (Event)
+import Network.Socket (Socket)
 import Network.Socket qualified as S
-import System.IO (Handle)
 import System.IO qualified as IO
 import Text.Printf (printf)
 
 {- |
-Run an event processor with an eventlog socket.
+Run an event processor with `EventlogSourceOptions`.
 -}
-runWithEventlogSource ::
+runWithEventlogSourceOptions ::
   -- | The logging action.
   Logger IO ->
   -- | The eventlog socket handle.
-  EventlogSource ->
+  EventlogSourceOptions ->
   -- | The initial timeout in seconds for exponential backoff.
   Double ->
   -- | The timeout exponent for exponential backoff.
@@ -57,27 +58,47 @@ runWithEventlogSource ::
   -- | The event processor.
   ProcessT IO (Tick Event) Void ->
   IO ()
-runWithEventlogSource logger eventlogSocket timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
-  withEventlogSource logger timeoutExponent initialTimeoutS eventlogSocket $ \eventlogSource -> do
-    let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
-    let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSource
-    case maybeOutputFile of
-      Nothing ->
-        runT_ $
-          fromSocket ~> decodeEventBatch logger ~> toEventSink
-      Just outputFile ->
-        IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
-          runT_ $
-            fromSocket
-              ~> fanout
-                [ fileSinkBatch outputHandle
-                , decodeEventBatch logger ~> toEventSink
-                ]
+runWithEventlogSourceOptions logger eventlogSourceOptions timeoutExponent initialTimeoutS batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  withEventlogSourceHandle logger timeoutExponent initialTimeoutS eventlogSourceOptions $ \eventlogSourceHandle ->
+    runWithEventlogSourceHandle logger eventlogSourceHandle batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink
 
 {- |
-Run an action with a `Handle` to an `EventlogSource`.
+Run an event processor with an eventlog socket handle.
 -}
-withEventlogSource ::
+runWithEventlogSourceHandle ::
+  -- | The logging action.
+  Logger IO ->
+  -- | The eventlog socket handle.
+  EventlogSourceHandle ->
+  -- | The batch interval in milliseconds.
+  Int ->
+  -- | The number of bytes to read (defaults to 4KiB).
+  Maybe Int ->
+  -- | An optional file to which to stream binary eventlog data.
+  Maybe FilePath ->
+  -- | The event processor.
+  ProcessT IO (Tick Event) Void ->
+  IO ()
+runWithEventlogSourceHandle logger eventlogSourceHandle batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
+  let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
+  let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSourceHandle
+  case maybeOutputFile of
+    Nothing ->
+      runT_ $
+        fromSocket ~> decodeEventBatch logger ~> toEventSink
+    Just outputFile ->
+      IO.withFile outputFile IO.WriteMode $ \outputHandle -> do
+        runT_ $
+          fromSocket
+            ~> fanout
+              [ fileSinkBatch outputHandle
+              , decodeEventBatch logger ~> toEventSink
+              ]
+
+{- |
+Run an action with a `Handle` to the eventlog described by `EventlogSourceOptions`.
+-}
+withEventlogSourceHandle ::
   -- | The logging action.
   Logger IO ->
   -- | The initial timeout in seconds for exponential backoff.
@@ -85,12 +106,12 @@ withEventlogSource ::
   -- | The timeout exponent for exponential backoff.
   Double ->
   -- | The eventlog socket.
-  EventlogSource ->
-  (Handle -> IO ()) ->
+  EventlogSourceOptions ->
+  (EventlogSourceHandle -> IO ()) ->
   IO ()
-withEventlogSource logger initialTimeoutS timeoutExponent eventlogSource action = do
+withEventlogSourceHandle logger initialTimeoutS timeoutExponent eventlogSource action = do
   case eventlogSource of
-    EventlogStdin -> do
+    EventlogSourceOptionsStdin -> do
       writeLog logger INFO $
         "Reading eventlog from stdin"
       let enter = do
@@ -100,20 +121,20 @@ withEventlogSource logger initialTimeoutS timeoutExponent eventlogSource action 
       let leave maybeStdinTextEncoding = do
             traverse_ (IO.hSetEncoding IO.stdin) maybeStdinTextEncoding
             IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
-      E.bracket enter leave . const . action $ IO.stdin
-    EventlogFile eventlogFile -> do
+      E.bracket enter leave . const . action $ EventlogSourceHandleStdin
+    EventlogSourceOptionsFile eventlogFile -> do
       writeLog logger INFO $
         "Reading eventlog from " <> T.pack eventlogFile
       IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
-        action handle
-    EventlogSocketUnix eventlogSocketUnix -> do
+        action $ EventlogSourceHandleFile handle
+    EventlogSourceOptionsSocketUnix eventlogSocketUnix -> do
       writeLog logger INFO $
         "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-      E.bracket (connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix) IO.hClose $ \handle ->
-        action handle
+      E.bracket (connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix) S.close $ \socket ->
+        action $ EventlogSourceHandleSocketUnix socket
 
 {- |
-Connect to an `EventlogSource` with retries and non-randomised exponential backoff.
+Connect to the eventlog described by `EventlogSourceOptions` with retries and non-randomised exponential backoff.
 -}
 connectRetry ::
   -- | The logging action.
@@ -124,14 +145,14 @@ connectRetry ::
   Double ->
   -- | The eventlog socket.
   FilePath ->
-  IO Handle
+  IO Socket
 connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix =
   connectLoop initialTimeoutS
  where
   waitFor :: Double -> IO ()
   waitFor timeoutS = threadDelay $ round $ timeoutS * 1e6
 
-  connectLoop :: Double -> IO Handle
+  connectLoop :: Double -> IO Socket
   connectLoop timeoutS = do
     let connect = do
           writeLog logger DEBUG $
@@ -157,13 +178,13 @@ connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix =
 {- |
 Try to connect to a Unix socket.
 -}
-tryConnect :: FilePath -> IO Handle
+tryConnect :: FilePath -> IO Socket
 tryConnect eventlogSocketUnix =
   E.bracketOnError (S.socket S.AF_UNIX S.Stream S.defaultProtocol) S.close $ \socket -> do
     S.connect socket (S.SockAddrUnix eventlogSocketUnix)
-    handle <- S.socketToHandle socket IO.ReadMode
-    IO.hSetBuffering handle IO.NoBuffering
-    pure handle
+    -- handle <- S.socketToHandle socket IO.ReadMode
+    -- IO.hSetBuffering handle IO.NoBuffering
+    pure socket
 
 {- |
 Interal helper. Pretty-printer for timeout values in microseconds.
