@@ -6,7 +6,7 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.Source (
   -- * Eventlog source
-  sourceHandleBatch,
+  eventlogSourceTick,
   defaultChunkSizeBytes,
 ) where
 
@@ -23,7 +23,7 @@ A source which reads chunks from a `Handle`.
 When input is available, it yields an v`Item`.
 It yields a v`Tick` at each increment of the batch interval.
 -}
-sourceHandleBatch ::
+eventlogSourceTick ::
   (MonadIO m) =>
   -- | The batch interval in milliseconds.
   Int ->
@@ -32,7 +32,7 @@ sourceHandleBatch ::
   -- | The eventlog source handle.
   EventlogSourceHandle ->
   MachineT m k (Tick BS.ByteString)
-sourceHandleBatch batchIntervalMilli chunkSizeBytes h =
+eventlogSourceTick batchIntervalMilli chunkSizeBytes h =
   construct $ start 0
  where
   batchIntervalMicro = milliToMicro batchIntervalMilli

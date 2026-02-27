@@ -28,6 +28,7 @@
 - Add `EventlogSourceHandle`.
 - **BREAKING**: Rename `runWithEventlogSource` to `runWithEventlogSourceOptions`.
 - Add `withEventlogSourceHandle` and `runWithEventlogSourceHandle` to `GHC.Eventlog.Live.Source`.
+- **BREAKING**: Rename `sourceHandleBatch` to `eventlogSourceTick`.
 
 ### 0.4.0.0
 
