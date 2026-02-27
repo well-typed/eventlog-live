@@ -42,7 +42,8 @@ import GHC.Eventlog.Live.Machine.Analysis.Thread
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.WithStartTime
 import GHC.Eventlog.Live.Options
-import GHC.Eventlog.Live.Socket
+import GHC.Eventlog.Live.Source
+import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
@@ -80,9 +81,9 @@ main = do
           ~> dropTick
           ~> mapping D.toList
           ~> influxDBWriter influxDBWriteParams
-  runWithEventlogSource
+  runWithEventlogSourceOptions
     logger
-    eventlogSource
+    eventlogSourceOptions
     eventlogSocketTimeout
     eventlogSocketTimeoutExponent
     batchIntervalMs
@@ -335,7 +336,7 @@ optionsInfo =
     O.idm
 
 data Options = Options
-  { eventlogSource :: EventlogSource
+  { eventlogSourceOptions :: EventlogSourceOptions
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
   , eventlogFlushIntervalS :: Double
@@ -348,7 +349,7 @@ data Options = Options
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> eventlogSourceParser
+    <$> eventlogSourceOptionsParser
     <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
     <*> eventlogFlushIntervalSParser
