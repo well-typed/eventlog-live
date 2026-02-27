@@ -32,7 +32,7 @@ import GHC.Eventlog.Counters.EKG (registerCounters)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, sortByTick)
 import GHC.Eventlog.Live.Machine.Decoder (decodeEventBatch)
 import GHC.Eventlog.Live.Machine.Sink (fileSinkBatch)
-import GHC.Eventlog.Live.Machine.Source (defaultChunkSizeBytes, sourceHandleBatch)
+import GHC.Eventlog.Live.Machine.Source (defaultChunkSizeBytes, eventlogSourceTick)
 import GHC.RTS.Events (Event (evTime))
 
 import Data.Machine (MachineT, ProcessT, await, repeatedly, runT_, (~>))
@@ -52,7 +52,7 @@ main = displayConsoleRegions $ do
     PathTypeFile -> openEventlogFile (optEventLogPath opts)
 
   let input :: MachineT IO k (Tick BS.ByteString)
-      input = sourceHandleBatch 1_000 defaultChunkSizeBytes h
+      input = eventlogSourceTick 1_000 defaultChunkSizeBytes h
 
   let events :: ProcessT IO (Tick BS.ByteString) Event
       events =
