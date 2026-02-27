@@ -15,7 +15,6 @@ import System.Console.Regions (
   setConsoleRegion,
   withConsoleRegion,
  )
-import System.IO (Handle)
 import Text.Printf (PrintfArg, PrintfType, printf)
 
 import qualified Data.ByteString as BS
@@ -38,6 +37,7 @@ import GHC.RTS.Events (Event (evTime))
 
 import Data.Machine (MachineT, ProcessT, await, repeatedly, runT_, (~>))
 import Data.Machine.Fanout (fanout)
+import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (EventlogSourceHandleFile, EventlogSourceHandleSocketUnix))
 
 main :: IO ()
 main = displayConsoleRegions $ do
@@ -47,12 +47,12 @@ main = displayConsoleRegions $ do
         O.fullDesc
           <> O.header "collatzer - demo web app"
 
-  hdl <- case optPathType opts of
+  h <- case optPathType opts of
     PathTypeSocket -> connectToEventlogSocket (optEventLogPath opts)
     PathTypeFile -> openEventlogFile (optEventLogPath opts)
 
   let input :: MachineT IO k (Tick BS.ByteString)
-      input = sourceHandleBatch 1_000 defaultChunkSizeBytes hdl
+      input = sourceHandleBatch 1_000 defaultChunkSizeBytes h
 
   let events :: ProcessT IO (Tick BS.ByteString) Event
       events =
@@ -83,19 +83,17 @@ main = displayConsoleRegions $ do
 -- connecting & opening
 -------------------------------------------------------------------------------
 
-connectToEventlogSocket :: FilePath -> IO Handle
+connectToEventlogSocket :: FilePath -> IO EventlogSourceHandle
 connectToEventlogSocket socketName = do
   s <- Sock.socket Sock.AF_UNIX Sock.Stream Sock.defaultProtocol
   Sock.connect s (Sock.SockAddrUnix socketName)
-  h <- Sock.socketToHandle s IO.ReadMode
-  IO.hSetBuffering h IO.NoBuffering
-  return h
+  return $ EventlogSourceHandleSocketUnix s
 
-openEventlogFile :: FilePath -> IO Handle
+openEventlogFile :: FilePath -> IO EventlogSourceHandle
 openEventlogFile path = do
-  hdl <- IO.openFile path IO.ReadMode
-  IO.hSetBinaryMode hdl True
-  return hdl
+  h <- IO.openFile path IO.ReadMode
+  IO.hSetBinaryMode h True
+  return $ EventlogSourceHandleFile h
 
 -------------------------------------------------------------------------------
 -- output-concurrent + printf
