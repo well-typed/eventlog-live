@@ -6,59 +6,17 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.Source (
   -- * Eventlog source
-  sourceHandleWait,
   sourceHandleBatch,
   defaultChunkSizeBytes,
 ) where
 
-import Control.Exception (catch, throwIO)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString qualified as BS
-import Data.Machine (MachineT (..), PlanT, construct, yield)
+import Data.Machine (MachineT (..), construct, yield)
 import Data.Word (Word64)
 import GHC.Clock (getMonotonicTimeNSec)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), TickInfo (..))
-import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle, EventlogSourceData (..), recv)
-import System.IO (Handle, hWaitForInput)
-import System.IO.Error (isEOFError)
-
--------------------------------------------------------------------------------
--- Socket source
-
-{- |
-A source which reads chunks from a `Handle`.
-When an input is available, it yields an v`Item`.
-When the timeout is reached, it yields a v`Tick`.
--}
-sourceHandleWait ::
-  forall m k.
-  (MonadIO m) =>
-  -- | The wait timeout in milliseconds.
-  Int ->
-  -- | The number of bytes to read.
-  Int ->
-  -- | The eventlog socket handle.
-  Handle ->
-  MachineT m k (Tick BS.ByteString)
-sourceHandleWait timeoutMilli chunkSizeBytes handle =
-  construct $ go 0
- where
-  go :: Word -> PlanT k (Tick BS.ByteString) m ()
-  go tick = do
-    ready <- liftIO $ hWaitForInput' handle timeoutMilli
-    case ready of
-      Ready -> do
-        bs <- liftIO $ BS.hGetSome handle chunkSizeBytes
-        yield (Item bs)
-        go tick
-      NotReady -> do
-        yield TickWithInfo{tickInfo = TickInfo{tick}}
-        go (tick + 1)
-      EOF ->
-        pure ()
-
--------------------------------------------------------------------------------
--- Socket source with batches
+import GHC.Eventlog.Live.Source.Core (EventlogSourceData (..), EventlogSourceHandle, recv)
 
 {- |
 A source which reads chunks from a `Handle`.
@@ -130,28 +88,3 @@ Convert milliseconds to microseconds.
 -}
 milliToMicro :: Int -> Int
 milliToMicro = (* 1_000)
-
-{- |
-Internal helper.
-Type to represent the state of a handle.
--}
-data Ready = Ready | NotReady | EOF
-
-{- |
-Internal helper.
-Wait for input from a `Handle` for a given number of milliseconds.
--}
-hWaitForInput' ::
-  -- | The handle.
-  Handle ->
-  -- | The timeout in milliseconds.
-  Int ->
-  IO Ready
-hWaitForInput' handle timeoutMilli =
-  catch (boolToReady <$> hWaitForInput handle timeoutMilli) handleEOFError
- where
-  boolToReady True = Ready
-  boolToReady False = NotReady
-  handleEOFError err
-    | isEOFError err = pure EOF
-    | otherwise = throwIO err
