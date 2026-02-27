@@ -11,7 +11,8 @@ import Data.Void (Void)
 import Data.Word (Word64)
 import GHC.Eventlog.Live.Machine.Core (sortByTick)
 import GHC.Eventlog.Live.Options
-import GHC.Eventlog.Live.Socket
+import GHC.Eventlog.Live.Source
+import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.RTS.Events (Event)
 import qualified GHC.RTS.Events as E
 import qualified Network.Socket as S
@@ -31,7 +32,7 @@ main = do
   -- Convert the eventlog flush interval to milliseconds
   let batchIntervalMs = round (eventlogFlushIntervalS * 1_000)
 
-  runWithEventlogSource mempty eventlogSocket eventlogSocketTimeout eventlogSocketTimeoutExponent batchIntervalMs Nothing Nothing $
+  runWithEventlogSourceOptions mempty eventlogSourceOptions eventlogSocketTimeout eventlogSocketTimeoutExponent batchIntervalMs Nothing Nothing $
     sortByTick E.evTime
       ~> printSink (RE.makeRegex <$> eventlogPattern)
 
@@ -45,16 +46,6 @@ printSink maybePattern = repeatedly go
       when (maybe True (`RE.matchTest` evStr) maybePattern) . liftIO $
         putStrLn evStr
 
--- | Connect to eventlog socket.
-connect :: EventlogSource -> IO Handle
-connect = \case
-  EventlogSocketUnix socketName -> do
-    socket <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
-    S.connect socket (S.SockAddrUnix socketName)
-    handle <- S.socketToHandle socket IO.ReadMode
-    IO.hSetBuffering handle IO.NoBuffering
-    pure handle
-
 --------------------------------------------------------------------------------
 -- Options
 --------------------------------------------------------------------------------
@@ -63,7 +54,7 @@ options :: O.ParserInfo Options
 options = O.info (optionsParser O.<**> O.helper) O.idm
 
 data Options = Options
-  { eventlogSocket :: EventlogSource
+  { eventlogSourceOptions :: EventlogSourceOptions
   , eventlogSocketTimeout :: Double
   , eventlogSocketTimeoutExponent :: Double
   , eventlogFlushIntervalS :: Double
@@ -73,7 +64,7 @@ data Options = Options
 optionsParser :: O.Parser Options
 optionsParser =
   Options
-    <$> eventlogSourceParser
+    <$> eventlogSourceOptionsParser
     <*> eventlogSocketTimeoutSParser
     <*> eventlogSocketTimeoutExponentParser
     <*> eventlogFlushIntervalSParser
