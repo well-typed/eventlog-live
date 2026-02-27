@@ -5,8 +5,7 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Options (
-  EventlogSource (..),
-  eventlogSourceParser,
+  eventlogSourceOptionsParser,
   eventlogSocketTimeoutSParser,
   eventlogSocketTimeoutExponentParser,
   heapProfBreakdownParser,
@@ -19,6 +18,7 @@ module GHC.Eventlog.Live.Options (
 import Control.Applicative (asum)
 import GHC.Eventlog.Live.Data.Severity (Severity (..), fromSeverityString)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (heapProfBreakdownEitherReader)
+import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 import Options.Applicative.Help.Pretty qualified as OP
@@ -27,18 +27,10 @@ import Options.Applicative.Help.Pretty qualified as OP
 -- Eventlog Source
 
 {- |
-The type of eventlog sockets.
--}
-data EventlogSource
-  = EventlogStdin
-  | EventlogFile FilePath
-  | EventlogSocketUnix FilePath
-
-{- |
 Parser for the eventlog socket.
 -}
-eventlogSourceParser :: O.Parser EventlogSource
-eventlogSourceParser =
+eventlogSourceOptionsParser :: O.Parser EventlogSourceOptions
+eventlogSourceOptionsParser =
   asum
     [ stdinParser
     , fileParser
@@ -46,21 +38,21 @@ eventlogSourceParser =
     ]
  where
   stdinParser =
-    EventlogStdin
+    EventlogSourceOptionsStdin
       <$ O.flag'
         ()
         ( O.long "eventlog-stdin"
             <> O.help "Read the eventlog from stdin."
         )
   fileParser =
-    EventlogFile
+    EventlogSourceOptionsFile
       <$> O.strOption
         ( O.long "eventlog-file"
             <> O.metavar "FILE"
             <> O.help "Read the eventlog from a file."
         )
   socketUnixParser =
-    EventlogSocketUnix
+    EventlogSourceOptionsSocketUnix
       <$> O.strOption
         ( O.long "eventlog-socket"
             <> O.metavar "SOCKET"

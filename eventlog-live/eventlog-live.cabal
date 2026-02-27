@@ -122,7 +122,8 @@ library
     GHC.Eventlog.Live.Machine.Source
     GHC.Eventlog.Live.Machine.WithStartTime
     GHC.Eventlog.Live.Options
-    GHC.Eventlog.Live.Socket
+    GHC.Eventlog.Live.Source
+    GHC.Eventlog.Live.Source.Core
 
   build-depends:
     , ansi-terminal         >=1.1    && <1.2
