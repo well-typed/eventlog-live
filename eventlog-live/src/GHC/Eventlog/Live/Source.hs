@@ -81,7 +81,7 @@ runWithEventlogSourceHandle ::
   IO ()
 runWithEventlogSourceHandle logger eventlogSourceHandle batchIntervalMs maybeChuckSizeBytes maybeOutputFile toEventSink = do
   let chuckSizeBytes = fromMaybe defaultChunkSizeBytes maybeChuckSizeBytes
-  let fromSocket = sourceHandleBatch batchIntervalMs chuckSizeBytes eventlogSourceHandle
+  let fromSocket = eventlogSourceTick batchIntervalMs chuckSizeBytes eventlogSourceHandle
   case maybeOutputFile of
     Nothing ->
       runT_ $
