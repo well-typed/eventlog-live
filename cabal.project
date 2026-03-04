@@ -44,3 +44,31 @@ if impl(ghc >=9.4)
   allow-newer:
     , concurrent-machines-0.3.1.5:base
     , concurrent-machines-0.3.1.5:containers
+
+-- 2026-03-04:
+-- add ghc-stack-profiler
+source-repository-package
+   type:     git
+   location: https://github.com/well-typed/ghc-stack-profiler.git
+   tag:      280df358691efc3cc25d3630710fd5b433ae286a
+   subdir:   ghc-stack-profiler
+
+-- 2026-03-04:
+-- add ghc-stack-profiler-core
+source-repository-package
+   type:     git
+   location: https://github.com/well-typed/ghc-stack-profiler.git
+   tag:      280df358691efc3cc25d3630710fd5b433ae286a
+   subdir:   ghc-stack-profiler-core
+
+-- 2026-03-04:
+-- set +control flag for eventlog-socket
+package eventlog-socket
+  flags:
+    +control
+
+-- 2026-03-04:
+-- set +control flag for ghc-stack-profiler
+package ghc-stack-profiler
+  flags:
+    +control
