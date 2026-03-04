@@ -21,6 +21,7 @@ RUN <<EOF
 cabal update
 mkdir "/eventlog-live/bin"
 cabal install \
+    --constraint="eventlog-socket +control" \
     --overwrite-policy=always \
     --install-method=copy \
     --installdir="/eventlog-live/bin" \
