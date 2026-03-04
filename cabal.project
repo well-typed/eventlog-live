@@ -13,18 +13,6 @@ packages: examples/oddball
 packages: examples/parfib
 packages: examples/spectral-norm
 
-source-repository-package
-  type:     git
-  location: https://github.com/well-typed/eventlog-socket
-  tag:      c8c7914d7443f2b08551dc7175b4f0f273604e51
-  subdir:   eventlog-socket
-
-source-repository-package
-  type:     git
-  location: https://github.com/well-typed/eventlog-socket
-  tag:      c8c7914d7443f2b08551dc7175b4f0f273604e51
-  subdir:   eventlog-socket-control
-
 -- 2026-02-24::
 -- eventlog-socket does not enable control by default.
 package eventlog-socket
