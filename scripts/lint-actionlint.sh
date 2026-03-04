@@ -13,10 +13,10 @@ if [ "${ACTIONLINT}" = "" ]; then
   if ! ACTIONLINT="$(which "actionlint-${EXPECT_VERSION}")"; then
     if ! ACTIONLINT="$(which "actionlint")"; then
       echo "Requires actionlint ${EXPECT_VERSION}; no version found"
-      echo "To install, run:"
-      echo
-      echo "  cabal install actionlint-${EXPECT_VERSION}"
-      echo
+	  echo "To install, see:"
+	  echo
+	  echo "  https://github.com/rhysd/actionlint/blob/v${EXPECT_VERSION}/docs/install.md"
+	  echo
       exit 1
     fi
   fi
