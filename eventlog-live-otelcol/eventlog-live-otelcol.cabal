@@ -111,6 +111,18 @@ flag use-template-haskell-lift
   default:     False
   manual:      False
 
+-- 2026-03-05:
+-- This flag should enable switching between the published version of
+-- hs-opentelemetry-otlp and the vendored copy. Currently, this package
+-- does not compile with the latest release of hs-opentelemetry-otlp,
+-- as it requires support for OTLP 1.9.0. However, once the latest version
+-- of hs-opentelemetry-otlp is published, this flag should be set to True
+-- by default in released versions and should be removed in future versions.
+flag use-hs-opentelemetry-otlp
+  description: Use hs-opentelemetry-otlp in place of the vendored copy.
+  default:     False
+  manual:      True
+
 common language
   ghc-options:
     -Wall -Wcompat -Widentities -Wprepositive-qualified-module
@@ -189,7 +201,6 @@ library
     , ghc-events               >=0.20   && <0.21
     , grapesy                  >=1.0.0  && <1.2
     , hashable                 >=1.4    && <1.6
-    , hs-opentelemetry-otlp    >=0.1.0  && <0.2
     , HsYAML                   >=0.2    && <0.3
     , http-api-data            >=0.6    && <0.7
     , http-types               >=0.12   && <0.13
@@ -223,9 +234,50 @@ library
   else
     build-depends: template-haskell >=2.2 && <3.0
 
+  if flag(use-hs-opentelemetry-otlp)
+    build-depends: hs-opentelemetry-otlp >=0.1.1.0 && <0.3
+
+  else
+    build-depends: eventlog-live-otelcol:vendor-hs-opentelemetry-otlp
+
 executable eventlog-live-otelcol
   import:         language
   main-is:        Main.hs
   hs-source-dirs: app
   build-depends:  eventlog-live-otelcol
   ghc-options:    -threaded -rtsopts -finfo-table-map
+
+-- 2026-03-05:
+-- This is a vendored copy of hs-opentelemetry-otlp with the unreleased changes
+-- from 841a8e191fba3f2c76f6e6fa10d26b644856b7ee, i.e., support for OTLP 1.9.0.
+library vendor-hs-opentelemetry-otlp
+  exposed-modules:
+    Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService
+    Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService_Fields
+    Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService
+    Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields
+    Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService
+    Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields
+    Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService
+    Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields
+    Proto.Opentelemetry.Proto.Common.V1.Common
+    Proto.Opentelemetry.Proto.Common.V1.Common_Fields
+    Proto.Opentelemetry.Proto.Logs.V1.Logs
+    Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields
+    Proto.Opentelemetry.Proto.Metrics.V1.Metrics
+    Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields
+    Proto.Opentelemetry.Proto.Profiles.V1development.Profiles
+    Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields
+    Proto.Opentelemetry.Proto.Resource.V1.Resource
+    Proto.Opentelemetry.Proto.Resource.V1.Resource_Fields
+    Proto.Opentelemetry.Proto.Trace.V1.Trace
+    Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields
+
+  hs-source-dirs:
+    vendor/hs-opentelemetry-otlp-841a8e191fba3f2c76f6e6fa10d26b644856b7ee/src
+
+  build-depends:
+    , base                >=4.7 && <5
+    , proto-lens-runtime
+
+  default-language: Haskell2010
