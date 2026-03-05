@@ -9,7 +9,7 @@
 let
   # Use GHC 9.10.1 with updated all-cabal-hashes
   haskellPackages =
-    (pkgs.haskell.packages.ghc9101.override { all-cabal-hashes = all-cabal-hashes; }).extend
+    (pkgs.haskell.packages.ghc9103.override { all-cabal-hashes = all-cabal-hashes; }).extend
       ((import ./overlay.nix) (pkgs));
 
   # Build the eventlog-live project
@@ -232,6 +232,9 @@ in
       server = {
         http_port = 3000;
         http_addr = "0.0.0.0";
+      };
+      security = {
+        secret_key = "thisisrandom";
       };
     };
   };
