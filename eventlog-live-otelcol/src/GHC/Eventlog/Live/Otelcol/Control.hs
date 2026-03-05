@@ -1,10 +1,18 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Otelcol.Control (
+  ControlServerPort (..),
   ControlServerApi (..),
   startControlServer,
 ) where
 
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Otelcol.Options (ServiceName (..))
+import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
+
+#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
@@ -19,10 +27,6 @@ import Data.HashMap.Strict qualified as M
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Otelcol.Options (ServiceName (..))
-import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
 import GHC.Eventlog.Socket.Control qualified as C (requestHeapCensus, startHeapProfiling, stopHeapProfiling)
 import GHC.Generics (Generic)
 import Network.Socket (Socket)
@@ -37,13 +41,53 @@ import Servant.Server (Handler, Server, ServerError (..), serve)
 import System.Log.FastLogger (fromLogStr)
 import Web.FormUrlEncoded (Form, FormOptions, FromForm (..), genericFromForm)
 import Web.FormUrlEncoded qualified as Form (FormOptions (fieldLabelModifier), defaultFormOptions)
+#endif
 
 --------------------------------------------------------------------------------
 -- Control App
 --------------------------------------------------------------------------------
 
-startControlServer :: Logger IO -> Warp.Port -> IO ControlServerApi
-startControlServer logger port = do
+newtype ControlServerPort = ControlServerPort Int
+  deriving (Eq, Show)
+
+data ControlServerApi = ControlServerApi
+  { notifyNewConnection :: ServiceName -> EventlogSourceHandle -> IO ()
+  , notifyEndConnection :: ServiceName -> IO ()
+  , stop :: IO ()
+  }
+
+startControlServer :: Logger IO -> ControlServerPort -> IO ControlServerApi
+#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+startControlServer = startControlServerIfEnabled
+#else
+startControlServer = startControlServerIfDisabled
+#endif
+
+--------------------------------------------------------------------------------
+-- Control App - Disabled
+--------------------------------------------------------------------------------
+
+#ifndef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+startControlServerIfDisabled :: Logger IO -> ControlServerPort -> IO ControlServerApi
+startControlServerIfDisabled logger _controlServerPort = do
+  writeLog logger WARN $
+    "This binary was built without support for the control server."
+  let notifyNewConnection :: ServiceName -> EventlogSourceHandle -> IO ()
+      notifyNewConnection _serviceName _eventlogSourceHandle = pure ()
+  let notifyEndConnection :: ServiceName -> IO ()
+      notifyEndConnection _serviceName = pure ()
+  let stop :: IO ()
+      stop = pure ()
+  pure ControlServerApi{..}
+#endif
+
+--------------------------------------------------------------------------------
+-- Control App - Enabled
+--------------------------------------------------------------------------------
+
+#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+startControlServerIfEnabled :: Logger IO -> ControlServerPort -> IO ControlServerApi
+startControlServerIfEnabled logger (ControlServerPort port) = do
   -- Create middleware that logs all incoming requests.
   requestLogger <- mkLoggerMiddleware logger
 
@@ -108,7 +152,6 @@ corsResourcePolicy _req = do
 
 --------------------------------------------------------------------------------
 -- Control Server
---------------------------------------------------------------------------------
 
 controlServer :: Logger IO -> TVar (HashMap ServiceName EventlogSourceHandle) -> Server (HealthApi :<|> ControlApi)
 controlServer logger eventlogSourceHandleMapVar =
@@ -196,17 +239,6 @@ controlServer logger eventlogSourceHandleMapVar =
 
 --------------------------------------------------------------------------------
 -- Control API
---------------------------------------------------------------------------------
-
-data ControlServerApi = ControlServerApi
-  { notifyNewConnection :: ServiceName -> EventlogSourceHandle -> IO ()
-  , notifyEndConnection :: ServiceName -> IO ()
-  , stop :: IO ()
-  }
-
---------------------------------------------------------------------------------
--- Control API
---------------------------------------------------------------------------------
 
 type ControlApi =
   "control" :> EventlogSocketApi
@@ -255,14 +287,12 @@ type BadCORSPreflightResp =
 
 --------------------------------------------------------------------------------
 -- Health
---------------------------------------------------------------------------------
 
 data Health = Health
   deriving (Generic, Show)
 
 --------------------------------------------------------------------------------
 -- StartHeapProfilingReq
---------------------------------------------------------------------------------
 
 newtype StartHeapProfilingReq = StartHeapProfilingReq
   { serviceName :: Text
@@ -279,7 +309,6 @@ instance FromJSON StartHeapProfilingReq where
 
 --------------------------------------------------------------------------------
 -- StopHeapProfilingReq
---------------------------------------------------------------------------------
 
 newtype StopHeapProfilingReq = StopHeapProfilingReq
   { serviceName :: Text
@@ -296,7 +325,6 @@ instance FromJSON StopHeapProfilingReq where
 
 --------------------------------------------------------------------------------
 -- RequestHeapCensusReq
---------------------------------------------------------------------------------
 
 newtype RequestHeapCensusReq = RequestHeapCensusReq
   { serviceName :: Text
@@ -313,7 +341,6 @@ instance FromJSON RequestHeapCensusReq where
 
 --------------------------------------------------------------------------------
 -- Internal helpers.
---------------------------------------------------------------------------------
 
 -- | Generic options for `FromForm`.
 myFormOptions :: FormOptions
@@ -339,3 +366,4 @@ camelTo2 c = map toLower . go2 . go1
   go2 "" = ""
   go2 (l : u : xs) | isLower l && isUpper u = l : c : u : go2 xs
   go2 (x : xs) = x : go2 xs
+#endif
