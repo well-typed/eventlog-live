@@ -107,19 +107,20 @@ logger colony = annotateStackStringIO "Logger Thread" $ forever $ do
 -- Main --------------------------------------------------------------------
 
 main :: IO ()
-main = setupRootStackProfiler True $ \ manager -> withStackProfiler manager (SampleIntervalMs 30) $ do
+main = do
   traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
-  putStrLn "Starting ColonySim... (Ctrl-C to stop)"
-  colony <- initColony
+  setupRootStackProfiler True $ \ manager -> withStackProfiler manager (SampleIntervalMs 30) $ do
+    putStrLn "Starting ColonySim... (Ctrl-C to stop)"
+    colony <- initColony
 
-  -- Logger thread
-  _ <- forkIO $ logger colony
+    -- Logger thread
+    _ <- forkIO $ logger colony
 
-  -- Simulation loop
-  let
-    loop :: Integer -> IO ()
-    loop tickNum = annotateStackStringIO "CallLoop" $ do
-      tick colony
-      annotateStackStringIO "Colony Sleep" $ threadDelay tickMicros
-      loop (tickNum + 1)
-  loop 0
+    -- Simulation loop
+    let
+      loop :: Integer -> IO ()
+      loop tickNum = annotateStackStringIO "CallLoop" $ do
+        tick colony
+        annotateStackStringIO "Colony Sleep" $ threadDelay tickMicros
+        loop (tickNum + 1)
+    loop 0
