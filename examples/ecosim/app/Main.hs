@@ -10,7 +10,7 @@ import Data.Foldable
 import Data.List qualified as List
 import GHC.Eventlog.Socket
 import GHC.Stack.Annotation
-import GHC.Stack.Profiler.Sampler
+import GHC.Stack.Profiler
 import System.Environment
 import System.Random
 
@@ -107,7 +107,7 @@ logger colony = annotateStackStringIO "Logger Thread" $ forever $ do
 -- Main --------------------------------------------------------------------
 
 main :: IO ()
-main = withStackProfiler (SampleIntervalMs 30) $ do
+main = setupRootStackProfiler True $ \ manager -> withStackProfiler manager (SampleIntervalMs 30) $ do
   traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
   putStrLn "Starting ColonySim... (Ctrl-C to stop)"
   colony <- initColony

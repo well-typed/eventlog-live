@@ -9,6 +9,7 @@ if impl(ghc <9.12)
   packages: eventlog-live-otelcol
 
 packages: examples/collatzer
+packages: examples/ecosim
 packages: examples/dumper
 packages: examples/fibber
 packages: examples/oddball

@@ -8,7 +8,7 @@ export GHC_EVENTLOG_SOCKET="/tmp/ecosim_eventlog.sock"
 
 # Build ecosim
 echo "Build ecosim"
-cabal build -w ghc-9.14 ecosim -v0
+cabal build -w ghc-9.14 ecosim
 ECOSIM_BIN=$(cabal list-bin -w ghc-9.14 exe:ecosim -v0 | head -n1)
 
 # Build eventlog-live-otelcol
