@@ -30,6 +30,7 @@ services:
       - "--eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock"
       - "-hT"
       - "--otelcol-host=otelcol"
+      - "--eventlog-flush-interval=1"
 
   grafana:
     # container_name: grafana
@@ -42,7 +43,7 @@ services:
       timeout: 10s
       retries: 5
     environment:
-      GF_INSTALL_PLUGINS: "https://github.com/cloudspout/cloudspout-button-panel/releases/download/7.0.23/cloudspout-button-panel.zip;cloudspout-button-panel"
+      GF_PLUGINS_PREINSTALL: "cloudspout-button-panel@@https://github.com/cloudspout/cloudspout-button-panel/releases/download/7.0.23/cloudspout-button-panel.zip,grafana-pyroscope-app"
     volumes:
       - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
       - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
@@ -70,6 +71,7 @@ services:
         condition: "service_started"
     command:
       - "--config=/etc/otelcol/config.yaml"
+      - "--feature-gates=service.profilesSupport"
     volumes:
       - "./config/otelcol.yaml:/etc/otelcol/config.yaml"
     ports:
@@ -86,6 +88,15 @@ services:
       - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
     ports:
       - "9090:9090" # Prometheus
+
+  pyroscope:
+    # container_name: pyroscope
+    image: grafana/pyroscope:1.16.0
+    command: ["-config.file=/etc/pyroscope.yaml"]
+    volumes:
+      - "./config/pyroscope.yaml:/etc/pyroscope.yaml"
+    ports:
+      - 4040:4040 # Pyroscope
 
   tempo:
     # container_name: tempo
