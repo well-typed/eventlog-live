@@ -76,7 +76,7 @@ jobs:
           key: ${{ steps.cache-cabal.outputs.cache-primary-key }}
 
       - name: 🏗️ Build
-        run: cabal build all ${{ matrix.cabal-flags }}
+        run: ./scripts/build-from-sdist.sh ${{ matrix.cabal-flags }}
 
       - name: 🧪 Test fibber-dumper
         run: ./examples/fibber/fibber-dumper.sh
