@@ -1,6 +1,7 @@
 pkgs: final: prev: {
   # Jailbreak proto-lens to allow it to build with newer dependencies
   grapesy = pkgs.haskell.lib.dontCheck prev.grapesy;
+  hs-opentelemetry-otlp = prev.callHackage "hs-opentelemetry-otlp" "0.2.0.0" { };
   http2 = prev.callHackage "http2" "5.3.9" { };
   http2-tls = prev.callHackage "http2-tls" "0.4.5" { };
   eventlog-socket = prev.callHackage "eventlog-socket" "0.1.2.0" { };
