@@ -3,11 +3,11 @@
     "all-cabal-hashes": {
       "flake": false,
       "locked": {
-        "lastModified": 1772714106,
-        "narHash": "sha256-X1jXqkXE9c25Yex9jV1PAnw7oF2DC7dGClfyp+aW/FM=",
+        "lastModified": 1773158342,
+        "narHash": "sha256-+2SLcR1wA1esovNb92mnOTwWZLk5ugtdBnegZXzRm3M=",
         "owner": "commercialhaskell",
         "repo": "all-cabal-hashes",
-        "rev": "5fd38da17eb47aa9eebe7e1ce6240a743ea3fe00",
+        "rev": "7c6f07f09174ca2bd148fcae4492a3067a15969f",
         "type": "github"
       },
       "original": {
@@ -71,11 +71,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1772624091,
-        "narHash": "sha256-QKyJ0QGWBn6r0invrMAK8dmJoBYWoOWy7lN+UHzW1jc=",
+        "lastModified": 1772963539,
+        "narHash": "sha256-9jVDGZnvCckTGdYT53d/EfznygLskyLQXYwJLKMPsZs=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "80bdc1e5ce51f56b19791b52b2901187931f5353",
+        "rev": "9dcb002ca1690658be4a04645215baea8b95f31d",
         "type": "github"
       },
       "original": {
