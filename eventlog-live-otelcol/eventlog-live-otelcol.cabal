@@ -182,7 +182,7 @@ library
     , data-default             >=0.2    && <0.9
     , dlist                    >=1.0    && <1.1
     , eventlog-live            >=0.5    && <0.6
-    , eventlog-socket          >=0.1.1  && <0.2
+    , eventlog-socket          >=0.1.2  && <0.2
     , eventlog-socket-control  >=0.1    && <0.2
     , fast-logger              >=3.0    && <3.3
     , file-embed               >=0.0.16 && <0.1
