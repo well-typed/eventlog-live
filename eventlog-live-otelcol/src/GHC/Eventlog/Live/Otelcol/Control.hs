@@ -9,13 +9,13 @@ import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Aeson qualified as JSON
+import Data.Aeson.Types (FromJSON (..), Parser, Value, genericParseJSON)
 import Data.Binary qualified as B
-import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isLower, isUpper, toLower)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
-import Data.List qualified as L
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
@@ -25,18 +25,18 @@ import GHC.Eventlog.Live.Otelcol.Options (ServiceName (..))
 import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
 import GHC.Eventlog.Socket.Control qualified as C (requestHeapCensus, startHeapProfiling, stopHeapProfiling)
 import GHC.Generics (Generic)
-import Network.HTTP.Types.Header (hOrigin)
 import Network.Socket (Socket)
 import Network.Socket.ByteString.Lazy qualified as SBSL
 import Network.Wai (Middleware, Request (..))
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
 import Network.Wai.Middleware.RequestLogger (Destination (..), DetailedSettings (..), OutputFormat (..), RequestLoggerSettings (..), defaultDetailedSettings, defaultRequestLoggerSettings, mkRequestLogger)
-import Servant (throwError)
-import Servant.API (FormUrlEncoded, Get, JSON, PostAccepted, ReqBody, (:>), type (:<|>) (..))
+import Servant (PlainText, throwError)
+import Servant.API (FormUrlEncoded, Get, Header, Headers, JSON, NoContent (..), PostAccepted, ReqBody, StdMethod (..), Verb, addHeader, (:>), type (:<|>) (..))
 import Servant.Server (Handler, Server, ServerError (..), serve)
 import System.Log.FastLogger (fromLogStr)
-import Web.FormUrlEncoded (Form, FormOptions (fieldLabelModifier), FromForm (..), defaultFormOptions, genericFromForm)
+import Web.FormUrlEncoded (Form, FormOptions, FromForm (..), genericFromForm)
+import Web.FormUrlEncoded qualified as Form (FormOptions (fieldLabelModifier), defaultFormOptions)
 
 --------------------------------------------------------------------------------
 -- Control App
@@ -91,23 +91,20 @@ mkLoggerMiddleware logger =
               }
       }
 
+-- TODO: The CORS policy should be configurable.
 corsResourcePolicy :: Request -> Maybe CorsResourcePolicy
-corsResourcePolicy req = do
-  origin <- findOrigin req
+corsResourcePolicy _req = do
   pure
     CorsResourcePolicy
-      { corsOrigins = Just ([origin], True)
+      { corsOrigins = Nothing
       , corsMethods = ["GET", "POST"]
-      , corsRequestHeaders = []
+      , corsRequestHeaders = ["Content-Type", "Origin"]
       , corsExposedHeaders = Nothing
       , corsMaxAge = Nothing -- TODO: Pick a timeout.
-      , corsVaryOrigin = True
-      , corsRequireOrigin = True
-      , corsIgnoreFailures = False
+      , corsVaryOrigin = False
+      , corsRequireOrigin = False
+      , corsIgnoreFailures = True -- TODO: Ignoring failures should be optional and linked to the badCORSPreflight handler.
       }
-
-findOrigin :: Request -> Maybe ByteString
-findOrigin = fmap snd . L.find ((hOrigin ==) . fst) . requestHeaders
 
 --------------------------------------------------------------------------------
 -- Control Server
@@ -123,7 +120,10 @@ controlServer logger eventlogSourceHandleMapVar =
       "Received request on /health."
 
   eventlogSocket :: Server EventlogSocketApi
-  eventlogSocket = startHeapProfiling :<|> stopHeapProfiling :<|> requestHeapCensus
+  eventlogSocket =
+    (startHeapProfiling :<|> badCORSPreflight)
+      :<|> (stopHeapProfiling :<|> badCORSPreflight)
+      :<|> (requestHeapCensus :<|> badCORSPreflight)
    where
     startHeapProfiling :: StartHeapProfilingReq -> Handler ()
     startHeapProfiling req = do
@@ -148,6 +148,18 @@ controlServer logger eventlogSourceHandleMapVar =
       -- Send the control command over the socket.
       withSocketFor (ServiceName req.serviceName) $ \socket -> do
         liftIO (SBSL.sendAll socket $ B.encode C.requestHeapCensus)
+
+    -- This accepts broken CORS preflight requests, such as those sent by Grafana on Safari.
+    --
+    -- TODO: This should be optional, defaulting to a 400 (Bad Request).
+    badCORSPreflight :: Handler BadCORSPreflightResp
+    badCORSPreflight = do
+      liftIO . writeLog logger DEBUG $ "Received preflight request."
+      pure $
+        addHeader "*" $
+          addHeader "GET, POST" $
+            addHeader "*" $
+              NoContent
 
     withSocketFor :: ServiceName -> (Socket -> Handler ()) -> Handler ()
     withSocketFor serviceName action = do
@@ -213,22 +225,33 @@ type HealthApi =
 
 type EventlogSocketApi =
   "eventlog-socket"
-    :> ( "start-heap-profiling" :> StartHeapProfilingApi
-          :<|> "stop-heap-profiling" :> StopHeapProfilingApi
-          :<|> "request-heap-census" :> RequestHeapCensusApi
+    :> ( "start-heap-profiling" :> (StartHeapProfilingApi :<|> BadCORSPreflight)
+          :<|> "stop-heap-profiling" :> (StopHeapProfilingApi :<|> BadCORSPreflight)
+          :<|> "request-heap-census" :> (RequestHeapCensusApi :<|> BadCORSPreflight)
        )
 
 type StartHeapProfilingApi =
-  ReqBody '[FormUrlEncoded] StartHeapProfilingReq
+  ReqBody '[FormUrlEncoded, JSON] StartHeapProfilingReq
     :> PostAccepted '[JSON] ()
 
 type StopHeapProfilingApi =
-  ReqBody '[FormUrlEncoded] StopHeapProfilingReq
+  ReqBody '[FormUrlEncoded, JSON] StopHeapProfilingReq
     :> PostAccepted '[JSON] ()
 
 type RequestHeapCensusApi =
-  ReqBody '[FormUrlEncoded] RequestHeapCensusReq
+  ReqBody '[FormUrlEncoded, JSON] RequestHeapCensusReq
     :> PostAccepted '[JSON] ()
+
+type BadCORSPreflight =
+  Verb 'OPTIONS 204 '[PlainText] BadCORSPreflightResp
+
+type BadCORSPreflightResp =
+  Headers
+    '[ Header "Access-Control-Allow-Origin" String
+     , Header "Access-Control-Allow-Methods" String
+     , Header "Access-Control-Allow-Headers" String
+     ]
+    NoContent
 
 --------------------------------------------------------------------------------
 -- Health
@@ -250,6 +273,10 @@ instance FromForm StartHeapProfilingReq where
   fromForm :: Form -> Either Text StartHeapProfilingReq
   fromForm = genericFromForm myFormOptions
 
+instance FromJSON StartHeapProfilingReq where
+  parseJSON :: Value -> Parser StartHeapProfilingReq
+  parseJSON = genericParseJSON myJSONOptions
+
 --------------------------------------------------------------------------------
 -- StopHeapProfilingReq
 --------------------------------------------------------------------------------
@@ -262,6 +289,10 @@ newtype StopHeapProfilingReq = StopHeapProfilingReq
 instance FromForm StopHeapProfilingReq where
   fromForm :: Form -> Either Text StopHeapProfilingReq
   fromForm = genericFromForm myFormOptions
+
+instance FromJSON StopHeapProfilingReq where
+  parseJSON :: Value -> Parser StopHeapProfilingReq
+  parseJSON = genericParseJSON myJSONOptions
 
 --------------------------------------------------------------------------------
 -- RequestHeapCensusReq
@@ -276,15 +307,27 @@ instance FromForm RequestHeapCensusReq where
   fromForm :: Form -> Either Text RequestHeapCensusReq
   fromForm = genericFromForm myFormOptions
 
-myFormOptions :: FormOptions
-myFormOptions =
-  defaultFormOptions
-    { fieldLabelModifier = camelTo2 '-'
-    }
+instance FromJSON RequestHeapCensusReq where
+  parseJSON :: Value -> Parser RequestHeapCensusReq
+  parseJSON = genericParseJSON myJSONOptions
 
 --------------------------------------------------------------------------------
 -- Internal helpers.
 --------------------------------------------------------------------------------
+
+-- | Generic options for `FromForm`.
+myFormOptions :: FormOptions
+myFormOptions =
+  Form.defaultFormOptions
+    { Form.fieldLabelModifier = camelTo2 '-'
+    }
+
+-- | Generic options for `FromJSON`.
+myJSONOptions :: JSON.Options
+myJSONOptions =
+  JSON.defaultOptions
+    { JSON.fieldLabelModifier = camelTo2 '-'
+    }
 
 -- | Taken from aeson.
 camelTo2 :: Char -> String -> String
