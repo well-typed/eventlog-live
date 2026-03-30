@@ -34,7 +34,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
   "links": [],
   "panels": [
     {
@@ -120,7 +119,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "editorMode": "builder",
@@ -228,7 +227,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "disableTextWrap": false,
@@ -345,7 +344,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -371,7 +370,6 @@
           "editorMode": "builder",
           "expr": "avg(ghc_eventlog_BlocksSize_bytes{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
-          "hide": false,
           "includeNullMetadata": true,
           "instant": false,
           "legendFormat": "BlocksSize",
@@ -388,7 +386,6 @@
           "editorMode": "builder",
           "expr": "avg(ghc_eventlog_HeapLive_bytes{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
-          "hide": false,
           "includeNullMetadata": true,
           "instant": false,
           "legendFormat": "HeapLive",
@@ -479,7 +476,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "disableTextWrap": false,
@@ -501,7 +498,6 @@
           "editorMode": "builder",
           "expr": "avg(ghc_eventlog_MemNeeded{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
-          "hide": false,
           "includeNullMetadata": true,
           "instant": false,
           "legendFormat": "MemNeeded",
@@ -518,7 +514,6 @@
           "editorMode": "builder",
           "expr": "avg(ghc_eventlog_MemReturned{exported_job=\"$service_name\"})",
           "fullMetaSearch": false,
-          "hide": false,
           "includeNullMetadata": true,
           "instant": false,
           "legendFormat": "MemReturned",
@@ -608,7 +603,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "disableTextWrap": false,
@@ -650,7 +645,7 @@
         "payload": "service-name=$service_name",
         "text": "Start Heap Profiling",
         "type": "header",
-        "url": "http://localhost:30719/control/heap-profiling/start/",
+        "url": "http://localhost:30719/control/eventlog-socket/start-heap-profiling",
         "variant": "destructive"
       },
       "pluginVersion": "7.0.23",
@@ -692,7 +687,7 @@
         "payload": "service-name=$service_name",
         "text": "Stop Heap Profiling",
         "type": "header",
-        "url": "http://localhost:30719/control/heap-profiling/stop/",
+        "url": "http://localhost:30719/control/eventlog-socket/stop-heap-profiling",
         "variant": "destructive"
       },
       "pluginVersion": "7.0.23",
@@ -779,6 +774,7 @@
         },
         "refresh": 2,
         "regex": "",
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
@@ -828,5 +824,6 @@
   "timezone": "browser",
   "title": "Eventlog Heap",
   "uid": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
-  "version": 1
+  "version": 1,
+  "weekStart": ""
 }
