@@ -622,129 +622,223 @@
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
         "overrides": []
       },
       "gridPos": {
         "h": 2,
-        "w": 4,
+        "w": 12,
         "x": 0,
         "y": 30
       },
-      "id": 7,
+      "id": 11,
       "options": {
-        "contentType": "application/x-www-form-urlencoded",
-        "icon": "play",
-        "isAuth": false,
-        "method": "POST",
-        "orientation": "center",
-        "payload": "service-name=$service_name",
-        "text": "Start Heap Profiling",
-        "type": "header",
-        "url": "http://localhost:30719/control/eventlog-socket/start-heap-profiling",
-        "variant": "destructive"
+        "inlineEditing": false,
+        "panZoom": false,
+        "root": {
+          "background": {
+            "color": {
+              "fixed": "transparent"
+            }
+          },
+          "border": {
+            "color": {
+              "fixed": "dark-green"
+            }
+          },
+          "constraint": {
+            "horizontal": "left",
+            "vertical": "top"
+          },
+          "elements": [
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                }
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/eventlog-socket/request-heap-census",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Requested Heap Census"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Request Heap Census",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "RequestHeapCensus",
+              "placement": {
+                "height": 45,
+                "left": 400,
+                "rotation": 0,
+                "top": 0,
+                "width": 195
+              },
+              "type": "button"
+            },
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                }
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/eventlog-socket/stop-heap-profiling",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Stopped Heap Profiling"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Stop Heap Profiling",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "StopHeapProfiling",
+              "placement": {
+                "height": 45,
+                "left": 200,
+                "top": 0,
+                "width": 195
+              },
+              "type": "button"
+            },
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "width": 0
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/eventlog-socket/start-heap-profiling",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Started Heap Profiling"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Start Heap Profiling",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "StartHeapProfiling",
+              "placement": {
+                "height": 45,
+                "left": 0,
+                "top": 0,
+                "width": 195
+              },
+              "type": "button"
+            }
+          ],
+          "name": "Element 1774877699342",
+          "placement": {
+            "height": 100,
+            "left": 0,
+            "rotation": 0,
+            "top": 0,
+            "width": 100
+          },
+          "type": "frame"
+        },
+        "showAdvancedTypes": true,
+        "tooltip": {
+          "disableForOneClick": false,
+          "mode": "single"
+        },
+        "zoomToContent": false
       },
-      "pluginVersion": "7.0.23",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
-          "direction": "backward",
-          "editorMode": "builder",
-          "expr": "",
-          "queryType": "range",
           "refId": "A"
         }
       ],
       "title": "",
       "transparent": true,
-      "type": "cloudspout-button-panel"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 4,
-        "x": 4,
-        "y": 30
-      },
-      "id": 8,
-      "options": {
-        "contentType": "application/x-www-form-urlencoded",
-        "icon": "square-shape",
-        "isAuth": false,
-        "method": "POST",
-        "orientation": "center",
-        "payload": "service-name=$service_name",
-        "text": "Stop Heap Profiling",
-        "type": "header",
-        "url": "http://localhost:30719/control/eventlog-socket/stop-heap-profiling",
-        "variant": "destructive"
-      },
-      "pluginVersion": "7.0.23",
-      "targets": [
-        {
-          "direction": "backward",
-          "editorMode": "builder",
-          "expr": "",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "",
-      "transparent": true,
-      "type": "cloudspout-button-panel"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 4,
-        "x": 8,
-        "y": 30
-      },
-      "id": 9,
-      "options": {
-        "contentType": "application/x-www-form-urlencoded",
-        "icon": "wrench",
-        "isAuth": false,
-        "method": "POST",
-        "orientation": "center",
-        "payload": "service-name=$service_name",
-        "text": "Request Heap Census",
-        "type": "header",
-        "url": "http://localhost:30719/control/eventlog-socket/request-heap-census",
-        "variant": "destructive"
-      },
-      "pluginVersion": "7.0.23",
-      "targets": [
-        {
-          "direction": "backward",
-          "editorMode": "builder",
-          "expr": "",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "",
-      "transparent": true,
-      "type": "cloudspout-button-panel"
+      "type": "canvas"
     }
   ],
   "preload": false,
