@@ -59,7 +59,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otelcol.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Control (ControlServerApi (..), ControlServerPort (..), startControlServer)
+import GHC.Eventlog.Live.Otelcol.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
@@ -109,10 +109,10 @@ main = do
   withMyGhcDebug logger maybeMyGhcDebugSocket $ do
     --
     -- Start the control server.
-    let port = ControlServerPort 30719
+    let port = ControlPort 30719
     writeLog logger DEBUG $
       "Starting control server on port " <> T.pack (show port)
-    controlServer <- startControlServer logger port
+    controlServer <- startControlServer logger controlOptions
 
     -- Read the configuration file.
     let readConfigFile configFile = do

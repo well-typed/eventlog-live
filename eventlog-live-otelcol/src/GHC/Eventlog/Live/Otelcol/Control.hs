@@ -2,14 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Otelcol.Control (
-  ControlServerPort (..),
   ControlServerApi (..),
   startControlServer,
 ) where
 
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Otelcol.Options (ServiceName (..))
+import GHC.Eventlog.Live.Otelcol.Options (ControlOptions, ServiceName (..))
 import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
 
 #ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
@@ -27,17 +26,18 @@ import Data.HashMap.Strict qualified as M
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
+import GHC.Eventlog.Live.Otelcol.Options (ControlOptions (..), ControlPort (..), ControlCors(..), ControlCorsAllowOrigin(..))
 import GHC.Eventlog.Socket.Control qualified as C (requestHeapCensus, startHeapProfiling, stopHeapProfiling)
 import GHC.Generics (Generic)
 import Network.Socket (Socket)
 import Network.Socket.ByteString.Lazy qualified as SBSL
-import Network.Wai (Middleware, Request (..))
+import Network.Wai (Middleware)
 import Network.Wai.Handler.Warp qualified as Warp
-import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
+import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), Origin, cors)
 import Network.Wai.Middleware.RequestLogger (Destination (..), DetailedSettings (..), OutputFormat (..), RequestLoggerSettings (..), defaultDetailedSettings, defaultRequestLoggerSettings, mkRequestLogger)
 import Servant (PlainText, throwError)
-import Servant.API (FormUrlEncoded, Get, Header, Headers, JSON, NoContent (..), PostAccepted, ReqBody, StdMethod (..), Verb, addHeader, (:>), type (:<|>) (..))
-import Servant.Server (Handler, Server, ServerError (..), serve)
+import Servant.API (FormUrlEncoded, Get, Header, Headers, JSON, NoContent (..), PostAccepted, ReqBody, StdMethod (..), UVerb, Union, WithStatus (..), addHeader, (:>), type (:<|>) (..))
+import Servant.Server (Handler, Server, ServerError (..), serve, respond)
 import System.Log.FastLogger (fromLogStr)
 import Web.FormUrlEncoded (Form, FormOptions, FromForm (..), genericFromForm)
 import Web.FormUrlEncoded qualified as Form (FormOptions (fieldLabelModifier), defaultFormOptions)
@@ -47,16 +47,13 @@ import Web.FormUrlEncoded qualified as Form (FormOptions (fieldLabelModifier), d
 -- Control App
 --------------------------------------------------------------------------------
 
-newtype ControlServerPort = ControlServerPort Int
-  deriving (Eq, Show)
-
 data ControlServerApi = ControlServerApi
   { notifyNewConnection :: ServiceName -> EventlogSourceHandle -> IO ()
   , notifyEndConnection :: ServiceName -> IO ()
   , stop :: IO ()
   }
 
-startControlServer :: Logger IO -> ControlServerPort -> IO ControlServerApi
+startControlServer :: Logger IO -> ControlOptions -> IO ControlServerApi
 #ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
 startControlServer = startControlServerIfEnabled
 #else
@@ -68,8 +65,8 @@ startControlServer = startControlServerIfDisabled
 --------------------------------------------------------------------------------
 
 #ifndef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
-startControlServerIfDisabled :: Logger IO -> ControlServerPort -> IO ControlServerApi
-startControlServerIfDisabled logger _controlServerPort = do
+startControlServerIfDisabled :: Logger IO -> ControlOptions -> IO ControlServerApi
+startControlServerIfDisabled logger _controlOptions = do
   writeLog logger WARN $
     "This binary was built without support for the control server."
   let notifyNewConnection :: ServiceName -> EventlogSourceHandle -> IO ()
@@ -86,23 +83,32 @@ startControlServerIfDisabled logger _controlServerPort = do
 --------------------------------------------------------------------------------
 
 #ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
-startControlServerIfEnabled :: Logger IO -> ControlServerPort -> IO ControlServerApi
-startControlServerIfEnabled logger (ControlServerPort port) = do
+startControlServerIfEnabled :: Logger IO -> ControlOptions -> IO ControlServerApi
+startControlServerIfEnabled logger ControlOptions{controlPort = ControlPort port, ..} = do
   -- Create middleware that logs all incoming requests.
   requestLogger <- mkLoggerMiddleware logger
 
   -- Create variable for storing sockets.
   eventlogSourceHandleMap <- newTVarIO M.empty
 
+  -- Create CORS resource policy.
+  --
+  -- NOTE: The @wai-cors@ package lets the resource policy depend dynamically
+  -- on the received request. However, it is difficult to expose this freedom
+  -- via command-line arguments.
+  --
+  -- TODO: We might have to manually find the origin in the request, check it
+  -- against the allow-list, and set the @corsOrigins@ field.
+  let !corsResourcePolicy = mkCorsResourcePolicy controlCors
+
   -- Start control server.
   controlServerThreadId <-
     forkIO $
       Warp.run port $
         requestLogger $
-          -- TODO: Allow customizable CORS policy.
-          cors corsResourcePolicy $
+          cors (const $ Just corsResourcePolicy) $
             serve (Proxy @(HealthApi :<|> ControlApi)) $
-              controlServer logger eventlogSourceHandleMap
+              controlServer logger eventlogSourceHandleMap (corsIgnoreFailures corsResourcePolicy)
 
   -- When notified of a new connection, update the eventlogSourceHandleMap.
   let notifyNewConnection serviceName eventlogSourceHandle = do
@@ -135,26 +141,45 @@ mkLoggerMiddleware logger =
               }
       }
 
--- TODO: The CORS policy should be configurable.
-corsResourcePolicy :: Request -> Maybe CorsResourcePolicy
-corsResourcePolicy _req = do
-  pure
-    CorsResourcePolicy
-      { corsOrigins = Nothing
+mkCorsResourcePolicy :: ControlCors -> CorsResourcePolicy
+mkCorsResourcePolicy ControlCors{..} =
+  CorsResourcePolicy
+    { corsOrigins = corsOrigins
       , corsMethods = ["GET", "POST"]
       , corsRequestHeaders = ["Content-Type", "Origin"]
       , corsExposedHeaders = Nothing
-      , corsMaxAge = Nothing -- TODO: Pick a timeout.
-      , corsVaryOrigin = False
-      , corsRequireOrigin = False
-      , corsIgnoreFailures = True -- TODO: Ignoring failures should be optional and linked to the badCORSPreflight handler.
+      , corsMaxAge = controlCorsMaxAgeS
+      , corsVaryOrigin = corsVaryOrigin
+      , corsRequireOrigin = controlCorsRequireOrigin
+      , corsIgnoreFailures = controlCorsIgnoreFailures
       }
+ where
+  -- TODO: If we add authentication, this flag needs to be set.
+  corsCredentials :: Bool
+  corsCredentials = False
+
+  -- The @wai-cors@ package represents wildcard as @Nothing@ and otherwise
+  -- accepts a list of origins and a boolean that determines whether or not
+  -- credentials are used to access the resource.
+  corsOrigins :: Maybe ([Origin], Bool)
+  corsOrigins =
+    case controlCorsAllowOrigin of
+      ControlCorsAllowOriginWildcard -> Nothing
+      ControlCorsAllowOriginList origins -> Just (origins, corsCredentials)
+
+  -- The @Vary: Origin@ header must be added if @Access-Control-Allow-Origin@
+  -- is not set to wildcard and there are multiple origins.
+  corsVaryOrigin :: Bool
+  corsVaryOrigin =
+    case controlCorsAllowOrigin of
+      ControlCorsAllowOriginWildcard -> False
+      ControlCorsAllowOriginList origins -> length origins >= 2
 
 --------------------------------------------------------------------------------
 -- Control Server
 
-controlServer :: Logger IO -> TVar (HashMap ServiceName EventlogSourceHandle) -> Server (HealthApi :<|> ControlApi)
-controlServer logger eventlogSourceHandleMapVar =
+controlServer :: Logger IO -> TVar (HashMap ServiceName EventlogSourceHandle) -> Bool -> Server (HealthApi :<|> ControlApi)
+controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
   health :<|> eventlogSocket
  where
   health :: Handler ()
@@ -192,17 +217,20 @@ controlServer logger eventlogSourceHandleMapVar =
       withSocketFor (ServiceName req.serviceName) $ \socket -> do
         liftIO (SBSL.sendAll socket $ B.encode C.requestHeapCensus)
 
-    -- This accepts broken CORS preflight requests, such as those sent by Grafana on Safari.
-    --
-    -- TODO: This should be optional, defaulting to a 400 (Bad Request).
-    badCORSPreflight :: Handler BadCORSPreflightResp
-    badCORSPreflight = do
-      liftIO . writeLog logger DEBUG $ "Received preflight request."
-      pure $
-        addHeader "*" $
-          addHeader "GET, POST" $
-            addHeader "*" $
-              NoContent
+    badCORSPreflight :: Handler (Union '[BadCORSPreflightAccept, BadCORSPreflightReject])
+    badCORSPreflight
+      | corsIgnoreFailures = do
+          -- This accepts malformed CORS preflight requests.
+          liftIO . writeLog logger DEBUG $ "Accepted malformed CORS preflight request."
+          respond . WithStatus @204 $
+            addHeader @"Access-Control-Allow-Origin" @String "*" $
+              addHeader @"Access-Control-Allow-Methods" @String "GET, POST" $
+                addHeader @"Access-Control-Allow-Headers" @String "*" $
+                  NoContent
+      | otherwise = do
+          liftIO . writeLog logger DEBUG $ "Accepted malformed CORS preflight request."
+          respond . WithStatus @400 $
+            NoContent
 
     withSocketFor :: ServiceName -> (Socket -> Handler ()) -> Handler ()
     withSocketFor serviceName action = do
@@ -265,6 +293,8 @@ type EventlogSocketApi =
 type StartHeapProfilingApi =
   ReqBody '[FormUrlEncoded, JSON] StartHeapProfilingReq
     :> PostAccepted '[JSON] ()
+    -- Verb 'POST 200 '[JSON] ()
+    -- UVerb 'OPTIONS '[JSON] '[WithStatus 200 (), WithStatus 404 BadOops]
 
 type StopHeapProfilingApi =
   ReqBody '[FormUrlEncoded, JSON] StopHeapProfilingReq
@@ -275,15 +305,26 @@ type RequestHeapCensusApi =
     :> PostAccepted '[JSON] ()
 
 type BadCORSPreflight =
-  Verb 'OPTIONS 204 '[PlainText] BadCORSPreflightResp
+  UVerb 'OPTIONS '[PlainText] '[BadCORSPreflightAccept, BadCORSPreflightReject]
 
-type BadCORSPreflightResp =
-  Headers
+-- "/a/b/c"
+
+type BadCORSPreflightAccept = WithStatus 204 (Headers
     '[ Header "Access-Control-Allow-Origin" String
      , Header "Access-Control-Allow-Methods" String
      , Header "Access-Control-Allow-Headers" String
      ]
-    NoContent
+    NoContent)
+{- (Headers
+    '[ Header "Access-Control-Allow-Origin" String
+     , Header "Access-Control-Allow-Methods" String
+     , Header "Access-Control-Allow-Headers" String
+     ]
+    NoContent)
+-}
+
+type BadCORSPreflightReject =  WithStatus 400 NoContent
+
 
 --------------------------------------------------------------------------------
 -- Health
