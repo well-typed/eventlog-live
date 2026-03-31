@@ -5,11 +5,17 @@ module GHC.Eventlog.Live.Otelcol.Options (
   MyGhcDebugSocket (..),
   ServiceName (..),
   OpenTelemetryCollectorOptions (..),
+  ControlOptions (..),
+  ControlPort (..),
+  ControlCors (..),
+  ControlCorsAllowOrigin (..),
   options,
   withMyEventlogSocket,
 ) where
 
 import Control.Applicative (asum)
+import Data.ByteString.Char8 qualified as BSC
+import Data.Char (isSpace)
 import Data.Default (Default (..))
 import Data.Foldable (for_)
 import Data.Hashable (Hashable)
@@ -31,6 +37,8 @@ import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
+import Text.ParserCombinators.ReadP (ReadP)
+import Text.ParserCombinators.ReadP qualified as P
 
 options :: O.ParserInfo Options
 options =
@@ -57,6 +65,7 @@ data Options = Options
   , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
   , myDebugOptions :: MyDebugOptions
+  , controlOptions :: ControlOptions
   }
 
 optionsParser :: O.Parser Options
@@ -74,6 +83,7 @@ optionsParser =
     <*> O.optional configFileParser
     <*> openTelemetryCollectorOptionsParser
     <*> myDebugOptionsParser
+    <*> controlOptionsParser
 
 --------------------------------------------------------------------------------
 -- Debug Options
@@ -196,20 +206,20 @@ otelcolAddressParser =
     <$> O.strOption
       ( O.long "otelcol-host"
           <> O.metavar "HOST"
-          <> O.help "Server hostname."
+          <> O.help "Otelcol server hostname."
       )
     <*> O.option
       O.auto
       ( O.long "otelcol-port"
           <> O.metavar "PORT"
-          <> O.help "Server TCP port."
+          <> O.help "Otelcol server TCP port."
           <> O.value 4317
       )
     <*> O.optional
       ( O.strOption
           ( O.long "otelcol-authority"
               <> O.metavar "HOST"
-              <> O.help "Server authority."
+              <> O.help "Otelcol server authority."
           )
       )
 
@@ -250,3 +260,111 @@ otelcolSslKeyLogParser =
             <> O.help "Use SSLKEYLOGFILE to log SSL keys."
         )
     ]
+
+--------------------------------------------------------------------------------
+-- Control Server Configuration
+
+data ControlOptions = ControlOptions
+  { controlPort :: !ControlPort
+  , controlCors :: !ControlCors
+  }
+
+controlOptionsParser :: O.Parser ControlOptions
+controlOptionsParser =
+  ControlOptions
+    <$> controlPortParser
+    <*> controlCorsParser
+
+newtype ControlPort = ControlPort Int
+  deriving (Eq, Show)
+
+controlPortParser :: O.Parser ControlPort
+controlPortParser =
+  ControlPort
+    <$> O.option
+      O.auto
+      ( O.long "control-port"
+          <> O.metavar "PORT"
+          <> O.help "Control server TCP port."
+          <> O.value 30719
+      )
+
+data ControlCors = ControlCors
+  { controlCorsAllowOrigin :: !ControlCorsAllowOrigin
+  , controlCorsMaxAgeS :: !(Maybe Int)
+  , controlCorsRequireOrigin :: !Bool
+  , controlCorsIgnoreFailures :: !Bool
+  }
+
+controlCorsParser :: O.Parser ControlCors
+controlCorsParser =
+  ControlCors
+    <$> controlCorsAllowOriginParser
+    <*> controlCorsMaxAgeSParser
+    <*> controlCorsRequireOriginParser
+    <*> controlCorsIgnoreFailuresParser
+
+controlCorsMaxAgeSParser :: O.Parser (Maybe Int)
+controlCorsMaxAgeSParser =
+  O.option
+    (O.maybeReader $ Just . read)
+    ( O.long "control-cors-max-age"
+        <> O.metavar "SECONDS"
+        <> O.help "Set the maximum age of a cached CORS preflight request for the control server CORS policy."
+        <> O.value Nothing
+    )
+
+controlCorsRequireOriginParser :: O.Parser Bool
+controlCorsRequireOriginParser =
+  O.flag False True $
+    ( O.long "control-cors-require-origin"
+        <> O.help "If enabled, the control server will not accept requests without an Origin header."
+    )
+
+controlCorsIgnoreFailuresParser :: O.Parser Bool
+controlCorsIgnoreFailuresParser =
+  O.flag False True $
+    ( O.long "control-cors-ignore-failure"
+        <> O.help "If enabled, the control server will accept malformed CORS preflight requests."
+    )
+
+type ControlCorsOrigin = BSC.ByteString
+
+data ControlCorsAllowOrigin
+  = ControlCorsAllowOriginWildcard
+  | ControlCorsAllowOriginList [ControlCorsOrigin]
+
+controlCorsAllowOriginParser :: O.Parser ControlCorsAllowOrigin
+controlCorsAllowOriginParser =
+  O.option
+    (readSReader (P.readP_to_S pControlCorsAllowOrigin))
+    ( O.long "control-cors-allow-origin"
+        <> O.metavar "ORIGIN"
+        <> O.help "Set the allowed origins for the control server CORS policy."
+        <> O.value ControlCorsAllowOriginWildcard
+    )
+ where
+  readSReader :: ReadS a -> O.ReadM a
+  readSReader readS = O.maybeReader $ \str ->
+    case readS str of
+      [(a, "")] -> Just a
+      _otherwise -> Nothing
+
+pControlCorsAllowOrigin :: ReadP ControlCorsAllowOrigin
+pControlCorsAllowOrigin =
+  P.skipSpaces
+    *> asum
+      [ -- Wildcard
+        ControlCorsAllowOriginWildcard <$ P.char '*' <* P.skipSpaces
+      , -- List of origins
+        ControlCorsAllowOriginList <$> P.sepBy1 pOrigin (P.char ',' <* P.skipSpaces)
+      ]
+ where
+  -- TODO: The parser for origin could parse the syntax for origins:
+  --
+  -- Origin: null
+  -- Origin: <scheme>://<hostname>
+  -- Origin: <scheme>://<hostname>:<port>
+  --
+  pOrigin :: ReadP ControlCorsOrigin
+  pOrigin = BSC.pack <$> P.munch1 (\c -> not (c == ',' || isSpace c)) <* P.skipSpaces
