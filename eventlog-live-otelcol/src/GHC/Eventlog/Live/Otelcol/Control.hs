@@ -2,14 +2,28 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Otelcol.Control (
+  ControlOptions (..),
+  ControlPort (..),
+  ControlCors (..),
+  ControlCorsAllowOrigin (..),
   ControlServerApi (..),
+  controlOptionsParser,
   startControlServer,
 ) where
 
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Otelcol.Options (ControlOptions, ServiceName (..))
+import Control.Applicative (asum)
+import Data.ByteString.Char8 qualified as BSC
+import Data.Char (isSpace)
+import Data.Maybe (isJust)
+import GHC.Eventlog.Live.Logger (Logger)
+import GHC.Eventlog.Live.Otelcol.Config (ServiceName)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
+import Options.Applicative qualified as O
+import Options.Applicative.Compat qualified as OC
+import Options.Applicative.Extra.Feature (Feature (..))
+import Options.Applicative.Extra.Feature qualified as OF
+import Text.ParserCombinators.ReadP (ReadP)
+import Text.ParserCombinators.ReadP qualified as P
 
 #ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
 import Control.Concurrent (forkIO, killThread)
@@ -25,8 +39,11 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import GHC.Eventlog.Live.Otelcol.Options (ControlOptions (..), ControlPort (..), ControlCors(..), ControlCorsAllowOrigin(..))
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (writeLog)
+import GHC.Eventlog.Live.Otelcol.Config (ServiceName (..))
 import GHC.Eventlog.Socket.Control qualified as C (requestHeapCensus, startHeapProfiling, stopHeapProfiling)
 import GHC.Generics (Generic)
 import Network.Socket (Socket)
@@ -41,6 +58,22 @@ import Servant.Server (Handler, Server, ServerError (..), serve, respond)
 import System.Log.FastLogger (fromLogStr)
 import Web.FormUrlEncoded (Form, FormOptions, FromForm (..), genericFromForm)
 import Web.FormUrlEncoded qualified as Form (FormOptions (fieldLabelModifier), defaultFormOptions)
+#else
+import Control.Monad (when)
+#endif
+
+--------------------------------------------------------------------------------
+-- Feature: control
+--------------------------------------------------------------------------------
+
+control :: Feature
+control = Feature{flag = "control", isOn = isOn, info = "Cannot start control server."}
+ where
+  isOn :: Bool
+#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+  isOn = True
+#else
+  isOn = False
 #endif
 
 --------------------------------------------------------------------------------
@@ -53,81 +86,92 @@ data ControlServerApi = ControlServerApi
   , stop :: IO ()
   }
 
+noopControlServerApi :: ControlServerApi
+noopControlServerApi =
+  ControlServerApi
+    { notifyNewConnection = \_serviceName _eventlogSourceHandle -> pure ()
+    , notifyEndConnection = \_serviceName -> pure ()
+    , stop = pure ()
+    }
+
+{- |
+If the binary is built with -f+control and the control server is enabled from
+the CLI, this starts the control server and returns the control server API.
+
+If the binary is NOT built with -f+control, but the control server is enabled
+from the CLI, this prints an error and exits the process.
+
+If the control server is NOT enabled from the CLI, this returns a no-op API.
+-}
 startControlServer :: Logger IO -> ControlOptions -> IO ControlServerApi
-#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
-startControlServer = startControlServerIfEnabled
-#else
-startControlServer = startControlServerIfDisabled
-#endif
 
 --------------------------------------------------------------------------------
 -- Control App - Disabled
 --------------------------------------------------------------------------------
-
 #ifndef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
-startControlServerIfDisabled :: Logger IO -> ControlOptions -> IO ControlServerApi
-startControlServerIfDisabled logger _controlOptions = do
-  writeLog logger WARN $
-    "This binary was built without support for the control server."
-  let notifyNewConnection :: ServiceName -> EventlogSourceHandle -> IO ()
-      notifyNewConnection _serviceName _eventlogSourceHandle = pure ()
-  let notifyEndConnection :: ServiceName -> IO ()
-      notifyEndConnection _serviceName = pure ()
-  let stop :: IO ()
-      stop = pure ()
-  pure ControlServerApi{..}
-#endif
+
+startControlServer logger controlOptions = do
+  when (shouldStart controlOptions) $
+    OF.exitIfUnsupported control logger
+  pure noopControlServerApi
 
 --------------------------------------------------------------------------------
 -- Control App - Enabled
 --------------------------------------------------------------------------------
+#else
 
-#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
-startControlServerIfEnabled :: Logger IO -> ControlOptions -> IO ControlServerApi
-startControlServerIfEnabled logger ControlOptions{controlPort = ControlPort port, ..} = do
-  -- Create middleware that logs all incoming requests.
-  requestLogger <- mkLoggerMiddleware logger
+startControlServer logger controlOptions
+  | shouldStart controlOptions = do
+    -- Determine the control port
+    let port = maybe 30179 (.port) controlOptions.controlPort
 
-  -- Create variable for storing sockets.
-  eventlogSourceHandleMap <- newTVarIO M.empty
+    writeLog logger INFO $
+      "Starting control server on " <> T.pack (show port)
+    -- Create middleware that logs all incoming requests.
+    requestLogger <- mkLoggerMiddleware logger
 
-  -- Create CORS resource policy.
-  --
-  -- NOTE: The @wai-cors@ package lets the resource policy depend dynamically
-  -- on the received request. However, it is difficult to expose this freedom
-  -- via command-line arguments.
-  --
-  -- TODO: We might have to manually find the origin in the request, check it
-  -- against the allow-list, and set the @corsOrigins@ field.
-  let !corsResourcePolicy = mkCorsResourcePolicy controlCors
+    -- Create variable for storing sockets.
+    eventlogSourceHandleMap <- newTVarIO M.empty
 
-  -- Start control server.
-  controlServerThreadId <-
-    forkIO $
-      Warp.run port $
-        requestLogger $
-          cors (const $ Just corsResourcePolicy) $
-            serve (Proxy @(HealthApi :<|> ControlApi)) $
-              controlServer logger eventlogSourceHandleMap (corsIgnoreFailures corsResourcePolicy)
+    -- Create CORS resource policy.
+    --
+    -- NOTE: The @wai-cors@ package lets the resource policy depend dynamically
+    -- on the received request. However, it is difficult to expose this freedom
+    -- via command-line arguments.
+    --
+    -- TODO: We might have to manually find the origin in the request, check it
+    -- against the allow-list, and set the @corsOrigins@ field.
+    let !corsResourcePolicy = mkCorsResourcePolicy controlOptions.controlCors
 
-  -- When notified of a new connection, update the eventlogSourceHandleMap.
-  let notifyNewConnection serviceName eventlogSourceHandle = do
-        writeLog logger DEBUG $
-          "New connection for service " <> serviceName.serviceName <> "."
-        atomically $
-          modifyTVar' eventlogSourceHandleMap (M.insert serviceName eventlogSourceHandle)
+    -- Start control server.
+    controlServerThreadId <-
+      forkIO $
+        Warp.run port $
+          requestLogger $
+            cors (const $ Just corsResourcePolicy) $
+              serve (Proxy @(HealthApi :<|> ControlApi)) $
+                controlServer logger eventlogSourceHandleMap (corsIgnoreFailures corsResourcePolicy)
 
-  -- When notified of the end of a connection, update the eventlogSourceHandleMap.
-  let notifyEndConnection serviceName = do
-        writeLog logger DEBUG $
-          "End connection for service " <> serviceName.serviceName <> "."
-        atomically $
-          modifyTVar' eventlogSourceHandleMap (M.delete serviceName)
+    -- When notified of a new connection, update the eventlogSourceHandleMap.
+    let notifyNewConnection serviceName eventlogSourceHandle = do
+          writeLog logger DEBUG $
+            "New connection for service " <> serviceName.serviceName <> "."
+          atomically $
+            modifyTVar' eventlogSourceHandleMap (M.insert serviceName eventlogSourceHandle)
 
-  -- When requested to stop, kill the control server thread.
-  let stop = killThread controlServerThreadId
+    -- When notified of the end of a connection, update the eventlogSourceHandleMap.
+    let notifyEndConnection serviceName = do
+          writeLog logger DEBUG $
+            "End connection for service " <> serviceName.serviceName <> "."
+          atomically $
+            modifyTVar' eventlogSourceHandleMap (M.delete serviceName)
 
-  pure ControlServerApi{..}
+    -- When requested to stop, kill the control server thread.
+    let stop = killThread controlServerThreadId
+
+    pure ControlServerApi{..}
+  | otherwise =
+    pure noopControlServerApi
 
 mkLoggerMiddleware :: Logger IO -> IO Middleware
 mkLoggerMiddleware logger =
@@ -164,16 +208,16 @@ mkCorsResourcePolicy ControlCors{..} =
   corsOrigins :: Maybe ([Origin], Bool)
   corsOrigins =
     case controlCorsAllowOrigin of
-      ControlCorsAllowOriginWildcard -> Nothing
-      ControlCorsAllowOriginList origins -> Just (origins, corsCredentials)
+      Just (ControlCorsAllowOriginList origins) -> Just (origins, corsCredentials)
+      _otherwise -> Nothing
 
   -- The @Vary: Origin@ header must be added if @Access-Control-Allow-Origin@
   -- is not set to wildcard and there are multiple origins.
   corsVaryOrigin :: Bool
   corsVaryOrigin =
     case controlCorsAllowOrigin of
-      ControlCorsAllowOriginWildcard -> False
-      ControlCorsAllowOriginList origins -> length origins >= 2
+      Just (ControlCorsAllowOriginList origins) -> length origins >= 2
+      _otherwise -> False
 
 --------------------------------------------------------------------------------
 -- Control Server
@@ -307,21 +351,12 @@ type RequestHeapCensusApi =
 type BadCORSPreflight =
   UVerb 'OPTIONS '[PlainText] '[BadCORSPreflightAccept, BadCORSPreflightReject]
 
--- "/a/b/c"
-
 type BadCORSPreflightAccept = WithStatus 204 (Headers
     '[ Header "Access-Control-Allow-Origin" String
      , Header "Access-Control-Allow-Methods" String
      , Header "Access-Control-Allow-Headers" String
      ]
     NoContent)
-{- (Headers
-    '[ Header "Access-Control-Allow-Origin" String
-     , Header "Access-Control-Allow-Methods" String
-     , Header "Access-Control-Allow-Headers" String
-     ]
-    NoContent)
--}
 
 type BadCORSPreflightReject =  WithStatus 400 NoContent
 
@@ -407,4 +442,134 @@ camelTo2 c = map toLower . go2 . go1
   go2 "" = ""
   go2 (l : u : xs) | isLower l && isUpper u = l : c : u : go2 xs
   go2 (x : xs) = x : go2 xs
+
 #endif
+
+--------------------------------------------------------------------------------
+-- Control Options
+--------------------------------------------------------------------------------
+
+data ControlOptions = ControlOptions
+  { controlEnabled :: !Bool
+  , controlPort :: !(Maybe ControlPort)
+  , controlCors :: !ControlCors
+  }
+
+{- |
+Internal helper.
+
+If the user provides any of the control options, this implies @--control@.
+-}
+shouldStart :: ControlOptions -> Bool
+shouldStart controlOptions =
+  controlOptions.controlEnabled
+    || isJust controlOptions.controlPort
+    || isJust controlOptions.controlCors.controlCorsAllowOrigin
+    || isJust controlOptions.controlCors.controlCorsMaxAgeS
+    || controlOptions.controlCors.controlCorsRequireOrigin
+    || controlOptions.controlCors.controlCorsIgnoreFailures
+
+controlOptionsParser :: O.Parser ControlOptions
+controlOptionsParser =
+  OC.parserOptionGroup "Control Server Options" $
+    ControlOptions
+      <$> controlEnabledParser
+      <*> controlPortParser
+      <*> controlCorsParser
+
+controlEnabledParser :: O.Parser Bool
+controlEnabledParser =
+  OF.onlyFor control (O.flag False True) mempty $
+    O.long "control"
+      <> OF.helpFor control "Start the control server."
+
+newtype ControlPort = ControlPort {port :: Int}
+  deriving (Eq, Show)
+
+controlPortParser :: O.Parser (Maybe ControlPort)
+controlPortParser =
+  asum
+    [ OF.onlyFor control (O.option (Just . ControlPort <$> O.auto)) (O.metavar "PORT") $
+        O.long "control-port"
+          <> OF.helpFor control "The port number for the control server."
+    , pure Nothing
+    ]
+
+data ControlCors = ControlCors
+  { controlCorsAllowOrigin :: !(Maybe ControlCorsAllowOrigin)
+  , controlCorsMaxAgeS :: !(Maybe Int)
+  , controlCorsRequireOrigin :: !Bool
+  , controlCorsIgnoreFailures :: !Bool
+  }
+
+controlCorsParser :: O.Parser ControlCors
+controlCorsParser =
+  ControlCors
+    <$> controlCorsAllowOriginParser
+    <*> controlCorsMaxAgeSParser
+    <*> controlCorsRequireOriginParser
+    <*> controlCorsIgnoreFailuresParser
+
+controlCorsMaxAgeSParser :: O.Parser (Maybe Int)
+controlCorsMaxAgeSParser =
+  asum
+    [ OF.onlyFor control (O.option (Just <$> O.auto)) (O.metavar "SECONDS") $
+        O.long "control-cors-max-age"
+          <> OF.helpFor control "Set the maximum age of a cached CORS preflight request for the control server CORS policy."
+    , pure Nothing
+    ]
+
+controlCorsRequireOriginParser :: O.Parser Bool
+controlCorsRequireOriginParser =
+  OF.onlyFor control (O.flag False True) mempty $
+    O.long "control-cors-require-origin"
+      <> OF.helpFor control "If enabled, the control server will not accept requests without an Origin header."
+
+controlCorsIgnoreFailuresParser :: O.Parser Bool
+controlCorsIgnoreFailuresParser =
+  OF.onlyFor control (O.flag False True) mempty $
+    O.long "control-cors-ignore-failure"
+      <> OF.helpFor control "If enabled, the control server will accept malformed CORS preflight requests."
+
+type ControlCorsOrigin = BSC.ByteString
+
+data ControlCorsAllowOrigin
+  = ControlCorsAllowOriginWildcard
+  | ControlCorsAllowOriginList [ControlCorsOrigin]
+
+controlCorsAllowOriginParser :: O.Parser (Maybe ControlCorsAllowOrigin)
+controlCorsAllowOriginParser =
+  asum
+    [ OF.onlyFor control (O.option (Just <$> readPReader pControlCorsAllowOrigin)) (O.metavar "ORIGIN") $
+        O.long "control-cors-allow-origin"
+          <> OF.helpFor control "Set the allowed origins for the control server CORS policy."
+    , pure Nothing
+    ]
+
+readPReader :: ReadP a -> O.ReadM a
+readPReader readP = readSReader (P.readP_to_S readP)
+
+readSReader :: ReadS a -> O.ReadM a
+readSReader readS = O.maybeReader $ \str ->
+  case readS str of
+    [(a, "")] -> Just a
+    _otherwise -> Nothing
+
+pControlCorsAllowOrigin :: ReadP ControlCorsAllowOrigin
+pControlCorsAllowOrigin =
+  P.skipSpaces
+    *> asum
+      [ -- Wildcard
+        ControlCorsAllowOriginWildcard <$ P.char '*' <* P.skipSpaces
+      , -- List of origins
+        ControlCorsAllowOriginList <$> P.sepBy1 pOrigin (P.char ',' <* P.skipSpaces)
+      ]
+ where
+  -- TODO: The parser for origin could parse the syntax for origins:
+  --
+  -- Origin: null
+  -- Origin: <scheme>://<hostname>
+  -- Origin: <scheme>://<hostname>:<port>
+  --
+  pOrigin :: ReadP ControlCorsOrigin
+  pOrigin = BSC.pack <$> P.munch1 (\c -> not (c == ',' || isSpace c)) <* P.skipSpaces

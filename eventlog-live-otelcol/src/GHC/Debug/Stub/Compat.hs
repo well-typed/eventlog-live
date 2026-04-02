@@ -13,23 +13,40 @@ module GHC.Debug.Stub.Compat (
 ) where
 
 import Control.Applicative (asum)
-import Data.Text qualified as T (pack)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger)
 import Options.Applicative qualified as O
+import Options.Applicative.Extra.Feature (Feature (..))
+import Options.Applicative.Extra.Feature qualified as OF
 
-#if defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
+#ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
+import Data.Text qualified as T
 import GHC.Debug.Stub qualified as GHC.Debug (withGhcDebug, withGhcDebugTCP, withGhcDebugUnix)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (writeLog)
 import System.Exit (exitFailure)
 import Text.Read (readEither)
 #else
 import Data.Maybe (isJust)
-import System.Exit (exitFailure)
-import Options.Applicative.Help.Pretty qualified as OP
+import Control.Monad (when)
+#endif
+
+--------------------------------------------------------------------------------
+-- Feature: use-ghc-debug-stub
+--------------------------------------------------------------------------------
+
+useGhcDebugStub :: Feature
+useGhcDebugStub = Feature{flag = "use-ghc-debug-stub", isOn = isOn, info = "Cannot open ghc-debug socket."}
+ where
+  isOn :: Bool
+#ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
+  isOn = True
+#else
+  isOn = False
 #endif
 
 --------------------------------------------------------------------------------
 -- My GHC Debug
+--------------------------------------------------------------------------------
 
 data MyGhcDebugSocket
   = MyGhcDebugSocketDefault
@@ -42,7 +59,7 @@ Internal helper.
 Start @ghc-debug@ on the given `MyGhcDebugSocket`.
 -}
 withMyGhcDebug :: Logger IO -> Maybe MyGhcDebugSocket -> IO a -> IO a
-#if defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
+#ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
 withMyGhcDebug logger maybeMyGhcDebugSocket action =
   case maybeMyGhcDebugSocket of
     Nothing -> action
@@ -60,122 +77,38 @@ withMyGhcDebug logger maybeMyGhcDebugSocket action =
         Right portWord16 ->
           GHC.Debug.withGhcDebugTCP host portWord16 action
 #else
-withMyGhcDebug logger maybeMyGhcDebugSocket action
-  | isJust maybeMyGhcDebugSocket = do
-    writeLog logger FATAL $ T.pack myGhcDebugSocketUnsupportedErrorMessage
-    exitFailure
-  | otherwise = action
+withMyGhcDebug logger maybeMyGhcDebugSocket action = do
+  when (isJust maybeMyGhcDebugSocket) $
+    OF.exitIfUnsupported useGhcDebugStub logger
+  action
 #endif
 
 --------------------------------------------------------------------------------
 -- My GHC Debug
 
 maybeMyGhcDebugSocketParser :: O.Parser (Maybe MyGhcDebugSocket)
-#if defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
 maybeMyGhcDebugSocketParser =
-  O.optional . asum $
+  asum $
     [ myGhcDebugSocketDefaultParser
     , myGhcDebugSocketUnixParser
     , myGhcDebugSocketTcpParser
+    , pure Nothing
     ]
- where
-  myGhcDebugSocketDefaultParser =
-    O.flag'
-      MyGhcDebugSocketDefault
-      ( O.long myGhcDebugSocketDefaultLong
-          <> O.help myGhcDebugSocketDefaultHelp
-      )
-  myGhcDebugSocketUnixParser =
-    MyGhcDebugSocketUnix
-      <$> O.strOption
-        ( O.long myGhcDebugSocketUnixLong
-            <> O.metavar myGhcDebugSocketUnixMetavar
-            <> O.help myGhcDebugSocketUnixHelp
-        )
-  myGhcDebugSocketTcpParser =
-    MyGhcDebugSocketUnix
-      <$> O.strOption
-        ( O.long myGhcDebugSocketTcpLong
-            <> O.metavar myGhcDebugSocketTcpMetavar
-            <> O.help myGhcDebugSocketTcpHelp
-        )
-#else
-maybeMyGhcDebugSocketParser =
-  asum . fmap mkUnsupportedParser $
-    [ myGhcDebugSocketDefaultMod
-    , myGhcDebugSocketUnixMod
-    , myGhcDebugSocketTcpMod
-    ]
- where
-  mkUnsupportedParser modOptionFields =
-    Nothing <$ O.infoOption myGhcDebugSocketUnsupportedErrorMessage modOptionFields
-  mkUnsupportedHelpDoc help =
-    Just $ OP.vcat [OP.pretty $ "Unsupported. Requires build with -f+" <> myGhcDebugFeatureFlag <> ".", OP.pretty help]
-  myGhcDebugSocketDefaultMod =
-     O.long myGhcDebugSocketDefaultLong
-      <> O.hidden
-      <> O.helpDoc (mkUnsupportedHelpDoc myGhcDebugSocketDefaultHelp)
-  myGhcDebugSocketUnixMod =
-      O.long myGhcDebugSocketUnixLong
-      <> O.metavar myGhcDebugSocketUnixMetavar
-      <> O.hidden
-      <> O.helpDoc (mkUnsupportedHelpDoc myGhcDebugSocketUnixHelp)
-  myGhcDebugSocketTcpMod =
-      O.long myGhcDebugSocketTcpLong
-      <> O.metavar myGhcDebugSocketTcpMetavar
-      <> O.hidden
-      <> O.helpDoc (mkUnsupportedHelpDoc myGhcDebugSocketTcpHelp)
-#endif
 
-#if !defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
-myGhcDebugFeatureFlag :: String
-myGhcDebugFeatureFlag =
-  "use-ghc-debug-stub"
-#endif
+myGhcDebugSocketDefaultParser :: O.Parser (Maybe MyGhcDebugSocket)
+myGhcDebugSocketDefaultParser =
+  OF.onlyFor useGhcDebugStub (O.flag' $ Just MyGhcDebugSocketDefault) mempty $
+    O.long "my-ghc-debug-socket"
+      <> OF.helpFor useGhcDebugStub "Open the default ghc-debug socket for this program."
 
-#if !defined(EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB)
-myGhcDebugSocketUnsupportedErrorMessage :: String
-myGhcDebugSocketUnsupportedErrorMessage =
-  "Cannot open ghc-debug socket. This executable was built without -f+" <> myGhcDebugFeatureFlag <> "."
-{-# INLINE myGhcDebugSocketUnsupportedErrorMessage #-}
-#endif
+myGhcDebugSocketUnixParser :: O.Parser (Maybe MyGhcDebugSocket)
+myGhcDebugSocketUnixParser =
+  OF.onlyFor useGhcDebugStub (O.option (Just . MyGhcDebugSocketUnix <$> O.str)) (O.metavar "FILE") $
+    O.long "my-ghc-debug-socket-unix"
+      <> OF.helpFor useGhcDebugStub "Open a ghc-debug Unix domain socket with the given file path."
 
-myGhcDebugSocketDefaultLong :: String
-myGhcDebugSocketDefaultLong =
-  "enable-my-ghc-debug-socket"
-{-# INLINE myGhcDebugSocketDefaultLong #-}
-
-myGhcDebugSocketDefaultHelp :: String
-myGhcDebugSocketDefaultHelp =
-  "Enable ghc-debug for this program."
-{-# INLINE myGhcDebugSocketDefaultHelp #-}
-
-myGhcDebugSocketUnixLong :: String
-myGhcDebugSocketUnixLong =
-  "enable-my-ghc-debug-socket-unix"
-{-# INLINE myGhcDebugSocketUnixLong #-}
-
-myGhcDebugSocketUnixMetavar :: String
-myGhcDebugSocketUnixMetavar =
-  "SOCKET"
-{-# INLINE myGhcDebugSocketUnixMetavar #-}
-
-myGhcDebugSocketUnixHelp :: String
-myGhcDebugSocketUnixHelp =
-  "Enable ghc-debug for this program on the given Unix socket."
-{-# INLINE myGhcDebugSocketUnixHelp #-}
-
-myGhcDebugSocketTcpLong :: String
-myGhcDebugSocketTcpLong =
-  "enable-my-ghc-debug-socket-tcp"
-{-# INLINE myGhcDebugSocketTcpLong #-}
-
-myGhcDebugSocketTcpMetavar :: String
-myGhcDebugSocketTcpMetavar =
-  "ADDRESS"
-{-# INLINE myGhcDebugSocketTcpMetavar #-}
-
-myGhcDebugSocketTcpHelp :: String
-myGhcDebugSocketTcpHelp =
-  "Enable ghc-debug for this program on the given TCP socket specified as 'host:port'."
-{-# INLINE myGhcDebugSocketTcpHelp #-}
+myGhcDebugSocketTcpParser :: O.Parser (Maybe MyGhcDebugSocket)
+myGhcDebugSocketTcpParser =
+  OF.onlyFor useGhcDebugStub (O.option (Just . MyGhcDebugSocketTcp <$> O.str)) (O.metavar "ADDRESS") $
+    O.long "my-ghc-debug-socket-tcp"
+      <> OF.helpFor useGhcDebugStub "Open a ghc-debug TCP/IP socket with the given address as 'host:port'."

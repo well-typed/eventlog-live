@@ -179,6 +179,7 @@ library
     GHC.Eventlog.Live.Otelcol.Stats
     Language.Haskell.TH.Lift.Compat
     Options.Applicative.Compat
+    Options.Applicative.Extra.Feature
     Paths_eventlog_live_otelcol
     System.Random.Compat
 

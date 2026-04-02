@@ -109,10 +109,7 @@ main = do
   withMyGhcDebug logger maybeMyGhcDebugSocket $ do
     --
     -- Start the control server.
-    let port = ControlPort 30719
-    writeLog logger DEBUG $
-      "Starting control server on port " <> T.pack (show port)
-    controlServer <- startControlServer logger controlOptions
+    controlServerApi <- startControlServer logger controlOptions
 
     -- Read the configuration file.
     let readConfigFile configFile = do
@@ -227,8 +224,8 @@ main = do
         eventlogSourceOptions
         $ \eventlogSourceHandle -> do
           -- Notify the control server of the connection status.
-          let newConnection = controlServer.notifyNewConnection serviceName eventlogSourceHandle
-          let endConnection = controlServer.notifyEndConnection serviceName
+          let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
+          let endConnection = controlServerApi.notifyEndConnection serviceName
           bracket_ newConnection endConnection $
             -- Run the eventlog processor.
             runWithEventlogSourceHandle
