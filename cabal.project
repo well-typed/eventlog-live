@@ -49,3 +49,19 @@ if impl(ghc >=9.4)
   allow-newer:
     , concurrent-machines-0.3.1.5:base
     , concurrent-machines-0.3.1.5:containers
+
+-- 2026-04-02:
+-- add PR#19 for ghc-stack-profiler
+source-repository-package
+  type:     git
+  location: https://github.com/well-typed/ghc-stack-profiler.git
+  subdir:   ghc-stack-profiler
+  tag:      2d36ed9e68436871decff47f16328a81cc3740e4
+
+-- 2026-04-02:
+-- add PR#19 for ghc-stack-profiler
+source-repository-package
+  type:     git
+  location: https://github.com/well-typed/ghc-stack-profiler.git
+  subdir:   ghc-stack-profiler-core
+  tag:      2d36ed9e68436871decff47f16328a81cc3740e4

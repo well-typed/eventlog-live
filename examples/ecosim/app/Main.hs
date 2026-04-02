@@ -10,7 +10,7 @@ import Data.Foldable
 import Data.List qualified as List
 import GHC.Eventlog.Socket
 import GHC.Stack.Annotation
-import GHC.Stack.Profiler.Sampler
+import GHC.Stack.Profiler (ProfilerSamplingInterval (..), setupRootStackProfiler, withStackProfiler)
 import System.Environment
 import System.Random
 
@@ -107,19 +107,21 @@ logger colony = annotateStackStringIO "Logger Thread" $ forever $ do
 -- Main --------------------------------------------------------------------
 
 main :: IO ()
-main = withStackProfiler (SampleIntervalMs 30) $ do
-  traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
-  putStrLn "Starting ColonySim... (Ctrl-C to stop)"
-  colony <- initColony
+main =
+  setupRootStackProfiler True $ \manager ->
+    withStackProfiler manager (SampleIntervalMs 30) $ do
+      traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
+      putStrLn "Starting ColonySim... (Ctrl-C to stop)"
+      colony <- initColony
 
-  -- Logger thread
-  _ <- forkIO $ logger colony
+      -- Logger thread
+      _ <- forkIO $ logger colony
 
-  -- Simulation loop
-  let
-    loop :: Integer -> IO ()
-    loop tickNum = annotateStackStringIO "CallLoop" $ do
-      tick colony
-      annotateStackStringIO "Colony Sleep" $ threadDelay tickMicros
-      loop (tickNum + 1)
-  loop 0
+      -- Simulation loop
+      let
+        loop :: Integer -> IO ()
+        loop tickNum = annotateStackStringIO "CallLoop" $ do
+          tick colony
+          annotateStackStringIO "Colony Sleep" $ threadDelay tickMicros
+          loop (tickNum + 1)
+      loop 0

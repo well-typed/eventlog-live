@@ -44,7 +44,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Source
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
-import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
+import GHC.RTS.Events (Event (..))
 import Lens.Family2 (set, (^.))
 import Options.Applicative qualified as O
 import Options.Applicative.Extra qualified as O (helperWith)
