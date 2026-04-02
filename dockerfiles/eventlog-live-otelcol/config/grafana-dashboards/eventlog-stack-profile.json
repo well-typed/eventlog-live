@@ -19,15 +19,28 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
   "links": [],
   "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "panels": [],
+      "repeat": "service_name",
+      "title": "Stack Profile for ${service_name}",
+      "type": "row"
+    },
     {
       "datasource": {
         "type": "grafana-pyroscope-datasource",
         "uid": "P02E4190217B50628"
       },
-      "description": "Flamegraph of the RTS Callstack",
+      "description": "Flamegraph of the GHC RTS Callstack",
       "fieldConfig": {
         "defaults": {
           "unit": "Sample"
@@ -38,11 +51,11 @@
         "h": 16,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 1,
       "options": {},
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -50,14 +63,15 @@
             "uid": "P02E4190217B50628"
           },
           "groupBy": [],
-          "labelSelector": "{}",
+          "includeExemplars": false,
+          "labelSelector": "{service_name=\"${service_name}\"}",
           "profileTypeId": "process_cpu:stack:samples::",
           "queryType": "profile",
           "refId": "A",
           "spanSelector": []
         }
       ],
-      "title": "RTS Stack Profile",
+      "title": "Stack Profile",
       "type": "flamegraph"
     }
   ],
@@ -65,7 +79,35 @@
   "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allowCustomValue": true,
+        "current": {
+          "text": ["ecosim"],
+          "value": ["ecosim"]
+        },
+        "datasource": {
+          "type": "grafana-pyroscope-datasource",
+          "uid": "P02E4190217B50628"
+        },
+        "definition": "",
+        "description": "The service name used for the visualisations on this dashboard.",
+        "label": "Service Name",
+        "multi": true,
+        "name": "service_name",
+        "options": [],
+        "query": {
+          "labelName": "service_name",
+          "profileTypeId": "process_cpu:stack:samples::",
+          "type": "labelValue"
+        },
+        "refresh": 1,
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
@@ -75,5 +117,6 @@
   "timezone": "browser",
   "title": "Eventlog Stack Profile",
   "uid": "ad7v28q",
-  "version": 1
+  "version": 1,
+  "weekStart": ""
 }
