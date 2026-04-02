@@ -103,6 +103,14 @@ flag control
   default:     False
   manual:      True
 
+-- 2026-04-02:
+-- This flag should enable switching the use of eventlog-socket on
+-- and off, since it may cause issues with certain versions of GHC.
+flag use-eventlog-socket
+  description: Use eventlog-socket
+  default:     False
+  manual:      True
+
 -- 2025-11-10:
 -- This flag should enable switching the use of ghc-debug-stub on
 -- and off, since it may cause issues with certain versions of GHC.
@@ -177,6 +185,7 @@ library
     GHC.Eventlog.Live.Otelcol.Exporter.Traces
     GHC.Eventlog.Live.Otelcol.Options
     GHC.Eventlog.Live.Otelcol.Stats
+    GHC.Eventlog.Socket.Compat
     Language.Haskell.TH.Lift.Compat
     Options.Applicative.Compat
     Options.Applicative.Extra.Feature
@@ -191,7 +200,6 @@ library
     , data-default           >=0.2    && <0.9
     , dlist                  >=1.0    && <1.1
     , eventlog-live          >=0.5    && <0.6
-    , eventlog-socket        >=0.1.1  && <0.2
     , file-embed             >=0.0.16 && <0.1
     , ghc-events             >=0.20   && <0.21
     , grapesy                >=1.0.0  && <1.2
@@ -226,6 +234,10 @@ library
       , warp                     >=3.4   && <3.5
 
     cpp-options:   -DEVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+
+  if flag(use-eventlog-socket)
+    build-depends: eventlog-socket >=0.1.2 && <0.2
+    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
 
   if flag(use-ghc-debug-stub)
     build-depends: ghc-debug-stub >=0.1 && <1.0

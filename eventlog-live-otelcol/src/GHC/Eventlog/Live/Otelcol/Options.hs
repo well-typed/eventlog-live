@@ -1,20 +1,16 @@
 module GHC.Eventlog.Live.Otelcol.Options (
   Options (..),
   MyDebugOptions (..),
-  MyEventlogSocket (..),
-  MyGhcDebugSocket (..),
   ServiceName (..),
   OpenTelemetryCollectorOptions (..),
   options,
-  withMyEventlogSocket,
 ) where
 
 import Control.Applicative (asum)
 import Data.Default (Default (..))
-import Data.Foldable (for_)
 import Data.Text qualified as T
 import Data.Version (showVersion)
-import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), maybeMyGhcDebugSocketParser)
+import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Otelcol.Config (ServiceName (..))
@@ -23,7 +19,7 @@ import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaStri
 import GHC.Eventlog.Live.Otelcol.Config.Types (Config)
 import GHC.Eventlog.Live.Otelcol.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
-import GHC.Eventlog.Socket qualified as Eventlog.Socket
+import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
@@ -224,25 +220,5 @@ myDebugOptionsParser :: O.Parser MyDebugOptions
 myDebugOptionsParser =
   OC.parserOptionGroup "Debug Options" $
     MyDebugOptions
-      <$> O.optional myEventlogSocketParser
+      <$> maybeMyEventlogSocketParser
       <*> maybeMyGhcDebugSocketParser
-
-newtype MyEventlogSocket
-  = MyEventlogSocketUnix FilePath
-
-myEventlogSocketParser :: O.Parser MyEventlogSocket
-myEventlogSocketParser =
-  MyEventlogSocketUnix
-    <$> O.strOption
-      ( O.long "my-eventlog-socket-unix"
-          <> O.metavar "SOCKET"
-          <> O.help "Enable the eventlog socket for this program on the given Unix socket."
-      )
-
-{- |
-Set @eventlog-socket@ as the eventlog writer.
--}
-withMyEventlogSocket :: Maybe MyEventlogSocket -> IO ()
-withMyEventlogSocket maybeMyEventlogSocket =
-  for_ maybeMyEventlogSocket $ \(MyEventlogSocketUnix myEventlogSocket) ->
-    Eventlog.Socket.startWait myEventlogSocket
