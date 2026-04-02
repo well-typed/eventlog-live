@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {- |
 Module      : GHC.Debug.Stub.Compat
@@ -63,12 +64,18 @@ withMyGhcDebug :: Logger IO -> Maybe MyGhcDebugSocket -> IO a -> IO a
 withMyGhcDebug logger maybeMyGhcDebugSocket action =
   case maybeMyGhcDebugSocket of
     Nothing -> action
-    Just MyGhcDebugSocketDefault ->
+    Just MyGhcDebugSocketDefault -> do
+      writeLog logger INFO $
+        "Start ghc-debug with default socket."
       GHC.Debug.withGhcDebug action
-    Just (MyGhcDebugSocketUnix myGhcDebugSocketUnix) ->
+    Just (MyGhcDebugSocketUnix myGhcDebugSocketUnix) -> do
+      writeLog logger INFO $
+        "Start ghc-debug with Unix domain socket at " <> T.pack myGhcDebugSocketUnix <> "."
       GHC.Debug.withGhcDebugUnix myGhcDebugSocketUnix action
     Just (MyGhcDebugSocketTcp myGhcDebugSocketTcp) -> do
       let (host, port) = break (== ':') myGhcDebugSocketTcp
+      writeLog logger INFO $
+        "Start ghc-debug with TCP/IP socket at " <> T.pack host <> ":" <> T.pack port <> "."
       case readEither port of
         Left _parseError -> do
           writeLog logger FATAL $

@@ -66,6 +66,7 @@ import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Options
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
+import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (Symbol)
@@ -105,7 +106,7 @@ main = do
 
   -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
   let MyDebugOptions{..} = myDebugOptions
-  withMyEventlogSocket maybeMyEventlogSocket
+  startMyEventlogSocket logger maybeMyEventlogSocket
   withMyGhcDebug logger maybeMyGhcDebugSocket $ do
     --
     -- Start the control server.
