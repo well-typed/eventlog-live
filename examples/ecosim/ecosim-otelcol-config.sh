@@ -13,7 +13,7 @@ ECOSIM_BIN=$(cabal list-bin exe:ecosim -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
-cabal build eventlog-live-otelcol -v0
+cabal build eventlog-live-otelcol -f+control -v0
 EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -v0 | head -n1)
 
 # Create the temporary directory
