@@ -5,29 +5,23 @@ module GHC.Eventlog.Live.Otelcol.Options (
   MyGhcDebugSocket (..),
   ServiceName (..),
   OpenTelemetryCollectorOptions (..),
-  ControlOptions (..),
-  ControlPort (..),
-  ControlCors (..),
-  ControlCorsAllowOrigin (..),
   options,
   withMyEventlogSocket,
 ) where
 
 import Control.Applicative (asum)
-import Data.ByteString.Char8 qualified as BSC
-import Data.Char (isSpace)
 import Data.Default (Default (..))
 import Data.Foldable (for_)
-import Data.Hashable (Hashable)
-import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket (..), maybeMyGhcDebugSocketParser)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Options
+import GHC.Eventlog.Live.Otelcol.Config (ServiceName (..))
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
 import GHC.Eventlog.Live.Otelcol.Config.Types (Config)
+import GHC.Eventlog.Live.Otelcol.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 import GHC.RTS.Events (HeapProfBreakdown (..))
@@ -37,8 +31,6 @@ import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Paths_eventlog_live_otelcol qualified as EventlogLive
-import Text.ParserCombinators.ReadP (ReadP)
-import Text.ParserCombinators.ReadP qualified as P
 
 options :: O.ParserInfo Options
 options =
@@ -64,8 +56,8 @@ data Options = Options
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
   , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
-  , myDebugOptions :: MyDebugOptions
   , controlOptions :: ControlOptions
+  , myDebugOptions :: MyDebugOptions
   }
 
 optionsParser :: O.Parser Options
@@ -82,46 +74,8 @@ optionsParser =
     <*> statsParser
     <*> O.optional configFileParser
     <*> openTelemetryCollectorOptionsParser
-    <*> myDebugOptionsParser
     <*> controlOptionsParser
-
---------------------------------------------------------------------------------
--- Debug Options
-
-data MyDebugOptions = MyDebugOptions
-  { maybeMyEventlogSocket :: Maybe MyEventlogSocket
-  , maybeMyGhcDebugSocket :: Maybe MyGhcDebugSocket
-  }
-
-myDebugOptionsParser :: O.Parser MyDebugOptions
-myDebugOptionsParser =
-  OC.parserOptionGroup "Debug Options" $
-    MyDebugOptions
-      <$> O.optional myEventlogSocketParser
-      <*> maybeMyGhcDebugSocketParser
-
---------------------------------------------------------------------------------
--- My Eventlog Socket
-
-newtype MyEventlogSocket
-  = MyEventlogSocketUnix FilePath
-
-myEventlogSocketParser :: O.Parser MyEventlogSocket
-myEventlogSocketParser =
-  MyEventlogSocketUnix
-    <$> O.strOption
-      ( O.long "enable-my-eventlog-socket-unix"
-          <> O.metavar "SOCKET"
-          <> O.help "Enable the eventlog socket for this program on the given Unix socket."
-      )
-
-{- |
-Set @eventlog-socket@ as the eventlog writer.
--}
-withMyEventlogSocket :: Maybe MyEventlogSocket -> IO ()
-withMyEventlogSocket maybeMyEventlogSocket =
-  for_ maybeMyEventlogSocket $ \(MyEventlogSocketUnix myEventlogSocket) ->
-    Eventlog.Socket.startWait myEventlogSocket
+    <*> myDebugOptionsParser
 
 --------------------------------------------------------------------------------
 -- Configuration
@@ -161,9 +115,6 @@ debugDefaultsPrinter =
 
 --------------------------------------------------------------------------------
 -- Service Name
-
-newtype ServiceName = ServiceName {serviceName :: Text}
-  deriving newtype (Eq, Hashable)
 
 serviceNameParser :: O.Parser ServiceName
 serviceNameParser =
@@ -262,109 +213,36 @@ otelcolSslKeyLogParser =
     ]
 
 --------------------------------------------------------------------------------
--- Control Server Configuration
+-- Debug Options
 
-data ControlOptions = ControlOptions
-  { controlPort :: !ControlPort
-  , controlCors :: !ControlCors
+data MyDebugOptions = MyDebugOptions
+  { maybeMyEventlogSocket :: Maybe MyEventlogSocket
+  , maybeMyGhcDebugSocket :: Maybe MyGhcDebugSocket
   }
 
-controlOptionsParser :: O.Parser ControlOptions
-controlOptionsParser =
-  ControlOptions
-    <$> controlPortParser
-    <*> controlCorsParser
+myDebugOptionsParser :: O.Parser MyDebugOptions
+myDebugOptionsParser =
+  OC.parserOptionGroup "Debug Options" $
+    MyDebugOptions
+      <$> O.optional myEventlogSocketParser
+      <*> maybeMyGhcDebugSocketParser
 
-newtype ControlPort = ControlPort Int
-  deriving (Eq, Show)
+newtype MyEventlogSocket
+  = MyEventlogSocketUnix FilePath
 
-controlPortParser :: O.Parser ControlPort
-controlPortParser =
-  ControlPort
-    <$> O.option
-      O.auto
-      ( O.long "control-port"
-          <> O.metavar "PORT"
-          <> O.help "Control server TCP port."
-          <> O.value 30719
+myEventlogSocketParser :: O.Parser MyEventlogSocket
+myEventlogSocketParser =
+  MyEventlogSocketUnix
+    <$> O.strOption
+      ( O.long "my-eventlog-socket-unix"
+          <> O.metavar "SOCKET"
+          <> O.help "Enable the eventlog socket for this program on the given Unix socket."
       )
 
-data ControlCors = ControlCors
-  { controlCorsAllowOrigin :: !ControlCorsAllowOrigin
-  , controlCorsMaxAgeS :: !(Maybe Int)
-  , controlCorsRequireOrigin :: !Bool
-  , controlCorsIgnoreFailures :: !Bool
-  }
-
-controlCorsParser :: O.Parser ControlCors
-controlCorsParser =
-  ControlCors
-    <$> controlCorsAllowOriginParser
-    <*> controlCorsMaxAgeSParser
-    <*> controlCorsRequireOriginParser
-    <*> controlCorsIgnoreFailuresParser
-
-controlCorsMaxAgeSParser :: O.Parser (Maybe Int)
-controlCorsMaxAgeSParser =
-  O.option
-    (O.maybeReader $ Just . read)
-    ( O.long "control-cors-max-age"
-        <> O.metavar "SECONDS"
-        <> O.help "Set the maximum age of a cached CORS preflight request for the control server CORS policy."
-        <> O.value Nothing
-    )
-
-controlCorsRequireOriginParser :: O.Parser Bool
-controlCorsRequireOriginParser =
-  O.flag False True $
-    ( O.long "control-cors-require-origin"
-        <> O.help "If enabled, the control server will not accept requests without an Origin header."
-    )
-
-controlCorsIgnoreFailuresParser :: O.Parser Bool
-controlCorsIgnoreFailuresParser =
-  O.flag False True $
-    ( O.long "control-cors-ignore-failure"
-        <> O.help "If enabled, the control server will accept malformed CORS preflight requests."
-    )
-
-type ControlCorsOrigin = BSC.ByteString
-
-data ControlCorsAllowOrigin
-  = ControlCorsAllowOriginWildcard
-  | ControlCorsAllowOriginList [ControlCorsOrigin]
-
-controlCorsAllowOriginParser :: O.Parser ControlCorsAllowOrigin
-controlCorsAllowOriginParser =
-  O.option
-    (readSReader (P.readP_to_S pControlCorsAllowOrigin))
-    ( O.long "control-cors-allow-origin"
-        <> O.metavar "ORIGIN"
-        <> O.help "Set the allowed origins for the control server CORS policy."
-        <> O.value ControlCorsAllowOriginWildcard
-    )
- where
-  readSReader :: ReadS a -> O.ReadM a
-  readSReader readS = O.maybeReader $ \str ->
-    case readS str of
-      [(a, "")] -> Just a
-      _otherwise -> Nothing
-
-pControlCorsAllowOrigin :: ReadP ControlCorsAllowOrigin
-pControlCorsAllowOrigin =
-  P.skipSpaces
-    *> asum
-      [ -- Wildcard
-        ControlCorsAllowOriginWildcard <$ P.char '*' <* P.skipSpaces
-      , -- List of origins
-        ControlCorsAllowOriginList <$> P.sepBy1 pOrigin (P.char ',' <* P.skipSpaces)
-      ]
- where
-  -- TODO: The parser for origin could parse the syntax for origins:
-  --
-  -- Origin: null
-  -- Origin: <scheme>://<hostname>
-  -- Origin: <scheme>://<hostname>:<port>
-  --
-  pOrigin :: ReadP ControlCorsOrigin
-  pOrigin = BSC.pack <$> P.munch1 (\c -> not (c == ',' || isSpace c)) <* P.skipSpaces
+{- |
+Set @eventlog-socket@ as the eventlog writer.
+-}
+withMyEventlogSocket :: Maybe MyEventlogSocket -> IO ()
+withMyEventlogSocket maybeMyEventlogSocket =
+  for_ maybeMyEventlogSocket $ \(MyEventlogSocketUnix myEventlogSocket) ->
+    Eventlog.Socket.startWait myEventlogSocket
