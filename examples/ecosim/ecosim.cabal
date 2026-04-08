@@ -1,0 +1,31 @@
+cabal-version: 3.0
+name:          ecosim
+version:       0.1.0.0
+author:        fendor
+maintainer:    fendor@well-typed.com
+copyright:     (c) 2025 Well-Typed
+license:       BSD-3-Clause
+build-type:    Simple
+category:      Simulation
+description:
+  Simulation example project for Stack profiles for eventlog-live.
+
+synopsis:      Simulation example project for Stack profiles.
+
+common warnings
+  ghc-options: -Wall -Wx-no-partial
+
+executable ecosim
+  import:           warnings
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -finfo-table-map
+  build-depends:
+    , base                   >=4.20  && <5
+    , eventlog-socket        >=0.1.0 && <0.2
+    , ghc-stack-annotations  >=0.1   && <0.2
+    , ghc-stack-profiler     >=0.1   && <0.2
+    , random                 >=1.2   && <1.4
+    , stm                    >=2.5   && <2.6
+
+  hs-source-dirs:   app
+  default-language: GHC2021
