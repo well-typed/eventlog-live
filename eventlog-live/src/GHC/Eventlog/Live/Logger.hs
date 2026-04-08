@@ -11,6 +11,7 @@ module GHC.Eventlog.Live.Logger (
   Logger,
   MyTelemetryData (..),
   writeLog,
+  writeException,
   writeMetric,
   filterBySeverity,
   stderrLogger,
@@ -23,13 +24,14 @@ import Colog.Core.Action (cfilter, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, readTChan, writeTChan)
-import Control.Exception (bracket_)
+import Control.Exception (Exception (..), bracket_)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Ix (Ix (..))
 import Data.Machine (SourceT, repeatedly, yield)
 import Data.Maybe (isNothing)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
@@ -71,6 +73,13 @@ writeLog logger severity body =
               , attrs = ["call-stack" ~= prettyCallStack callStack]
               }
         }
+
+{- |
+Use a `Logger` to log an exception.
+-}
+writeException :: (Exception e) => Logger m -> e -> m ()
+writeException logger e =
+  writeLog logger ERROR (T.pack $ displayException e)
 
 {- |
 Use a `Logger` to log an internal metric.
