@@ -1,30 +1,11 @@
 {
-  config,
   pkgs,
-  lib,
   all-cabal-hashes,
   ...
 }:
 
 let
-  # Use GHC 9.10.1 with updated all-cabal-hashes
-  haskellPackages =
-    (pkgs.haskell.packages.ghc9103.override { all-cabal-hashes = all-cabal-hashes; }).extend
-      ((import ./overlay.nix) (pkgs));
-
-  # Build the eventlog-live project
-  eventlog-live =
-    haskellPackages.callCabal2nix "eventlog-live" (pkgs.lib.cleanSource ../../eventlog-live)
-      { };
-
-  # Build the oddball example
-  oddball = haskellPackages.callCabal2nix "oddball" (pkgs.lib.cleanSource ../../examples/oddball) { };
-
-  # Build the eventlog-live-otelcol
-  eventlog-live-otelcol =
-    haskellPackages.callCabal2nix "eventlog-live-otelcol"
-      (pkgs.lib.cleanSource ../../eventlog-live-otelcol)
-      { inherit eventlog-live; };
+  inherit (import ./default.nix { inherit pkgs all-cabal-hashes; }) oddball eventlog-live-otelcol;
 in
 {
   imports = [
