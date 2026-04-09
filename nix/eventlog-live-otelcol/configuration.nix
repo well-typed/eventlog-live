@@ -1,8 +1,4 @@
-{
-  pkgs,
-  all-cabal-hashes,
-  ...
-}:
+{ pkgs, all-cabal-hashes, ... }:
 
 let
   inherit (import ./default.nix { inherit pkgs all-cabal-hashes; }) oddball eventlog-live-otelcol;
