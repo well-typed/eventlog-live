@@ -41,8 +41,12 @@
           config = systemConfig;
           standalone-vm = generator "qcow";
           vm = nixosConfig.config.system.build.vm;
-          inherit (import ./default.nix { inherit pkgs all-cabal-hashes; }) 
-            oddball eventlog-live eventlog-live-otelcol eventlog-live-otelcol-control;
+          inherit (import ./default.nix { inherit pkgs all-cabal-hashes; })
+            oddball
+            eventlog-live
+            eventlog-live-otelcol
+            eventlog-live-otelcol-control
+            ;
         };
 
         # Development shell

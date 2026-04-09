@@ -1,8 +1,9 @@
-{hlib, ...}: final: prev: with hlib; {
+{ hlib, ... }:
+final: prev: with hlib; {
 
-  eventlog-live = final.callPackage ./eventlog-live.nix {};
-  eventlog-live-otelcol = final.callPackage ./eventlog-live-otelcol.nix {};
-  oddball = final.callPackage ./oddball.nix {};
+  eventlog-live = final.callPackage ./eventlog-live.nix { };
+  eventlog-live-otelcol = final.callPackage ./eventlog-live-otelcol.nix { };
+  oddball = final.callPackage ./oddball.nix { };
 
   # Jailbreak proto-lens to allow it to build with newer dependencies
   grapesy = dontCheck prev.grapesy;
