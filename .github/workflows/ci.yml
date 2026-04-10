@@ -153,13 +153,58 @@ jobs:
           - "oddball"
 
   #############################################################################
-  # Build Nix VM
+  # Build Nix Packages
   #############################################################################
 
-  build-nix-vm:
-    name: "Build Nix VM"
+  build-nix-packages:
+    name: |
+      ${{ format(
+            'Build Nix package ({0}/{1})',
+            matrix.package.root,
+            matrix.package.name
+          )
+       }}
     runs-on: "ubuntu-latest"
-    if: github.ref_name == 'master' && github.event_name == 'push'
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🛠️ Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+
+      - name: 🏗️ Build
+        run: nix build .#${{ matrix.package.name }}
+        working-directory: "nix/${{ matrix.package.root }}"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - root: "eventlog-live-otelcol"
+            name: "eventlog-live"
+          - root: "eventlog-live-otelcol"
+            name: "eventlog-live-otelcol"
+          - root: "eventlog-live-otelcol"
+            name: "oddball"
+
+  #############################################################################
+  # Build Nix VMs
+  #############################################################################
+
+  build-nix-vms:
+    name: |
+      ${{ format(
+            'Build Nix VM ({0}/{1})',
+            matrix.package.root,
+            matrix.package.name
+          )
+       }}
+    runs-on: "ubuntu-latest"
+    if: ${{ github.ref_name == 'master' && github.event_name == 'push' }}
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
@@ -177,14 +222,14 @@ jobs:
           nix_path: nixpkgs=channel:nixpkgs-unstable
 
       - name: 🏗️ Build
-        run: nix build .#standalone-vm
-        working-directory: "nix/${{ matrix.nix-vm-directory }}"
+        run: nix build .#${{ matrix.package.name }}
+        working-directory: "nix/${{ matrix.package.root }}"
 
       - name: 📦 Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.nix-vm-directory }}.qcow2"
-          path: "${{ github.workspace }}/nix/${{ matrix.nix-vm-directory }}/result/nixos.qcow2"
+          name: "${{ matrix.package.root }}.qcow2"
+          path: "${{ github.workspace }}/nix/${{ matrix.package.root }}/result/nixos.qcow2"
           if-no-files-found: error
           compression-level: 9
           overwrite: true
@@ -192,8 +237,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nix-vm-directory:
-          - "eventlog-live-otelcol"
+        package:
+          - root: "eventlog-live-otelcol"
+            name: "standalone-vm"
 
   #############################################################################
   # Test with cabal-docspec
