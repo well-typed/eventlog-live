@@ -206,7 +206,7 @@ library
     , eventlog-live            >=0.5    && <0.6
     , file-embed               >=0.0.16 && <0.1
     , ghc-events               >=0.20   && <0.21
-    , ghc-stack-profiler-core  >=0.1    && <0.2
+    , ghc-stack-profiler-core  >=0.2    && <0.3
     , grapesy                  >=1.0.0  && <1.2
     , hashable                 >=1.4    && <1.6
     , hs-opentelemetry-otlp    >=0.2.0  && <0.3

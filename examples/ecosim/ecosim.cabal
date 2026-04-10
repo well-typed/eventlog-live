@@ -23,7 +23,7 @@ executable ecosim
     , base                   >=4.20  && <5
     , eventlog-socket        >=0.1.0 && <0.2
     , ghc-stack-annotations  >=0.1   && <0.2
-    , ghc-stack-profiler     >=0.1   && <0.2
+    , ghc-stack-profiler     >=0.2   && <0.3
     , random                 >=1.2   && <1.4
     , stm                    >=2.5   && <2.6
 
