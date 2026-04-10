@@ -134,7 +134,7 @@ library
     , co-log-core              >=0.3    && <0.4
     , dlist                    >=1.0    && <1.1
     , ghc-events               >=0.20   && <0.21
-    , ghc-stack-profiler-core  >=0.1    && <0.2
+    , ghc-stack-profiler-core  >=0.2    && <0.3
     , hashable                 >=1.4    && <1.6
     , machines                 >=0.7.4  && <0.8
     , monad-control            >=1.0    && <1.1
