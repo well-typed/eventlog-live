@@ -16,6 +16,11 @@ COPY --parents \
     "./examples/oddball/" \
     "/eventlog-live/"
 
+# Create cabal.project file
+COPY <<EOF /eventlog-live/examples/oddball/cabal.project
+packages: .
+EOF
+
 # Build oddball
 RUN <<EOF
 cabal update

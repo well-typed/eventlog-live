@@ -26,7 +26,7 @@ package grpc-spec
 EOF
 
 # Install protoc
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y protobuf-compiler
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y protobuf-compiler libsnappy-dev
 
 # Build eventlog-live-otelcol
 RUN <<EOF
