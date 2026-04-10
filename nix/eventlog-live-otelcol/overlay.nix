@@ -9,8 +9,8 @@ final: prev: with hlib; {
   grapesy = dontCheck prev.grapesy;
   http2 = prev.callHackage "http2" "5.3.9" { };
   http2-tls = prev.callHackage "http2-tls" "0.4.5" { };
-  eventlog-socket = prev.callHackage "eventlog-socket" "0.1.2.0" { };
-  eventlog-socket-control = prev.callHackage "eventlog-socket-control" "0.1.0.0" { };
+  eventlog-socket = prev.callHackage "eventlog-socket" "0.1.3.0" { };
+  eventlog-socket-control = prev.callHackage "eventlog-socket-control" "0.1.1.0" { };
   optparse-applicative = prev.callHackage "optparse-applicative" "0.19.0.0" { };
   proto-lens = doJailbreak prev.proto-lens;
   proto-lens-protobuf-types = doJailbreak prev.proto-lens-protobuf-types;
