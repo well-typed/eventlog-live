@@ -2,6 +2,38 @@
 
 This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to [the demo described in the README](https://github.com/well-typed/eventlog-live#demo), which sets up `eventlog-live-otelcol`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
 
+## Building the packages
+
+The configuration contains three Nix packages:
+
+- `eventlog-live`
+- `eventlog-live-otelcol`
+- `oddball`
+
+These packages can be built from command-line:
+
+```sh
+# build eventlog-live:
+nix build .#eventlog-live
+
+# build eventlog-live-otelcol:
+nix build .#eventlog-live-otelcol
+
+# build oddball:
+nix build .#oddball
+```
+
+The `eventlog-live` and `oddball` packages should build on any supported platform.
+Unfortunately, `eventlog-live-otelcol` depends on the `crc32c` package, which does not have Nix derivations for `arm64` architectures.
+
+> [!NOTE]
+> These Nix commands use the `nix-command` and `flakes` features.
+> On any system where these aren't enabled by default, this requires the following extra command-line options:
+>
+> ```sh
+> --extra-experimental-features nix-command flakes
+> ```
+
 ## Building the VM
 
 Building the VM requires a linux machine running [Nix](https://nixos.org) with flakes enabled.
