@@ -12,6 +12,7 @@ packages: examples/collatzer
 packages: examples/dumper
 packages: examples/fibber
 packages: examples/oddball
+packages: examples/jumpy-jump
 packages: examples/parfib
 packages: examples/spectral-norm
 
