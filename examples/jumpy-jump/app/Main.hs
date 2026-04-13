@@ -35,6 +35,7 @@ main =
       threadDelay 100
 
 {-# SCC jumpyJump0 #-}
+{-# OPAQUE jumpyJump0 #-}
 jumpyJump0 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -53,6 +54,7 @@ jumpyJump0 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump1 #-}
+{-# OPAQUE jumpyJump1 #-}
 jumpyJump1 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -71,6 +73,7 @@ jumpyJump1 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump2 #-}
+{-# OPAQUE jumpyJump2 #-}
 jumpyJump2 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -89,6 +92,7 @@ jumpyJump2 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump3 #-}
+{-# OPAQUE jumpyJump3 #-}
 jumpyJump3 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -107,6 +111,7 @@ jumpyJump3 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump4 #-}
+{-# OPAQUE jumpyJump4 #-}
 jumpyJump4 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -125,6 +130,7 @@ jumpyJump4 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump5 #-}
+{-# OPAQUE jumpyJump5 #-}
 jumpyJump5 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -143,6 +149,7 @@ jumpyJump5 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump6 #-}
+{-# OPAQUE jumpyJump6 #-}
 jumpyJump6 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -161,6 +168,7 @@ jumpyJump6 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump7 #-}
+{-# OPAQUE jumpyJump7 #-}
 jumpyJump7 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
@@ -179,6 +187,7 @@ jumpyJump7 = do
   printf "leave %d\n" n
 
 {-# SCC jumpyJump8 #-}
+{-# OPAQUE jumpyJump8 #-}
 jumpyJump8 = do
   n <- randomRIO @Word8 (0, 9)
   threadDelay 5
