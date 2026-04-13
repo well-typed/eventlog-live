@@ -2,11 +2,7 @@ import: cabal.project.config
 
 packages: eventlog-live
 packages: eventlog-live-influxdb
-
--- 2025-09-17:
--- proto-lens-setup-0.4.0.9 does not support GHC 9.12 or later.
-if impl(ghc <9.12)
-  packages: eventlog-live-otelcol
+packages: eventlog-live-otelcol
 
 packages: examples/collatzer
 packages: examples/dumper
