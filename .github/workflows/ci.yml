@@ -272,6 +272,11 @@ jobs:
         run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
         id: dev-dependencies
 
+      - name: 🛠️ Setup Protobuf Compiler
+        uses: ./.github/actions/setup-protoc
+        with:
+          protoc-version: ${{ steps.dev-dependencies.outputs.protoc }}
+
       - name: 🛠️ Setup cabal-docspec
         uses: ./.github/actions/setup-cabal-docspec
 
