@@ -272,6 +272,12 @@ jobs:
         run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
         id: dev-dependencies
 
+      - name: 🛠️ Setup Haskell
+        id: setup-haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
+
       - name: 🛠️ Setup Protobuf Compiler
         uses: ./.github/actions/setup-protoc
         with:
@@ -281,10 +287,7 @@ jobs:
         uses: ./.github/actions/setup-cabal-docspec
 
       - name: 🛠️ Update package list for Hackage
-        run: |
-          mkdir ~/.cabal
-          cabal user-config update
-          cabal update
+        run: cabal update
 
       - name: 🧪 Test with cabal-docspec
         run: ./scripts/test-cabal-docspec.sh
