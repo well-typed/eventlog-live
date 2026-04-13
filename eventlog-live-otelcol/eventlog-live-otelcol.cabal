@@ -228,7 +228,7 @@ library
     build-depends:
       , aeson                    >=2.2   && <2.3
       , binary                   >=0.8   && <0.9
-      , eventlog-socket-control  >=0.1   && <0.2
+      , eventlog-socket-control  >=0.1.1 && <0.2
       , fast-logger              >=3.0   && <3.3
       , http-api-data            >=0.6   && <0.7
       , network                  >=3.2.7 && <3.3
