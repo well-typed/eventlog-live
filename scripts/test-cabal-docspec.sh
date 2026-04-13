@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Check ghc version
+GHC_VERSION="$(awk -F'=' '/^ghc=/{print$2}' ./scripts/dev-dependencies.txt)"
+
 # Check cabal-docspec version
 EXPECT_VERSION="$(awk -F'=' '/^cabal-docspec=/{print$2}' ./scripts/dev-dependencies.txt)"
 
@@ -36,6 +39,7 @@ if [ "${SKIP_CABAL_BUILD}" = "" ]; then
   fi
 fi
 ${CABAL_DOCSPEC} \
-  --verbose \
   --no-check-properties \
+  --verbose \
+  --with-compiler="ghc-${GHC_VERSION}" \
   || exit 1
