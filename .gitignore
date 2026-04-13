@@ -6,3 +6,4 @@ dist-newstyle/
 *.prof
 /nix/*/result
 cabal.project.local
+/examples/ghc/build-Cabal-syntax.sh
