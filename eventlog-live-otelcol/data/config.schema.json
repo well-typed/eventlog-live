@@ -40,6 +40,15 @@
             "thread_state": { "$ref": "#/definitions/trace" }
           },
           "additionalProperties": false
+        },
+        "profiles": {
+          "type": "object",
+          "properties": {
+            "defaults": { "#ref": "#/definitions/profile_defaults" },
+            "stack_sample": { "$ref": "#/definitions/profile" },
+            "cost_centre_sample": { "$ref": "#/definitions/profile" }
+          },
+          "additionalProperties": false
         }
       }
     }
@@ -135,6 +144,21 @@
       "additionalProperties": false
     },
     "trace_defaults": {
+      "description": "An optional 'defaults' block for defining YAML anchors.",
+      "properties": {
+        "export": { "$ref": "#/definitions/export_strategy" }
+      },
+      "additionalProperties": false
+    },
+    "profile": {
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "export": { "$ref": "#/definitions/export_strategy" }
+      },
+      "additionalProperties": false
+    },
+    "profile_defaults": {
       "description": "An optional 'defaults' block for defining YAML anchors.",
       "properties": {
         "export": { "$ref": "#/definitions/export_strategy" }
