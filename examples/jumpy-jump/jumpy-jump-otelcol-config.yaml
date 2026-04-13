@@ -72,3 +72,7 @@ processors:
       name: ghc_eventlog_StackSampleProfile
       description: A thread RTS callstack sample
       export: 5s
+    cost_centre_sample:
+      name: ghc_eventlog_CostCentreProfile
+      description: A cost centre callstack sample.
+      export: 5s
