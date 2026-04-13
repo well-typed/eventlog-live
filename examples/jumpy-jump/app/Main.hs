@@ -204,21 +204,3 @@ jumpyJump8 = do
     8 -> jumpyJump8
     9 -> pure ()
   printf "leave %d\n" n
-
-{-# SCC jumpyJump9 #-}
-jumpyJump9 = do
-  n <- randomRIO @Word8 (0, 9)
-  threadDelay 5
-  printf "enter %d\n" n
-  case n of
-    0 -> jumpyJump0
-    1 -> jumpyJump1
-    2 -> jumpyJump2
-    3 -> jumpyJump3
-    4 -> jumpyJump4
-    5 -> jumpyJump5
-    6 -> jumpyJump6
-    7 -> jumpyJump7
-    8 -> jumpyJump8
-    9 -> pure ()
-  printf "leave %d\n" n
