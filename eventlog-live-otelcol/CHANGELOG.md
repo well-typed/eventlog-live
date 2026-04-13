@@ -4,6 +4,9 @@
 - **BREAKING**: Change value of `aggregate` in configuration files to ``(boolean | `${number}x`)``.
 - Support logs and markers (`thread_label`, `user_marker`, `user_message`, `internal_log_message`).
 - Support internal telemetry (currently only `internal_log_message`).
+- Support cost-centre profiles.
+- Support `ghc-stack-profiler` call-stack profiles.
+- **BREAKING**: Use OTLP v1.9.
 
 ### 0.5.0.0
 
