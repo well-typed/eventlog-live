@@ -8,8 +8,8 @@ export GHC_EVENTLOG_SOCKET="/tmp/jumpy_jump_eventlog.sock"
 
 # Build jumpy-jump
 echo "Build jumpy-jump"
-cabal build jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --project-file=cabal.project.profiling -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --project-file=cabal.project.profiling -v0 | head -n1)
+cabal build jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --enable-profiling -v0
+JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --enable-profiling -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
