@@ -237,6 +237,22 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
       :<|> (stopHeapProfiling :<|> badCORSPreflight)
       :<|> (requestHeapCensus :<|> badCORSPreflight)
    where
+    startProfiling :: StartProfilingReq -> Handler ()
+    startProfiling req = do
+      liftIO . writeLog logger DEBUG $
+        "Received request on /control/eventlog-socket/start-profiling for " <> req.serviceName <> "."
+      -- Send the control command over the socket.
+      withSocketFor (ServiceName req.serviceName) $ \socket -> do
+        liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
+
+    stopProfiling :: StopProfilingReq -> Handler ()
+    stopProfiling req = do
+      liftIO . writeLog logger DEBUG $
+        "Received request on /control/eventlog-socket/stop-profiling for " <> req.serviceName <> "."
+      -- Send the control command over the socket.
+      withSocketFor (ServiceName req.serviceName) $ \socket -> do
+        liftIO (SBSL.sendAll socket $ B.encode C.stopProfiling)
+
     startHeapProfiling :: StartHeapProfilingReq -> Handler ()
     startHeapProfiling req = do
       liftIO . writeLog logger DEBUG $
@@ -329,16 +345,24 @@ type HealthApi =
 
 type EventlogSocketApi =
   "eventlog-socket"
-    :> ( "start-heap-profiling" :> (StartHeapProfilingApi :<|> BadCORSPreflight)
+    :> ("start-profiling" :> (StartProfilingApi :<|> BadCORSPreflight)
+          :<|> "stop-profiling" :> (StopProfilingApi :<|> BadCORSPreflight)
+          :<|> "start-heap-profiling" :> (StartHeapProfilingApi :<|> BadCORSPreflight)
           :<|> "stop-heap-profiling" :> (StopHeapProfilingApi :<|> BadCORSPreflight)
           :<|> "request-heap-census" :> (RequestHeapCensusApi :<|> BadCORSPreflight)
        )
 
+type StartProfilingApi =
+  ReqBody '[FormUrlEncoded, JSON] StartProfilingReq
+    :> PostAccepted '[JSON] ()
+
+type StopProfilingApi =
+  ReqBody '[FormUrlEncoded, JSON] StopProfilingReq
+    :> PostAccepted '[JSON] ()
+
 type StartHeapProfilingApi =
   ReqBody '[FormUrlEncoded, JSON] StartHeapProfilingReq
     :> PostAccepted '[JSON] ()
-    -- Verb 'POST 200 '[JSON] ()
-    -- UVerb 'OPTIONS '[JSON] '[WithStatus 200 (), WithStatus 404 BadOops]
 
 type StopHeapProfilingApi =
   ReqBody '[FormUrlEncoded, JSON] StopHeapProfilingReq
@@ -366,6 +390,38 @@ type BadCORSPreflightReject =  WithStatus 400 NoContent
 
 data Health = Health
   deriving (Generic, Show)
+
+--------------------------------------------------------------------------------
+-- StartProfilingReq
+
+newtype StartProfilingReq = StartProfilingReq
+  { serviceName :: Text
+  }
+  deriving (Generic, Show)
+
+instance FromForm StartProfilingReq where
+  fromForm :: Form -> Either Text StartProfilingReq
+  fromForm = genericFromForm myFormOptions
+
+instance FromJSON StartProfilingReq where
+  parseJSON :: Value -> Parser StartProfilingReq
+  parseJSON = genericParseJSON myJSONOptions
+
+--------------------------------------------------------------------------------
+-- StopProfilingReq
+
+newtype StopProfilingReq = StopProfilingReq
+  { serviceName :: Text
+  }
+  deriving (Generic, Show)
+
+instance FromForm StopProfilingReq where
+  fromForm :: Form -> Either Text StopProfilingReq
+  fromForm = genericFromForm myFormOptions
+
+instance FromJSON StopProfilingReq where
+  parseJSON :: Value -> Parser StopProfilingReq
+  parseJSON = genericParseJSON myJSONOptions
 
 --------------------------------------------------------------------------------
 -- StartHeapProfilingReq
