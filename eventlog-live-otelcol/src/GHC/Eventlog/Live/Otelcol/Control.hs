@@ -238,12 +238,12 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
   controlApi = eventlogSocket :<|> customCommand
    where
     customCommand :: Server CustomCommandApi
-    customCommand namespaceText = callCustomCommand :<|> badCORSPreflight
+    customCommand namespaceText commandId = callCustomCommand :<|> badCORSPreflight
      where
       callCustomCommand :: CustomCommandReq -> Handler (Union '[CustomCommandAccept, CustomCommandReject])
       callCustomCommand req = do
         liftIO . writeLog logger DEBUG $
-          "Received request on /control/" <> namespaceText <> " with command ID " <> T.pack (show req.commandId) <> " for " <> req.serviceName <> "."
+          "Received request on /control/" <> namespaceText <> " with command ID " <> T.pack (show commandId) <> " for " <> req.serviceName <> "."
         -- Construct the user namespace.
         liftIO (eitherUserNamespace namespaceText) >>= \case
           -- If userNamespace throws an exception, then...
@@ -254,7 +254,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
           -- Otherwise, ...
           Right namespace -> do
             -- ...construct the user command...
-            let command = C.userCommand namespace (C.CommandId req.commandId)
+            let command = C.userCommand namespace (C.CommandId commandId)
             -- ...send the user command...
             withSocketFor (ServiceName req.serviceName) $ \socket -> do
               liftIO (SBSL.sendAll socket $ B.encode command)
@@ -375,8 +375,9 @@ type HealthApi =
 
 type CustomCommandApi =
   Capture "namespace" Text
-    :> ((ReqBody '[FormUrlEncoded, JSON] CustomCommandReq
-      :> UVerb 'POST '[JSON] '[CustomCommandAccept, CustomCommandReject]) :<|> BadCORSPreflight)
+    :> Capture "commandId" Word8
+      :> ((ReqBody '[FormUrlEncoded, JSON] CustomCommandReq
+        :> UVerb 'POST '[JSON] '[CustomCommandAccept, CustomCommandReject]) :<|> BadCORSPreflight)
 
 type CustomCommandAccept = WithStatus 204 NoContent
 
@@ -408,7 +409,6 @@ instance ToJSON CustomCommandError where
 
 data CustomCommandReq = CustomCommandReq
   { serviceName :: Text
-  , commandId :: Word8
   }
   deriving (Generic, Show)
 
