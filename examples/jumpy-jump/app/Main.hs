@@ -6,10 +6,11 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
 import Data.Foldable (traverse_)
 import Data.Word (Word8)
-import GHC.Eventlog.Socket (startWait)
+import Debug.Trace (traceMarkerIO)
+import GHC.Eventlog.Socket (startFromEnv, startWait)
 import System.Environment (lookupEnv)
 import System.Exit (exitSuccess)
-import System.Random (randomRIO)
+import System.Random (newStdGen, randomRIO, randomRs)
 import Text.Printf (printf)
 
 #ifdef JUMPY_JUMP_USE_GHC_STACK_PROFILER
@@ -20,7 +21,7 @@ withGhcStackProfiler :: IO () -> IO ()
 #ifdef JUMPY_JUMP_USE_GHC_STACK_PROFILER
 withGhcStackProfiler action =
   withRootStackProfiler True $ \manager ->
-    withStackProfiler manager (SampleIntervalMs 30) $
+    withStackProfiler manager (SampleIntervalMs 1) $
       action
 #else
 withGhcStackProfiler action = action
@@ -29,15 +30,32 @@ withGhcStackProfiler action = action
 main :: IO ()
 main =
   withGhcStackProfiler $ do
-    traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
+    startFromEnv
     forever $ do
       jumpyJump0
-      threadDelay 100
+      beABitOfAnOddball
+
+{-# SCC beABitOfAnOddball #-}
+{-# OPAQUE beABitOfAnOddball #-}
+beABitOfAnOddball = do
+  n <- randomRIO (100, 1000)
+  traceMarkerIO $ "Summing " ++ show n ++ " numbers"
+  putStrLn $ "Generating " ++ show n ++ " random numbers"
+  nRandomIntegers <- randomRs @Integer (-1000, 1000) <$> newStdGen
+  let sumOfNRandomIntegers = foldr (+) 00 $ take n nRandomIntegers
+  putStrLn $ "Sum: " ++ show sumOfNRandomIntegers
+
+randomJumpTarget :: IO Word8
+randomJumpTarget = do
+  n <- randomRIO @Word8 (0, 9)
+  -- Decrease the chance of returning 9,
+  -- which makes the chains of jumps longer.
+  if n /= 9 then pure n else randomRIO @Word8 (0, 9)
 
 {-# SCC jumpyJump0 #-}
 {-# OPAQUE jumpyJump0 #-}
 jumpyJump0 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -56,7 +74,7 @@ jumpyJump0 = do
 {-# SCC jumpyJump1 #-}
 {-# OPAQUE jumpyJump1 #-}
 jumpyJump1 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -75,7 +93,7 @@ jumpyJump1 = do
 {-# SCC jumpyJump2 #-}
 {-# OPAQUE jumpyJump2 #-}
 jumpyJump2 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -94,7 +112,7 @@ jumpyJump2 = do
 {-# SCC jumpyJump3 #-}
 {-# OPAQUE jumpyJump3 #-}
 jumpyJump3 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -113,7 +131,7 @@ jumpyJump3 = do
 {-# SCC jumpyJump4 #-}
 {-# OPAQUE jumpyJump4 #-}
 jumpyJump4 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -132,7 +150,7 @@ jumpyJump4 = do
 {-# SCC jumpyJump5 #-}
 {-# OPAQUE jumpyJump5 #-}
 jumpyJump5 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -151,7 +169,7 @@ jumpyJump5 = do
 {-# SCC jumpyJump6 #-}
 {-# OPAQUE jumpyJump6 #-}
 jumpyJump6 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -170,7 +188,7 @@ jumpyJump6 = do
 {-# SCC jumpyJump7 #-}
 {-# OPAQUE jumpyJump7 #-}
 jumpyJump7 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
@@ -189,7 +207,7 @@ jumpyJump7 = do
 {-# SCC jumpyJump8 #-}
 {-# OPAQUE jumpyJump8 #-}
 jumpyJump8 = do
-  n <- randomRIO @Word8 (0, 9)
+  n <- randomJumpTarget
   threadDelay 5
   printf "enter %d\n" n
   case n of
