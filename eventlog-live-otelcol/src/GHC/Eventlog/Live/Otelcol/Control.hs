@@ -29,9 +29,11 @@ import Text.ParserCombinators.ReadP qualified as P
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
+import Control.Exception (Exception (..), catches)
+import Control.Exception qualified as E (Handler (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Aeson qualified as JSON
-import Data.Aeson.Types (FromJSON (..), Parser, Value, genericParseJSON)
+import Data.Aeson.Types (FromJSON (..), ToJSON (..), Parser, Value, genericParseJSON, genericToJSON)
 import Data.Binary qualified as B
 import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isLower, isUpper, toLower)
@@ -41,10 +43,11 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import Data.Word (Word8)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)
 import GHC.Eventlog.Live.Otelcol.Config (ServiceName (..))
-import GHC.Eventlog.Socket.Control qualified as C (requestHeapCensus, startHeapProfiling, stopHeapProfiling)
+import GHC.Eventlog.Socket.Control qualified as C
 import GHC.Generics (Generic)
 import Network.Socket (Socket)
 import Network.Socket.ByteString.Lazy qualified as SBSL
@@ -53,7 +56,7 @@ import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), Origin, cors)
 import Network.Wai.Middleware.RequestLogger (Destination (..), DetailedSettings (..), OutputFormat (..), RequestLoggerSettings (..), defaultDetailedSettings, defaultRequestLoggerSettings, mkRequestLogger)
 import Servant (PlainText, throwError)
-import Servant.API (FormUrlEncoded, Get, Header, Headers, JSON, NoContent (..), PostAccepted, ReqBody, StdMethod (..), UVerb, Union, WithStatus (..), addHeader, (:>), type (:<|>) (..))
+import Servant.API (Capture, FormUrlEncoded, Get, Header, Headers, JSON, NoContent (..), PostAccepted, ReqBody, StdMethod (..), UVerb, Union, WithStatus (..), addHeader, (:>), type (:<|>) (..))
 import Servant.Server (Handler, Server, ServerError (..), serve, respond)
 import System.Log.FastLogger (fromLogStr)
 import Web.FormUrlEncoded (Form, FormOptions, FromForm (..), genericFromForm)
@@ -224,58 +227,88 @@ mkCorsResourcePolicy ControlCors{..} =
 
 controlServer :: Logger IO -> TVar (HashMap ServiceName EventlogSourceHandle) -> Bool -> Server (HealthApi :<|> ControlApi)
 controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
-  health :<|> eventlogSocket
+  health :<|> controlApi
  where
   health :: Handler ()
   health = do
     liftIO . writeLog logger DEBUG $
       "Received request on /health."
 
-  eventlogSocket :: Server EventlogSocketApi
-  eventlogSocket =
-    (startHeapProfiling :<|> badCORSPreflight)
-      :<|> (stopHeapProfiling :<|> badCORSPreflight)
-      :<|> (requestHeapCensus :<|> badCORSPreflight)
+  controlApi :: Server ControlApi
+  controlApi = eventlogSocket :<|> customCommand
    where
-    startProfiling :: StartProfilingReq -> Handler ()
-    startProfiling req = do
-      liftIO . writeLog logger DEBUG $
-        "Received request on /control/eventlog-socket/start-profiling for " <> req.serviceName <> "."
-      -- Send the control command over the socket.
-      withSocketFor (ServiceName req.serviceName) $ \socket -> do
-        liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
+    customCommand :: Server CustomCommandApi
+    customCommand namespaceText = callCustomCommand :<|> badCORSPreflight
+     where
+      callCustomCommand :: CustomCommandReq -> Handler (Union '[CustomCommandAccept, CustomCommandReject])
+      callCustomCommand req = do
+        liftIO . writeLog logger DEBUG $
+          "Received request on /control/" <> namespaceText <> " with command ID " <> T.pack (show req.commandId) <> " for " <> req.serviceName <> "."
+        -- Construct the user namespace.
+        liftIO (eitherUserNamespace namespaceText) >>= \case
+          -- If userNamespace throws an exception, then...
+          Left customCommandError ->
+            -- ...respond with a custom command error.
+            respond . WithStatus @404 $
+              customCommandError
+          -- Otherwise, ...
+          Right namespace -> do
+            -- ...construct the user command...
+            let command = C.userCommand namespace (C.CommandId req.commandId)
+            -- ...send the user command...
+            withSocketFor (ServiceName req.serviceName) $ \socket -> do
+              liftIO (SBSL.sendAll socket $ B.encode command)
+            -- ...respond with a success status.
+            respond . WithStatus @204 $
+              NoContent
 
-    stopProfiling :: StopProfilingReq -> Handler ()
-    stopProfiling req = do
-      liftIO . writeLog logger DEBUG $
-        "Received request on /control/eventlog-socket/stop-profiling for " <> req.serviceName <> "."
-      -- Send the control command over the socket.
-      withSocketFor (ServiceName req.serviceName) $ \socket -> do
-        liftIO (SBSL.sendAll socket $ B.encode C.stopProfiling)
+    eventlogSocket :: Server EventlogSocketApi
+    eventlogSocket =
+        (startProfiling :<|> badCORSPreflight)
+        :<|> (stopProfiling :<|> badCORSPreflight)
+        :<|> (startHeapProfiling :<|> badCORSPreflight)
+        :<|> (stopHeapProfiling :<|> badCORSPreflight)
+        :<|> (requestHeapCensus :<|> badCORSPreflight)
+     where
+      startProfiling :: StartProfilingReq -> Handler ()
+      startProfiling req = do
+        liftIO . writeLog logger DEBUG $
+          "Received request on /control/eventlog-socket/start-profiling for " <> req.serviceName <> "."
+        -- Send the control command over the socket.
+        withSocketFor (ServiceName req.serviceName) $ \socket -> do
+          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
 
-    startHeapProfiling :: StartHeapProfilingReq -> Handler ()
-    startHeapProfiling req = do
-      liftIO . writeLog logger DEBUG $
-        "Received request on /control/eventlog-socket/start-heap-profiling for " <> req.serviceName <> "."
-      -- Send the control command over the socket.
-      withSocketFor (ServiceName req.serviceName) $ \socket -> do
-        liftIO (SBSL.sendAll socket $ B.encode C.startHeapProfiling)
+      stopProfiling :: StopProfilingReq -> Handler ()
+      stopProfiling req = do
+        liftIO . writeLog logger DEBUG $
+          "Received request on /control/eventlog-socket/stop-profiling for " <> req.serviceName <> "."
+        -- Send the control command over the socket.
+        withSocketFor (ServiceName req.serviceName) $ \socket -> do
+          liftIO (SBSL.sendAll socket $ B.encode C.stopProfiling)
 
-    stopHeapProfiling :: StopHeapProfilingReq -> Handler ()
-    stopHeapProfiling req = do
-      liftIO . writeLog logger DEBUG $
-        "Received request on /control/eventlog-socket/stop-heap-profiling for " <> req.serviceName <> "."
-      -- Send the control command over the socket.
-      withSocketFor (ServiceName req.serviceName) $ \socket -> do
-        liftIO (SBSL.sendAll socket $ B.encode C.stopHeapProfiling)
+      startHeapProfiling :: StartHeapProfilingReq -> Handler ()
+      startHeapProfiling req = do
+        liftIO . writeLog logger DEBUG $
+          "Received request on /control/eventlog-socket/start-heap-profiling for " <> req.serviceName <> "."
+        -- Send the control command over the socket.
+        withSocketFor (ServiceName req.serviceName) $ \socket -> do
+          liftIO (SBSL.sendAll socket $ B.encode C.startHeapProfiling)
 
-    requestHeapCensus :: RequestHeapCensusReq -> Handler ()
-    requestHeapCensus req = do
-      liftIO . writeLog logger DEBUG $
-        "Received request on /control/eventlog-socket/request-heap-census for " <> req.serviceName <> "."
-      -- Send the control command over the socket.
-      withSocketFor (ServiceName req.serviceName) $ \socket -> do
-        liftIO (SBSL.sendAll socket $ B.encode C.requestHeapCensus)
+      stopHeapProfiling :: StopHeapProfilingReq -> Handler ()
+      stopHeapProfiling req = do
+        liftIO . writeLog logger DEBUG $
+          "Received request on /control/eventlog-socket/stop-heap-profiling for " <> req.serviceName <> "."
+        -- Send the control command over the socket.
+        withSocketFor (ServiceName req.serviceName) $ \socket -> do
+          liftIO (SBSL.sendAll socket $ B.encode C.stopHeapProfiling)
+
+      requestHeapCensus :: RequestHeapCensusReq -> Handler ()
+      requestHeapCensus req = do
+        liftIO . writeLog logger DEBUG $
+          "Received request on /control/eventlog-socket/request-heap-census for " <> req.serviceName <> "."
+        -- Send the control command over the socket.
+        withSocketFor (ServiceName req.serviceName) $ \socket -> do
+          liftIO (SBSL.sendAll socket $ B.encode C.requestHeapCensus)
 
     badCORSPreflight :: Handler (Union '[BadCORSPreflightAccept, BadCORSPreflightReject])
     badCORSPreflight
@@ -329,10 +362,66 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
 -- Control API
 
 type ControlApi =
-  "control" :> EventlogSocketApi
+  "control" :> (EventlogSocketApi :<|> CustomCommandApi)
+
+--------------------------------------------------------------------------------
+-- Health API
 
 type HealthApi =
   "health" :> Get '[JSON] ()
+
+--------------------------------------------------------------------------------
+-- Custom Command API
+
+type CustomCommandApi =
+  Capture "namespace" Text
+    :> ((ReqBody '[FormUrlEncoded, JSON] CustomCommandReq
+      :> UVerb 'POST '[JSON] '[CustomCommandAccept, CustomCommandReject]) :<|> BadCORSPreflight)
+
+type CustomCommandAccept = WithStatus 204 NoContent
+
+type CustomCommandReject = WithStatus 404 CustomCommandError
+
+newtype CustomCommandError = CustomCommandError
+  { errorMessage :: String
+  }
+  deriving (Generic, Show)
+
+eitherUserNamespace :: Text -> IO (Either CustomCommandError C.Namespace)
+eitherUserNamespace namespace =
+  (pure . Right . C.userNamespace $ namespace) `catches` handlers
+ where
+  handlers =
+    [ E.Handler $ pure . Left . toCustomCommandError @C.NamespaceReservedError
+    , E.Handler $ pure . Left . toCustomCommandError @C.NamespaceTooLongError
+    ]
+
+toCustomCommandError :: (Exception e) => e -> CustomCommandError
+toCustomCommandError = CustomCommandError . displayException
+
+instance ToJSON CustomCommandError where
+  toJSON :: CustomCommandError -> Value
+  toJSON = genericToJSON myJSONOptions
+
+--------------------------------------------------------------------------------
+-- CustomCommandReq
+
+data CustomCommandReq = CustomCommandReq
+  { serviceName :: Text
+  , commandId :: Word8
+  }
+  deriving (Generic, Show)
+
+instance FromForm CustomCommandReq where
+  fromForm :: Form -> Either Text CustomCommandReq
+  fromForm = genericFromForm myFormOptions
+
+instance FromJSON CustomCommandReq where
+  parseJSON :: Value -> Parser CustomCommandReq
+  parseJSON = genericParseJSON myJSONOptions
+
+--------------------------------------------------------------------------------
+-- Eventlog Socket API
 
 -- 2025-12-11:
 -- Ideally, the /heap-profiling API would attach the semantics of /start and
@@ -383,13 +472,6 @@ type BadCORSPreflightAccept = WithStatus 204 (Headers
     NoContent)
 
 type BadCORSPreflightReject =  WithStatus 400 NoContent
-
-
---------------------------------------------------------------------------------
--- Health
-
-data Health = Health
-  deriving (Generic, Show)
 
 --------------------------------------------------------------------------------
 -- StartProfilingReq
