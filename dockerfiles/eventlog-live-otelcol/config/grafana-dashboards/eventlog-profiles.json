@@ -1,0 +1,390 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Dashboard for cost centre and GHC call-stack profiles.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "panels": [],
+      "repeat": "service_name",
+      "title": "Stack Profile for ${service_name}",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "P02E4190217B50628"
+      },
+      "description": "Flamegraph of the GHC RTS Callstack",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Sample"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {},
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "P02E4190217B50628"
+          },
+          "groupBy": [],
+          "includeExemplars": false,
+          "labelSelector": "{service_name=\"${service_name}\"}",
+          "profileTypeId": "process_cpu:stack:samples::",
+          "queryType": "profile",
+          "refId": "A",
+          "spanSelector": []
+        }
+      ],
+      "title": "Stack Profile",
+      "type": "flamegraph"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 3,
+      "options": {
+        "inlineEditing": false,
+        "panZoom": false,
+        "root": {
+          "background": {
+            "color": {
+              "fixed": "transparent"
+            }
+          },
+          "border": {
+            "color": {
+              "fixed": "dark-green"
+            }
+          },
+          "constraint": {
+            "horizontal": "left",
+            "vertical": "top"
+          },
+          "elements": [
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                }
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/ghc-stack-profiler/2",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Stopped GHC Stack Profiling"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Stop GHC Stack Profiling",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "StopGhcStackProfiling",
+              "placement": {
+                "height": 45,
+                "left": 660,
+                "rotation": 0,
+                "top": 0,
+                "width": 215
+              },
+              "type": "button"
+            },
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                }
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/ghc-stack-profiler/1",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Started GHC Stack Profiling"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Start GHC Stack Profiling",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "StartGhcStackProfiling",
+              "placement": {
+                "height": 45,
+                "left": 440,
+                "rotation": 0,
+                "top": 0,
+                "width": 215
+              },
+              "type": "button"
+            },
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                }
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/eventlog-socket/stop-profiling",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Stopped Cost Centre Profiling"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Stop Cost Centre Profiling",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "StopCostCentreProfiling",
+              "placement": {
+                "height": 45,
+                "left": 220,
+                "top": 0,
+                "width": 215
+              },
+              "type": "button"
+            },
+            {
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "width": 0
+              },
+              "config": {
+                "align": "center",
+                "api": {
+                  "contentType": "application/x-www-form-urlencoded",
+                  "data": "service-name=${service_name}",
+                  "endpoint": "http://localhost:30719/control/eventlog-socket/start-profiling",
+                  "headerParams": [],
+                  "method": "POST",
+                  "queryParams": [],
+                  "successMessage": "Started Cost Centre Profiling"
+                },
+                "color": {
+                  "fixed": "#F0F4FD"
+                },
+                "size": 14,
+                "style": {
+                  "variant": "destructive"
+                },
+                "text": {
+                  "fixed": "Start Cost Centre Profiling",
+                  "mode": "fixed"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "name": "StartCostCentreProfiling",
+              "placement": {
+                "height": 45,
+                "left": 0,
+                "top": 0,
+                "width": 215
+              },
+              "type": "button"
+            }
+          ],
+          "name": "Element 1774877699342",
+          "placement": {
+            "height": 100,
+            "left": 0,
+            "rotation": 0,
+            "top": 0,
+            "width": 100
+          },
+          "type": "frame"
+        },
+        "showAdvancedTypes": true,
+        "tooltip": {
+          "disableForOneClick": false,
+          "mode": "single"
+        },
+        "zoomToContent": false
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "refId": "A"
+        }
+      ],
+      "title": "",
+      "transparent": true,
+      "type": "canvas"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "allowCustomValue": true,
+        "current": {
+          "text": ["ecosim"],
+          "value": ["ecosim"]
+        },
+        "datasource": {
+          "type": "grafana-pyroscope-datasource",
+          "uid": "P02E4190217B50628"
+        },
+        "definition": "",
+        "description": "The service name used for the visualisations on this dashboard.",
+        "label": "Service Name",
+        "multi": true,
+        "name": "service_name",
+        "options": [],
+        "query": {
+          "labelName": "service_name",
+          "profileTypeId": "process_cpu:stack:samples::",
+          "type": "labelValue"
+        },
+        "refresh": 1,
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Eventlog Profiles",
+  "uid": "ad7v28q",
+  "version": 2,
+  "weekStart": ""
+}
