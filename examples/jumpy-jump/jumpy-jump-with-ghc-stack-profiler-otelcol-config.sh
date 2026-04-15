@@ -4,17 +4,18 @@
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/jumpy_jump_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
 
 # Build jumpy-jump
 echo "Build jumpy-jump"
-cabal build jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler -v0 | head -n1)
+cabal build jumpy-jump -wghc-9.14 --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler -v0
+JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump -wghc-9.14 --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
-cabal build eventlog-live-otelcol -v0
-EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -v0 | head -n1)
+cabal build eventlog-live-otelcol -f+control -v0
+EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -f+control -v0 | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -35,6 +36,7 @@ echo 'Start jumpy-jump' && \
 	${JUMPY_JUMP_BIN} \
 		+RTS \
 		-l \
+		-hT \
 		--eventlog-flush-interval=1 \
 		-RTS
 "
@@ -48,10 +50,12 @@ echo 'Start eventlog-live-otelcol (for jumpy-jump)' && \
 		--stats \
 		--config='$DIR/jumpy-jump-otelcol-config.yaml' \
 		--service-name='jumpy-jump' \
-	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
+	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
 	    --otelcol-host=localhost \
-		+RTS -l -hT --eventlog-flush-interval=1 -RTS
+		--control \
+		--control-port 30719 \
+		--control-cors-ignore-failure
 "
 
 # Create the screen conf file
