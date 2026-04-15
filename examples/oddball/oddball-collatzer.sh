@@ -1,7 +1,8 @@
 #!/bin/sh -e
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
@@ -38,4 +39,4 @@ trap 'trap - TERM && kill -- -$$' INT TERM
 # NOTE: The purpose of 'sleep 2' is to give the oddball process
 #       sufficient time to create the Unix socket.
 echo "Run collatzer"
-sleep 2 && "${COLLATZER_BIN}" --unix "$GHC_EVENTLOG_SOCKET"
+sleep 2 && "${COLLATZER_BIN}" --unix "$GHC_EVENTLOG_UNIX_PATH"

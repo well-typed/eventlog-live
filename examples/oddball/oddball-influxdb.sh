@@ -1,7 +1,8 @@
 #!/bin/sh -e
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
@@ -24,7 +25,7 @@ trap "trap - TERM && kill -- -$$" INT TERM EXIT
 # Run eventlog-live-influxdb
 echo "Start eventlog-live-influxdb"
 "${EVENTLOG_LIVE_INFLUXDB_BIN}" \
-    --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
+    --eventlog-socket "$GHC_EVENTLOG_UNIX_PATH" \
     -hT \
     --influxdb-host=localhost \
     --influxdb-database=eventlog \
