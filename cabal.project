@@ -2,7 +2,11 @@ import: cabal.project.config
 
 packages: eventlog-live
 packages: eventlog-live-influxdb
-packages: eventlog-live-otelcol
+
+-- 2026-04-15:
+-- eventlog-live-otelcol does not support GHC 9.14 or later
+if impl(ghc <9.14)
+  packages: eventlog-live-otelcol
 
 packages: examples/collatzer
 packages: examples/dumper
