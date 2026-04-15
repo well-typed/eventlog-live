@@ -4,7 +4,8 @@
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
@@ -13,8 +14,8 @@ ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
-cabal build eventlog-live-otelcol -v0
-EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -v0 | head -n1)
+cabal build eventlog-live-otelcol -f+control -v0
+EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -f+control -v0 | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -49,10 +50,12 @@ echo 'Start eventlog-live-otelcol (for oddball)' && \
 		--stats \
 		--config='$DIR/oddball-otelcol-config.yaml' \
 		--service-name='oddball' \
-	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
+	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
 	    --otelcol-host=localhost \
-		+RTS -l -hT --eventlog-flush-interval=1 -RTS
+		--control \
+		--control-port 30719 \
+		--control-cors-ignore-failure
 "
 
 # Create the screen conf file

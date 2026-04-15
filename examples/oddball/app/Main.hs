@@ -11,7 +11,7 @@ import System.Random
 
 main :: IO ()
 main = do
-  traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
+  startFromEnv
   _ <- forever $ threadDelay 3000000 >> doRandom
   return ()
 

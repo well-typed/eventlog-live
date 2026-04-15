@@ -1,7 +1,8 @@
 #!/bin/sh -e
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/oddball_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
@@ -26,6 +27,6 @@ echo "Start eventlog-live-otelcol"
 "${EVENTLOG_LIVE_OTELCOL_BIN}" \
 	--verbosity=trace2 \
 	--service-name='oddball' \
-    --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
+    --eventlog-socket "$GHC_EVENTLOG_UNIX_PATH" \
     -hT \
     --otelcol-host=localhost
