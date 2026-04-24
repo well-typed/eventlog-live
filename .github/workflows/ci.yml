@@ -78,9 +78,6 @@ jobs:
       - name: 🏗️ Build
         run: cabal build all ${{ matrix.cabal-flags }}
 
-      - name: 🧪 Test fibber-dumper
-        run: ./examples/fibber/fibber-dumper.sh
-
     strategy:
       fail-fast: false
       matrix:
@@ -144,7 +141,6 @@ jobs:
       fail-fast: false
       matrix:
         dockerfile:
-          - "dumper"
           - "eventlog-live-otelcol"
           - "fibber"
           - "oddball"
