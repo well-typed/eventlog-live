@@ -7,6 +7,7 @@
 - Support cost-centre profiles.
 - Support `ghc-stack-profiler` call-stack profiles.
 - **BREAKING**: Use OTLP v1.9.
+- Support an optional control server via a REST API.
 
 ### 0.5.0.0
 
