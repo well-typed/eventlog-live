@@ -147,7 +147,6 @@ jobs:
           - "dumper"
           - "eventlog-live-otelcol"
           - "fibber"
-          - "ghc-events-show"
           - "oddball"
 
   #############################################################################
