@@ -14,8 +14,3 @@ packages: examples/oddball
 packages: examples/jumpy-jump
 packages: examples/parfib
 packages: examples/spectral-norm
-
--- 2025-09-17:
--- ghc-stack-profiler-0.2.0.0 does not support GHC 9.8 or earlier
-if impl(ghc >=9.10)
-  packages: examples/ecosim

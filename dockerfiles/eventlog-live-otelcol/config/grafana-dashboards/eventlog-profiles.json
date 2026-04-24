@@ -350,10 +350,6 @@
     "list": [
       {
         "allowCustomValue": true,
-        "current": {
-          "text": ["ecosim"],
-          "value": ["ecosim"]
-        },
         "datasource": {
           "type": "grafana-pyroscope-datasource",
           "uid": "P02E4190217B50628"
@@ -385,6 +381,6 @@
   "timezone": "browser",
   "title": "Eventlog Profiles",
   "uid": "ad7v28q",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }
