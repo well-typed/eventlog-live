@@ -144,7 +144,6 @@ jobs:
       fail-fast: false
       matrix:
         dockerfile:
-          - "collatzer"
           - "dumper"
           - "eventlog-live-otelcol"
           - "fibber"
