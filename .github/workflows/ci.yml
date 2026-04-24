@@ -146,7 +146,6 @@ jobs:
         dockerfile:
           - "collatzer"
           - "dumper"
-          - "eventlog-live-influxdb"
           - "eventlog-live-otelcol"
           - "fibber"
           - "ghc-events-show"
@@ -520,6 +519,5 @@ jobs:
         run: |
           nix-shell -p haskellPackages.cabal2nix --run '\
             cabal2nix file://${{ github.workspace }}/eventlog-live && \
-            cabal2nix file://${{ github.workspace }}/eventlog-live-influxdb && \
             cabal2nix file://${{ github.workspace }}/eventlog-live-otelcol'
         shell: bash
