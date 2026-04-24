@@ -17,10 +17,8 @@ description:
       [network](https://hackage.haskell.org/package/network) package.
 
   This package is primarily intended for use via the
-  [eventlog-live-influxdb](https://hackage.haskell.org/package/eventlog-live-influxdb)
-  and
   [eventlog-live-otelcol](https://hackage.haskell.org/package/eventlog-live-otelcol)
-  packages.
+  package.
 
   [⚠️ Warning]:
       This package is experimental.
