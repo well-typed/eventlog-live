@@ -74,7 +74,7 @@ services:
 
   otelcol:
     # container_name: otelcol
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.140.1
     depends_on:
       loki:
         condition: "service_started"
