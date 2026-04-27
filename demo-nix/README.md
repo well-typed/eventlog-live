@@ -1,6 +1,6 @@
 # NixOS VM
 
-This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to [the demo described in the README](https://github.com/well-typed/eventlog-live#demo), which sets up `eventlog-live-otelcol`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
+This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to an older version of [the demo described in the README](https://github.com/well-typed/eventlog-live#demo), which sets up `eventlog-live-otelcol`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
 
 ## Building the packages
 
