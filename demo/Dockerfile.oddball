@@ -8,7 +8,7 @@
 FROM haskell:9.12-slim-bookworm AS build
 
 # Configure oddball
-ARG GHC_EVENTLOG_SOCKET "/tmp/ghc_eventlog.sock"
+ARG GHC_EVENTLOG_UNIX_PATH: "/tmp/ghc_eventlog.sock"
 
 # Copy files from the project directory
 WORKDIR "/eventlog-live/examples/oddball"
