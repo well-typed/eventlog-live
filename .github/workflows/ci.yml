@@ -126,7 +126,7 @@ jobs:
       - name: 🏗️ Build
         uses: docker/build-push-action@v6
         with:
-          file: dockerfiles/Dockerfile.${{ matrix.dockerfile }}
+          file: demo/Dockerfile.${{ matrix.dockerfile }}
           push: false
           tags: |
             well-typed/${{
