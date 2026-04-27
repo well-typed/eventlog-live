@@ -5,7 +5,7 @@ synopsis:      Example with an interesting call stack profile.
 description:   Repeatedly jump randomly between ten jumpyJump functions.
 author:        Wen Kokke
 maintainer:    wen@well-typed.com
-copyright:     (c) 2023 Well-Typed
+copyright:     (c) 2026 Well-Typed
 license:       BSD-3-Clause
 license-file:  LICENSE
 category:      Debug, Monitoring, System, Network
