@@ -5,14 +5,16 @@ services:
       context: "../.."
       dockerfile: "./dockerfiles/Dockerfile.oddball"
     volumes:
-      - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
+      - "oddball:/run/oddball"
     environment:
-      GHC_EVENTLOG_SOCKET: "/run/ghc-eventlog-socket/ghc-eventlog.sock"
+      GHC_EVENTLOG_UNIX_PATH: "/run/oddball/ghc_eventlog.sock"
+      LANG: C.UTF-8
     command:
       - "+RTS"
       - "-l"
       - "-hT"
       - "--eventlog-flush-interval=1"
+      - "-RTS"
 
   eventlog-live-otelcol:
     # container_name: eventlog-live-otelcol
@@ -24,13 +26,24 @@ services:
         condition: "service_started"
       otelcol:
         condition: "service_started"
+    ports:
+      - "30179:30179"
     volumes:
-      - "ghc_eventlog_socket:/run/ghc-eventlog-socket"
+      - "oddball:/run/oddball"
+      - "./config/oddball-otelcol-config.yaml:/etc/oddball/oddball-otelcol-config.yaml"
+    environment:
+      LANG: C.UTF-8
     command:
-      - "--eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock"
+      - "--verbosity=debug"
+      - "--config=/etc/oddball/oddball-otelcol-config.yaml"
+      - "--service-name=oddball"
+      - "--eventlog-socket=/run/oddball/ghc_eventlog.sock"
       - "-hT"
-      - "--otelcol-host=otelcol"
       - "--eventlog-flush-interval=1"
+      - "--otelcol-host=otelcol"
+      - "--control"
+      - "--control-port=30719"
+      - "--control-cors-ignore-failure"
 
   grafana:
     # container_name: grafana
@@ -121,4 +134,4 @@ services:
       - "24318:24318" # OTLP HTTP receiver
 
 volumes:
-  ghc_eventlog_socket:
+  oddball:
