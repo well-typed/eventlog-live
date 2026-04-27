@@ -27,7 +27,12 @@ services:
       otelcol:
         condition: "service_started"
     ports:
-      - "30179:30179"
+      - "30719:30719"
+    healthcheck:
+      test: "curl -f http://localhost:30719/health"
+      interval: 1m
+      timeout: 10s
+      retries: 5
     volumes:
       - "oddball:/run/oddball"
       - "./config/eventlog-live-otelcol.yaml:/etc/eventlog-live-otelcol/config.yaml"
