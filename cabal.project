@@ -7,7 +7,6 @@ packages: eventlog-live
 if impl(ghc <9.14)
   packages: eventlog-live-otelcol
 
-packages: examples/fibber
 packages: examples/oddball
 packages: examples/jumpy-jump
 packages: examples/parfib
