@@ -33,6 +33,7 @@ RUN <<EOF
 cabal update
 mkdir "/eventlog-live/bin"
 cabal install \
+    -f+control \
     --overwrite-policy=always \
     --install-method=copy \
     --installdir="/eventlog-live/bin" \
