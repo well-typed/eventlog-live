@@ -100,7 +100,18 @@ services:
 
   tempo:
     # container_name: tempo
-    image: grafana/tempo:latest
+    #
+    # 2026-04-27:
+    # The latest version of grafana/tempo doesn't work with the configuration
+    # used in this example, and grafana/tempo only publishes tags that include
+    # the architecture of the image. Therefore, we need this nightmare hack to
+    # enable running the docker compose file on both supported architectures.
+    #
+    # If you're on arm64, you should set ARCH to arm64, e.g.,
+    #
+    # ARCH=arm64 docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose-external.yml up -d
+    #
+    image: grafana/tempo:main-93b3140-${ARCH:-amd64}
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - "./config/tempo.yaml:/etc/tempo.yaml"
