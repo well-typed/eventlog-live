@@ -80,7 +80,7 @@ services:
     #
     # If you're on arm64, you should set ARCH to arm64, e.g.,
     #
-    # ARCH=arm64 docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose-external.yml up -d
+    # ARCH=arm64 docker compose -f demo/eventlog-live-otelcol/docker-compose-external.yml up -d
     #
     image: grafana/tempo:main-93b3140-${ARCH:-amd64}
     command: ["-config.file=/etc/tempo.yaml"]
