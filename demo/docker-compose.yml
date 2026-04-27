@@ -2,8 +2,8 @@ services:
   oddball:
     # container_name: oddball
     build:
-      context: "../.."
-      dockerfile: "./dockerfiles/Dockerfile.oddball"
+      context: ".."
+      dockerfile: "./demo/Dockerfile.oddball"
     volumes:
       - "oddball:/run/oddball"
     environment:
@@ -19,8 +19,8 @@ services:
   eventlog-live-otelcol:
     # container_name: eventlog-live-otelcol
     build:
-      context: "../.."
-      dockerfile: "./dockerfiles/Dockerfile.eventlog-live-otelcol"
+      context: ".."
+      dockerfile: "./demo/Dockerfile.eventlog-live-otelcol"
     depends_on:
       oddball:
         condition: "service_started"
@@ -30,12 +30,12 @@ services:
       - "30179:30179"
     volumes:
       - "oddball:/run/oddball"
-      - "./config/oddball-otelcol-config.yaml:/etc/oddball/oddball-otelcol-config.yaml"
+      - "./config/eventlog-live-otelcol.yaml:/etc/eventlog-live-otelcol/config.yaml"
     environment:
       LANG: C.UTF-8
     command:
       - "--verbosity=debug"
-      - "--config=/etc/oddball/oddball-otelcol-config.yaml"
+      - "--config=/etc/eventlog-live-otelcol/config.yaml"
       - "--service-name=oddball"
       - "--eventlog-socket=/run/oddball/ghc_eventlog.sock"
       - "-hT"
@@ -122,7 +122,7 @@ services:
     #
     # If you're on arm64, you should set ARCH to arm64, e.g.,
     #
-    # ARCH=arm64 docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose-external.yml up -d
+    # ARCH=arm64 docker compose -f demo/eventlog-live-otelcol/docker-compose-external.yml up -d
     #
     image: grafana/tempo:main-93b3140-${ARCH:-amd64}
     command: ["-config.file=/etc/tempo.yaml"]

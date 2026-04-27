@@ -10,6 +10,11 @@ This repository contains a collection of libraries and tools for the live profil
 
 ## Demo
 
+The `docker
+
+
+## Demo
+
 The following is a screenshow of Grafana which shows live heap profiling statistics coming from the [`oddball`](examples/oddball) example application.
 
 ![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example application.](assets/eventlog-live-otelcol.png)
@@ -17,16 +22,16 @@ The following is a screenshow of Grafana which shows live heap profiling statist
 To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then navigate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Heap_.
 
 ```sh
-docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose.yml up --build
+docker compose -f demo/eventlog-live-otelcol/docker-compose.yml up --build
 ```
 
 This [Docker Compose](https://docs.docker.com/compose/) configuration builds and runs a number of Docker containers:
 
-- [`oddball`](dockerfiles/Dockerfile.oddball)
+- [`oddball`](demo/Dockerfile.oddball)
 
   The monitored application, `oddball`, which repeatedly generates and sums large quantities of random numbers.
 
-- [`eventlog-live-otelcol`](dockerfiles/Dockerfile.eventlog-live-otelcol)
+- [`eventlog-live-otelcol`](demo/Dockerfile.eventlog-live-otelcol)
 
   The `eventlog-live-otelcol` application, which streams eventlog data from `oddball` to the
   OpenTelemetry Collector.
@@ -163,14 +168,14 @@ The `-hc` and `-hb` flags are unsupported.
 ### Putting it all together
 
 To visualise the profiling data of your instrumented application, you must connect it to the demo system.
-The Docker Compose configuration in [`dockerfiles/eventlog-live-otelcol/docker-compose-external.yml`](dockerfiles/eventlog-live-otelcol/docker-compose-external.yml) sets up the same infrastructure used in the demo without the example application.
+The Docker Compose configuration in [`demo/eventlog-live-otelcol/docker-compose-external.yml`](demo/eventlog-live-otelcol/docker-compose-external.yml) sets up the same infrastructure used in the demo without the example application.
 
 To use it, follow these steps:
 
 1.  Start the containers with the OpenTelemetry Collector, Prometheus, and Grafana using the configuration files in this repository:
 
     ```sh
-    docker compose -f dockerfiles/eventlog-live-otelcol/docker-compose-external.yaml up --build -d
+    docker compose -f demo/eventlog-live-otelcol/docker-compose-external.yaml up --build -d
     ```
 
 2.  Set the `GHC_EVENTLOG_SOCKET` environment variable:
