@@ -10,51 +10,138 @@ This repository contains a collection of libraries and tools for the live profil
 
 ## Demo
 
-The `docker
+The [`demo`](demo/) directory contains a demo of `eventlog-live` monitoring the [`jumpy-jump`](examples/jumpy-jump/) example program.
 
-
-## Demo
-
-The following is a screenshow of Grafana which shows live heap profiling statistics coming from the [`oddball`](examples/oddball) example application.
-
-![A screenshot of Grafana showing live heap profiling statistics coming from the `oddball` example application.](assets/eventlog-live-otelcol.png)
-
-To run this example for yourself, run the following command from the root of the repository, wait until all containers have started, then navigate to Grafana at <localhost:3000>, log in using username `admin` and password `admin`, and open the heap profiling visualisation under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Heap_.
+To start the self-contained demo, run the appropriate [Docker Compose](https://docs.docker.com/compose/) command for your processor architecture from the root of the repository.
 
 ```sh
-docker compose -f demo/eventlog-live-otelcol/docker-compose.yml up --build
+# On AMD64:
+ARCH=amd64 docker compose -f demo/docker-compose.yml up --build
+
+# On ARM64:
+ARCH=arm64 docker compose -f demo/docker-compose.yml up --build
 ```
 
-This [Docker Compose](https://docs.docker.com/compose/) configuration builds and runs a number of Docker containers:
+Once all containers have started, navigate to Grafana at <localhost:3000> and log in using username `admin` and password `admin`.
 
-- [`oddball`](demo/Dockerfile.oddball)
+The Grafana instance comes with four preconfigured dashboards: Heap, Logs, Profiles, Threads.
 
-  The monitored application, `oddball`, which repeatedly generates and sums large quantities of random numbers.
+### The Heap Dashboard
 
-- [`eventlog-live-otelcol`](demo/Dockerfile.eventlog-live-otelcol)
+Navigate to the Heap dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Heap_.
 
-  The `eventlog-live-otelcol` application, which streams eventlog data from `oddball` to the
-  OpenTelemetry Collector.
+![A screenshot of the Grafana Heap dashboard for the oddball example program.](assets/oddball-otelcol-heap-2026-04-27.png)
 
-- [`grafana/grafana-oss`](https://hub.docker.com/r/grafana/grafana-oss)
+This dashboard has four visualisations which are repeated for each service selected in the _Service Name_ option (see the option bar).
 
-  The Grafana instance, which visualises the eventlog data.
+- The _HeapProfSample_ visualisation shows a detailed heap profile for the service using the heap profile breakdown selected from command-line, by passing [`-h`](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#rts-options-heap-prof) to the RTS options of the instrumented program and to `eventlog-live-otelcol`. The demo uses `-hT`, i.e., a breakdown by heap closure type. The number of distinct closure types shown is limited by the _HeapProfSample Limit_ option (see the option bar).
 
-- [`grafana/loki`](https://hub.docker.com/r/grafana/loki/)
+- The _HeapSize_ visualisation shows the current size of the heap. The [_HeapSize_](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_SIZE) and [_BlocksSize_](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-BLOCKS_SIZE) metrics measure the current total size of the heap, based on the number of currently allocated megablocks or blocks, respectively. The [_HeapLive_](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_LIVE) metric measures the number of live bytes, based on the number of live blocks.
 
-  The Loki log processor and database, which acts as a log datasource for Grafana.
+- The [_MemReturn_](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-MEM_RETURN) visualisation shows information about the allocation of megablocks and attempts to return them to the OS. The _MemReturn_ metric measures the current number of allocated megablock, the _MemNeeded_ metric measures the number of megablocks currently needed, and the _MemReturned_ metric measures the number of megablocks returned to the OS. If your heap is fragmented then the current value will be greater than needed value but returned will be less than the difference between the two.
 
-- [`prom/prometheus`](https://hub.docker.com/r/prom/prometheus)
+- The [_HeapAllocated_](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_ALLOCATED) visualisation shows the amount of memory allocated over time.
 
-  The Prometheus metric processor and database, which acts as a metric datasource for Grafana.
+The buttoms below the _HeapProfSample_ visualisation control heap profiling in the instrumented program. This requires that both the instrumented program and `eventlog-live-otelcol` are built with the `control` flag. The _Start_ and _Stop_ buttons control the heap profiling timer in the instrumented program. If this is disabled, no detailed heap profile samples are taken, and the _HeapProfSample_ visualisation will flatline. However, the other three visualisations will continue to update. The _Request Heap Census_ button can be used to request a single detailed heap profile sample.
 
-- [`grafana/tempo`](https://hub.docker.com/r/grafana/tempo)
+The _UserMarker_ switch and _Filter UserMarker_ option can be used to include user markers in the various visualisations. To enable user markers, flip the _UserMarker_ switch. To filter user markers, edit the regular expression in the _Filter UserMarker_ field. The oddball program emits a user marker every time it starts a large summation with the message "Summing N numbers". To show these markers, we flip the _UserMarker_ switch and type "Summing" in the _Filter UserMarker_ field.
 
-  The Tempo span processor and database, which acts as a span datasource for Grafana.
+![The same screenshot of the Grafana Heap dashboard for the oddball example program, but with user markers enabled, which draws a series of vertical dotted red lines on the visualisations that correspond to the timing of the user marker events.](assets/oddball-otelcol-heap-markers-2026-04-27.png)
 
-- [`otel/opentelemetry-collector-contrib`](https://hub.docker.com/r/otel/opentelemetry-collector-contrib)
+To emit a user marker from your program, use [`traceMarker`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarker)/[`traceMarkerIO`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarkerIO).
 
-  The OpenTelemetry Collector, which streams the telemetry data to the various datasources.
+### The Logs Dashboard
+
+Navigate to the Logs dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Logs_.
+
+![A screenshot of the Grafana Logs dashboard for the oddball example program.](assets/oddball-otelcol-logs-2026-04-27.png)
+
+This dashboard has a single visualisation which is repeated for each service selected in the _Service Name_ option (see the option bar). For each user service there is a corresponding `eventlog-live-otelcol` service, e.g., for `oddball`, there is `eventlog-live-otelcol-for-oddball`.
+
+- The _Logs_ visualisation shows log messages.
+
+  For the instrumented program, the logs visualisation shows all messages emitted by user message tracing ([`traceEvent`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceEvent)/[`traceEventIO`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceEventIO)) and user marker tracing ([`traceMarker`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarker)/[`traceMarkerIO`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarkerIO)). As these functions do not set a severity, these messages are all assigned `TRACE` severity.
+
+  For the corresponding `eventlog-live-otelcol` service, the logs visualisation shows the internal logs for that `eventlog-live-otelcol` instance. Logs that would not be shown under the given `--verbosity` command-line option will not available.
+
+### The Profiles Dashboard
+
+Navigate to the Profiles dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Profiles_.
+
+![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for cost-centre profiles. The flamegraph is currently focused on the main symbol.](assets/jumpy-jump-otelcol-profile-cost-centre-main-2026-04-27.png)
+
+This dashboard has a single visualisation which is repeated for each service selected in the _Service Name_ option (see the option bar).
+
+- The _Stack Profile_ visualisation shows a flamegraph and a table with the top symbols.
+
+The `oddball` program used in the demo does not produce interesting profiles and profiles are disabled in the demo. The profiles shown in these screenshots are for the [`jumpy-jump`](examples/jumpy-jump/) program.
+
+Stack profiles may be produced using [cost-centre profiling](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html) or by [`ghc-stack-profiler`](https://hackage.haskell.org/package/ghc-stack-profiler). For examples, see [`examples/jumpy-jump-otelcol-with-cost-centre-profiler.sh`](examples/jumpy-jump-otelcol-with-cost-centre-profiler.sh) and [`examples/jumpy-jump-otelcol-with-ghc-stack-profiler.sh`](examples/jumpy-jump-otelcol-with-ghc-stack-profiler.sh), respectively.
+
+Be wary that cost-centre profiles and the call-stack profiles produced by `ghc-stack-profiler` can differ quite a lot for the same program. Cost-centre profiling maintains and samples a virtual cost-centre stack, whereas `ghc-stack-profiler` samples the call stack.
+
+The following shows the _Stack Profile_ visualisation for the same cost-centre profile as above, but without focus on the `Main:main` symbol, which reveals the `IDLE:IDLE`, `PROFILING:OVERHEAD_of`, and `SYSTEM:SYSTEM` symbols.
+
+![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for cost-centre profiles.](assets/jumpy-jump-otelcol-profile-cost-centre-2026-04-27.png)
+
+The following shows the _Stack Profile_ visualisation for a call-stack profile produced by `ghc-stack-profiler`.
+
+![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for GHC call-stack profiles sampled by ghc-stack-profiler.](assets/jumpy-jump-otelcol-profile-ghc-stack-2026-04-27.png)
+
+The buttoms below the _Stack Profile_ visualisation control stack profiling in the instrumented program. This requires that both the instrumented program and `eventlog-live-otelcol` are built with the `control` flag. The _Start_ and _Stop_ buttons control the sampler in the instrumented program. You should use the buttons that correspond to the kind of profiling for which your program is instrumented.
+
+> [!WARNING]
+> The _Stack Profile_ visualisation does not yet differentiate between the two kinds of stack profile.
+> If you instrument a program to produce both kinds of profile, the visualisation will mix samples from both kinds.
+
+### The Threads Dashboard
+
+Navigate to the Threads dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Threads_.
+
+![A screenshot of the Grafana Threads dashboard for the oddball example program.](assets/oddball-otelcol-threads-2026-04-27.png)
+
+This dashboard has three visualisations which are repeated for each service selected in the _Service Name_ option (see the option bar).
+
+- The _Productivity_ visualisation shows the average productivity over the current interval, i.e., the ratio between time spent running user code and time spent in garbage collection.
+
+- The _Productivity over time_ visualisation shows the average productivity over time.
+
+- The _Traces_ visualisation shows a table of capability and thread traces. If you click any of the trace IDs, you'll be taken to the trace exporer, where you can investigate the state of each thread over time.
+
+  ![A screenshot of the Grafana Trace Explorer for the oddball example program.](assets/oddball-otelcol-trace-explorer-2026-04-27.png)
+
+> [!WARNING]
+> The trace explorer view depends on the _CapabilityUsage_ and _ThreadState_ traces, which are numerous and can easily overwhelm the OpenTelemetry Collector. If the `eventlog-live-otelcol` log shows a stream of `EnhanceYourCalm` errors, these traces are the most likely culprit, and you may benefit from disabling them in your configuration file.
+
+### The Docker Compose Files
+
+The [Docker Compose](https://docs.docker.com/compose/) configuration `demo/docker-compose.yml` starts up a variety of containers.
+
+- `oddball`, which repeatedly generates and sums random quantities of random numbers.
+- `eventlog-live-otelcol`, which analyses the eventlog data from `oddball` and streams telemetry data to the OpenTelemetry Collector.
+- The _OpenTelemetry Collector_, which streams the telemetry data to the various databases.
+- _Loki_, which is a log processor and database.
+- _Prometheus_, which is a _metric_ processor and database.
+- _Tempo_, which is a _span_ processor and database.
+- _Grafana_, which visualises the telemetry data from the various databases.
+
+The configuration `demo/docker-compose-external.yml` allows you to reuse the services from the demo to monitor your own program. It starts up all of the above services, except for `oddball` and `eventlog-live-otelcol`. To use this file, run the appropriate [Docker Compose](https://docs.docker.com/compose/) command for your processor architecture from the root of the repository.
+
+```sh
+# On AMD64:
+ARCH=amd64 docker compose -f demo/docker-compose-external.yml up --build
+
+# On ARM64:
+ARCH=arm64 docker compose -f demo/docker-compose-external.yml up --build
+```
+
+Once all containers have started, you can run your own instrumented program together with your own local instance of `eventlog-live-otelcol`, and the telemetry data will be visualised in Grafana as above. The various example scripts will give you an idea of how to set this up. For instance, see [`examples/oddball/oddball-otelcol-with-hT.sh`](examples/oddball/oddball-otelcol-with-hT.sh).
+
+> [!INFO]
+> The `demo/docker-compose-external.yml` configuration _could_ be changed to include an instance of `eventlog-live-otelcol`. However, the instrumented program and `eventlog-live-otelcol` communicate the eventlog over a Unix domain socket and, unfortunately, exposing Unix domain sockets from the host OS to a container is not portable. The `eventlog-socket` library has recently added support for TCP/IPv4 sockets, which _could_ be used to solve this program. However, the eventlog socket is a very high bandwidth socket, so even when support for TCP/IPv4 is added to `eventlog-live-otelcol`, it is likely preferable to continue to use a Unix domain socket.
+
+> [!WARNING]
+> The `eventlog-live-otelcol` program is intended to analyse the eventlog and send telemetry data to an OpenTelemetry Collector. Currently, only the gRPC protocol is supported. If you wish to send telemetry data to some provider that only supports the HTTP/Protobuf protocol, such as HoneyComb or Grafana Cloud, you must run your own OpenTelemetry Collector and configure that to forward telemetry data to your provider.
 
 ## Getting Started
 
@@ -95,11 +182,11 @@ import           System.Environment (lookupEnv)
 main :: IO ()
 main = do
   putStrLn "Creating eventlog socket..."
-  traverse_ GHC.Eventlog.Socket.start =<< lookupEnv "GHC_EVENTLOG_SOCKET"
+  traverse_ GHC.Eventlog.Socket.start =<< lookupEnv "GHC_EVENTLOG_UNIX_PATH"
   ...
 ```
 
-This starts the `eventlog-socket` writer if the `GHC_EVENTLOG_SOCKET` environment variable is set.
+This starts the `eventlog-socket` writer if the `GHC_EVENTLOG_UNIX_PATH` environment variable is set.
 
 If you wish for your application to block until the client process connects to the eventlog socket, you can call `GHC.Eventlog.Socket.startWait`.
 
@@ -175,13 +262,17 @@ To use it, follow these steps:
 1.  Start the containers with the OpenTelemetry Collector, Prometheus, and Grafana using the configuration files in this repository:
 
     ```sh
-    docker compose -f demo/eventlog-live-otelcol/docker-compose-external.yaml up --build -d
+    # On AMD64:
+    ARCH=amd64 docker compose -f demo/docker-compose-external.yml up --build
+
+    # On ARM64:
+    ARCH=arm64 docker compose -f demo/docker-compose-external.yml up --build
     ```
 
-2.  Set the `GHC_EVENTLOG_SOCKET` environment variable:
+2.  Set the `GHC_EVENTLOG_UNIX_PATH` environment variable:
 
     ```sh
-    export GHC_EVENTLOG_SOCKET="/tmp/my_eventlog.sock"
+    export GHC_EVENTLOG_UNIX_PATH="/tmp/my_eventlog.sock"
     ```
 
 3.  Start your instrumented application:
@@ -194,7 +285,7 @@ To use it, follow these steps:
 
     ```sh
     eventlog-live-otelcol \
-      --eventlog-socket "$GHC_EVENTLOG_SOCKET" \
+      --eventlog-socket "$GHC_EVENTLOG_UNIX_PATH" \
       -hT \
       --otelcol-host=localhost
     ```
