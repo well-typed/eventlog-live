@@ -52,6 +52,7 @@ echo 'Start eventlog-live-otelcol (for oddball)' && \
 		--service-name='oddball' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
+		--eventlog-flush-interval=1 \
 	    --otelcol-host=localhost \
 		--control \
 		--control-port 30719 \
