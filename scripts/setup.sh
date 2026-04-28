@@ -2,7 +2,7 @@
 
 # List supported dependencies:
 declare -a DEPENDENCIES
-DEPENDENCIES=("cabal-docspec" "cabal-fmt" "fourmolu" "hlint" "nixfmt" "ShellCheck")
+DEPENDENCIES=("cabal-docspec" "cabal-gild" "fourmolu" "hlint" "nixfmt" "ShellCheck")
 
 # Extra dependencies:
 declare -a EXTRA_DEPENDENCIES
