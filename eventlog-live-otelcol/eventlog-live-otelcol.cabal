@@ -185,8 +185,15 @@ library
     GHC.Eventlog.Live.Otelcol.Exporter.Profiles
     GHC.Eventlog.Live.Otelcol.Exporter.Traces
     GHC.Eventlog.Live.Otelcol.Options
+    GHC.Eventlog.Live.Otelcol.Processor.Common.Core
+    GHC.Eventlog.Live.Otelcol.Processor.Common.Logs
+    GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics
+    GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles
+    GHC.Eventlog.Live.Otelcol.Processor.Common.Traces
+    GHC.Eventlog.Live.Otelcol.Processor.Heap
+    GHC.Eventlog.Live.Otelcol.Processor.Logs
     GHC.Eventlog.Live.Otelcol.Processor.Profiles
-    GHC.Eventlog.Live.Otelcol.Processor.Profiles.Dictionary
+    GHC.Eventlog.Live.Otelcol.Processor.Threads
     GHC.Eventlog.Live.Otelcol.Stats
     GHC.Eventlog.Socket.Compat
     Language.Haskell.TH.Lift.Compat
