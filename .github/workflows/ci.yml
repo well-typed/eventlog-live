@@ -219,7 +219,7 @@ jobs:
           nix_path: nixpkgs=channel:nixpkgs-unstable
 
       - name: 🏗️ Build
-        run: nix build .standalone-vm
+        run: nix build .#standalone-vm
         working-directory: "demo-nix"
 
       - name: 📦 Upload artifact
