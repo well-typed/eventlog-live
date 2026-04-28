@@ -1,6 +1,6 @@
 # NixOS VM
 
-This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to an older version of [the demo described in the README](https://github.com/well-typed/eventlog-live#demo), which sets up `eventlog-live-otelcol`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
+This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to an older version of the [demo](demo/), which sets up `eventlog-live-otelcol`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
 
 ## Building the packages
 
@@ -49,20 +49,20 @@ There are two flavours for the VM: _standalone_ and _lightweight_:
   Hence, it cannot be run on any other machine.
   However, it is significantly smaller and faster to build development.
 
-To build a standalone image, run the following command from `nix/eventlog-live-otelcol`:
+To build a standalone image, run the following command from `demo-nix`:
 
 ```
 nix build .#standalone-vm
 ```
 
-To build a lightweight image, run the following command from the `nix/eventlog-live-otelcol` directory:
+To build a lightweight image, run the following command from the `demo-nix` directory:
 
 ```
 nix build .#vm
 ```
 
 To build standalone images for different architectures, you can use [remote builders](https://nixos.wiki/wiki/Distributed_build).
-For instance, if you have set up a remote builder for `aarch64-linux` builds, then you can build a standalone image for `aarch64-linux` by running the following command from the `nix/eventlog-live-otelcol` directory:
+For instance, if you have set up a remote builder for `aarch64-linux` builds, then you can build a standalone image for `aarch64-linux` by running the following command from the `demo-nix` directory:
 
 ```
 nix build .#packages.aarch64-linux.standalone-vm
@@ -75,7 +75,7 @@ There are two options for running the VM, depending on whether your system is ca
 ### Using Nix
 
 If your system satisfies the build prerequisites, you can run the VM via Nix.
-Run the following command from the `nix/eventlog-live-otelcol` directory:
+Run the following command from the `demo-nix` directory:
 
 ```sh
 ./run-vm.sh
