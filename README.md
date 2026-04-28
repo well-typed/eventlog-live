@@ -102,7 +102,7 @@ This dashboard has three visualisations which are repeated for each service sele
 
 - The _Productivity over time_ visualisation shows the average productivity over time. This metric is derived from the [`RUN_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-RUN_THREAD) and [`STOP_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-STOP_THREAD) events.
 
-- The _Traces_ visualisation shows a table of capability and thread traces. If you click any of the trace IDs, you'll be taken to the trace exporer, where you can investigate the state of each thread over time. These traces are derived from the [`RUN_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-RUN_THREAD) and [`STOP_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-STOP_THREAD) events.
+- The _Traces_ visualisation shows a table of capability and thread traces. If you click any of the trace IDs, you'll be taken to the trace exporer, where you can investigate the state of each thread over time. These traces are derived from the [`RUN_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-RUN_THREAD) and [`STOP_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-STOP_THREAD) events. Traces are disabled in the demo, as their sheer volume tends to overwhelm the OpenTelemetry Collector.
 
   ![A screenshot of the Grafana Trace Explorer for the oddball example program.](assets/oddball-otelcol-trace-explorer-2026-04-27.png)
 
