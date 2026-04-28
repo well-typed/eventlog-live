@@ -62,11 +62,11 @@ processors:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
       description: A trace of capability usage (either mutator thread or garbage collection).
-      export: 5s
+      export: false
     thread_state:
       name: ghc_eventlog_ThreadState
       description: A trace of thread state changes (either running or stopped).
-      export: 5s
+      export: false
   profiles:
     stack_sample:
       name: ghc_eventlog_StackSampleProfile
