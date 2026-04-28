@@ -255,7 +255,7 @@ The `-hc` and `-hb` flags are unsupported.
 ### Putting it all together
 
 To visualise the profiling data of your instrumented application, you must connect it to the demo system.
-The Docker Compose configuration in [`demo/eventlog-live-otelcol/docker-compose-external.yml`](demo/eventlog-live-otelcol/docker-compose-external.yml) sets up the same infrastructure used in the demo without the example application.
+The Docker Compose configuration in [`demo/docker-compose-external.yml`](demo/docker-compose-external.yml) sets up the same infrastructure used in the demo without the example application.
 
 To use it, follow these steps:
 
