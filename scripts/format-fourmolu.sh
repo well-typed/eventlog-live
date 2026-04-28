@@ -31,6 +31,6 @@ if [ "${ACTUAL_VERSION}" != "${EXPECT_VERSION}" ]; then
 fi
 
 # Format Haskell files
-echo "Format Haskell files with cabal-fmt version ${ACTUAL_VERSION}"
+echo "Format Haskell files with fourmolu version ${ACTUAL_VERSION}"
 # shellcheck disable=SC2086
 git ls-files --exclude-standard --no-deleted --deduplicate '*.hs' | xargs -L50 ${FOURMOLU} --mode=inplace
