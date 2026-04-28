@@ -28,7 +28,7 @@ Navigate to the Heap dashboard under ☰ > _Dashboards_ > _Browse_ then _General
 
 ![A screenshot of the Grafana Heap dashboard for the oddball example program.](assets/oddball-otelcol-heap-2026-04-27.png)
 
-This dashboard has four visualisations which are repeated for each service selected in the _Service Name_ option (see the option bar).
+This dashboard has four visualisations which are repeated for each service selected in the _Service Name_ option (see the option bar). To select a service, add its name to the list of services in the _Service Name_ option, e.g., in the above screenshot, only the `oddball` service is selected.
 
 - The _HeapProfSample_ visualisation shows a detailed heap profile for the service using the heap profile breakdown selected from command-line, by passing [`-h`](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#rts-options-heap-prof) to the RTS options of the instrumented program and to `eventlog-live-otelcol`. The demo uses `-hT`, i.e., a breakdown by heap closure type. The number of distinct closure types shown is limited by the _HeapProfSample Limit_ option (see the option bar). These metrics are derived from the [`HEAP_PROF_SAMPLE_STRING`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_PROF_SAMPLE_STRING) event.
 
@@ -273,9 +273,14 @@ To use it, follow these steps:
 
     ```sh
     eventlog-live-otelcol \
+      --service-name=my-app \
       --eventlog-socket "$GHC_EVENTLOG_UNIX_PATH" \
       -hT \
-      --otelcol-host=localhost
+      --eventlog-flush-interval=1 \
+      --otelcol-host=localhost \
+      --control \
+      --control-port 30719 \
+      --control-cors-ignore-failure
     ```
 
 ### Fine-tuning `eventlog-live-otelcol`
