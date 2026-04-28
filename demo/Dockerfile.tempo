@@ -1,0 +1,7 @@
+
+# 2026-04-27:
+# The latest version of grafana/tempo doesn't work with the configuration
+# used in this example, and grafana/tempo only publishes tags that include
+# the architecture of the image. Therefore, we need this nightmare hack to
+# enable running the docker compose file on both supported architectures.
+FROM grafana/tempo:main-93b3140-${TARGETARCH:-amd64}

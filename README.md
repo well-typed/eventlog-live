@@ -12,14 +12,10 @@ This repository contains a collection of libraries and tools for the live profil
 
 The [`demo`](demo/) directory contains a demo of `eventlog-live` monitoring the [`jumpy-jump`](examples/jumpy-jump/) example program.
 
-To start the self-contained demo, run the appropriate [Docker Compose](https://docs.docker.com/compose/) command for your processor architecture from the root of the repository.
+To start the self-contained demo, run the following [Docker Compose](https://docs.docker.com/compose/) from the root of the repository.
 
 ```sh
-# On AMD64:
-ARCH=amd64 docker compose -f demo/docker-compose.yml up --build
-
-# On ARM64:
-ARCH=arm64 docker compose -f demo/docker-compose.yml up --build
+docker compose -f demo/docker-compose.yml up --build
 ```
 
 Once all containers have started, navigate to Grafana at <localhost:3000> and log in using username `admin` and password `admin`.
@@ -125,14 +121,10 @@ The [Docker Compose](https://docs.docker.com/compose/) configuration `demo/docke
 - _Tempo_, which is a _span_ processor and database.
 - _Grafana_, which visualises the telemetry data from the various databases.
 
-The configuration `demo/docker-compose-external.yml` allows you to reuse the services from the demo to monitor your own program. It starts up all of the above services, except for `oddball` and `eventlog-live-otelcol`. To use this file, run the appropriate [Docker Compose](https://docs.docker.com/compose/) command for your processor architecture from the root of the repository.
+The configuration `demo/docker-compose-external.yml` allows you to reuse the services from the demo to monitor your own program. It starts up all of the above services, except for `oddball` and `eventlog-live-otelcol`. To use this file, run the following [Docker Compose](https://docs.docker.com/compose/) command from the root of the repository.
 
 ```sh
-# On AMD64:
-ARCH=amd64 docker compose -f demo/docker-compose-external.yml up --build
-
-# On ARM64:
-ARCH=arm64 docker compose -f demo/docker-compose-external.yml up --build
+docker compose -f demo/docker-compose-external.yml up --build
 ```
 
 Once all containers have started, you can run your own instrumented program together with your own local instance of `eventlog-live-otelcol`, and the telemetry data will be visualised in Grafana as above. The various example scripts will give you an idea of how to set this up. For instance, see [`examples/oddball/oddball-otelcol-with-hT.sh`](examples/oddball/oddball-otelcol-with-hT.sh).
@@ -259,14 +251,10 @@ The Docker Compose configuration in [`demo/docker-compose-external.yml`](demo/do
 
 To use it, follow these steps:
 
-1.  Start the containers with the OpenTelemetry Collector, Prometheus, and Grafana using the configuration files in this repository:
+1.  Run the following [Docker Compose](https://docs.docker.com/compose/) from the root of the repository.
 
     ```sh
-    # On AMD64:
-    ARCH=amd64 docker compose -f demo/docker-compose-external.yml up --build
-
-    # On ARM64:
-    ARCH=arm64 docker compose -f demo/docker-compose-external.yml up --build
+    docker compose -f demo/docker-compose-external.yml up --build
     ```
 
 2.  Set the `GHC_EVENTLOG_UNIX_PATH` environment variable:
