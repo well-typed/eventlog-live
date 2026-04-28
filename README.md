@@ -10,7 +10,7 @@ This repository contains a collection of libraries and tools for the live profil
 
 ## Demo
 
-The [`demo`](demo/) directory contains a demo of `eventlog-live` monitoring the [`jumpy-jump`](examples/jumpy-jump/) example program.
+The [`demo`](demo/) directory contains a demo of `eventlog-live` monitoring the [`oddball`](examples/oddball/) example program.
 
 To start the self-contained demo, run the appropriate [Docker Compose](https://docs.docker.com/compose/) command for your processor architecture from the root of the repository.
 
