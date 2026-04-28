@@ -1,31 +1,30 @@
 cabal-version: 2.4
-name:          parfib
-version:       0.1.0.0
-synopsis:      Example with an interesting thread profile.
+name: parfib
+version: 0.1.0.0
+synopsis: Example with an interesting thread profile.
 description:
   An implementation of the Fibonnaci function using spark parallelism.
   Taken from the GHC's @nofib@ benchmarks.
 
-maintainer:    wen@well-typed.com
-license-file:  LICENSE
-category:      Debug, Monitoring, System, Network
+maintainer: wen@well-typed.com
+license-file: LICENSE
+category: Debug, Monitoring, System, Network
 tested-with:
-  GHC ==9.2.8
-   || ==9.4.8
-   || ==9.6.7
-   || ==9.8.4
-   || ==9.10.2
-   || ==9.12.2
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
 
 executable parfib
-  main-is:          Main.hs
-  hs-source-dirs:   app
+  main-is: Main.hs
+  hs-source-dirs: app
   default-language: Haskell2010
-  ghc-options:      -threaded -rtsopts -finfo-table-map
+  ghc-options:
+    -threaded
+    -rtsopts
+    -finfo-table-map
+
   build-depends:
-    , base             >=4.14  && <5
-    , eventlog-socket  >=0.1.2 && <0.2
-    , parallel         >=3.2   && <3.3
+    base >=4.14 && <5,
+    eventlog-socket >=0.1.2 && <0.2,
+    parallel >=3.2 && <3.3,
 
   if impl(ghc <9.4)
     ghc-options: -eventlog

@@ -1,43 +1,41 @@
 cabal-version: 2.4
-name:          jumpy-jump
-version:       0.1.0.0
-synopsis:      Example with an interesting call stack profile.
-description:   Repeatedly jump randomly between ten jumpyJump functions.
-author:        Wen Kokke
-maintainer:    wen@well-typed.com
-copyright:     (c) 2026 Well-Typed
-license:       BSD-3-Clause
-license-file:  LICENSE
-category:      Debug, Monitoring, System, Network
+name: jumpy-jump
+version: 0.1.0.0
+synopsis: Example with an interesting call stack profile.
+description: Repeatedly jump randomly between ten jumpyJump functions.
+author: Wen Kokke
+maintainer: wen@well-typed.com
+copyright: (c) 2026 Well-Typed
+license: BSD-3-Clause
+license-file: LICENSE
+category: Debug, Monitoring, System, Network
 tested-with:
-  GHC ==9.2.8
-   || ==9.4.8
-   || ==9.6.7
-   || ==9.8.4
-   || ==9.10.2
-   || ==9.12.2
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
 
 flag use-ghc-stack-profiler
   description: Use ghc-stack-profiler
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 executable jumpy-jump
-  main-is:            Main.hs
-  hs-source-dirs:     app
-  default-language:   Haskell2010
+  main-is: Main.hs
+  hs-source-dirs: app
+  default-language: Haskell2010
   default-extensions: TypeApplications
   ghc-options:
-    -threaded -rtsopts -finfo-table-map -fdistinct-constructor-tables
+    -threaded
+    -rtsopts
+    -finfo-table-map
+    -fdistinct-constructor-tables
 
   build-depends:
-    , base             >=4.14  && <5
-    , eventlog-socket  >=0.1.2 && <0.2
-    , random           >=1.2   && <1.4
+    base >=4.14 && <5,
+    eventlog-socket >=0.1.2 && <0.2,
+    random >=1.2 && <1.4,
 
   if flag(use-ghc-stack-profiler)
     build-depends: ghc-stack-profiler >=0.2 && <0.3
-    cpp-options:   -DJUMPY_JUMP_USE_GHC_STACK_PROFILER
+    cpp-options: -DJUMPY_JUMP_USE_GHC_STACK_PROFILER
 
   if impl(ghc <9.4)
     ghc-options: -eventlog
