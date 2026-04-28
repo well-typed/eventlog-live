@@ -1,12 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Profiles.Dictionary
+Module      : GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles
 Description : Abstraction over ProfilesDictionary for the OTLP protocol.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Profiles.Dictionary (
+module GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (
+  toExportProfileServiceRequest,
+
   -- * Dictionary for deduplication logic of common values
   ProfileDictionary,
   emptyProfileDictionary,
@@ -28,16 +30,26 @@ where
 
 import Control.Monad.Trans.State.Strict (StateT)
 import Control.Monad.Trans.State.Strict qualified as State
-import Data.Int
+import Data.Int (Int32)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.ProtoLens
+import Data.ProtoLens (Message (..))
 import Data.Text (Text)
-import GHC.Generics
-import Lens.Family2
-import Lens.Family2.Unchecked
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (messageWith)
+import GHC.Generics (Generic)
+import Lens.Family2 (Lens', (&), (.~), (^.))
+import Lens.Family2.Unchecked (lens)
+import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService qualified as OPS
+import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
+
+toExportProfileServiceRequest :: OP.ProfilesData -> OPS.ExportProfilesServiceRequest
+toExportProfileServiceRequest profilesData =
+  messageWith
+    [ OPS.resourceProfiles .~ profilesData ^. OPS.resourceProfiles
+    , OPS.dictionary .~ profilesData ^. OPS.dictionary
+    ]
 
 type SymbolIndex = Int32
 
@@ -74,21 +86,15 @@ data ProfileDictionary = ProfileDictionary
 
 toProfilesDictionary :: ProfileDictionary -> OP.ProfilesDictionary
 toProfilesDictionary st =
-  defMessage
-    & OP.locationTable
-      .~ locationTableList st
-    & OP.functionTable
-      .~ functionTableList st
-    & OP.stringTable
-      .~ stringTableList st
-    & OP.mappingTable
-      .~ mappingTableList st
-    & OP.linkTable
-      .~ linkTableList st
-    & OP.attributeTable
-      .~ attributeTableList st
-    & OP.stackTable
-      .~ stackTableList st
+  messageWith
+    [ OP.locationTable .~ locationTableList st
+    , OP.functionTable .~ functionTableList st
+    , OP.stringTable .~ stringTableList st
+    , OP.mappingTable .~ mappingTableList st
+    , OP.linkTable .~ linkTableList st
+    , OP.attributeTable .~ attributeTableList st
+    , OP.stackTable .~ stackTableList st
+    ]
 
 emptyProfileDictionary :: ProfileDictionary
 emptyProfileDictionary =

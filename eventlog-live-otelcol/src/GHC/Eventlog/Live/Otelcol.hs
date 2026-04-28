@@ -13,89 +13,60 @@ module GHC.Eventlog.Live.Otelcol (
 
 import Control.Concurrent.STM.TChan (newTChanIO)
 import Control.Exception (bracket_)
-import Control.Monad (unless)
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.ByteString (ByteString)
-import Data.Coerce (Coercible, coerce)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Foldable qualified as F
-import Data.Functor ((<&>))
-import Data.HashMap.Strict qualified as M
-import Data.Hashable (Hashable)
-import Data.Int (Int16, Int32, Int64, Int8)
-import Data.Kind (Type)
-import Data.Machine (MachineT, Process, ProcessT, asParts, await, construct, echo, mapping, repeatedly, stopped, yield, (~>))
-import Data.Machine.Fanout (fanout)
+import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
-import Data.ProtoLens (Message (defMessage))
-import Data.Proxy (Proxy (..))
-import Data.Semigroup (Last (..), Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Version (showVersion)
-import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
-import GHC.Eventlog.Live.Data.Attribute
-import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
-import GHC.Eventlog.Live.Data.Group qualified as DG
+import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
-import GHC.Eventlog.Live.Data.Metric (Metric (..), SomeMetric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Data.Severity qualified as DS (SeverityNumber (..), toSeverityNumber)
-import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData, writeLog)
+import GHC.Eventlog.Live.Logger (MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
-import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
-import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadStateSpan (..))
-import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
-import GHC.Eventlog.Live.Otelcol.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
+import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otelcol.Exporter.Profiles (exportResourceProfiles)
 import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
 import GHC.Eventlog.Live.Otelcol.Options
-import GHC.Eventlog.Live.Otelcol.Processor.Profiles (processCallStackData)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (toExportMetricsServiceRequest, toResourceMetrics, toScopeMetrics)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (toExportProfileServiceRequest)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
+import GHC.Eventlog.Live.Otelcol.Processor.Heap (processHeapEvents)
+import GHC.Eventlog.Live.Otelcol.Processor.Logs (processLogEvents)
+import GHC.Eventlog.Live.Otelcol.Processor.Profiles (processCallStackData, processProfileEvents)
+import GHC.Eventlog.Live.Otelcol.Processor.Threads (processThreadEvents)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
-import GHC.RTS.Events (Event (..), HeapProfBreakdown (..), ThreadId)
-import GHC.Records (HasField (..))
-import GHC.TypeLits (Symbol)
-import Lens.Family2 ((&), (.~), (^.))
+import GHC.RTS.Events (Event (..))
+import Lens.Family2 ((.~))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
 import Options.Applicative qualified as O
 import Paths_eventlog_live_otelcol qualified as EventlogLive
-import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS
-import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
-import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService qualified as OPS
 import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
-import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
-import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
-import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
-import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
-import System.Random (StdGen, initStdGen)
-import System.Random.Compat (uniformByteString)
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -275,7 +246,7 @@ exportResourceTelemetryData fullConfig connection =
           --       streams. However, it has the "unfortunate" side-effect of
           --       making it impossible to not batch once per interval.
           ~> M.batchByTick
-          ~> M.liftTick (mapping D.toList ~> asExportLogsServiceRequest)
+          ~> M.liftTick (mapping (toExportLogsServiceRequest . D.toList))
           ~> exportResourceLogs connection
           ~> M.liftTick (mapping (D.singleton . ExportLogsResultStat))
     , -- Export metrics.
@@ -283,7 +254,7 @@ exportResourceTelemetryData fullConfig connection =
         M.liftTick (mapping getResourceMetrics ~> asParts ~> mapping D.singleton)
           -- NOTE: See note above.
           ~> M.batchByTick
-          ~> M.liftTick (mapping D.toList ~> asExportMetricsServiceRequest)
+          ~> M.liftTick (mapping (toExportMetricsServiceRequest . D.toList))
           ~> exportResourceMetrics connection
           ~> M.liftTick (mapping (D.singleton . ExportMetricsResultStat))
     , -- Export spans.
@@ -291,13 +262,12 @@ exportResourceTelemetryData fullConfig connection =
         M.liftTick (mapping getResourceSpans ~> asParts ~> mapping D.singleton)
           -- NOTE: See note above.
           ~> M.batchByTick
-          ~> M.liftTick (mapping D.toList ~> asExportTracesServiceRequest)
+          ~> M.liftTick (mapping (toExportTracesServiceRequest . D.toList))
           ~> exportResourceSpans connection
           ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
     , -- Export profiles.
       runIf (C.shouldExportProfiles fullConfig) $
-        M.liftTick (mapping getResourceProfiles ~> asParts)
-          ~> M.liftTick asExportProfileServiceRequest
+        M.liftTick (mapping getResourceProfiles ~> asParts ~> mapping toExportProfileServiceRequest)
           ~> exportResourceProfiles connection
           ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
     ]
@@ -356,9 +326,8 @@ asResourceTelemetryData resource instrumentationScope =
       pure $ ResourceTelemetryData'Span resourceSpans
     maybeProfiles = do
       (resourceProfile, dictionary) <-
-        ifNonEmpty
-          profiles
-          (processCallStackData resource instrumentationScope profiles)
+        ifNonEmpty profiles $
+          processCallStackData resource instrumentationScope profiles
       pure $
         ResourceTelemetryData'Profile $
           messageWith
@@ -400,504 +369,8 @@ getMyLogRecord = \case
   M.MyTelemetryData'LogRecord{..} -> Just logRecord
   M.MyTelemetryData'Metric{} -> Nothing
 
--- 2025-12-09:
--- This function is currently unused, but will be required when migrating
--- the internal metrics, i.e., Stats, over to use the new internal logger.
-_getMySomeMetric :: MyTelemetryData -> Maybe SomeMetric
-_getMySomeMetric = \case
-  M.MyTelemetryData'LogRecord{} -> Nothing
-  M.MyTelemetryData'Metric{..} -> Just metric
-
 --------------------------------------------------------------------------------
--- processThreadEvents
---------------------------------------------------------------------------------
-
-data OneOf a b c = A !a | B !b | C !c
-
-processThreadEvents ::
-  (MonadIO m) =>
-  Logger m ->
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either OM.Metric OT.Span)))
-processThreadEvents verbosity fullConfig =
-  runIf (shouldProcessThreadEvents fullConfig) $
-    M.sortByTicks (.value.evTime) fullConfig.eventlogFlushIntervalX
-      ~> M.liftTick
-        ( fanout
-            [ M.validateOrder verbosity (.value.evTime)
-            , runIf (shouldComputeCapabilityUsageSpan fullConfig) $
-                M.processGCSpans verbosity
-                  ~> mapping (D.singleton . A)
-            , runIf (shouldComputeThreadStateSpan fullConfig) $
-                M.processThreadStateSpans' M.tryGetTimeUnixNano (.value) M.setWithStartTime'value verbosity
-                  ~> fanout
-                    [ M.asMutatorSpans' (.value) M.setWithStartTime'value
-                        ~> mapping (D.singleton . B)
-                    , mapping (D.singleton . C)
-                    ]
-            ]
-        )
-      ~> M.liftTick
-        ( asParts
-            ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
-        )
-      ~> fanout
-        [ M.liftTick
-            ( mapping leftToMaybe
-                ~> asParts
-            )
-            ~> M.fanoutTick
-              [ runMetricProcessor
-                  MetricProcessor
-                    { metricProcessorProxy = Proxy @"capabilityUsage"
-                    , dataProcessor = M.processCapabilityUsageMetrics
-                    , aggregators = viaSum
-                    , postProcessor = echo
-                    , unit = "ns"
-                    , asMetric'Data =
-                        asSum
-                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
-                          , OM.isMonotonic .~ True
-                          ]
-                    }
-                  fullConfig
-                  ~> mapping (fmap (fmap Left))
-              , runIf (C.processorEnabled (.traces) (.capabilityUsage) fullConfig) $
-                  M.liftTick
-                    ( M.dropStartTime
-                        ~> asSpan fullConfig
-                        ~> mapping (D.singleton . Right)
-                    )
-                    ~> M.batchByTick
-              ]
-        , runIf (C.processorEnabled (.traces) (.threadState) fullConfig) $
-            M.liftTick
-              ( mapping rightToMaybe
-                  ~> asParts
-                  ~> asSpan fullConfig
-                  ~> mapping (D.singleton . Right)
-              )
-              ~> M.batchByTick
-        ]
- where
-  repackCapabilityUsageSpanOrThreadStateSpan = \case
-    A i -> Left $ fmap Left i
-    B i -> Left $ fmap Right i
-    C i -> Right i.value
-
-{- |
-Internal helper.
-Get the `Left` value, if any.
--}
-leftToMaybe :: Either a b -> Maybe a
-leftToMaybe = either Just (const Nothing)
-
-{- |
-Internal helper.
-Get the `Right` value, if any.
--}
-rightToMaybe :: Either a b -> Maybe b
-rightToMaybe = either (const Nothing) Just
-
-{- |
-Internal helper.
-Determine whether or not any thread events should be processed at all.
--}
-shouldProcessThreadEvents :: FullConfig -> Bool
-shouldProcessThreadEvents fullConfig =
-  C.processorEnabled (.metrics) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.traces) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.traces) (.threadState) fullConfig
-
-{- |
-Internal helper.
-Determine whether or not the capability usage spans should be computed.
--}
-shouldComputeCapabilityUsageSpan :: FullConfig -> Bool
-shouldComputeCapabilityUsageSpan fullConfig =
-  C.processorEnabled (.traces) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.metrics) (.capabilityUsage) fullConfig
-
-{- |
-Internal helper.
-Determine whether or not the thread state spans should be computed.
--}
-shouldComputeThreadStateSpan :: FullConfig -> Bool
-shouldComputeThreadStateSpan fullConfig =
-  C.processorEnabled (.traces) (.threadState) fullConfig
-    || shouldComputeCapabilityUsageSpan fullConfig
-
---------------------------------------------------------------------------------
--- processLogEvents
---------------------------------------------------------------------------------
-
-processLogEvents ::
-  (MonadIO m) =>
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processLogEvents fullConfig =
-  M.fanoutTick
-    [ processThreadLabel fullConfig
-    , processUserMarker fullConfig
-    , processUserMessage fullConfig
-    ]
-
---------------------------------------------------------------------------------
--- UserMessage
-
-processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processUserMessage fullConfig =
-  runIf (C.processorEnabled (.logs) (.userMessage) fullConfig) $
-    M.liftTick M.processUserMessageData
-      ~> M.liftTick (mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMessage) fullConfig)
-
---------------------------------------------------------------------------------
--- UserMarker
-
-processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processUserMarker fullConfig =
-  runIf (C.processorEnabled (.logs) (.userMarker) fullConfig) $
-    M.liftTick M.processUserMarkerData
-      ~> M.liftTick (mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMarker) fullConfig)
-
---------------------------------------------------------------------------------
--- ThreadLabel
-
-processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processThreadLabel fullConfig =
-  runIf (C.processorEnabled (.logs) (.threadLabel) fullConfig) $
-    M.liftTick M.processThreadLabelData
-      ~> M.liftTick (mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (.threadLabel) fullConfig)
-
---------------------------------------------------------------------------------
--- processHeapEvents
---------------------------------------------------------------------------------
-
-processHeapEvents ::
-  (MonadIO m) =>
-  Logger m ->
-  Maybe HeapProfBreakdown ->
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapEvents verbosity maybeHeapProfBreakdown fullConfig =
-  M.fanoutTick
-    [ processHeapAllocated fullConfig
-    , processBlocksSize fullConfig
-    , processHeapSize fullConfig
-    , processHeapLive fullConfig
-    , processMemReturn fullConfig
-    , processHeapProfSample verbosity maybeHeapProfBreakdown fullConfig
-    ]
-
---------------------------------------------------------------------------------
--- HeapAllocated
-
-processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapAllocated =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapAllocated"
-      , dataProcessor = M.processHeapAllocatedData
-      , aggregators = viaSum
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data =
-          asSum
-            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
-            , OM.isMonotonic .~ True
-            ]
-      }
-
---------------------------------------------------------------------------------
--- HeapSize
-
-processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapSize =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapSize"
-      , dataProcessor = M.processHeapSizeData
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
-
---------------------------------------------------------------------------------
--- BlocksSize
-
-processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processBlocksSize =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"blocksSize"
-      , dataProcessor = M.processBlocksSizeData
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
-
---------------------------------------------------------------------------------
--- HeapLive
-
-processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapLive =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapLive"
-      , dataProcessor = M.processHeapLiveData
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
-
---------------------------------------------------------------------------------
--- MemReturn
-
-processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processMemReturn fullConfig =
-  runIf (shouldComputeMemReturn fullConfig) $
-    M.liftTick M.processMemReturnData
-      ~> M.fanoutTick
-        [ runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"memCurrent"
-              , dataProcessor = mapping (fmap (.current))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "{mblock}"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        , runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"memNeeded"
-              , dataProcessor = mapping (fmap (.needed))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "{mblock}"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        , runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"memReturned"
-              , dataProcessor = mapping (fmap (.returned))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "{mblock}"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        ]
-
-{- |
-Internal helper.
-Determine whether the MemReturn data should be computed.
--}
-shouldComputeMemReturn :: FullConfig -> Bool
-shouldComputeMemReturn fullConfig =
-  C.processorEnabled (.metrics) (.memCurrent) fullConfig
-    || C.processorEnabled (.metrics) (.memNeeded) fullConfig
-    || C.processorEnabled (.metrics) (.memReturned) fullConfig
-
---------------------------------------------------------------------------------
--- HeapProfSample
-
-processHeapProfSample ::
-  (MonadIO m) =>
-  Logger m ->
-  Maybe HeapProfBreakdown ->
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapProfSample logger maybeHeapProfBreakdown =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSampleData logger maybeHeapProfBreakdown
-      , aggregators = viaLast
-      , postProcessor = mapping M.heapProfSamples ~> asParts
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
-
---------------------------------------------------------------------------------
--- Generic Metric Processor
-
-type MetricProcessor :: Symbol -> Type -> (Type -> Type) -> Type -> Type -> Type -> Type -> Type
-data MetricProcessor metricProcessor metricProcessorConfig m a b c d
-  = ( Monad m
-    , HasField metricProcessor C.Metrics (Maybe metricProcessorConfig)
-    , C.IsMetricProcessorConfig metricProcessorConfig
-    , IsNumberDataPoint'Value d
-    ) =>
-  MetricProcessor
-  { metricProcessorProxy :: !(Proxy metricProcessor)
-  -- ^ The metric's field name in `C.Metrics`.
-  , dataProcessor :: !(ProcessT m a b)
-  -- ^ The metric's data processor
-  , aggregators :: !(Aggregators b c)
-  -- ^ The metric's aggregator
-  , postProcessor :: !(Process c (Metric d))
-  -- ^ The metric's post processor
-  , unit :: !Text
-  -- ^ The metric's unit (in UCUM format).
-  , asMetric'Data :: !(Process [OM.NumberDataPoint] OM.Metric'Data)
-  -- ^ A process to wrap data points as `OM.Metric'Data`.
-  }
-
-{- |
-Internal helper.
-Run a `MetricProcessor`.
--}
-runMetricProcessor ::
-  forall metricProcessor metricProcessorConfig m a b c d.
-  (Default metricProcessorConfig) =>
-  MetricProcessor metricProcessor metricProcessorConfig m a b c d ->
-  -- | The full configuration.
-  FullConfig ->
-  ProcessT m (Tick a) (Tick (DList OM.Metric))
-runMetricProcessor MetricProcessor{..} fullConfig =
-  let metricProcessorConfig :: C.Metrics -> Maybe metricProcessorConfig
-      metricProcessorConfig = getField @metricProcessor
-   in runIf (C.processorEnabled (.metrics) metricProcessorConfig fullConfig) $
-        M.liftTick dataProcessor
-          ~> aggregate aggregators (C.processorAggregationBatches (.metrics) metricProcessorConfig fullConfig)
-          ~> M.liftTick postProcessor
-          ~> mapping (fmap (D.singleton . toNumberDataPoint))
-          ~> M.batchByTicks (C.processorExportBatches (.metrics) metricProcessorConfig fullConfig)
-          ~> M.liftTick
-            ( mapping D.toList
-                ~> asMetric'Data
-                ~> asMetricWith fullConfig metricProcessorConfig [OM.unit .~ unit]
-                ~> mapping D.singleton
-            )
-{-# INLINE runMetricProcessor #-}
-
---------------------------------------------------------------------------------
--- processProfileEvents
---------------------------------------------------------------------------------
-
-processProfileEvents ::
-  (MonadIO m) =>
-  Logger m ->
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
-processProfileEvents verbosity config =
-  M.fanoutTick
-    [ processStackProfSample verbosity config
-    , processCostCentreProfSample verbosity config
-    ]
-
---------------------------------------------------------------------------------
--- StackProfSample
-
-processStackProfSample ::
-  (MonadIO m) =>
-  Logger m ->
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
-processStackProfSample logger config = do
-  let
-    postProcessor = mapping M.stackProfSamples ~> asParts
-    dataProcessor = M.processStackProfSampleData logger
-  -- aggregators = viaLast
-  runIf (C.processorEnabled (.profiles) (.stackSample) config) $
-    M.liftTick dataProcessor
-      -- ~> aggregate aggregators (C.processorAggregationBatches (.profiles) (.stackSample) config)
-      ~> M.liftTick postProcessor
-      -- TODO: do something with the Metric value, right now it is completely unused
-      ~> M.liftTick (mapping (D.singleton . (.value)))
-      ~> M.batchByTicks (C.processorExportBatches (.profiles) (.stackSample) config)
-
-processCostCentreProfSample ::
-  (MonadIO m) =>
-  Logger m ->
-  FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
-processCostCentreProfSample logger config = do
-  let
-    postProcessor = mapping M.stackProfSamples ~> asParts
-    dataProcessor = M.processCostCentreProfSampleData logger
-  -- aggregators = viaLast
-  runIf (C.processorEnabled (.profiles) (.costCentreSample) config) $
-    M.liftTick dataProcessor
-      ~> M.liftTick postProcessor
-      ~> M.liftTick (mapping (D.singleton . (.value)))
-      ~> M.batchByTicks (C.processorExportBatches (.profiles) (.costCentreSample) config)
-
---------------------------------------------------------------------------------
--- Aggregation
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- Metric Aggregation
-
-data Aggregators a b = Aggregators
-  { nothing :: Process (Tick a) (Tick b)
-  , byBatches :: Int -> Process (Tick a) (Tick b)
-  }
-
-{- |
-Internal helper.
-Aggregate items based on the provided aggregators and aggregation strategy.
--}
-aggregate :: Aggregators a b -> Int -> Process (Tick a) (Tick b)
-aggregate Aggregators{..} aggregationBatches
-  | aggregationBatches >= 1 = byBatches aggregationBatches
-  | otherwise = nothing
-
-{- |
-Internal helper.
-Metric aggregators via the `Semigroup` instance for `Sum`.
--}
-viaSum :: forall a. (Num a) => Aggregators (Metric a) (Metric a)
-viaSum =
-  Aggregators
-    { nothing = echo
-    , byBatches = \ticks ->
-        -- TODO: Yield group sample counts as separate metric.
-        batchByTicksVia ticks (Proxy @(Metric (Sum a)))
-          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
-    }
-
-{- |
-Internal helper.
-Metric aggregators via the `Semigroup` instance for `Last`.
--}
-viaLast :: forall a. (GroupBy a) => Aggregators a a
-viaLast =
-  Aggregators
-    { nothing = echo
-    , byBatches = \ticks ->
-        -- TODO: Yield group sample counts as separate metric.
-        batchByTicksVia ticks (Proxy @(Last a))
-          ~> M.liftTick (mapping (fmap (.representative)) ~> asParts)
-    }
-
-{- |
-Internal helper.
-This function aggregates items via a `Semigroup` instance and grouped by the `GroupBy` instance.
--}
-batchByTicksVia ::
-  forall a b.
-  (Coercible a b, GroupBy b, Semigroup b) =>
-  -- | The number of ticks per batch.
-  Int ->
-  Proxy b ->
-  Process (Tick a) (Tick [Group a])
-batchByTicksVia ticks (Proxy :: Proxy b) =
-  mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
-    ~> M.batchByTicks @(GroupedBy b) ticks
-    ~> M.liftTick (mapping (coerce @[Group b] @[Group a] . DG.groups))
-
---------------------------------------------------------------------------------
--- Machines
+-- Instrumentation Scope
 --------------------------------------------------------------------------------
 
 -- 2025-09-22:
@@ -915,347 +388,3 @@ eventlogLiveScope =
     [ OC.name .~ eventlogLiveName
     , OC.version .~ eventlogLiveVersion
     ]
-
-asExportLogsServiceRequest :: Process [OL.ResourceLogs] OLS.ExportLogsServiceRequest
-asExportLogsServiceRequest = mapping $ (defMessage &) . (OL.resourceLogs .~)
-
-asExportMetricsServiceRequest :: Process [OM.ResourceMetrics] OMS.ExportMetricsServiceRequest
-asExportMetricsServiceRequest = mapping $ (defMessage &) . (OM.resourceMetrics .~)
-
-asExportTracesServiceRequest :: Process [OT.ResourceSpans] OTS.ExportTraceServiceRequest
-asExportTracesServiceRequest = mapping $ (defMessage &) . (OTS.resourceSpans .~)
-
-toResourceLogs :: OR.Resource -> [OL.ScopeLogs] -> Maybe OL.ResourceLogs
-toResourceLogs resource scopeLogs =
-  ifNonEmpty scopeLogs $
-    messageWith [OL.resource .~ resource, OL.scopeLogs .~ scopeLogs]
-
-toResourceMetrics :: OR.Resource -> [OM.ScopeMetrics] -> Maybe OM.ResourceMetrics
-toResourceMetrics resource scopeMetrics =
-  ifNonEmpty scopeMetrics $
-    messageWith [OL.resource .~ resource, OM.scopeMetrics .~ scopeMetrics]
-
-asExportProfileServiceRequest :: Process OP.ProfilesData OPS.ExportProfilesServiceRequest
-asExportProfileServiceRequest = mapping $ \profilesData ->
-  messageWith
-    [ OPS.resourceProfiles .~ profilesData ^. OPS.resourceProfiles
-    , OPS.dictionary .~ profilesData ^. OPS.dictionary
-    ]
-
-toResourceSpans :: OR.Resource -> [OT.ScopeSpans] -> Maybe OT.ResourceSpans
-toResourceSpans resource scopeSpans =
-  ifNonEmpty scopeSpans $
-    messageWith [OL.resource .~ resource, OT.scopeSpans .~ scopeSpans]
-
-toScopeLogs :: OC.InstrumentationScope -> [OL.LogRecord] -> Maybe OL.ScopeLogs
-toScopeLogs instrumentationScope logRecords =
-  ifNonEmpty logRecords $
-    messageWith [OL.scope .~ instrumentationScope, OL.logRecords .~ logRecords]
-
-toScopeMetrics :: OC.InstrumentationScope -> [OM.Metric] -> Maybe OM.ScopeMetrics
-toScopeMetrics instrumentationScope metrics =
-  ifNonEmpty metrics $
-    messageWith [OM.scope .~ instrumentationScope, OM.metrics .~ metrics]
-
-toScopeSpans :: OC.InstrumentationScope -> [OT.Span] -> Maybe OT.ScopeSpans
-toScopeSpans instrumentationScope spans =
-  ifNonEmpty spans $
-    messageWith [OT.scope .~ instrumentationScope, OT.spans .~ spans]
-
-ifNonEmpty :: [a] -> b -> Maybe b
-ifNonEmpty xs r = if null xs then Nothing else Just r
-
-asMetricWith ::
-  (Default a, HasField "description" a (Maybe Text), HasField "name" a (Maybe Text)) =>
-  FullConfig ->
-  (C.Metrics -> Maybe a) ->
-  [OM.Metric -> OM.Metric] ->
-  Process OM.Metric'Data OM.Metric
-asMetricWith fullConfig field mod =
-  asMetric $
-    [ OM.name .~ C.processorName (.metrics) field fullConfig
-    , maybe id (OM.description .~) $ C.processorDescription (.metrics) field fullConfig
-    ]
-      <> mod
-
-asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
-asMetric mod = mapping $ toMetric mod
-
-toMetric :: [OM.Metric -> OM.Metric] -> OM.Metric'Data -> OM.Metric
-toMetric mod metric'data = messageWith ((OM.maybe'data' .~ Just metric'data) : mod)
-
-asGauge :: Process [OM.NumberDataPoint] OM.Metric'Data
-asGauge =
-  repeatedly $ do
-    await >>= \dataPoints ->
-      unless (null dataPoints) $
-        yield (toGauge dataPoints)
-
-toGauge :: [OM.NumberDataPoint] -> OM.Metric'Data
-toGauge dataPoints = OM.Metric'Gauge . messageWith $ [OM.dataPoints .~ dataPoints]
-
-asSum :: [OM.Sum -> OM.Sum] -> Process [OM.NumberDataPoint] OM.Metric'Data
-asSum mod =
-  repeatedly $
-    await >>= \dataPoints ->
-      unless (null dataPoints) $
-        yield (toSum mod dataPoints)
-
-toSum :: [OM.Sum -> OM.Sum] -> [OM.NumberDataPoint] -> OM.Metric'Data
-toSum mod dataPoints = OM.Metric'Sum . messageWith $ (OM.dataPoints .~ dataPoints) : mod
-
---------------------------------------------------------------------------------
--- Interpret data
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- Interpret logs
-
-class ToLogRecord v where
-  toLogRecord :: v -> OL.LogRecord
-
-instance ToLogRecord LogRecord where
-  toLogRecord :: LogRecord -> OL.LogRecord
-  toLogRecord i =
-    messageWith
-      [ OL.body .~ messageWith [OC.stringValue .~ i.body]
-      , OL.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-      , -- TODO: this could be set to the actual observed time in the processor.
-        OL.observedTimeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-      , OL.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
-      , OL.severityNumber .~ toSeverityNumber i.maybeSeverity
-      ]
-   where
-    toSeverityNumber :: Maybe Severity -> OL.SeverityNumber
-    toSeverityNumber = maybe OL.SEVERITY_NUMBER_UNSPECIFIED (toEnum . (.value) . DS.toSeverityNumber)
-
-instance ToLogRecord M.ThreadLabel where
-  toLogRecord :: M.ThreadLabel -> OL.LogRecord
-  toLogRecord i =
-    messageWith
-      [ OL.body .~ messageWith [OC.stringValue .~ i.threadlabel]
-      , OL.timeUnixNano .~ i.startTimeUnixNano
-      , -- TODO: this could be set to the actual observed time in the processor.
-        OL.observedTimeUnixNano .~ i.startTimeUnixNano
-      , OL.attributes
-          .~ mapMaybe
-            toMaybeKeyValue
-            [ "kind" ~= ("ThreadLabel" :: Text)
-            , "thread" ~= i.thread
-            ]
-      ]
-
---------------------------------------------------------------------------------
--- Interpret spans
-
-class AsSpan v where
-  -- | The `Key` type is used to index a `HashMap` in the default definition of `asSpan`.
-  type Key v
-
-  -- | The `toKey` function extracts a `Key` from the input value.
-  toKey ::
-    -- | The input value.
-    v ->
-    Key v
-
-  toSpan ::
-    -- | The configuration.
-    FullConfig ->
-    -- | The input value.
-    v ->
-    -- | The trace ID.
-    ByteString ->
-    -- | The span ID.
-    ByteString ->
-    OT.Span
-
-  -- | The `asSpan` machine processes values @v@ into OpenTelemetry spans `OT.Span`.
-  asSpan :: (MonadIO m) => FullConfig -> ProcessT m v OT.Span
-  default asSpan :: (MonadIO m, Hashable (Key v)) => FullConfig -> ProcessT m v OT.Span
-  asSpan fullConfig = construct $ go (mempty, Nothing)
-   where
-    -- go :: (HashMap (Key v) ByteString, Maybe StdGen) -> PlanT (Is v) OT.Span m Void
-    go (traceIds, maybeGen) = do
-      -- Ensure the StdGen is initialised
-      gen0 <- maybe (liftIO initStdGen) pure maybeGen
-      -- Receive the next value
-      i <- await
-      -- Ensure the next value has a trace ID
-      let ensureTraceId :: Maybe ByteString -> ((ByteString, StdGen), Maybe ByteString)
-          ensureTraceId = wrap . maybe (uniformByteString 16 gen0) (,gen0)
-           where
-            wrap out@(traceId, _gen) = (out, Just traceId)
-      let ((traceId, gen1), traceIds') = M.alterF ensureTraceId (toKey i) traceIds
-      -- Ensure the next value has a span ID
-      let (spanId, gen2) = uniformByteString 8 gen1
-      -- Yield a span
-      yield $ toSpan fullConfig i traceId spanId
-      -- Continue
-      go (traceIds', Just gen2)
-
---------------------------------------------------------------------------------
--- Interpret capability usage spans
-
-instance AsSpan CapabilityUsageSpan where
-  type Key CapabilityUsageSpan = Int
-
-  toKey :: CapabilityUsageSpan -> Int
-  toKey = (.cap)
-
-  toSpan :: FullConfig -> CapabilityUsageSpan -> ByteString -> ByteString -> OT.Span
-  toSpan fullConfig i traceId spanId =
-    messageWith
-      [ OT.traceId .~ traceId
-      , OT.spanId .~ spanId
-      , OT.name .~ C.processorName (.traces) (.capabilityUsage) fullConfig <> " " <> M.showCapabilityUserCategory user
-      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-      , OT.startTimeUnixNano .~ i.startTimeUnixNano
-      , OT.endTimeUnixNano .~ i.endTimeUnixNano
-      , OT.attributes
-          .~ mapMaybe
-            toMaybeKeyValue
-            [ "capability" ~= i.cap
-            , "user" ~= user
-            ]
-      , OT.status
-          .~ messageWith
-            [ OT.code .~ OT.Status'STATUS_CODE_OK
-            ]
-      ]
-   where
-    user = M.capabilityUser i
-
---------------------------------------------------------------------------------
--- Interpret thread state spans
-
-instance AsSpan ThreadStateSpan where
-  type Key ThreadStateSpan = ThreadId
-
-  toKey :: ThreadStateSpan -> ThreadId
-  toKey = (.thread)
-
-  toSpan :: FullConfig -> ThreadStateSpan -> ByteString -> ByteString -> OT.Span
-  toSpan fullConfig i traceId spanId =
-    messageWith
-      [ OT.traceId .~ traceId
-      , OT.spanId .~ spanId
-      , OT.name .~ C.processorName (.traces) (.threadState) fullConfig <> " " <> M.showThreadStateCategory i.threadState
-      , OT.kind .~ OT.Span'SPAN_KIND_INTERNAL
-      , OT.startTimeUnixNano .~ i.startTimeUnixNano
-      , OT.endTimeUnixNano .~ i.endTimeUnixNano
-      , OT.attributes
-          .~ mapMaybe
-            toMaybeKeyValue
-            [ "capability" ~= M.threadStateCap i.threadState
-            , "thread" ~= show i.thread
-            , "status" ~= (show <$> M.threadStateStatus i.threadState)
-            ]
-      , OT.status
-          .~ messageWith
-            [ OT.code .~ OT.Status'STATUS_CODE_OK
-            ]
-      ]
-
---------------------------------------------------------------------------------
--- Interpret metrics
-
-class IsNumberDataPoint'Value v where
-  toNumberDataPoint'Value :: v -> OM.NumberDataPoint'Value
-
-instance IsNumberDataPoint'Value Float where
-  toNumberDataPoint'Value :: Float -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble . realToFrac
-
-instance IsNumberDataPoint'Value Double where
-  toNumberDataPoint'Value :: Double -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble
-
-instance IsNumberDataPoint'Value Word8 where
-  toNumberDataPoint'Value :: Word8 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Word16 where
-  toNumberDataPoint'Value :: Word16 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Word32 where
-  toNumberDataPoint'Value :: Word32 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
--- | __Warning__: This instance may cause overflow.
-instance IsNumberDataPoint'Value Word64 where
-  toNumberDataPoint'Value :: Word64 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
--- | __Warning__: This instance may cause overflow.
-instance IsNumberDataPoint'Value Word where
-  toNumberDataPoint'Value :: Word -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int8 where
-  toNumberDataPoint'Value :: Int8 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int16 where
-  toNumberDataPoint'Value :: Int16 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int32 where
-  toNumberDataPoint'Value :: Int32 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int64 where
-  toNumberDataPoint'Value :: Int64 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt
-
-instance IsNumberDataPoint'Value Int where
-  toNumberDataPoint'Value :: Int -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-toNumberDataPoint :: (IsNumberDataPoint'Value v) => Metric v -> OM.NumberDataPoint
-toNumberDataPoint i =
-  messageWith
-    [ OM.maybe'value .~ Just (toNumberDataPoint'Value i.value)
-    , OM.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , OM.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
-    , OM.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
-    ]
-
-toMaybeKeyValue :: Attr -> Maybe OC.KeyValue
-toMaybeKeyValue (k, v) =
-  toMaybeAnyValue v <&> \v ->
-    messageWith
-      [ OC.key .~ k
-      , OC.value .~ v
-      ]
-
-toMaybeAnyValue :: AttrValue -> Maybe OC.AnyValue
-toMaybeAnyValue = \case
-  AttrBool v -> Just $ messageWith [OC.boolValue .~ v]
-  AttrInt v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrInt8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrInt16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrInt32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrInt64 v -> Just $ messageWith [OC.intValue .~ v]
-  AttrWord v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrWord8 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrWord16 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrWord32 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrWord64 v -> Just $ messageWith [OC.intValue .~ fromIntegral v]
-  AttrDouble v -> Just $ messageWith [OC.doubleValue .~ v]
-  AttrText v -> Just $ messageWith [OC.stringValue .~ v]
-  AttrNull -> Nothing
-
---------------------------------------------------------------------------------
--- DSL for writing messages
-
--- | Construct a message with a list of modifications applied.
-messageWith :: (Message msg) => [msg -> msg] -> msg
-messageWith = foldr ($) defMessage
-
--------------------------------------------------------------------------------
--- Internal Helpers
--------------------------------------------------------------------------------
-
-runIf :: (Monad m) => Bool -> MachineT m k o -> MachineT m k o
-runIf b m = if b then m else stopped

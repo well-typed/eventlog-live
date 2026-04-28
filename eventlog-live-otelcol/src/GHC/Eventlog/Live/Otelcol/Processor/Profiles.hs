@@ -7,17 +7,30 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Otelcol.Processor.Profiles (
+  processProfileEvents,
   processCallStackData,
 )
 where
 
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State.Strict (State, runState)
-import Data.ProtoLens (Message (defMessage))
+import Data.DList (DList)
+import Data.DList qualified as D
+import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Text (Text)
+import GHC.Eventlog.Live.Data.Metric (Metric (..))
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
-import GHC.Eventlog.Live.Otelcol.Processor.Profiles.Dictionary (ProfileDictionary, SymbolIndex)
-import GHC.Eventlog.Live.Otelcol.Processor.Profiles.Dictionary qualified as ProfDictionary
+import GHC.Eventlog.Live.Machine.Core (Tick)
+import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Otelcol.Config qualified as C
+import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (ProfileDictionary, SymbolIndex)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles qualified as ProfDictionary
+import GHC.RTS.Events (Event (..))
 import GHC.Stack.Profiler.Core.SourceLocation qualified as Profiler
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
@@ -26,49 +39,97 @@ import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource (Resource)
 
+--------------------------------------------------------------------------------
+-- processProfileEvents
+--------------------------------------------------------------------------------
+
+processProfileEvents ::
+  (MonadIO m) =>
+  Logger m ->
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+processProfileEvents verbosity config =
+  M.fanoutTick
+    [ processStackProfSample verbosity config
+    , processCostCentreProfSample verbosity config
+    ]
+
+--------------------------------------------------------------------------------
+-- StackProfSample
+
+processStackProfSample ::
+  (MonadIO m) =>
+  Logger m ->
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+processStackProfSample logger config =
+  runIf (C.processorEnabled (.profiles) (.stackSample) config) $
+    M.liftTick
+      ( M.processStackProfSampleData logger
+          ~> mapping M.stackProfSamples
+          ~> asParts
+          ~> mapping (D.singleton . (.value))
+      )
+      ~> M.batchByTicks (C.processorExportBatches (.profiles) (.stackSample) config)
+
+processCostCentreProfSample ::
+  (MonadIO m) =>
+  Logger m ->
+  FullConfig ->
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+processCostCentreProfSample logger config =
+  runIf (C.processorEnabled (.profiles) (.costCentreSample) config) $
+    M.liftTick
+      ( M.processCostCentreProfSampleData logger
+          ~> mapping M.stackProfSamples
+          ~> asParts
+          ~> mapping (D.singleton . (.value))
+      )
+      ~> M.batchByTicks (C.processorExportBatches (.profiles) (.costCentreSample) config)
+
 processCallStackData :: Resource -> OC.InstrumentationScope -> [M.CallStackData] -> (OP.ResourceProfiles, OP.ProfilesDictionary)
-processCallStackData resource instrumentationScope callstacks =
-  let (profile, st) = flip runState ProfDictionary.emptyProfileDictionary $ do
-        sampleNameStrId <- ProfDictionary.getString "__name__"
-        sampleTypeStrId <- ProfDictionary.getString "String"
-        sampleAttrId <-
-          ProfDictionary.getAttribute $
-            messageWith @OP.KeyValueAndUnit
-              [ OP.keyStrindex .~ sampleNameStrId
-              , OP.unitStrindex .~ sampleTypeStrId
-              , OP.value .~ messageWith [OC.stringValue .~ "process_cpu"]
-              ]
+processCallStackData resource instrumentationScope callstacks = (resourceProfiles, profilesDictionary)
+ where
+  scopedProfiles =
+    messageWith
+      [ OP.profiles .~ [profile]
+      , OP.scope .~ instrumentationScope
+      ]
 
-        samples <- traverse (asSample sampleAttrId) callstacks
-        cpuId <- ProfDictionary.getString "stack"
-        unitId <- ProfDictionary.getString "samples"
-        let sampleType :: OP.ValueType
-            sampleType =
-              messageWith
-                [ OP.typeStrindex .~ cpuId
-                , OP.unitStrindex .~ unitId
-                ]
+  resourceProfiles =
+    messageWith
+      [ OP.scopeProfiles .~ [scopedProfiles]
+      , OP.resource .~ resource
+      ]
 
-        pure $
+  profilesDictionary = ProfDictionary.toProfilesDictionary st
+
+  (profile, st) = flip runState ProfDictionary.emptyProfileDictionary $ do
+    sampleNameStrId <- ProfDictionary.getString "__name__"
+    sampleTypeStrId <- ProfDictionary.getString "String"
+    sampleAttrId <-
+      ProfDictionary.getAttribute $
+        messageWith @OP.KeyValueAndUnit
+          [ OP.keyStrindex .~ sampleNameStrId
+          , OP.unitStrindex .~ sampleTypeStrId
+          , OP.value .~ messageWith [OC.stringValue .~ "process_cpu"]
+          ]
+
+    samples <- traverse (asSample sampleAttrId) callstacks
+    cpuId <- ProfDictionary.getString "stack"
+    unitId <- ProfDictionary.getString "samples"
+    let sampleType :: OP.ValueType
+        sampleType =
           messageWith
-            [ OP.samples .~ samples
-            , OP.sampleType .~ sampleType
+            [ OP.typeStrindex .~ cpuId
+            , OP.unitStrindex .~ unitId
             ]
 
-      scopedProfiles =
-        messageWith
-          [ OP.profiles .~ [profile]
-          , OP.scope .~ instrumentationScope
-          ]
-
-      resourceProfiles =
-        messageWith
-          [ OP.scopeProfiles .~ [scopedProfiles]
-          , OP.resource .~ resource
-          ]
-
-      profilesDictionary = ProfDictionary.toProfilesDictionary st
-   in (resourceProfiles, profilesDictionary)
+    pure $
+      messageWith
+        [ OP.samples .~ samples
+        , OP.sampleType .~ sampleType
+        ]
 
 asSample :: SymbolIndex -> M.CallStackData -> State ProfileDictionary OP.Sample
 asSample six stackData = do
@@ -232,10 +293,3 @@ getLocationIndexForCostCentre costCentre = do
       [ OP.lines .~ [line]
       , OP.address .~ 0 -- 0 means unset
       ]
-
---------------------------------------------------------------------------------
--- DSL for writing messages
-
--- | Construct a message with a list of modifications applied.
-messageWith :: (Message msg) => [msg -> msg] -> msg
-messageWith = foldr ($) defMessage
