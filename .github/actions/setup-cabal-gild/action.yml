@@ -1,0 +1,48 @@
+name: "Setup cabal-gild"
+description: "Install a specific cabal-gild version"
+inputs:
+  cabal-gild-version:
+    required: true
+    description: "Version of cabal-gild"
+  ghc-version:
+    required: true
+    description: "Version of GHC"
+  cabal-version:
+    required: true
+    description: "Version of cabal"
+runs:
+  using: composite
+  steps:
+    - name: 💾 Restore cache
+      uses: actions/cache/restore@v4
+      if: ${{ !env.ACT }}
+      id: cache-cabal-gild
+      with:
+        path: "${{ github.workspace }}/.cabal-gild/bin"
+        key: ${{ runner.os }}-cabal-gild-${{ inputs.cabal-gild-version }}
+
+    - name: 🛠️ Install Haskell
+      if: ${{ env.ACT || steps.cache-cabal-gild.outputs.cache-hit != 'true' }}
+      uses: haskell-actions/setup@v2
+      id: setup-haskell
+      with:
+        ghc-version: ${{ inputs.ghc-version }}
+        cabal-version: ${{ inputs.cabal-version }}
+
+    - name: 🛠️ Install cabal-gild
+      if: ${{ env.ACT || steps.cache-cabal-gild.outputs.cache-hit != 'true' }}
+      run: |
+        mkdir --parents "${{ github.workspace }}/.cabal-gild/bin"
+        cabal install cabal-gild-${{ inputs.cabal-gild-version }} --overwrite-policy=always --install-method=copy --installdir="${{ github.workspace }}/.cabal-gild/bin"
+      shell: sh
+
+    - name: 🛠️ Add cabal-gild to PATH
+      run: echo "${{ github.workspace }}/.cabal-gild/bin" >> "$GITHUB_PATH"
+      shell: sh
+
+    - name: 💾 Save cache
+      uses: actions/cache/save@v4
+      if: ${{ !env.ACT && steps.cache-cabal-gild.outputs.cache-hit != 'true' }}
+      with:
+        path: "${{ github.workspace }}/.cabal-gild/bin"
+        key: ${{ steps.cache-cabal-gild.outputs.cache-primary-key }}
