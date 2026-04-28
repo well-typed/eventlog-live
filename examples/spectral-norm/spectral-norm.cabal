@@ -1,35 +1,34 @@
 cabal-version: 2.4
-name:          spectral-norm
-version:       0.1.0.0
-synopsis:      Example with an interesting thread profile.
+name: spectral-norm
+version: 0.1.0.0
+synopsis: Example with an interesting thread profile.
 description:
   An implementation of spectral-norm from The Computer Language Benchmarks Game.
   Taken from the GHC's @nofib@ benchmarks.
 
-maintainer:    wen@well-typed.com
-license-file:  LICENSE
-category:      Debug, Monitoring, System, Network
+maintainer: wen@well-typed.com
+license-file: LICENSE
+category: Debug, Monitoring, System, Network
 tested-with:
-  GHC ==9.2.8
-   || ==9.4.8
-   || ==9.6.7
-   || ==9.8.4
-   || ==9.10.2
-   || ==9.12.2
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
 
 executable spectral-norm
-  main-is:            Main.hs
-  hs-source-dirs:     app
-  c-sources:          cbits/main.c
-  default-language:   Haskell2010
+  main-is: Main.hs
+  hs-source-dirs: app
+  c-sources: cbits/main.c
+  default-language: Haskell2010
   default-extensions: BangPatterns
   ghc-options:
-    -threaded -no-hs-main -funbox-strict-fields -optc-O3
-    -fexcess-precision -optc-ffast-math
+    -threaded
+    -no-hs-main
+    -funbox-strict-fields
+    -optc-O3
+    -fexcess-precision
+    -optc-ffast-math
 
   build-depends:
-    , base             >=4.14  && <5
-    , eventlog-socket  >=0.1.2 && <0.2
+    base >=4.14 && <5,
+    eventlog-socket >=0.1.2 && <0.2,
 
   if impl(ghc <9.4)
     ghc-options: -eventlog

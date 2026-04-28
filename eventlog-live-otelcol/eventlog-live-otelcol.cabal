@@ -1,7 +1,7 @@
-cabal-version:      3.0
-name:               eventlog-live-otelcol
-version:            0.6.0.0
-synopsis:           Stream eventlog data to the OpenTelemetry Collector.
+cabal-version: 3.0
+name: eventlog-live-otelcol
+version: 0.6.0.0
+synopsis: Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into
   the OpenTelemetry Collector.
@@ -74,25 +74,25 @@ description:
   >                            Enable ghc-debug for this program on the given TCP
   >                            socket specified as 'host:port'.
 
-license:            BSD-3-Clause
-license-file:       LICENSE
-author:             Wen Kokke
-maintainer:         wen@well-typed.com
-copyright:          (c) 2025 Well-Typed
-build-type:         Simple
-category:           Debug, Monitoring, System
-extra-doc-files:    CHANGELOG.md
+license: BSD-3-Clause
+license-file: LICENSE
+author: Wen Kokke
+maintainer: wen@well-typed.com
+copyright: (c) 2025 Well-Typed
+build-type: Simple
+category: Debug, Monitoring, System
+extra-doc-files: CHANGELOG.md
 extra-source-files:
   data/config.schema.json
   data/default.yaml
 
 tested-with:
-  GHC ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2
 
 source-repository head
-  type:     git
+  type: git
   location: https://github.com/well-typed/eventlog-live.git
-  subdir:   eventlog-live-otelcol
+  subdir: eventlog-live-otelcol
 
 -- This flag enables the control command server, which is an HTTP endpoint
 -- that gets started by eventlog-live-otelcol. If +control is set, then
@@ -100,16 +100,16 @@ source-repository head
 -- set at compile-time, the control server can be enabled at runtime.
 flag control
   description: Enable control command server.
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 -- 2026-04-02:
 -- This flag should enable switching the use of eventlog-socket on
 -- and off, since it may cause issues with certain versions of GHC.
 flag use-eventlog-socket
   description: Use eventlog-socket
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 -- 2025-11-10:
 -- This flag should enable switching the use of ghc-debug-stub on
@@ -117,24 +117,28 @@ flag use-eventlog-socket
 -- See https://github.com/well-typed/eventlog-live/issues/88
 flag use-ghc-debug-stub
   description: Use ghc-debug-stub
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 -- 2025-11-06:
 -- This flag should enable switching between template-haskell and
 -- template-haskell-lift, because the latter is not on nixpkgs.
 flag use-template-haskell-lift
   description: Use template-haskell-lift in place of template-haskell
-  default:     False
-  manual:      False
+  default: False
+  manual: False
 
 common language
   ghc-options:
-    -Wall -Wcompat -Widentities -Wprepositive-qualified-module
-    -Wredundant-constraints -Wunticked-promoted-constructors
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wprepositive-qualified-module
+    -Wredundant-constraints
+    -Wunticked-promoted-constructors
     -Wunused-packages
 
-  default-language:   Haskell2010
+  default-language: Haskell2010
   default-extensions:
     BangPatterns
     ConstraintKinds
@@ -170,8 +174,8 @@ common language
     TypeOperators
 
 library
-  import:          language
-  hs-source-dirs:  src
+  import: language
+  hs-source-dirs: src
   exposed-modules: GHC.Eventlog.Live.Otelcol
   other-modules:
     GHC.Debug.Stub.Compat
@@ -204,68 +208,70 @@ library
 
   autogen-modules: Paths_eventlog_live_otelcol
   build-depends:
-    , ansi-terminal            >=1.1    && <1.2
-    , base                     >=4.16   && <4.22
-    , bytestring               >=0.11   && <0.13
-    , containers               >=0.6    && <0.8
-    , data-default             >=0.2    && <0.9
-    , dlist                    >=1.0    && <1.1
-    , eventlog-live            >=0.5    && <0.6
-    , file-embed               >=0.0.16 && <0.1
-    , ghc-events               >=0.20   && <0.21
-    , ghc-stack-profiler-core  >=0.2    && <0.3
-    , grapesy                  >=1.0.0  && <1.2
-    , hashable                 >=1.4    && <1.6
-    , hs-opentelemetry-otlp    >=0.2.0  && <0.3
-    , HsYAML                   >=0.2    && <0.3
-    , lens-family              >=2.1.3  && <2.2
-    , machines                 >=0.7.4  && <0.8
-    , optparse-applicative     >=0.17   && <0.20
-    , proto-lens               >=0.7.1  && <0.8
-    , random                   >=1.2    && <1.4
-    , stm                      >=2.5    && <2.6
-    , strict-list              >=0.1    && <0.2
-    , table-layout             >=1.0    && <1.1
-    , text                     >=1.2    && <2.2
-    , transformers             >=0.2    && <0.7
-    , unordered-containers     >=0.2.20 && <0.3
-    , vector                   >=0.11   && <0.14
+    ansi-terminal >=1.1 && <1.2,
+    base >=4.16 && <4.22,
+    bytestring >=0.11 && <0.13,
+    containers >=0.6 && <0.8,
+    data-default >=0.2 && <0.9,
+    dlist >=1.0 && <1.1,
+    eventlog-live >=0.5 && <0.6,
+    file-embed >=0.0.16 && <0.1,
+    ghc-events >=0.20 && <0.21,
+    ghc-stack-profiler-core >=0.2 && <0.3,
+    grapesy >=1.0.0 && <1.2,
+    hashable >=1.4 && <1.6,
+    hs-opentelemetry-otlp >=0.2.0 && <0.3,
+    HsYAML >=0.2 && <0.3,
+    lens-family >=2.1.3 && <2.2,
+    machines >=0.7.4 && <0.8,
+    optparse-applicative >=0.17 && <0.20,
+    proto-lens >=0.7.1 && <0.8,
+    random >=1.2 && <1.4,
+    stm >=2.5 && <2.6,
+    strict-list >=0.1 && <0.2,
+    table-layout >=1.0 && <1.1,
+    text >=1.2 && <2.2,
+    transformers >=0.2 && <0.7,
+    unordered-containers >=0.2.20 && <0.3,
+    vector >=0.11 && <0.14,
 
   if flag(control)
     build-depends:
-      , aeson                    >=2.2   && <2.3
-      , binary                   >=0.8   && <0.9
-      , eventlog-socket-control  >=0.1.1 && <0.2
-      , fast-logger              >=3.0   && <3.3
-      , http-api-data            >=0.6   && <0.7
-      , network                  >=3.2.7 && <3.3
-      , servant                  >=0.20  && <0.21
-      , servant-server           >=0.20  && <0.21
-      , wai                      >=3.2   && <3.3
-      , wai-cors                 >=0.2   && <0.3
-      , wai-extra                >=3.1   && <3.2
-      , warp                     >=3.4   && <3.5
+      aeson >=2.2 && <2.3,
+      binary >=0.8 && <0.9,
+      eventlog-socket-control >=0.1.1 && <0.2,
+      fast-logger >=3.0 && <3.3,
+      http-api-data >=0.6 && <0.7,
+      network >=3.2.7 && <3.3,
+      servant >=0.20 && <0.21,
+      servant-server >=0.20 && <0.21,
+      wai >=3.2 && <3.3,
+      wai-cors >=0.2 && <0.3,
+      wai-extra >=3.1 && <3.2,
+      warp >=3.4 && <3.5,
 
-    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+    cpp-options: -DEVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
 
   if flag(use-eventlog-socket)
     build-depends: eventlog-socket >=0.1.2 && <0.2
-    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
+    cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
 
   if flag(use-ghc-debug-stub)
     build-depends: ghc-debug-stub >=0.1 && <1.0
-    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
+    cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
 
   if flag(use-template-haskell-lift)
     build-depends: template-haskell-lift >=0.1 && <0.2
-    cpp-options:   -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
-
+    cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
   else
     build-depends: template-haskell >=2.2 && <3.0
 
 executable eventlog-live-otelcol
-  import:         language
-  main-is:        Main.hs
+  import: language
+  main-is: Main.hs
   hs-source-dirs: app
-  build-depends:  eventlog-live-otelcol
-  ghc-options:    -threaded -rtsopts -finfo-table-map
+  build-depends: eventlog-live-otelcol
+  ghc-options:
+    -threaded
+    -rtsopts
+    -finfo-table-map
