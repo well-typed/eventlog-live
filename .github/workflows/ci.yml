@@ -321,11 +321,11 @@ jobs:
         run: ./scripts/lint-cabal.sh
 
   #############################################################################
-  # Lint with cabal-fmt
+  # Lint with cabal-gild
   #############################################################################
 
-  lint-cabal-fmt:
-    name: "Lint with cabal-fmt"
+  lint-cabal-gild:
+    name: "Lint with cabal-gild"
     runs-on: "ubuntu-latest"
     steps:
       - name: 📥 Checkout repository
@@ -337,15 +337,15 @@ jobs:
         run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
         id: dev-dependencies
 
-      - name: 🛠️ Install cabal-fmt
-        uses: ./.github/actions/setup-cabal-fmt
+      - name: 🛠️ Install cabal-gild
+        uses: ./.github/actions/setup-cabal-gild
         with:
-          cabal-fmt-version: ${{ steps.dev-dependencies.outputs.cabal-fmt }}
+          cabal-gild-version: ${{ steps.dev-dependencies.outputs.cabal-gild }}
           ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
           cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
 
-      - name: 🎗️ Lint with cabal-fmt
-        run: ./scripts/lint-cabal-fmt.sh
+      - name: 🎗️ Lint with cabal-gild
+        run: ./scripts/lint-cabal-gild.sh
 
   #############################################################################
   # Lint with HLint
