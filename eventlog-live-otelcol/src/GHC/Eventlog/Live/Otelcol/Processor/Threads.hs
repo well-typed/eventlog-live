@@ -52,7 +52,7 @@ processThreadEvents verbosity fullConfig =
                 M.processGCSpans verbosity
                   ~> mapping (D.singleton . A)
             , runIf (shouldComputeThreadStateSpan fullConfig) $
-                M.processThreadStateSpans' M.tryGetTimeUnixNano (.value) M.setWithStartTime'value verbosity
+                M.processThreadStateSpans' M.getTimeUnixNano (.value) M.setWithStartTime'value verbosity
                   ~> fanout
                     [ M.asMutatorSpans' (.value) M.setWithStartTime'value
                         ~> mapping (D.singleton . B)

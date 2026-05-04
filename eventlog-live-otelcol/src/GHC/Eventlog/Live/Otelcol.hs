@@ -133,7 +133,7 @@ main = do
     -- Create machine that processes eventlog data into telemetry data
     let processEventlogTelemetry :: ProcessT IO (Tick Event) (Tick ResourceTelemetryData)
         processEventlogTelemetry =
-          M.liftTick M.withStartTime
+          M.liftTick (M.withStartTime logger)
             ~> M.fanoutTick
               [ -- Process the heap events.
                 processHeapEvents logger maybeHeapProfBreakdown fullConfig
