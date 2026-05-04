@@ -10,8 +10,8 @@ export GHC_EVENTLOG_SOCKET="/tmp/spectral_norm_eventlog.sock"
 
 # Build spectral-norm
 echo "Build spectral-norm"
-cabal build spectral-norm -v0
-SPECTRAL_NORM_BIN=$(cabal list-bin exe:spectral-norm -v0 | head -n1)
+cabal build spectral-norm --constraint=eventlog-socket+control -v0
+SPECTRAL_NORM_BIN=$(cabal list-bin exe:spectral-norm --constraint=eventlog-socket+control -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"

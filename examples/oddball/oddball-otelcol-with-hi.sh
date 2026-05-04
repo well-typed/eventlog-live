@@ -9,8 +9,8 @@ export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 
 # Build oddball
 echo "Build oddball"
-cabal build oddball -v0
-ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
+cabal build oddball --constraint=eventlog-socket+control -v0
+ODDBALL_BIN=$(cabal list-bin exe:oddball --constraint=eventlog-socket+control -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
