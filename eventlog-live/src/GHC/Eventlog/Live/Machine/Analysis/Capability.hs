@@ -51,7 +51,7 @@ import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), getTimeUnixNano, setWithStartTime'value)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, Timestamp)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
@@ -92,7 +92,7 @@ processCapabilityUsageMetrics =
               Metric
                 { value = j.value.startTimeUnixNano - i.endTimeUnixNano
                 , maybeTimeUnixNano = Just i.endTimeUnixNano
-                , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
+                , maybeStartTimeUnixNano = Just j.startTimeUnixNano
                 , attrs = ["cap" ~= cap, "category" ~= ("Idle" :: Text)]
                 }
         -- Yield a duration metric for the current span.
@@ -101,7 +101,7 @@ processCapabilityUsageMetrics =
           Metric
             { value = duration j.value
             , maybeTimeUnixNano = Just j.value.startTimeUnixNano
-            , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
+            , maybeStartTimeUnixNano = Just j.startTimeUnixNano
             , attrs = ["cap" ~= cap, "category" ~= showCapabilityUserCategory user, "user" ~= user]
             }
         go (Just j.value)
@@ -176,7 +176,7 @@ processCapabilityUsageSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
 processCapabilityUsageSpans logger =
-  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value logger
+  processCapabilityUsageSpans' getTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value logger
     ~> mapping (either (fmap Left) (fmap Right))
 
 {- |
@@ -186,7 +186,7 @@ work on arbitrary types using a getter and a pair of lenses.
 processCapabilityUsageSpans' ::
   forall m s t1 t2.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Timestamp) ->
   (s -> Event) ->
   (s -> GCSpan -> t1) ->
   (s -> MutatorSpan -> t2) ->
@@ -248,7 +248,7 @@ processGCSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime GCSpan)
 processGCSpans =
-  processGCSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
+  processGCSpans' getTimeUnixNano (.value) setWithStartTime'value
 
 {- |
 Generalised version of `processGCSpans` that can be adapted to work on
@@ -257,7 +257,7 @@ arbitrary types using a getter and a lens.
 processGCSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Timestamp) ->
   (s -> Event) ->
   (s -> GCSpan -> t) ->
   Logger m ->
@@ -321,8 +321,8 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
           Just i
             -- If the previous event was a `StartGC` event, then...
             | E.StartGC{} <- getEventInfo i
-            , Just startTimeUnixNano <- timeUnixNano i
-            , Just endTimeUnixNano <- timeUnixNano j -> do
+            , startTimeUnixNano <- timeUnixNano i
+            , endTimeUnixNano <- timeUnixNano j -> do
                 -- ...yield a GC span, and...
                 yield . setGCSpan j $ GCSpan{..}
                 -- ...continue with the current event.
@@ -401,7 +401,7 @@ processMutatorSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime MutatorSpan)
 processMutatorSpans =
-  processMutatorSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
+  processMutatorSpans' getTimeUnixNano (.value) setWithStartTime'value
 
 {- |
 Generalised version of `processMutatorSpans` that can be adapted to work on
@@ -410,7 +410,7 @@ arbitrary types using a getter and a lens.
 processMutatorSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Timestamp) ->
   (s -> Event) ->
   (s -> MutatorSpan -> t) ->
   Logger m ->

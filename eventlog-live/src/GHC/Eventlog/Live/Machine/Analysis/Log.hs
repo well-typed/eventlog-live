@@ -14,7 +14,7 @@ import Data.Text (Text)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), getTimeUnixNano)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events qualified as E
 
@@ -71,7 +71,7 @@ logRecord ::
 logRecord i body maybeSeverity attrs =
   LogRecord
     { body = body
-    , maybeTimeUnixNano = tryGetTimeUnixNano i
+    , maybeTimeUnixNano = Just (getTimeUnixNano i)
     , maybeSeverity = maybeSeverity
     , attrs = attrs
     }

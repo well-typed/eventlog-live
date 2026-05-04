@@ -49,7 +49,7 @@ import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), getTimeUnixNano)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
 import Numeric (showHex)
@@ -540,7 +540,7 @@ metric ::
 metric i v attrs =
   Metric
     { value = v
-    , maybeTimeUnixNano = tryGetTimeUnixNano i
-    , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
+    , maybeTimeUnixNano = Just (getTimeUnixNano i)
+    , maybeStartTimeUnixNano = Just i.startTimeUnixNano
     , attrs = attrs
     }
