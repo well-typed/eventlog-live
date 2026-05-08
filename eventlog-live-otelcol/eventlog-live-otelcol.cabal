@@ -257,14 +257,14 @@ library
     cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
 
   if flag(use-ghc-debug-stub)
-    build-depends: ghc-debug-stub >=0.1 && <1.0
+    build-depends: ghc-debug-stub >=0.1 && <1
     cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
 
   if flag(use-template-haskell-lift)
     build-depends: template-haskell-lift >=0.1 && <0.2
     cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
   else
-    build-depends: template-haskell >=2.2 && <3.0
+    build-depends: template-haskell >=2.2 && <3
 
 executable eventlog-live-otelcol
   import: language
