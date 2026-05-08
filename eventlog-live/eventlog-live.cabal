@@ -3,22 +3,8 @@ name: eventlog-live
 version: 0.5.0.0
 synopsis: Live processing of eventlog data.
 description:
-  This package supports live processing of eventlog data.
-  It consists of three libraries:
-
-  *   The @eventlog-live@ library defines
-      [machines](https://hackage.haskell.org/package/machines)
-      for processing eventlog data.
-  *   The @eventlog-live:options@ sub-library defines
-      [optparse-applicative](https://hackage.haskell.org/package/optparse-applicative)
-      parsers for common command-line arguments.
-  *   The @eventlog-live:socket@ sub-library defines functions to read the
-      eventlog from a Unix socket, which depend on the
-      [network](https://hackage.haskell.org/package/network) package.
-
-  This package is primarily intended for use via the
-  [eventlog-live-otelcol](https://hackage.haskell.org/package/eventlog-live-otelcol)
-  package.
+  This package provides [machines](https://hackage.haskell.org/package/machines) for processing live eventlog data.
+  It is primarily intended for use via the [eventlog-live-otelcol](https://hackage.haskell.org/package/eventlog-live-otelcol) package.
 
   [⚠️ Warning]:
       This package is experimental.
