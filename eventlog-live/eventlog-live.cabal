@@ -44,6 +44,12 @@ source-repository head
   location: https://github.com/well-typed/eventlog-live.git
   subdir: eventlog-live
 
+source-repository this
+  type: git
+  location: https://github.com/well-typed/eventlog-live.git
+  tag: eventlog-live-0.5.0.0
+  subdir: eventlog-live
+
 -- 2025-12-09:
 -- This flag should enable switching between concurrent-machines and the
 -- vendored copy of the packages, as it currently does not easily build.
