@@ -61,7 +61,7 @@ To build a lightweight image, run the following command from the `demo-nix` dire
 nix build .#vm
 ```
 
-To build standalone images for different architectures, you can use [remote builders](https://nixos.wiki/wiki/Distributed_build).
+To build standalone images for different architectures, you can use [remote builders](https://wiki.nixos.org/wiki/Distributed_build).
 For instance, if you have set up a remote builder for `aarch64-linux` builds, then you can build a standalone image for `aarch64-linux` by running the following command from the `demo-nix` directory:
 
 ```
