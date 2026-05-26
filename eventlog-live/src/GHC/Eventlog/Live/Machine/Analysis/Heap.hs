@@ -25,8 +25,8 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   heapProfBreakdownShow,
 
   -- ** Things fendor doesn't want to reimplement
-  InfoTable (..),
-  InfoTablePtr (..),
+  InfoProv (..),
+  InfoProvPtr (..),
   HeapProfBreakdown,
   metric,
 ) where
@@ -222,30 +222,30 @@ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSamples =
 Internal helper.
 The type of info table pointers.
 -}
-newtype InfoTablePtr = InfoTablePtr Word64
+newtype InfoProvPtr = InfoProvPtr Word64
   deriving newtype (Eq, Hashable, Ord)
 
-instance Show InfoTablePtr where
-  showsPrec :: Int -> InfoTablePtr -> ShowS
-  showsPrec _ (InfoTablePtr ptr) =
+instance Show InfoProvPtr where
+  showsPrec :: Int -> InfoProvPtr -> ShowS
+  showsPrec _ (InfoProvPtr ptr) =
     showString "0x" . showHex ptr
 
-instance Read InfoTablePtr where
-  readsPrec :: Int -> ReadS InfoTablePtr
-  readsPrec _ = readP_to_S (InfoTablePtr <$> (P.string "0x" *> readHexP))
+instance Read InfoProvPtr where
+  readsPrec :: Int -> ReadS InfoProvPtr
+  readsPrec _ = readP_to_S (InfoProvPtr <$> (P.string "0x" *> readHexP))
 
 {- |
 Internal helper.
 The type of an info table entry, as produced by the `E.InfoTableProv` event.
 -}
-data InfoTable = InfoTable
-  { infoTablePtr :: !InfoTablePtr
-  , infoTableName :: !Text
-  , infoTableClosureDesc :: !Int
-  , infoTableTyDesc :: !Text
-  , infoTableLabel :: !Text
-  , infoTableModule :: !Text
-  , infoTableSrcLoc :: !Text
+data InfoProv = InfoProv
+  { ipPtr :: !InfoProvPtr -- TODO: Remove this field.
+  , ipName :: !Text
+  , ipClosureDesc :: !Int
+  , ipTyDesc :: !Text
+  , ipLabel :: !Text
+  , ipModule :: !Text
+  , ipSrcLoc :: !Text
   }
   deriving (Show, Eq, Ord)
 
@@ -255,7 +255,7 @@ The type of the state kept by `processHeapProfSampleData`.
 -}
 data HeapProfSampleState = HeapProfSampleState
   { eitherShouldWarnOrHeapProfBreakdown :: !(Either Bool HeapProfBreakdown)
-  , infoTableMap :: !(HashMap InfoTablePtr InfoTable)
+  , infoProvMap :: !(HashMap InfoProvPtr InfoProv)
   , heapProfSampleEraStack :: ![Word64]
   , maybeHeapProfSampleData :: !(Maybe HeapProfSampleData)
   }
@@ -268,10 +268,10 @@ We track info tables until (1) we learn that the RTS is not run with @-hi@,
 or (2) we see the first heap profiling sample and don't yet know for sure
 that the RTS is run with @-hi@.
 -}
-shouldTrackInfoTableMap :: Either Bool HeapProfBreakdown -> Bool
-shouldTrackInfoTableMap (Left _shouldWarn) = True
-shouldTrackInfoTableMap (Right HeapProfBreakdownInfoTable) = True
-shouldTrackInfoTableMap _ = False
+shouldTrackInfoProvMap :: Either Bool HeapProfBreakdown -> Bool
+shouldTrackInfoProvMap (Left _shouldWarn) = True
+shouldTrackInfoProvMap (Right HeapProfBreakdownInfoTable) = True
+shouldTrackInfoProvMap _ = False
 
 {- |
 Internal helper.
@@ -300,7 +300,7 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
     go
       HeapProfSampleState
         { eitherShouldWarnOrHeapProfBreakdown = maybe (Left True) Right maybeHeapProfBreakdown
-        , infoTableMap = mempty
+        , infoProvMap = mempty
         , heapProfSampleEraStack = mempty
         , maybeHeapProfSampleData = mempty
         }
@@ -322,19 +322,19 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
             go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
       -- Announces an info table entry.
       E.InfoTableProv{..}
-        | shouldTrackInfoTableMap eitherShouldWarnOrHeapProfBreakdown -> do
-            let infoTablePtr = InfoTablePtr itInfo
-                infoTable =
-                  InfoTable
-                    { infoTablePtr = infoTablePtr
-                    , infoTableName = itTableName
-                    , infoTableClosureDesc = itClosureDesc
-                    , infoTableTyDesc = itTyDesc
-                    , infoTableLabel = itLabel
-                    , infoTableModule = itModule
-                    , infoTableSrcLoc = itSrcLoc
+        | shouldTrackInfoProvMap eitherShouldWarnOrHeapProfBreakdown -> do
+            let ipPtr = InfoProvPtr itInfo
+                infoProv =
+                  InfoProv
+                    { ipPtr = ipPtr
+                    , ipName = itTableName
+                    , ipClosureDesc = itClosureDesc
+                    , ipTyDesc = itTyDesc
+                    , ipLabel = itLabel
+                    , ipModule = itModule
+                    , ipSrcLoc = itSrcLoc
                     }
-            go st{infoTableMap = M.insert infoTablePtr infoTable infoTableMap}
+            go st{infoProvMap = M.insert ipPtr infoProv infoProvMap}
       -- Announces the beginning of a heap profile sample.
       E.HeapProfSampleBegin{..} -> do
         -- Check that maybeHeapProfSampleData is Nothing.
@@ -392,7 +392,7 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
                   \         you must also pass the heap profile type to this executable.\n\
                   \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
             lift $ writeLog logger WARN $ msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
+            go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoProvMap = mempty}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
             let msg =
@@ -401,14 +401,14 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
                       "Unsupported heap profile breakdown %s"
                       (heapProfBreakdownShow HeapProfBreakdownBiography)
             lift $ writeLog logger WARN $ msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoTableMap = mempty}
+            go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoProvMap = mempty}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
             -- If the heap profile breakdown is by info table, add the info table.
-            let maybeInfoTable
+            let maybeInfoProv
                   | isHeapProfBreakdownInfoTable heapProfBreakdown = do
-                      !infoTablePtr <- readMaybe (T.unpack heapProfLabel)
-                      M.lookup infoTablePtr infoTableMap
+                      !ipPtr <- readMaybe (T.unpack heapProfLabel)
+                      M.lookup ipPtr infoProvMap
                   | otherwise = Nothing
             -- Get the HeapProfSampleData
             heapProfSampleData <-
@@ -429,12 +429,12 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
                     , "heapProfId" ~= heapProfId
                     , "heapProfLabel" ~= heapProfLabel
                     , "heapProfSampleEra" ~= (fst <$> L.uncons heapProfSampleEraStack)
-                    , "infoTableName" ~= fmap (.infoTableName) maybeInfoTable
-                    , "infoTableClosureDesc" ~= fmap (.infoTableClosureDesc) maybeInfoTable
-                    , "infoTableTyDesc" ~= fmap (.infoTableTyDesc) maybeInfoTable
-                    , "infoTableLabel" ~= fmap (.infoTableLabel) maybeInfoTable
-                    , "infoTableModule" ~= fmap (.infoTableModule) maybeInfoTable
-                    , "infoTableSrcLoc" ~= fmap (.infoTableSrcLoc) maybeInfoTable
+                    , "ipName" ~= fmap (.ipName) maybeInfoProv
+                    , "ipClosureDesc" ~= fmap (.ipClosureDesc) maybeInfoProv
+                    , "ipTyDesc" ~= fmap (.ipTyDesc) maybeInfoProv
+                    , "ipLabel" ~= fmap (.ipLabel) maybeInfoProv
+                    , "ipModule" ~= fmap (.ipModule) maybeInfoProv
+                    , "ipSrcLoc" ~= fmap (.ipSrcLoc) maybeInfoProv
                     ]
             heapProfSampleData' <-
               lift $ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData
@@ -442,7 +442,7 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
             go
               st
                 { -- If we're not profiling with -hi, discard the info table map
-                  infoTableMap = if isHeapProfBreakdownInfoTable heapProfBreakdown then st.infoTableMap else mempty
+                  infoProvMap = if isHeapProfBreakdownInfoTable heapProfBreakdown then st.infoProvMap else mempty
                 , -- Add the update HeapProfSampleData
                   maybeHeapProfSampleData = Just heapProfSampleData'
                 }

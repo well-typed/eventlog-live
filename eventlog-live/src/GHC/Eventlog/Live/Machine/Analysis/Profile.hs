@@ -31,7 +31,7 @@ import Data.Vector.Unboxed qualified as UVector
 import Data.Word
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Logger (Logger, writeException)
-import GHC.Eventlog.Live.Machine.Analysis.Heap (InfoTable (..), InfoTablePtr (..), metric)
+import GHC.Eventlog.Live.Machine.Analysis.Heap (InfoProv (..), InfoProvPtr (..), metric)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..))
@@ -41,7 +41,7 @@ import GHC.Stack.Profiler.Core.SymbolTable qualified as SPCS
 import GHC.Stack.Profiler.Core.ThreadSample qualified as SPCT
 
 data StackProfSampleState = StackProfSampleState
-  { infoTableMap :: !(HashMap InfoTablePtr InfoTable)
+  { infoTableMap :: !(HashMap InfoProvPtr InfoProv)
   , -- TODO: this should probably be a maybe?
     -- We could report when interleaved messages are present
     stackProfSampleChunk :: ![SPCE.BinaryCallStackMessage]
@@ -93,14 +93,14 @@ data CostCentre = CostCentre
   deriving (Show, Eq, Ord, Generic)
 
 data StackItemData
-  = IpeData !InfoTable
+  = IpeData !InfoProv
   | UserMessageData !Text
   | SourceLocationData !SPCT.SourceLocation
   | CostCentreData !CostCentre
   deriving (Show, Eq, Ord, Generic)
 
-shouldTrackInfoTableMap :: Bool
-shouldTrackInfoTableMap = True
+shouldTrackInfoProvMap :: Bool
+shouldTrackInfoProvMap = True
 
 shouldTrackCostCentreMap :: Bool
 shouldTrackCostCentreMap = True
@@ -185,17 +185,17 @@ processStackProfSampleData logger =
     await >>= \i -> case i.value.evSpec of
       -- Announces an info table entry.
       E.InfoTableProv{..}
-        | shouldTrackInfoTableMap -> do
-            let infoTablePtr = InfoTablePtr itInfo
+        | shouldTrackInfoProvMap -> do
+            let infoTablePtr = InfoProvPtr itInfo
                 infoTable =
-                  InfoTable
-                    { infoTablePtr = infoTablePtr
-                    , infoTableName = itTableName
-                    , infoTableClosureDesc = itClosureDesc
-                    , infoTableTyDesc = itTyDesc
-                    , infoTableLabel = itLabel
-                    , infoTableModule = itModule
-                    , infoTableSrcLoc = itSrcLoc
+                  InfoProv
+                    { ipPtr = infoTablePtr
+                    , ipName = itTableName
+                    , ipClosureDesc = itClosureDesc
+                    , ipTyDesc = itTyDesc
+                    , ipLabel = itLabel
+                    , ipModule = itModule
+                    , ipSrcLoc = itSrcLoc
                     }
             go st{infoTableMap = M.insert infoTablePtr infoTable st.infoTableMap}
       E.UserBinaryMessage{payload} ->
@@ -261,9 +261,9 @@ hydrateBinaryEventlog spst msg = (callStackData, spst{stackProfSampleChunk = []}
           mapMaybe (toStackItemData spst.infoTableMap) $ SPCT.callStack callStackMessage
       }
 
-toStackItemData :: HashMap InfoTablePtr InfoTable -> SPCT.StackItem -> Maybe StackItemData
+toStackItemData :: HashMap InfoProvPtr InfoProv -> SPCT.StackItem -> Maybe StackItemData
 toStackItemData tbl = \case
-  SPCT.IpeId iid -> IpeData <$> HashMap.lookup (InfoTablePtr $ SPCE.getIpeId iid) tbl
+  SPCT.IpeId iid -> IpeData <$> HashMap.lookup (InfoProvPtr $ SPCE.getIpeId iid) tbl
   SPCT.UserMessage msg -> Just $ UserMessageData $ Text.pack msg
   SPCT.SourceLocation srcLoc -> Just $ SourceLocationData srcLoc
 
