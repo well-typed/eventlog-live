@@ -28,8 +28,8 @@ import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (ProfileDictionary, SymbolIndex)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles qualified as ProfDictionary
+import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (ProfilesDictionary, SymbolIndex)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary qualified as PD
 import GHC.RTS.Events (Event (..))
 import GHC.Stack.Profiler.Core.SourceLocation qualified as Profiler
 import Lens.Family2 ((.~))
@@ -102,13 +102,13 @@ processCallStackData resource instrumentationScope callstacks = (resourceProfile
       , OP.resource .~ resource
       ]
 
-  profilesDictionary = ProfDictionary.toProfilesDictionary st
+  profilesDictionary = PD.toProfilesDictionary st
 
-  (profile, st) = flip runState ProfDictionary.emptyProfileDictionary $ do
-    sampleNameStrId <- ProfDictionary.getString "__name__"
-    sampleTypeStrId <- ProfDictionary.getString "String"
+  (profile, st) = flip runState PD.empty $ do
+    sampleNameStrId <- PD.getString "__name__"
+    sampleTypeStrId <- PD.getString "String"
     sampleAttrId <-
-      ProfDictionary.getAttribute $
+      PD.getAttribute $
         messageWith @OP.KeyValueAndUnit
           [ OP.keyStrindex .~ sampleNameStrId
           , OP.unitStrindex .~ sampleTypeStrId
@@ -116,8 +116,8 @@ processCallStackData resource instrumentationScope callstacks = (resourceProfile
           ]
 
     samples <- traverse (asSample sampleAttrId) callstacks
-    cpuId <- ProfDictionary.getString "stack"
-    unitId <- ProfDictionary.getString "samples"
+    cpuId <- PD.getString "stack"
+    unitId <- PD.getString "samples"
     let sampleType :: OP.ValueType
         sampleType =
           messageWith
@@ -131,21 +131,21 @@ processCallStackData resource instrumentationScope callstacks = (resourceProfile
         , OP.sampleType .~ sampleType
         ]
 
-asSample :: SymbolIndex -> M.CallStackData -> State ProfileDictionary OP.Sample
+asSample :: SymbolIndex -> M.CallStackData -> State ProfilesDictionary OP.Sample
 asSample six stackData = do
   locIndices <- traverse toIndex stackData.stack
   s <-
-    ProfDictionary.getStack $
+    PD.getStack $
       messageWith
         [ OP.locationIndices .~ locIndices
         ]
 
-  sampleThreadKeyStrId <- ProfDictionary.getString "thread"
-  sampleCapKeyStrId <- ProfDictionary.getString "capability"
-  sampleNumberUnitStrId <- ProfDictionary.getString "Number"
+  sampleThreadKeyStrId <- PD.getString "thread"
+  sampleCapKeyStrId <- PD.getString "capability"
+  sampleNumberUnitStrId <- PD.getString "Number"
 
   threadAttrId <-
-    ProfDictionary.getAttribute $
+    PD.getAttribute $
       messageWith @OP.KeyValueAndUnit
         [ OP.keyStrindex .~ sampleThreadKeyStrId
         , OP.unitStrindex .~ sampleNumberUnitStrId
@@ -153,7 +153,7 @@ asSample six stackData = do
         ]
 
   capAttrId <-
-    ProfDictionary.getAttribute $
+    PD.getAttribute $
       messageWith @OP.KeyValueAndUnit
         [ OP.keyStrindex .~ sampleCapKeyStrId
         , OP.unitStrindex .~ sampleNumberUnitStrId
@@ -171,19 +171,19 @@ asSample six stackData = do
              ]
       ]
  where
-  toIndex :: M.StackItemData -> State ProfileDictionary SymbolIndex
+  toIndex :: M.StackItemData -> State ProfilesDictionary SymbolIndex
   toIndex = \case
     M.IpeData infoTable -> getLocationIndexForInfoTable infoTable
     M.UserMessageData message -> getLocationIndexForText message
     M.SourceLocationData srcLoc -> getLocationIndexForSourceLocation srcLoc
     M.CostCentreData costCentre -> getLocationIndexForCostCentre costCentre
 
-getLocationIndexForSourceLocation :: Profiler.SourceLocation -> State ProfileDictionary SymbolIndex
+getLocationIndexForSourceLocation :: Profiler.SourceLocation -> State ProfilesDictionary SymbolIndex
 getLocationIndexForSourceLocation srcLoc = do
-  functionNameId <- ProfDictionary.getString $ Profiler.functionName srcLoc
-  fileNameId <- ProfDictionary.getString $ Profiler.fileName srcLoc
+  functionNameId <- PD.getString $ Profiler.functionName srcLoc
+  fileNameId <- PD.getString $ Profiler.fileName srcLoc
   funcIdx <-
-    ProfDictionary.getFunction $
+    PD.getFunction $
       messageWith
         [ OP.nameStrindex .~ functionNameId
         , OP.systemNameStrindex .~ 0 -- 0 means unset
@@ -199,17 +199,17 @@ getLocationIndexForSourceLocation srcLoc = do
           , OP.column .~ fromIntegral (Profiler.column srcLoc)
           ]
 
-  ProfDictionary.getLocation $
+  PD.getLocation $
     messageWith
       [ OP.lines .~ [line]
       , OP.mappingIndex .~ 0 -- 0 means unset
       ]
 
-getLocationIndexForText :: Text -> State ProfileDictionary SymbolIndex
+getLocationIndexForText :: Text -> State ProfilesDictionary SymbolIndex
 getLocationIndexForText msg = do
-  textId <- ProfDictionary.getString msg
+  textId <- PD.getString msg
   funcIdx <-
-    ProfDictionary.getFunction $
+    PD.getFunction $
       messageWith
         [ OP.nameStrindex .~ textId
         , OP.systemNameStrindex .~ 0 -- 0 means unset
@@ -225,24 +225,24 @@ getLocationIndexForText msg = do
           , OP.column .~ 0 -- 0 means unset
           ]
 
-  ProfDictionary.getLocation $
+  PD.getLocation $
     messageWith
       [ OP.lines .~ [line]
       ]
 
-getLocationIndexForInfoTable :: M.InfoTable -> State ProfileDictionary SymbolIndex
+getLocationIndexForInfoTable :: M.InfoTable -> State ProfilesDictionary SymbolIndex
 getLocationIndexForInfoTable infoTable = do
-  infoTableNameId <- ProfDictionary.getString infoTable.infoTableName
+  infoTableNameId <- PD.getString infoTable.infoTableName
   let label =
         if (infoTable.infoTableLabel) == ""
           then infoTable.infoTableModule <> ":" <> infoTable.infoTableName
           else infoTable.infoTableModule <> ":" <> infoTable.infoTableLabel
-  infoTableFuncNameId <- ProfDictionary.getString label
+  infoTableFuncNameId <- PD.getString label
   -- tyDesc <- getText infoTable.infoTableTyDesc
   --
-  infoTableSrcLocId <- ProfDictionary.getString infoTable.infoTableSrcLoc
+  infoTableSrcLocId <- PD.getString infoTable.infoTableSrcLoc
   funcIdx <-
-    ProfDictionary.getFunction $
+    PD.getFunction $
       messageWith
         [ OP.nameStrindex .~ infoTableFuncNameId
         , OP.systemNameStrindex .~ infoTableNameId
@@ -258,21 +258,21 @@ getLocationIndexForInfoTable infoTable = do
           , OP.column .~ 0 -- 0 means unset
           ]
 
-  ProfDictionary.getLocation $
+  PD.getLocation $
     messageWith
       [ OP.lines .~ [line]
       , OP.address .~ 0 -- 0 means unset
       ]
 
-getLocationIndexForCostCentre :: M.CostCentre -> State ProfileDictionary SymbolIndex
+getLocationIndexForCostCentre :: M.CostCentre -> State ProfilesDictionary SymbolIndex
 getLocationIndexForCostCentre costCentre = do
   let label = costCentre.costCentreModule <> ":" <> costCentre.costCentreLabel
-  costCentreFuncNameId <- ProfDictionary.getString label
+  costCentreFuncNameId <- PD.getString label
   -- tyDesc <- getText infoTable.infoTableTyDesc
   --
-  costCentreSrcLocId <- ProfDictionary.getString costCentre.costCentreSrcLoc
+  costCentreSrcLocId <- PD.getString costCentre.costCentreSrcLoc
   funcIdx <-
-    ProfDictionary.getFunction $
+    PD.getFunction $
       messageWith
         [ OP.nameStrindex .~ costCentreFuncNameId
         , OP.systemNameStrindex .~ costCentreFuncNameId
@@ -288,7 +288,7 @@ getLocationIndexForCostCentre costCentre = do
           , OP.column .~ 0 -- 0 means unset
           ]
 
-  ProfDictionary.getLocation $
+  PD.getLocation $
     messageWith
       [ OP.lines .~ [line]
       , OP.address .~ 0 -- 0 means unset

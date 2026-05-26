@@ -6,15 +6,10 @@ Description : Abstraction over ProfilesDictionary for the OTLP protocol.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (
-  toExportProfileServiceRequest,
-
+module GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (
   -- * Dictionary for deduplication logic of common values
-  ProfileDictionary,
-  emptyProfileDictionary,
-
-  -- * Turn a 'ProfileDictionary' into a 'OP.ProfilesDictionary'
-  toProfilesDictionary,
+  ProfilesDictionary,
+  empty,
 
   -- * Retrieve the 'SymbolIndex' for various 'OP.ProfilesData' fields
   SymbolIndex,
@@ -25,6 +20,10 @@ module GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (
   getLink,
   getAttribute,
   getStack,
+
+  -- * Convert data to the formats used by @hs-opentelemetry-otlp@.
+  toExportProfileServiceRequest,
+  toProfilesDictionary,
 )
 where
 
@@ -36,7 +35,7 @@ import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (messageWith)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable (SymbolIndex, SymbolTable)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable qualified as ST
 import GHC.Generics (Generic)
-import Lens.Family2 (Lens', (&), (.~), (^.))
+import Lens.Family2 (Lens', (.~), (^.))
 import Lens.Family2.Unchecked (lens)
 import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService qualified as OPS
 import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
@@ -50,7 +49,7 @@ toExportProfileServiceRequest profilesData =
     , OPS.dictionary .~ profilesData ^. OPS.dictionary
     ]
 
-data ProfileDictionary = ProfileDictionary
+data ProfilesDictionary = ProfilesDictionary
   { locationTable :: SymbolTable OP.Location
   -- ^ Common 'OP.Location' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
@@ -81,21 +80,21 @@ data ProfileDictionary = ProfileDictionary
   }
   deriving (Show, Ord, Eq, Generic)
 
-toProfilesDictionary :: ProfileDictionary -> OP.ProfilesDictionary
+toProfilesDictionary :: ProfilesDictionary -> OP.ProfilesDictionary
 toProfilesDictionary st =
   messageWith
-    [ OP.locationTable .~ locationTableList st
-    , OP.functionTable .~ functionTableList st
-    , OP.stringTable .~ stringTableList st
-    , OP.mappingTable .~ mappingTableList st
-    , OP.linkTable .~ linkTableList st
-    , OP.attributeTable .~ attributeTableList st
-    , OP.stackTable .~ stackTableList st
+    [ OP.locationTable .~ locations st
+    , OP.functionTable .~ functions st
+    , OP.stringTable .~ strings st
+    , OP.mappingTable .~ mappings st
+    , OP.linkTable .~ links st
+    , OP.attributeTable .~ attributes st
+    , OP.stackTable .~ stacks st
     ]
 
-emptyProfileDictionary :: ProfileDictionary
-emptyProfileDictionary =
-  ProfileDictionary
+empty :: ProfilesDictionary
+empty =
+  ProfilesDictionary
     { locationTable = ST.fromList [defMessage]
     , functionTable = ST.fromList [defMessage]
     , stringTable = ST.fromList [""]
@@ -105,51 +104,51 @@ emptyProfileDictionary =
     , stackTable = ST.fromList [defMessage]
     }
 
-locationTableList :: ProfileDictionary -> [OP.Location]
-locationTableList st = ST.toList st.locationTable
+locations :: ProfilesDictionary -> [OP.Location]
+locations pd = ST.toList pd.locationTable
 
-functionTableList :: ProfileDictionary -> [OP.Function]
-functionTableList st = ST.toList st.functionTable
+functions :: ProfilesDictionary -> [OP.Function]
+functions pd = ST.toList pd.functionTable
 
-stringTableList :: ProfileDictionary -> [Text]
-stringTableList st = ST.toList st.stringTable
+strings :: ProfilesDictionary -> [Text]
+strings pd = ST.toList pd.stringTable
 
-mappingTableList :: ProfileDictionary -> [OP.Mapping]
-mappingTableList st = ST.toList st.mappingTable
+mappings :: ProfilesDictionary -> [OP.Mapping]
+mappings pd = ST.toList pd.mappingTable
 
-linkTableList :: ProfileDictionary -> [OP.Link]
-linkTableList st = ST.toList st.linkTable
+links :: ProfilesDictionary -> [OP.Link]
+links pd = ST.toList pd.linkTable
 
-attributeTableList :: ProfileDictionary -> [OP.KeyValueAndUnit]
-attributeTableList st = ST.toList st.attributeTable
+attributes :: ProfilesDictionary -> [OP.KeyValueAndUnit]
+attributes pd = ST.toList pd.attributeTable
 
-stackTableList :: ProfileDictionary -> [OP.Stack]
-stackTableList st = ST.toList st.stackTable
+stacks :: ProfilesDictionary -> [OP.Stack]
+stacks pd = ST.toList pd.stackTable
 
-getSymbolIndexFor :: (Ord a, Monad m) => Lens' ProfileDictionary (SymbolTable a) -> a -> StateT ProfileDictionary m SymbolIndex
+getSymbolIndexFor :: (Ord a, Monad m) => Lens' ProfilesDictionary (SymbolTable a) -> a -> StateT ProfilesDictionary m SymbolIndex
 getSymbolIndexFor accessor a = do
-  tbl <- State.gets (^. accessor)
-  let (idx, tbl1) = ST.insert a tbl
-  State.modify' (\st -> st & accessor .~ tbl1)
-  pure idx
+  st <- State.gets (^. accessor)
+  let (si, pd') = ST.insert a st
+  State.modify' (accessor .~ pd')
+  pure si
 
-getLocation :: (Monad m) => OP.Location -> StateT ProfileDictionary m SymbolIndex
-getLocation = getSymbolIndexFor (lens (.locationTable) (\s v -> s{locationTable = v}))
+getLocation :: (Monad m) => OP.Location -> StateT ProfilesDictionary m SymbolIndex
+getLocation = getSymbolIndexFor (lens (.locationTable) (\pd st -> pd{locationTable = st}))
 
-getFunction :: (Monad m) => OP.Function -> StateT ProfileDictionary m SymbolIndex
-getFunction = getSymbolIndexFor (lens (.functionTable) (\s v -> s{functionTable = v}))
+getFunction :: (Monad m) => OP.Function -> StateT ProfilesDictionary m SymbolIndex
+getFunction = getSymbolIndexFor (lens (.functionTable) (\pd st -> pd{functionTable = st}))
 
-getString :: (Monad m) => Text -> StateT ProfileDictionary m SymbolIndex
-getString = getSymbolIndexFor (lens (.stringTable) (\s v -> s{stringTable = v}))
+getString :: (Monad m) => Text -> StateT ProfilesDictionary m SymbolIndex
+getString = getSymbolIndexFor (lens (.stringTable) (\pd st -> pd{stringTable = st}))
 
-getMapping :: (Monad m) => OP.Mapping -> StateT ProfileDictionary m SymbolIndex
-getMapping = getSymbolIndexFor (lens (.mappingTable) (\s v -> s{mappingTable = v}))
+getMapping :: (Monad m) => OP.Mapping -> StateT ProfilesDictionary m SymbolIndex
+getMapping = getSymbolIndexFor (lens (.mappingTable) (\pd st -> pd{mappingTable = st}))
 
-getLink :: (Monad m) => OP.Link -> StateT ProfileDictionary m SymbolIndex
-getLink = getSymbolIndexFor (lens (.linkTable) (\s v -> s{linkTable = v}))
+getLink :: (Monad m) => OP.Link -> StateT ProfilesDictionary m SymbolIndex
+getLink = getSymbolIndexFor (lens (.linkTable) (\pd st -> pd{linkTable = st}))
 
-getAttribute :: (Monad m) => OP.KeyValueAndUnit -> StateT ProfileDictionary m SymbolIndex
-getAttribute = getSymbolIndexFor (lens (.attributeTable) (\s v -> s{attributeTable = v}))
+getAttribute :: (Monad m) => OP.KeyValueAndUnit -> StateT ProfilesDictionary m SymbolIndex
+getAttribute = getSymbolIndexFor (lens (.attributeTable) (\pd st -> pd{attributeTable = st}))
 
-getStack :: (Monad m) => OP.Stack -> StateT ProfileDictionary m SymbolIndex
-getStack = getSymbolIndexFor (lens (.stackTable) (\s v -> s{stackTable = v}))
+getStack :: (Monad m) => OP.Stack -> StateT ProfilesDictionary m SymbolIndex
+getStack = getSymbolIndexFor (lens (.stackTable) (\pd st -> pd{stackTable = st}))

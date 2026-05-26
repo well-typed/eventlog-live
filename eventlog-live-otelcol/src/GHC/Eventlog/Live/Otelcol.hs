@@ -43,7 +43,7 @@ import GHC.Eventlog.Live.Otelcol.Options
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (toExportMetricsServiceRequest, toResourceMetrics, toScopeMetrics)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles (toExportProfileServiceRequest)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (toExportProfileServiceRequest)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
 import GHC.Eventlog.Live.Otelcol.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Otelcol.Processor.Logs (processLogEvents)
