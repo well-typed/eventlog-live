@@ -173,7 +173,7 @@ asSample six stackData = do
  where
   toIndex :: M.StackItemData -> State ProfilesDictionary SymbolIndex
   toIndex = \case
-    M.IpeData infoTable -> getLocationIndexForInfoTable infoTable
+    M.IpeData infoProv -> getLocationIndexForInfoTable infoProv
     M.UserMessageData message -> getLocationIndexForText message
     M.SourceLocationData srcLoc -> getLocationIndexForSourceLocation srcLoc
     M.CostCentreData costCentre -> getLocationIndexForCostCentre costCentre
@@ -230,23 +230,23 @@ getLocationIndexForText msg = do
       [ OP.lines .~ [line]
       ]
 
-getLocationIndexForInfoTable :: M.InfoTable -> State ProfilesDictionary SymbolIndex
-getLocationIndexForInfoTable infoTable = do
-  infoTableNameId <- PD.getString infoTable.infoTableName
+getLocationIndexForInfoTable :: M.InfoProv -> State ProfilesDictionary SymbolIndex
+getLocationIndexForInfoTable infoProv = do
+  ipNameId <- PD.getString infoProv.ipName
   let label =
-        if (infoTable.infoTableLabel) == ""
-          then infoTable.infoTableModule <> ":" <> infoTable.infoTableName
-          else infoTable.infoTableModule <> ":" <> infoTable.infoTableLabel
-  infoTableFuncNameId <- PD.getString label
-  -- tyDesc <- getText infoTable.infoTableTyDesc
+        if (infoProv.ipLabel) == ""
+          then infoProv.ipModule <> ":" <> infoProv.ipName
+          else infoProv.ipModule <> ":" <> infoProv.ipLabel
+  infoProvFuncNameId <- PD.getString label
+  -- tyDesc <- getText infoProv.infoProvTyDesc
   --
-  infoTableSrcLocId <- PD.getString infoTable.infoTableSrcLoc
+  ipSrcLocId <- PD.getString infoProv.ipSrcLoc
   funcIdx <-
     PD.getFunction $
       messageWith
-        [ OP.nameStrindex .~ infoTableFuncNameId
-        , OP.systemNameStrindex .~ infoTableNameId
-        , OP.filenameStrindex .~ infoTableSrcLocId -- 0 means unset
+        [ OP.nameStrindex .~ infoProvFuncNameId
+        , OP.systemNameStrindex .~ ipNameId
+        , OP.filenameStrindex .~ ipSrcLocId -- 0 means unset
         , OP.startLine .~ 0 -- 0 means unset
         ]
 
@@ -268,7 +268,7 @@ getLocationIndexForCostCentre :: M.CostCentre -> State ProfilesDictionary Symbol
 getLocationIndexForCostCentre costCentre = do
   let label = costCentre.costCentreModule <> ":" <> costCentre.costCentreLabel
   costCentreFuncNameId <- PD.getString label
-  -- tyDesc <- getText infoTable.infoTableTyDesc
+  -- tyDesc <- getText infoProv.infoProvTyDesc
   --
   costCentreSrcLocId <- PD.getString costCentre.costCentreSrcLoc
   funcIdx <-
