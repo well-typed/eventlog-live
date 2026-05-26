@@ -30,12 +30,11 @@ where
 
 import Control.Monad.Trans.State.Strict (StateT)
 import Control.Monad.Trans.State.Strict qualified as State
-import Data.Int (Int32)
-import Data.Map.Strict (Map)
-import Data.Map.Strict qualified as Map
 import Data.ProtoLens (Message (..))
 import Data.Text (Text)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (messageWith)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable (SymbolIndex, SymbolTable)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable qualified as ST
 import GHC.Generics (Generic)
 import Lens.Family2 (Lens', (&), (.~), (^.))
 import Lens.Family2.Unchecked (lens)
@@ -51,16 +50,14 @@ toExportProfileServiceRequest profilesData =
     , OPS.dictionary .~ profilesData ^. OPS.dictionary
     ]
 
-type SymbolIndex = Int32
-
 data ProfileDictionary = ProfileDictionary
-  { locationTable :: CommonSymbolTable OP.Location
+  { locationTable :: SymbolTable OP.Location
   -- ^ Common 'OP.Location' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
-  , functionTable :: CommonSymbolTable OP.Function
+  , functionTable :: SymbolTable OP.Function
   -- ^ Common 'OP.Function' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
-  , stringTable :: CommonSymbolTable Text
+  , stringTable :: SymbolTable Text
   -- ^ Common string table, the first entry must be "" per the protobuf
   --   documentation.
   --
@@ -69,16 +66,16 @@ data ProfileDictionary = ProfileDictionary
   --    // string_table[0] must always be "".
   --    repeated string string_table = 5;
   --   @
-  , mappingTable :: CommonSymbolTable OP.Mapping
+  , mappingTable :: SymbolTable OP.Mapping
   -- ^ Common 'OP.Mapping' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
-  , linkTable :: CommonSymbolTable OP.Link
+  , linkTable :: SymbolTable OP.Link
   -- ^ Common 'OP.Link' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
-  , attributeTable :: CommonSymbolTable OP.KeyValueAndUnit
+  , attributeTable :: SymbolTable OP.KeyValueAndUnit
   -- ^ Common 'OP.KeyValueAndUnit' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
-  , stackTable :: CommonSymbolTable OP.Stack
+  , stackTable :: SymbolTable OP.Stack
   -- ^ Common 'OP.Stack' table, first entry is the 'defMessage'.
   --   This holds for OTLP 1.9.0.
   }
@@ -99,40 +96,40 @@ toProfilesDictionary st =
 emptyProfileDictionary :: ProfileDictionary
 emptyProfileDictionary =
   ProfileDictionary
-    { locationTable = commonSymbolTableFromList [defMessage]
-    , functionTable = commonSymbolTableFromList [defMessage]
-    , stringTable = commonSymbolTableFromList [""]
-    , mappingTable = commonSymbolTableFromList [defMessage]
-    , linkTable = commonSymbolTableFromList [defMessage]
-    , attributeTable = commonSymbolTableFromList [defMessage]
-    , stackTable = commonSymbolTableFromList [defMessage]
+    { locationTable = ST.fromList [defMessage]
+    , functionTable = ST.fromList [defMessage]
+    , stringTable = ST.fromList [""]
+    , mappingTable = ST.fromList [defMessage]
+    , linkTable = ST.fromList [defMessage]
+    , attributeTable = ST.fromList [defMessage]
+    , stackTable = ST.fromList [defMessage]
     }
 
 locationTableList :: ProfileDictionary -> [OP.Location]
-locationTableList st = reverse st.locationTable.contents
+locationTableList st = ST.toList st.locationTable
 
 functionTableList :: ProfileDictionary -> [OP.Function]
-functionTableList st = reverse st.functionTable.contents
+functionTableList st = ST.toList st.functionTable
 
 stringTableList :: ProfileDictionary -> [Text]
-stringTableList st = reverse st.stringTable.contents
+stringTableList st = ST.toList st.stringTable
 
 mappingTableList :: ProfileDictionary -> [OP.Mapping]
-mappingTableList st = reverse st.mappingTable.contents
+mappingTableList st = ST.toList st.mappingTable
 
 linkTableList :: ProfileDictionary -> [OP.Link]
-linkTableList st = reverse st.linkTable.contents
+linkTableList st = ST.toList st.linkTable
 
 attributeTableList :: ProfileDictionary -> [OP.KeyValueAndUnit]
-attributeTableList st = reverse st.attributeTable.contents
+attributeTableList st = ST.toList st.attributeTable
 
 stackTableList :: ProfileDictionary -> [OP.Stack]
-stackTableList st = reverse st.stackTable.contents
+stackTableList st = ST.toList st.stackTable
 
-getSymbolIndexFor :: (Ord a, Monad m) => Lens' ProfileDictionary (CommonSymbolTable a) -> a -> StateT ProfileDictionary m SymbolIndex
+getSymbolIndexFor :: (Ord a, Monad m) => Lens' ProfileDictionary (SymbolTable a) -> a -> StateT ProfileDictionary m SymbolIndex
 getSymbolIndexFor accessor a = do
   tbl <- State.gets (^. accessor)
-  let (idx, tbl1) = insertCommonSymbolTable a tbl
+  let (idx, tbl1) = ST.insert a tbl
   State.modify' (\st -> st & accessor .~ tbl1)
   pure idx
 
@@ -156,52 +153,3 @@ getAttribute = getSymbolIndexFor (lens (.attributeTable) (\s v -> s{attributeTab
 
 getStack :: (Monad m) => OP.Stack -> StateT ProfileDictionary m SymbolIndex
 getStack = getSymbolIndexFor (lens (.stackTable) (\s v -> s{stackTable = v}))
-
--------------------------------------------------------------------------------
--- Common Symbol Table implementation
--- TODO: share with `ghc-stack-profiler-core` table?
-
-data CommonSymbolTable a
-  = CommonSymbolTable
-  { counter :: !SymbolIndex
-  , table :: Map a SymbolIndex
-  , contents :: ![a]
-  }
-  deriving (Show, Ord, Eq, Generic)
-
-emptyCommonSymbolTable :: CommonSymbolTable a
-emptyCommonSymbolTable =
-  CommonSymbolTable
-    { counter = 0
-    , table = Map.empty
-    , contents = []
-    }
-
-commonSymbolTableFromList :: (Ord a) => [a] -> CommonSymbolTable a
-commonSymbolTableFromList = foldr go emptyCommonSymbolTable
- where
-  go val tbl0 =
-    let (_, tbl1) = insertCommonSymbolTable val tbl0
-     in tbl1
-
-nextCounter :: CommonSymbolTable a -> (SymbolIndex, CommonSymbolTable a)
-nextCounter tbl = (tbl.counter, tbl{counter = tbl.counter + 1})
-
-insertCommonSymbolTable :: (Ord a) => a -> CommonSymbolTable a -> (SymbolIndex, CommonSymbolTable a)
-insertCommonSymbolTable val tbl =
-  let updateEntry tbl0 Nothing =
-        let (sid, newTbl) = nextCounter tbl0
-         in ((sid, True, newTbl), Just sid)
-      updateEntry newTbl (Just old) =
-        ((old, False, newTbl), Just old)
-
-      ((idx, newEntry, tbl1), newTable) = Map.alterF (updateEntry tbl) val tbl.table
-   in ( idx
-      , tbl1
-          { table = newTable
-          , contents =
-              if newEntry
-                then val : tbl1.contents
-                else tbl1.contents
-          }
-      )

@@ -201,6 +201,7 @@ library
     GHC.Eventlog.Live.Otelcol.Processor.Common.Logs
     GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics
     GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles
+    GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable
     GHC.Eventlog.Live.Otelcol.Processor.Common.Traces
     GHC.Eventlog.Live.Otelcol.Processor.Heap
     GHC.Eventlog.Live.Otelcol.Processor.Logs
