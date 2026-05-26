@@ -21,7 +21,7 @@ withGhcStackProfiler :: IO () -> IO ()
 #ifdef JUMPY_JUMP_USE_GHC_STACK_PROFILER
 withGhcStackProfiler action =
   withRootStackProfiler True $ \manager ->
-    withStackProfiler manager (SampleIntervalMs 1) $
+    withStackProfiler manager (SampleIntervalMs 100) $
       action
 #else
 withGhcStackProfiler action = action
