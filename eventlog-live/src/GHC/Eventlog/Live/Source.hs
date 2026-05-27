@@ -8,7 +8,6 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Source (
   Tick (..),
-  tryConnect,
   withEventlogSourceHandle,
   runWithEventlogSourceHandle,
   runWithEventlogSourceOptions,
@@ -18,6 +17,7 @@ import Control.Concurrent (threadDelay)
 import Control.Exception (Exception (..))
 import Control.Exception qualified as E
 import Data.Foldable (traverse_)
+import Data.List.NonEmpty qualified as NE
 import Data.Machine (ProcessT, runT_, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe)
@@ -127,11 +127,11 @@ withEventlogSourceHandle logger initialTimeoutS timeoutExponent eventlogSource a
         "Reading eventlog from " <> T.pack eventlogFile
       IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
         action $ EventlogSourceHandleFile handle
-    EventlogSourceOptionsSocketUnix eventlogSocketUnix -> do
+    EventlogSourceOptionsSocket eventlogSocketAddr -> do
       writeLog logger INFO $
-        "Waiting to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-      E.bracket (connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix) S.close $ \socket ->
-        action $ EventlogSourceHandleSocketUnix socket
+        "Waiting to connect on " <> prettyEventlogSocketAddr eventlogSocketAddr
+      E.bracket (connectRetry logger initialTimeoutS timeoutExponent eventlogSocketAddr) S.close $ \socket ->
+        action $ EventlogSourceHandleSocket socket
 
 {- |
 Connect to the eventlog described by `EventlogSourceOptions` with retries and non-randomised exponential backoff.
@@ -143,10 +143,10 @@ connectRetry ::
   Double ->
   -- | The timeout exponent for exponential backoff.
   Double ->
-  -- | The eventlog socket.
-  FilePath ->
+  -- | The eventlog socket address.
+  EventlogSocketAddr ->
   IO Socket
-connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix =
+connectRetry logger initialTimeoutS timeoutExponent eventlogSocketAddr =
   connectLoop initialTimeoutS
  where
   waitFor :: Double -> IO ()
@@ -156,15 +156,15 @@ connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix =
   connectLoop timeoutS = do
     let connect = do
           writeLog logger DEBUG $
-            "Trying to connect on " <> prettyEventlogSocketUnix eventlogSocketUnix
-          handle <- tryConnect eventlogSocketUnix
+            "Trying to connect on " <> prettyEventlogSocketAddr eventlogSocketAddr
+          socket <- tryConnect logger timeoutS eventlogSocketAddr
           writeLog logger DEBUG $
-            "Connected on " <> prettyEventlogSocketUnix eventlogSocketUnix
-          pure handle
+            "Connected on " <> prettyEventlogSocketAddr eventlogSocketAddr
+          pure socket
     let cleanup (e :: E.IOException) = do
           writeLog logger DEBUG $
             "Failed to connect on "
-              <> prettyEventlogSocketUnix eventlogSocketUnix
+              <> prettyEventlogSocketAddr eventlogSocketAddr
               <> ": "
               <> T.pack (displayException e)
           writeLog logger DEBUG $
@@ -175,16 +175,23 @@ connectRetry logger initialTimeoutS timeoutExponent eventlogSocketUnix =
           connectLoop (timeoutS * timeoutExponent)
     E.catch connect cleanup
 
-{- |
-Try to connect to a Unix socket.
--}
-tryConnect :: FilePath -> IO Socket
-tryConnect eventlogSocketUnix =
-  E.bracketOnError (S.socket S.AF_UNIX S.Stream S.defaultProtocol) S.close $ \socket -> do
-    S.connect socket (S.SockAddrUnix eventlogSocketUnix)
-    -- handle <- S.socketToHandle socket IO.ReadMode
-    -- IO.hSetBuffering handle IO.NoBuffering
-    pure socket
+tryConnect :: Logger IO -> Double -> EventlogSocketAddr -> IO Socket
+tryConnect logger timeoutS = \case
+  EventlogSocketUnixAddr{..} -> do
+    E.bracketOnError (S.socket S.AF_UNIX S.Stream S.defaultProtocol) S.close $ \socket -> do
+      S.connect socket (S.SockAddrUnix esaUnixPath)
+      pure socket
+  EventlogSocketInetAddr{..} -> do
+    let timeoutMSec = round $ timeoutS * 1e3
+    let addrInfo = S.defaultHints{S.addrFamily = S.AF_INET, S.addrSocketType = S.Stream}
+    addr <- NE.head <$> S.getAddrInfo (Just addrInfo) (Just esaInetHost) (Just $ esaInetPort)
+    let newSocket = S.socket (S.addrFamily addr) (S.addrSocketType addr) (S.addrProtocol addr)
+    let closeSocket socket = do
+          writeLog logger DEBUG $ "Disconnecting from Unix socket at " <> T.pack (show (S.addrAddress addr))
+          S.gracefulClose socket timeoutMSec
+    E.bracketOnError newSocket closeSocket $ \socket -> do
+      S.connect socket (S.addrAddress addr)
+      pure socket
 
 {- |
 Interal helper. Pretty-printer for timeout values in microseconds.
@@ -201,7 +208,9 @@ prettyTimeoutMcs timeoutS
   | otherwise = T.pack $ printf "%.2f seconds" timeoutS
 
 {- |
-Internal helper. Pretty-printer for eventlog sockets.
+Internal helper. Pretty-printer for eventlog socket addresses.
 -}
-prettyEventlogSocketUnix :: FilePath -> Text
-prettyEventlogSocketUnix eventlogSocketUnix = "Unix socket " <> T.pack eventlogSocketUnix
+prettyEventlogSocketAddr :: EventlogSocketAddr -> Text
+prettyEventlogSocketAddr = \case
+  EventlogSocketUnixAddr{..} -> "Unix socket " <> T.pack esaUnixPath
+  EventlogSocketInetAddr{..} -> "Inet socket " <> T.pack (esaInetHost <> ":" <> esaInetPort)

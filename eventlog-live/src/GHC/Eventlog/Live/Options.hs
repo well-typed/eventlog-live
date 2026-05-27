@@ -18,7 +18,7 @@ module GHC.Eventlog.Live.Options (
 import Control.Applicative (asum)
 import GHC.Eventlog.Live.Data.Severity (Severity (..), fromSeverityString)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (heapProfBreakdownEitherReader)
-import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
+import GHC.Eventlog.Live.Source.Core (EventlogSocketAddr (..), EventlogSourceOptions (..))
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 import Options.Applicative.Help.Pretty qualified as OP
@@ -34,7 +34,7 @@ eventlogSourceOptionsParser =
   asum
     [ stdinParser
     , fileParser
-    , socketUnixParser
+    , socketParser
     ]
  where
   stdinParser =
@@ -51,13 +51,36 @@ eventlogSourceOptionsParser =
             <> O.metavar "FILE"
             <> O.help "Read the eventlog from a file."
         )
+  socketParser =
+    EventlogSourceOptionsSocket
+      <$> asum
+        [ socketUnixParser
+        , socketInetParser
+        ]
   socketUnixParser =
-    EventlogSourceOptionsSocketUnix
+    EventlogSocketUnixAddr
       <$> O.strOption
         ( O.long "eventlog-socket"
             <> O.metavar "SOCKET"
             <> O.help "Read the eventlog from a Unix socket."
         )
+  socketInetParser =
+    EventlogSocketInetAddr
+      <$> socketInetHostParser
+      <*> socketInetPortParser
+
+  socketInetHostParser =
+    O.strOption
+      ( O.long "eventlog-socket-host"
+          <> O.metavar "HOST"
+          <> O.help "Read the eventlog from a TCP/IP socket."
+      )
+  socketInetPortParser =
+    O.strOption
+      ( O.long "eventlog-socket-port"
+          <> O.metavar "PORT"
+          <> O.help "Read the eventlog from a TCP/IP socket."
+      )
 
 {- |
 Parser for the intial timeout for exponential backoff.

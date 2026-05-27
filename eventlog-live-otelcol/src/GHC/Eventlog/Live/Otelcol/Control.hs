@@ -356,7 +356,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
               , errHeaders = []
               }
         -- If the service telemetry is streamed from a socket, continue.
-        Just (EventlogSourceHandleSocketUnix s) -> action s
+        Just (EventlogSourceHandleSocket s) -> action s
 
 --------------------------------------------------------------------------------
 -- Control API
