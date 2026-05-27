@@ -1,5 +1,6 @@
 module GHC.Eventlog.Live.Source.Core (
   EventlogSourceOptions (..),
+  EventlogSocketAddr (..),
   EventlogSourceHandle (..),
   EventlogSourceData (..),
   recv,
@@ -22,7 +23,25 @@ The options for different kinds of eventlog sources.
 data EventlogSourceOptions
   = EventlogSourceOptionsStdin
   | EventlogSourceOptionsFile FilePath
-  | EventlogSourceOptionsSocketUnix FilePath
+  | EventlogSourceOptionsSocket EventlogSocketAddr
+
+{- |
+The options for different kinds of eventlog sockets.
+-}
+data EventlogSocketAddr
+  = EventlogSocketUnixAddr
+      { esaUnixPath :: FilePath
+      -- ^ Unix socket path, e.g., @"\/tmp\/ghc_eventlog.sock"@.
+      --
+      -- __Warning:__ Unix domain socket paths are often limited to 107 characters or less.
+      }
+  | EventlogSocketInetAddr
+      { esaInetHost :: String
+      -- ^ TCP host or interface, e.g. @"127.0.0.1"@.
+      , esaInetPort :: String
+      -- ^ TCP port, e.g., @"4242"@.
+      }
+  deriving (Eq, Show)
 
 {- |
 The handles for different kinds of eventlog sources.
@@ -30,7 +49,7 @@ The handles for different kinds of eventlog sources.
 data EventlogSourceHandle
   = EventlogSourceHandleStdin
   | EventlogSourceHandleFile Handle
-  | EventlogSourceHandleSocketUnix Socket
+  | EventlogSourceHandleSocket Socket
 
 data EventlogSourceData
   = EventlogSourceData ByteString
@@ -53,7 +72,7 @@ recv ::
 recv = \case
   EventlogSourceHandleStdin -> recvFromHandle IO.stdin
   EventlogSourceHandleFile h -> recvFromHandle h
-  EventlogSourceHandleSocketUnix s -> recvFromSocket s
+  EventlogSourceHandleSocket s -> recvFromSocket s
 
 -- Permit a timeout and wrap the result appropriately.
 
