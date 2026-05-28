@@ -5,82 +5,6 @@ synopsis: Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable supports live streaming of eventlog data into the OpenTelemetry Collector.
 
-  > Usage: eventlog-live-otelcol (--eventlog-stdin | --eventlog-file FILE |
-  >                                --eventlog-socket SOCKET |
-  >                                --eventlog-socket-host HOST
-  >                                --eventlog-socket-port PORT)
-  >                              [--eventlog-socket-timeout SECONDS]
-  >                              [--eventlog-socket-exponent NUMBER]
-  >                              [--eventlog-flush-interval SECONDS]
-  >                              [--eventlog-log-file FILE] [-h Tcmdyrbi]
-  >                              [--service-name STRING]
-  >                              [-v|--verbosity fatal|error|warning|info|debug|trace]
-  >                              [-s|--stats] [--config FILE] --otelcol-host HOST
-  >                              [--otelcol-port PORT] [--otelcol-authority HOST]
-  >                              [--otelcol-ssl] [--otelcol-certificate-store FILE]
-  >                              [--otelcol-ssl-key-log FILE |
-  >                                --otelcol-ssl-key-log-from-env]
-  >                              [--print-defaults] [--print-config-json-schema]
-  >
-  > Available options:
-  >   --eventlog-stdin                  Read the eventlog from stdin.
-  >   --eventlog-file FILE              Read the eventlog from a file.
-  >   --eventlog-socket SOCKET          Read the eventlog from a Unix socket.
-  >   --eventlog-socket-host HOST       Read the eventlog from a TCP/IP socket.
-  >   --eventlog-socket-port PORT       Read the eventlog from a TCP/IP socket.
-  >   --eventlog-socket-timeout SECONDS Eventlog socket connection retry timeout in seconds.
-  >   --eventlog-socket-exponent NUMBER Eventlog socket connection retry timeout exponent.
-  >   --eventlog-flush-interval SECONDS Eventlog flush interval in seconds.
-  >                                     Should match the option passed to the application.
-  >   --eventlog-log-file FILE          Use file to log binary eventlog data.
-  >   -h Tcmdyrbi                       Heap profile breakdown.
-  >                                     Should match the option passed to the application.
-  >   --service-name STRING             The name of the profiled service.
-  >   -v,--verbosity fatal|error|warning|info|debug|trace
-  >                                     The severity threshold for logging.
-  >   -s,--stats                        Display runtime statistics.
-  >   --config FILE                     The path to a detailed configuration file.
-  >   --print-defaults                  Print default configuration options.
-  >   --print-config-json-schema        Print JSON Schema for configuration format.
-  >   --help                            Show this help text.
-  >   --version                         Show version information
-  >
-  > OpenTelemetry Collector Server Options
-  >   --otelcol-host HOST               Otelcol server hostname.
-  >   --otelcol-port PORT               Otelcol server TCP port.
-  >   --otelcol-authority HOST          Otelcol server authority.
-  >   --otelcol-ssl                     Use SSL.
-  >   --otelcol-certificate-store FILE  Store for certificate validation.
-  >   --otelcol-ssl-key-log FILE        Use file to log SSL keys.
-  >   --otelcol-ssl-key-log-from-env    Use SSLKEYLOGFILE to log SSL keys.
-  >
-  > Control Server Options
-  >   --control                         Requires build with -f+control.
-  >                                     Start the control server.
-  >   --control-port                    Requires build with -f+control.
-  >                                     The port number for the control server.
-  >   --control-cors-allow-origin
-  >                                     Requires build with -f+control.
-  >                                     Set the allowed origins for the control server CORS policy.
-  >   --control-cors-max-age            Requires build with -f+control.
-  >                                     Set the maximum age of a cached CORS preflight request for the control server CORS policy.
-  >   --control-cors-require-origin
-  >                                     Requires build with -f+control.
-  >                                     If enabled, the control server will not accept requests without an Origin header.
-  >   --control-cors-ignore-failure
-  >                                     Requires build with -f+control.
-  >                                     If enabled, the control server will accept malformed CORS preflight requests.
-  >
-  > Debug Options
-  >   --my-eventlog-socket-unix         Requires build with -f+use-eventlog-socket.
-  >                                     Open an eventlog socket for this program on the given Unix socket.
-  >   --my-ghc-debug-socket             Requires build with -f+use-ghc-debug-stub.
-  >                                     Open the default ghc-debug socket for this program.
-  >   --my-ghc-debug-socket-unix        Requires build with -f+use-ghc-debug-stub.
-  >                                     Open a ghc-debug Unix domain socket with the given file path.
-  >   --my-ghc-debug-socket-tcp         Requires build with -f+use-ghc-debug-stub.
-  >                                     Open a ghc-debug TCP/IP socket with the given address as 'host:port'.
-
 license: BSD-3-Clause
 license-file: LICENSE
 author: Wen Kokke
@@ -200,6 +124,7 @@ library
     GHC.Eventlog.Live.Otelcol.Config.Default.Raw
     GHC.Eventlog.Live.Otelcol.Config.Types
     GHC.Eventlog.Live.Otelcol.Control
+    GHC.Eventlog.Live.Otelcol.Exporter.Core
     GHC.Eventlog.Live.Otelcol.Exporter.Logs
     GHC.Eventlog.Live.Otelcol.Exporter.Metrics
     GHC.Eventlog.Live.Otelcol.Exporter.Profiles
@@ -234,6 +159,7 @@ library
     ansi-terminal >=1.1 && <1.2,
     base >=4.16 && <4.22,
     bytestring >=0.11 && <0.13,
+    case-insensitive >=1.2 && <1.3,
     containers >=0.6 && <0.8,
     data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
@@ -244,6 +170,9 @@ library
     hashable >=1.4 && <1.6,
     hs-opentelemetry-otlp >=0.2.0 && <0.3,
     HsYAML >=0.2 && <0.3,
+    http-client >=0.7 && <0.8,
+    http-client-tls >=0.3 && <0.4,
+    http-types >=0.12 && <0.13,
     ipedb >=0.2.0.1 && <0.3,
     lens-family >=2.1.3 && <2.2,
     machines >=0.7.4 && <0.8,

@@ -17,6 +17,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
 import Lens.Family2 ((^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -61,9 +62,9 @@ instance Exception RejectedProfilesError where
 -- OpenTelemetry gRPC Exporter for Profiles
 
 exportResourceProfiles ::
-  G.Connection ->
+  OpenTelemetryExporter ->
   ProcessT IO (Tick OPS.ExportProfilesServiceRequest) (Tick ExportProfileResult)
-exportResourceProfiles conn =
+exportResourceProfiles exporter =
   construct $ go False
  where
   go exportedProfiles =
@@ -86,7 +87,7 @@ exportResourceProfiles conn =
 
     doGrpc :: IO ExportProfileResult
     doGrpc = do
-      G.nonStreaming conn (G.rpc @(Protobuf OPS.ProfilesService "export")) (G.Proto exportProfilesServiceRequest) >>= \case
+      sendExportProfilesServiceRequest exportProfilesServiceRequest >>= \case
         G.Proto resp
           | resp ^. OPS.partialSuccess . OPS.rejectedProfiles == 0 ->
               pure $ ExportProfileSuccess exportedProfiles
@@ -97,6 +98,16 @@ exportResourceProfiles conn =
 
     handleSomeException :: SomeException -> IO ExportProfileResult
     handleSomeException someException = pure $ ExportProfileError 0 exportedProfiles someException
+
+  sendExportProfilesServiceRequest ::
+    OPS.ExportProfilesServiceRequest ->
+    IO (G.Proto OPS.ExportProfilesServiceResponse)
+  sendExportProfilesServiceRequest exportProfilesServiceRequest =
+    case exporter of
+      OpenTelemetryExporter'Grpc conn ->
+        G.nonStreaming conn (G.rpc @(Protobuf OPS.ProfilesService "export")) (G.Proto exportProfilesServiceRequest)
+      OpenTelemetryExporter'Http httpProtobufExporter ->
+        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1development/profiles" exportProfilesServiceRequest
 
 type instance G.RequestMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
 

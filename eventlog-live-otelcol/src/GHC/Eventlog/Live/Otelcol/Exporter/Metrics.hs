@@ -16,6 +16,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
 import Lens.Family2 ((^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -67,9 +68,9 @@ instance Exception RejectedMetricsError where
 -- OpenTelemetry gRPC Exporter for Metrics
 
 exportResourceMetrics ::
-  G.Connection ->
+  OpenTelemetryExporter ->
   ProcessT IO (Tick OMS.ExportMetricsServiceRequest) (Tick ExportMetricsResult)
-exportResourceMetrics conn = construct $ go False
+exportResourceMetrics exporter = construct $ go False
  where
   go exportedResourceMetrics =
     await >>= \case
@@ -91,7 +92,7 @@ exportResourceMetrics conn = construct $ go False
 
     doGrpc :: IO ExportMetricsResult
     doGrpc = do
-      G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest) >>= \case
+      sendExportMetricsServiceRequest exportMetricsServiceRequest >>= \case
         G.Proto resp
           | resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0 -> do
               pure $ ExportMetricsSuccess exportedDataPoints
@@ -105,6 +106,16 @@ exportResourceMetrics conn = construct $ go False
 
     handleSomeException :: SomeException -> IO ExportMetricsResult
     handleSomeException someException = pure $ ExportMetricsError 0 exportedDataPoints someException
+
+  sendExportMetricsServiceRequest ::
+    OMS.ExportMetricsServiceRequest ->
+    IO (G.Proto OMS.ExportMetricsServiceResponse)
+  sendExportMetricsServiceRequest exportMetricsServiceRequest =
+    case exporter of
+      OpenTelemetryExporter'Grpc conn ->
+        G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest)
+      OpenTelemetryExporter'Http httpProtobufExporter ->
+        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1/metrics" exportMetricsServiceRequest
 
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
