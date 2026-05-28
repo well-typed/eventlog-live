@@ -3,10 +3,12 @@ module GHC.Eventlog.Live.Otelcol.Options (
   MyDebugOptions (..),
   ServiceName (..),
   OpenTelemetryCollectorOptions (..),
+  OpenTelemetryCollectorProtocol (..),
+  HttpProtobufOptions (..),
+  HttpHeader (..),
   options,
 ) where
 
-import Control.Applicative (asum)
 import Data.Default (Default (..))
 import Data.Text qualified as T
 import Data.Version (showVersion)
@@ -21,7 +23,6 @@ import GHC.Eventlog.Live.Otelcol.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
 import GHC.RTS.Events (HeapProfBreakdown (..))
-import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
@@ -150,84 +151,121 @@ ccDBPathParser =
 --------------------------------------------------------------------------------
 -- OpenTelemetry Collector configuration
 
-newtype OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
-  { openTelemetryCollectorServer :: G.Server
+data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
+  { openTelemetryCollectorProtocol :: OpenTelemetryCollectorProtocol
+  , otelcolHost :: String
+  , maybeOtelcolPort :: Maybe Int
+  , maybeOtelcolAuthority :: Maybe String
+  , otelcolSsl :: Bool
+  , maybeOtelcolCertificateStore :: Maybe FilePath
+  , maybeOtelcolSslKeyLog :: Maybe G.SslKeyLog
+  , otelcolHeaders :: [HttpHeader]
   }
+
+data OpenTelemetryCollectorProtocol
+  = OpenTelemetryCollectorProtocol'Grpc
+  | OpenTelemetryCollectorProtocol'HttpProtobuf
+  deriving (Eq, Show)
+
+data HttpProtobufOptions = HttpProtobufOptions
+  { httpProtobufScheme :: String
+  , httpProtobufHost :: String
+  , httpProtobufPort :: Int
+  , httpProtobufHeaders :: [HttpHeader]
+  }
+  deriving (Show)
+
+data HttpHeader = HttpHeader
+  { httpHeaderName :: String
+  , httpHeaderValue :: String
+  }
+  deriving (Show)
 
 openTelemetryCollectorOptionsParser :: O.Parser OpenTelemetryCollectorOptions
 openTelemetryCollectorOptionsParser =
   OC.parserOptionGroup "OpenTelemetry Collector Server Options" $
     OpenTelemetryCollectorOptions
-      <$> otelcolServerParser
+      <$> otelcolProtocolParser
+      <*> otelcolHostParser
+      <*> O.optional otelcolPortParser
+      <*> O.optional otelcolAuthorityParser
+      <*> O.switch (O.long "otelcol-ssl" <> O.help "Use SSL.")
+      <*> O.optional otelcolCertificateStoreParser
+      <*> O.optional otelcolSslKeyLogParser
+      <*> O.many otelcolHeaderParser
 
-otelcolServerParser :: O.Parser G.Server
-otelcolServerParser =
-  makeServer
-    <$> otelcolAddressParser
-    <*> O.switch (O.long "otelcol-ssl" <> O.help "Use SSL.")
-    <*> otelcolServerValidationParser
-    <*> otelcolSslKeyLogParser
- where
-  makeServer :: G.Address -> Bool -> G.ServerValidation -> G.SslKeyLog -> G.Server
-  makeServer address ssl serverValidation sslKeyLog
-    | ssl = G.ServerSecure serverValidation sslKeyLog address
-    | otherwise = G.ServerInsecure address
+otelcolProtocolParser :: O.Parser OpenTelemetryCollectorProtocol
+otelcolProtocolParser =
+  O.option
+    ( O.eitherReader $ \case
+        "grpc" -> Right OpenTelemetryCollectorProtocol'Grpc
+        "http-protobuf" -> Right OpenTelemetryCollectorProtocol'HttpProtobuf
+        protocol -> Left $ "Unknown OpenTelemetry Collector protocol: " <> protocol
+    )
+    ( O.long "otelcol-protocol"
+        <> O.metavar "grpc|http-protobuf"
+        <> O.help "OpenTelemetry Collector protocol."
+        <> O.value OpenTelemetryCollectorProtocol'Grpc
+        <> O.showDefaultWith (const "grpc")
+    )
 
-otelcolAddressParser :: O.Parser G.Address
-otelcolAddressParser =
-  G.Address
-    <$> O.strOption
-      ( O.long "otelcol-host"
-          <> O.metavar "HOST"
-          <> O.help "Otelcol server hostname."
-      )
-    <*> O.option
-      O.auto
-      ( O.long "otelcol-port"
-          <> O.metavar "PORT"
-          <> O.help "Otelcol server TCP port."
-          <> O.value 4317
-      )
-    <*> O.optional
-      ( O.strOption
-          ( O.long "otelcol-authority"
-              <> O.metavar "HOST"
-              <> O.help "Otelcol server authority."
-          )
-      )
+otelcolHostParser :: O.Parser String
+otelcolHostParser =
+  O.strOption
+    ( O.long "otelcol-host"
+        <> O.metavar "HOST"
+        <> O.help "Otelcol server hostname."
+    )
 
-otelcolServerValidationParser :: O.Parser G.ServerValidation
-otelcolServerValidationParser =
-  asum
-    [ G.ValidateServer <$> otelcolCertificateStoreSpecParser
-    , pure G.NoServerValidation
-    ]
- where
-  otelcolCertificateStoreSpecParser :: O.Parser G.CertificateStoreSpec
-  otelcolCertificateStoreSpecParser =
-    makeCertificateStoreSpec
-      <$> O.optional
-        ( O.strOption
-            ( O.long "otelcol-certificate-store"
-                <> O.metavar "FILE"
-                <> O.help "Store for certificate validation."
-            )
-        )
-   where
-    makeCertificateStoreSpec :: Maybe FilePath -> G.CertificateStoreSpec
-    makeCertificateStoreSpec = maybe G.certStoreFromSystem G.certStoreFromPath
+otelcolPortParser :: O.Parser Int
+otelcolPortParser =
+  O.option
+    O.auto
+    ( O.long "otelcol-port"
+        <> O.metavar "PORT"
+        <> O.help "Otelcol server TCP port. Defaults to 4317 for gRPC and 4318 for HTTP/protobuf."
+    )
+
+otelcolAuthorityParser :: O.Parser String
+otelcolAuthorityParser =
+  O.strOption
+    ( O.long "otelcol-authority"
+        <> O.metavar "HOST"
+        <> O.help "Otelcol server authority."
+    )
+
+otelcolCertificateStoreParser :: O.Parser FilePath
+otelcolCertificateStoreParser =
+  O.strOption
+    ( O.long "otelcol-certificate-store"
+        <> O.metavar "FILE"
+        <> O.help "Store for certificate validation."
+    )
+
+otelcolHeaderParser :: O.Parser HttpHeader
+otelcolHeaderParser =
+  O.option
+    ( O.eitherReader $ \header ->
+        case break (== '=') header of
+          ("", _) -> Left "Header name must not be empty."
+          (_, "") -> Left "Header must have the form NAME=VALUE."
+          (httpHeaderName, _ : httpHeaderValue) -> Right HttpHeader{..}
+    )
+    ( O.long "otelcol-header"
+        <> O.metavar "NAME=VALUE"
+        <> O.help "Add an HTTP header for OTLP HTTP/protobuf. May be repeated."
+    )
 
 otelcolSslKeyLogParser :: O.Parser G.SslKeyLog
 otelcolSslKeyLogParser =
-  asum
+  O.asum
     [ G.SslKeyLogPath
         <$> O.strOption
           ( O.long "otelcol-ssl-key-log"
               <> O.metavar "FILE"
               <> O.help "Use file to log SSL keys."
           )
-    , O.flag
-        G.SslKeyLogNone
+    , O.flag'
         G.SslKeyLogFromEnv
         ( O.long "otelcol-ssl-key-log-from-env"
             <> O.help "Use SSLKEYLOGFILE to log SSL keys."

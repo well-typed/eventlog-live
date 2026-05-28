@@ -132,8 +132,7 @@ Once all containers have started, you can run your own instrumented program toge
 > [!INFO]
 > The `demo/docker-compose-external.yml` configuration _could_ be changed to include an instance of `eventlog-live-otelcol`. However, the instrumented program and `eventlog-live-otelcol` communicate the eventlog over a Unix domain socket and, unfortunately, exposing Unix domain sockets from the host OS to a container is not portable. The `eventlog-socket` library has recently added support for TCP/IPv4 sockets, which _could_ be used to solve this program. However, the eventlog socket is a very high bandwidth socket, so even when support for TCP/IPv4 is added to `eventlog-live-otelcol`, it is likely preferable to continue to use a Unix domain socket.
 
-> [!WARNING]
-> The `eventlog-live-otelcol` program is intended to analyse the eventlog and send telemetry data to an OpenTelemetry Collector. Currently, only the gRPC protocol is supported. If you wish to send telemetry data to some provider that only supports the HTTP/Protobuf protocol, such as HoneyComb or Grafana Cloud, you must run your own OpenTelemetry Collector and configure that to forward telemetry data to your provider.
+The `eventlog-live-otelcol` program is intended to analyse the eventlog and send telemetry data to an OpenTelemetry Collector. It supports OTLP over gRPC and HTTP/protobuf. The default is gRPC on port `4317`; pass `--otelcol-protocol=http-protobuf` to use HTTP/protobuf on port `4318`.
 
 ## Getting Started
 
@@ -282,6 +281,8 @@ To use it, follow these steps:
       --control-port 30719 \
       --control-cors-ignore-failure
     ```
+
+    To export using OTLP HTTP/protobuf instead, add `--otelcol-protocol=http-protobuf`. Custom HTTP headers for hosted providers can be supplied with repeatable `--otelcol-header NAME=VALUE` options.
 
 ### Fine-tuning `eventlog-live-otelcol`
 

@@ -16,6 +16,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
 import Lens.Family2 ((^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -63,9 +64,9 @@ instance Exception RejectedSpansError where
 -- OpenTelemetry gRPC Exporter for Traces
 
 exportResourceSpans ::
-  G.Connection ->
+  OpenTelemetryExporter ->
   ProcessT IO (Tick OTS.ExportTraceServiceRequest) (Tick ExportTraceResult)
-exportResourceSpans conn =
+exportResourceSpans exporter =
   construct $ go False
  where
   go exportedResourceSpans =
@@ -88,7 +89,7 @@ exportResourceSpans conn =
 
     doGrpc :: IO ExportTraceResult
     doGrpc = do
-      G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest) >>= \case
+      sendExportTraceServiceRequest exportTraceServiceRequest >>= \case
         G.Proto resp
           | resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0 ->
               pure $ ExportTraceSuccess exportedSpans
@@ -99,6 +100,16 @@ exportResourceSpans conn =
 
     handleSomeException :: SomeException -> IO ExportTraceResult
     handleSomeException someException = pure $ ExportTraceError 0 exportedSpans someException
+
+  sendExportTraceServiceRequest ::
+    OTS.ExportTraceServiceRequest ->
+    IO (G.Proto OTS.ExportTraceServiceResponse)
+  sendExportTraceServiceRequest exportTraceServiceRequest =
+    case exporter of
+      OpenTelemetryExporter'Grpc conn ->
+        G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest)
+      OpenTelemetryExporter'Http httpProtobufExporter ->
+        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1/traces" exportTraceServiceRequest
 
 type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata

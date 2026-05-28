@@ -16,6 +16,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
 import Lens.Family2 ((^.))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -67,9 +68,9 @@ instance Exception RejectedLogsError where
 -- OpenTelemetry gRPC Exporter for Logs
 
 exportResourceLogs ::
-  G.Connection ->
+  OpenTelemetryExporter ->
   ProcessT IO (Tick OLS.ExportLogsServiceRequest) (Tick ExportLogsResult)
-exportResourceLogs conn = construct $ go False
+exportResourceLogs exporter = construct $ go False
  where
   go exportedResourceLogs =
     await >>= \case
@@ -91,7 +92,7 @@ exportResourceLogs conn = construct $ go False
 
     doGrpc :: IO ExportLogsResult
     doGrpc = do
-      G.nonStreaming conn (G.rpc @(Protobuf OLS.LogsService "export")) (G.Proto exportLogsServiceRequest) >>= \case
+      sendExportLogsServiceRequest exportLogsServiceRequest >>= \case
         G.Proto resp
           | resp ^. OLS.partialSuccess . OLS.rejectedLogRecords == 0 -> do
               pure $ ExportLogsSuccess exportedLogRecords
@@ -102,6 +103,16 @@ exportResourceLogs conn = construct $ go False
 
     handleSomeException :: SomeException -> IO ExportLogsResult
     handleSomeException someException = pure $ ExportLogsError 0 exportedLogRecords someException
+
+  sendExportLogsServiceRequest ::
+    OLS.ExportLogsServiceRequest ->
+    IO (G.Proto OLS.ExportLogsServiceResponse)
+  sendExportLogsServiceRequest exportLogsServiceRequest =
+    case exporter of
+      OpenTelemetryExporter'Grpc conn ->
+        G.nonStreaming conn (G.rpc @(Protobuf OLS.LogsService "export")) (G.Proto exportLogsServiceRequest)
+      OpenTelemetryExporter'Http httpProtobufExporter ->
+        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1/logs" exportLogsServiceRequest
 
 type instance G.RequestMetadata (Protobuf OLS.LogsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OLS.LogsService meth) = G.NoMetadata
