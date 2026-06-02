@@ -7,7 +7,7 @@
     - The Haddock documentation builds without warnings and renders without errors.
     - The tests pass on CI.
 
-2.  Create a Git tag of the form `eventlog-live-${VERSION}`, e.g., `eventlog-live-0.5.0.0`:
+2.  Create a Git tag of the form `eventlog-live-${VERSION}`, e.g., `eventlog-live-v0.5.0.0`:
 
     ```sh
     git tag eventlog-live-${VERSION}
@@ -47,7 +47,7 @@
     - The Haddock documentation builds without warnings and renders without errors.
     - The tests pass on CI.
 
-2.  Create a Git tag of the form `eventlog-live-otelcol-${VERSION}`, e.g., `eventlog-live-otelcol-0.6.0.0`:
+2.  Create a Git tag of the form `eventlog-live-otelcol-${VERSION}`, e.g., `eventlog-live-otelcol-v0.6.0.0`:
 
     ```sh
     git tag eventlog-live-otelcol-${VERSION}
