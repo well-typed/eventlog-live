@@ -8,4 +8,4 @@ hlint=3.10
 nixfmt=1.2.0
 prettier=3.8.3
 shellcheck=0.11.0
-protoc=29.3
+protoc=34.1
