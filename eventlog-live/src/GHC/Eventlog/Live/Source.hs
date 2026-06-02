@@ -157,7 +157,7 @@ connectRetry logger initialTimeoutS timeoutExponent eventlogSocketAddr =
     let connect = do
           writeLog logger DEBUG $
             "Trying to connect on " <> prettyEventlogSocketAddr eventlogSocketAddr
-          socket <- tryConnect logger timeoutS eventlogSocketAddr
+          socket <- tryConnect eventlogSocketAddr
           writeLog logger DEBUG $
             "Connected on " <> prettyEventlogSocketAddr eventlogSocketAddr
           pure socket
@@ -175,21 +175,16 @@ connectRetry logger initialTimeoutS timeoutExponent eventlogSocketAddr =
           connectLoop (timeoutS * timeoutExponent)
     E.catch connect cleanup
 
-tryConnect :: Logger IO -> Double -> EventlogSocketAddr -> IO Socket
-tryConnect logger timeoutS = \case
+tryConnect :: EventlogSocketAddr -> IO Socket
+tryConnect = \case
   EventlogSocketUnixAddr{..} -> do
     E.bracketOnError (S.socket S.AF_UNIX S.Stream S.defaultProtocol) S.close $ \socket -> do
       S.connect socket (S.SockAddrUnix esaUnixPath)
       pure socket
   EventlogSocketInetAddr{..} -> do
-    let timeoutMSec = round $ timeoutS * 1e3
-    let addrInfo = S.defaultHints{S.addrFamily = S.AF_INET, S.addrSocketType = S.Stream}
+    let addrInfo = S.defaultHints{S.addrFamily = S.AF_UNSPEC, S.addrSocketType = S.Stream}
     addr <- NE.head <$> S.getAddrInfo (Just addrInfo) (Just esaInetHost) (Just $ esaInetPort)
-    let newSocket = S.socket (S.addrFamily addr) (S.addrSocketType addr) (S.addrProtocol addr)
-    let closeSocket socket = do
-          writeLog logger DEBUG $ "Disconnecting from Unix socket at " <> T.pack (show (S.addrAddress addr))
-          S.gracefulClose socket timeoutMSec
-    E.bracketOnError newSocket closeSocket $ \socket -> do
+    E.bracketOnError (S.socket (S.addrFamily addr) (S.addrSocketType addr) (S.addrProtocol addr)) S.close $ \socket -> do
       S.connect socket (S.addrAddress addr)
       pure socket
 
