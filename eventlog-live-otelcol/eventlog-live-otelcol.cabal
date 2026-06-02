@@ -105,7 +105,7 @@ source-repository this
   type: git
   location: https://github.com/well-typed/eventlog-live.git
   subdir: eventlog-live-otelcol
-  tag: eventlog-live-otelcol-0.6.1.0
+  tag: eventlog-live-otelcol-v0.6.1.0
 
 -- This flag enables the control command server, which is an HTTP endpoint
 -- that gets started by eventlog-live-otelcol. If +control is set, then
