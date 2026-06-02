@@ -7,6 +7,6 @@ fourmolu=0.16.2.0
 ghc=9.10.3
 hlint=3.10
 nixfmt=1.2.0
-prettier=3.4.1
+prettier=3.8.3
 shellcheck=0.10.0
 protoc=29.3
