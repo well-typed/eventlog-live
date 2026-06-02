@@ -1,3 +1,7 @@
+### 0.6.1.0
+
+- Support eventlog over TCP/IP.
+
 ### 0.6.0.0
 
 - **BREAKING**: Drop `enabled` from configuration files.
