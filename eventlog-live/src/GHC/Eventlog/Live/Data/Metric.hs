@@ -33,8 +33,9 @@ data Metric a = Metric
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   -- ^ The time at which the measurement was taken.
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
-  -- ^ The earliest time at which any measurement could have been taken.
-  --   Usually, this represents the start time of a process.
+  {- ^ The earliest time at which any measurement could have been taken.
+  Usually, this represents the start time of a process.
+  -}
   , attrs :: Attrs
   -- ^ A set of attributes.
   }

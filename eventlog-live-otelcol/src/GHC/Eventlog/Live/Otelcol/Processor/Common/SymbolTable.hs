@@ -25,19 +25,22 @@ type SymbolIndex = Int32
 data SymbolTable a
   = SymbolTable
   { nextSymbolIndex :: !SymbolIndex
-  -- ^
-  --   The next unused `SymbolIndex`.
-  --
-  --   > st.nextSymbolIndex == length st.entriesReversed
+  {- ^
+  The next unused `SymbolIndex`.
+
+  > st.nextSymbolIndex == length st.entriesReversed
+  -}
   , entryToSymbolIndex :: !(Map a SymbolIndex)
-  -- ^
-  --   A map from entries to their `SymbolIndex`.
-  --
-  --   > toList st !! (st.entryToSymbolIndex Map.! a) == a
+  {- ^
+  A map from entries to their `SymbolIndex`.
+
+  > toList st !! (st.entryToSymbolIndex Map.! a) == a
+  -}
   , entriesReversed :: ![a] -- reverse order of insertion into entryToSymbolIndex
 
-  -- ^
-  --   A list of entries in the `SymbolTable` in reverse order.
+  {- ^
+  A list of entries in the `SymbolTable` in reverse order.
+  -}
   }
   deriving (Show, Ord, Eq, Generic)
 

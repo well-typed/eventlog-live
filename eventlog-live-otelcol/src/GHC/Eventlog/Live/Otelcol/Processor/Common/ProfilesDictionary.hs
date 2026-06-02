@@ -51,32 +51,39 @@ toExportProfileServiceRequest profilesData =
 
 data ProfilesDictionary = ProfilesDictionary
   { locationTable :: SymbolTable OP.Location
-  -- ^ Common 'OP.Location' table, first entry is the 'defMessage'.
-  --   This holds for OTLP 1.9.0.
+  {- ^ Common 'OP.Location' table, first entry is the 'defMessage'.
+  This holds for OTLP 1.9.0.
+  -}
   , functionTable :: SymbolTable OP.Function
-  -- ^ Common 'OP.Function' table, first entry is the 'defMessage'.
-  --   This holds for OTLP 1.9.0.
+  {- ^ Common 'OP.Function' table, first entry is the 'defMessage'.
+  This holds for OTLP 1.9.0.
+  -}
   , stringTable :: SymbolTable Text
-  -- ^ Common string table, the first entry must be "" per the protobuf
-  --   documentation.
-  --
-  --   @
-  --    // A common table for strings referenced by various messages.
-  --    // string_table[0] must always be "".
-  --    repeated string string_table = 5;
-  --   @
+  {- ^ Common string table, the first entry must be "" per the protobuf
+  documentation.
+
+  @
+   // A common table for strings referenced by various messages.
+   // string_table[0] must always be "".
+   repeated string string_table = 5;
+  @
+  -}
   , mappingTable :: SymbolTable OP.Mapping
-  -- ^ Common 'OP.Mapping' table, first entry is the 'defMessage'.
-  --   This holds for OTLP 1.9.0.
+  {- ^ Common 'OP.Mapping' table, first entry is the 'defMessage'.
+  This holds for OTLP 1.9.0.
+  -}
   , linkTable :: SymbolTable OP.Link
-  -- ^ Common 'OP.Link' table, first entry is the 'defMessage'.
-  --   This holds for OTLP 1.9.0.
+  {- ^ Common 'OP.Link' table, first entry is the 'defMessage'.
+  This holds for OTLP 1.9.0.
+  -}
   , attributeTable :: SymbolTable OP.KeyValueAndUnit
-  -- ^ Common 'OP.KeyValueAndUnit' table, first entry is the 'defMessage'.
-  --   This holds for OTLP 1.9.0.
+  {- ^ Common 'OP.KeyValueAndUnit' table, first entry is the 'defMessage'.
+  This holds for OTLP 1.9.0.
+  -}
   , stackTable :: SymbolTable OP.Stack
-  -- ^ Common 'OP.Stack' table, first entry is the 'defMessage'.
-  --   This holds for OTLP 1.9.0.
+  {- ^ Common 'OP.Stack' table, first entry is the 'defMessage'.
+  This holds for OTLP 1.9.0.
+  -}
   }
   deriving (Show, Ord, Eq, Generic)
 

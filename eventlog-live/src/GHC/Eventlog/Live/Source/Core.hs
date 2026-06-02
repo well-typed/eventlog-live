@@ -31,9 +31,10 @@ The options for different kinds of eventlog sockets.
 data EventlogSocketAddr
   = EventlogSocketUnixAddr
       { esaUnixPath :: FilePath
-      -- ^ Unix socket path, e.g., @"\/tmp\/ghc_eventlog.sock"@.
-      --
-      -- __Warning:__ Unix domain socket paths are often limited to 107 characters or less.
+      {- ^ Unix socket path, e.g., @"\/tmp\/ghc_eventlog.sock"@.
+
+      __Warning:__ Unix domain socket paths are often limited to 107 characters or less.
+      -}
       }
   | EventlogSocketInetAddr
       { esaInetHost :: String
