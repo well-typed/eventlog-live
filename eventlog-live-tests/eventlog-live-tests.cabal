@@ -1,0 +1,105 @@
+cabal-version: 3.0
+name: eventlog-live-tests
+version: 0.1.0.0
+synopsis: Test suite for eventlog-live
+description: Test suite for eventlog-live.
+license: BSD-3-Clause
+license-file: LICENSE
+author: Eventlog Live Contributors
+maintainer: wen@well-typed.com
+copyright: (c) 2025 Well-Typed
+category: Test
+build-type: Simple
+extra-doc-files: CHANGELOG.md
+tested-with:
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
+
+flag debug
+  description: Enable debug logging
+  default: False
+  manual: True
+
+flag debug-verbosity-trace
+  description: Set the debug verbosity to TRACE.
+  default: False
+  manual: True
+
+flag debug-events
+  description: Enable debug logging for events
+  default: False
+  manual: True
+
+common language
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wredundant-constraints
+    -Wunticked-promoted-constructors
+    -Wunused-packages
+
+  default-extensions:
+    ConstraintKinds
+    DataKinds
+    DuplicateRecordFields
+    GADTs
+    ImplicitParams
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    NamedFieldPuns
+    NumericUnderscores
+    OverloadedRecordDot
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneKindSignatures
+    TypeApplications
+    TypeFamilies
+
+  default-language: Haskell2010
+
+library
+  import: language
+  hs-source-dirs: src
+  exposed-modules:
+    GHC.Eventlog.Live.Test
+
+  build-depends:
+    base >=4.14 && <5,
+    eventlog-socket-tests >=0.2 && <0.3,
+    grapesy >=1.0.0 && <1.2,
+    hs-opentelemetry-otlp >=0.2.0 && <0.3,
+    machines >=0.7.4 && <0.8,
+    network >=3.2.7 && <3.3,
+    process >=1.6 && <1.7,
+    stm >=2.5 && <2.6,
+    tasty >=1.2 && <1.6,
+    tasty-hunit >=0.10 && <0.11,
+    vector >=0.11 && <0.14,
+
+  if flag(debug)
+    build-depends: stm >=2.5 && <2.6
+    cpp-options: -DDEBUG
+
+  if flag(debug-verbosity-trace)
+    cpp-options: -DDEBUG_VERBOSITY_TRACE
+
+  if flag(debug-events)
+    cpp-options: -DDEBUG_EVENTS
+
+test-suite eventlog-live-tests
+  import: language
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is: Main.hs
+  ghc-options: -threaded
+  build-depends:
+    base >=4.14 && <5,
+    eventlog-live-tests,
+    filepath >=1.5 && <1.6,
+    tasty >=1.2 && <1.6,
+    temporary >=1.3 && <1.4,
+
+  build-tool-depends:
+    eventlog-live-otelcol:eventlog-live-otelcol

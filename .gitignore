@@ -7,3 +7,5 @@ dist-newstyle/
 /nix/*/result
 cabal.project.local
 /examples/ghc/build-Cabal-syntax.sh
+/eventlog-live-tests.err.log
+/eventlog-live-tests.out.log
