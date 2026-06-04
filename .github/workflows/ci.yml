@@ -78,6 +78,16 @@ jobs:
       - name: 🏗️ Build
         run: cabal build all ${{ matrix.cabal-flags }}
 
+      - name: 🚀 Testing
+        run: ./scripts/test.sh
+
+      - name: 📦 Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: eventlog-live-tests-${{ runner.os }}-${{ runner.arch }}-ghc-${{ matrix.ghc-version }}.err.log
+          path: eventlog-live-tests.err.log
+
     strategy:
       fail-fast: false
       matrix:
