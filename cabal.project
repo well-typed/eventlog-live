@@ -7,7 +7,21 @@ packages: eventlog-live
 if impl(ghc <9.14)
   packages: eventlog-live-otelcol
 
+-- 2026-04-15:
+-- eventlog-live-tests does not support GHC 9.14 or later
+if impl(ghc <9.14)
+  packages: eventlog-live-tests
+
 packages: examples/oddball
 packages: examples/jumpy-jump
 packages: examples/parfib
 packages: examples/spectral-norm
+
+-- 2026-06-01:
+-- Add eventlog-socket-tests as a dependency. This package should not be
+-- published and hence should only be used by eventlog-live-tests.
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/eventlog-socket.git
+    tag: a1354880f39f343d1c88c3cbe3e00cb74862f2c1
+    subdir: eventlog-socket-tests
