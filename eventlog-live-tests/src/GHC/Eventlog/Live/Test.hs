@@ -5,18 +5,18 @@ module GHC.Eventlog.Live.Test (
   assertResourceTelemetryData,
   hasInput,
 
-  -- * Running an OTLP server
-  ResourceTelemetryData (..),
-  HasOtlpServerInfo,
-  OtlpServerInfo (..),
-  withGrpcOtlpServer,
+  -- * Running `ProgramTest`
+  programTestFor,
 
   -- * Running @eventlog-live-otelcol@
   HasEventlogLiveOtelcolInfo,
   withEventlogLiveOtelcol,
 
-  -- * Running `ProgramTest`
-  programTestFor,
+  -- * Running an OTLP server
+  ResourceTelemetryData (..),
+  HasOtlpServerInfo,
+  OtlpServerInfo (..),
+  withGrpcOtlpServer,
 
   -- * Re-export "GHC.Eventlog.Socket.Test"
   module Export.GEST,
@@ -54,14 +54,47 @@ import System.Process (getCurrentPid)
 import Test.Tasty (TestName)
 import Test.Tasty.HUnit (Assertion)
 
+--------------------------------------------------------------------------------
+-- Running a machine-based assertion on `ResourceTelemetryData`
+--------------------------------------------------------------------------------
+
+{- |
+Assert that any input is received.
+-}
 hasInput :: ProcessT IO i o
 hasInput = construct (await >>= const stop)
 
+{- |
+Run a machine-based assertion on `ResourceTelemetryData`.
+-}
+assertResourceTelemetryData :: (HasLogger, HasTestInfo, HasOtlpServerInfo) => ProcessT IO ResourceTelemetryData x -> Assertion
+assertResourceTelemetryData validateResourceTelemetryData =
+  runT_ $ source ~> logging ~> validateResourceTelemetryData
+ where
+  OtlpServerInfo{..} = ?otlpServerInfo
+  source = repeatedly (yield =<< liftIO next)
+
+logging :: (HasLogger, HasTestInfo, Show i) => ProcessT IO i i
+logging = traversing (\i -> liftIO (debugInfo (show i)) >> pure i)
+
+--------------------------------------------------------------------------------
+-- Running `ProgramTest`
+--------------------------------------------------------------------------------
+
+{- |
+Variant of `GEST.programTestFor` for @eventlog-live-otelcol@ tests.
+
+This variant hides the eventlog socket from the continuation and manages the @eventlog-live-otelcol@ instance and the OTLP server.
+-}
 programTestFor ::
   (HasLogger) =>
+  -- | The test name.
   TestName ->
+  -- | The program to test against.
   Program ->
+  -- | The command-line arguments for @eventlog-live-otelcol@.
   [String] ->
+  -- | The test assertion.
   ((HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtelcolInfo) => Assertion) ->
   EventlogSocketAddr ->
   ProgramTest
@@ -74,16 +107,13 @@ programTestFor testName program eventlogLiveOtelcolArgs assertion =
       withEventlogLiveOtelcol eventlogLiveOtelcolArgs $
         assertion
 
-assertResourceTelemetryData :: (HasLogger, HasTestInfo, HasOtlpServerInfo) => ProcessT IO ResourceTelemetryData x -> Assertion
-assertResourceTelemetryData validateResourceTelemetryData =
-  runT_ $ source ~> logging ~> validateResourceTelemetryData
- where
-  OtlpServerInfo{..} = ?otlpServerInfo
-  source = repeatedly (yield =<< liftIO next)
+--------------------------------------------------------------------------------
+-- Running @eventlog-live-otelcol@
+--------------------------------------------------------------------------------
 
-logging :: (HasLogger, HasTestInfo, Show i) => ProcessT IO i i
-logging = traversing (\i -> liftIO (debugInfo (show i)) >> pure i)
-
+{- |
+An implicit constraint that requires an @eventlog-live-otelcol@ instance.
+-}
 type HasEventlogLiveOtelcolInfo = (?eventlogLiveOtelcolInfo :: ProgramInfo)
 
 {- |
@@ -125,14 +155,46 @@ withEventlogLiveOtelcol extraArgs action = do
     let ?programInfo = programInfo
     action
 
+--------------------------------------------------------------------------------
+-- Running an OTLP server
+--------------------------------------------------------------------------------
+
+-- NOTE: This type is different from the type with the same name found in
+--       eventlog-live-otelcol, as the latter still uses `OP.ProfileData`.
+--       This should be changed, but requires the refactoring that moves the
+--       profiles machinery into eventlog-live.
+
+{- |
+A batch of resource telemetry data.
+-}
+data ResourceTelemetryData
+  = ResourceTelemetryData'Logs !(Vector OL.ResourceLogs)
+  | ResourceTelemetryData'Metrics !(Vector OM.ResourceMetrics)
+  | ResourceTelemetryData'Profiles !(Vector OP.ResourceProfiles)
+  | ResourceTelemetryData'Spans !(Vector OT.ResourceSpans)
+  deriving (Show)
+
+{- |
+An implicit constraint that requires an OTLP server.
+-}
 type HasOtlpServerInfo = (?otlpServerInfo :: OtlpServerInfo)
 
+{- |
+An instance of an OTLP server.
+
+The `next` field contains an IO action that retrieves the next batch of resource telemetry data.
+
+The `host` and `port` fields contain the information needed to connect to the server.
+-}
 data OtlpServerInfo = OtlpServerInfo
   { next :: IO ResourceTelemetryData
   , host :: HostName
   , port :: PortNumber
   }
 
+{- |
+Run a test with a gRPC OTLP server.
+-}
 withGrpcOtlpServer ::
   (HasLogger, HasTestInfo) =>
   ((HasLogger, HasTestInfo, HasOtlpServerInfo) => IO a) ->
@@ -222,20 +284,7 @@ withGrpcOtlpServer action = do
 liftProto :: (Monad m) => (a -> m b) -> G.Proto a -> m (G.Proto b)
 liftProto f pa = G.Proto <$> f (G.getProto pa)
 
---------------------------------------------------------------------------------
--- Code shared with eventlog-live-otelcol
---------------------------------------------------------------------------------
-
--- NOTE: This type is different from the type with the same name found in
---       eventlog-live-otelcol, as the latter still uses `OP.ProfileData`.
---       This should be changed, but requires the refactoring that moves the
---       profiles machinery into eventlog-live.
-data ResourceTelemetryData
-  = ResourceTelemetryData'Logs !(Vector OL.ResourceLogs)
-  | ResourceTelemetryData'Metrics !(Vector OM.ResourceMetrics)
-  | ResourceTelemetryData'Profiles !(Vector OP.ResourceProfiles)
-  | ResourceTelemetryData'Spans !(Vector OT.ResourceSpans)
-  deriving (Show)
+-- TODO: These instances should be shared with eventlog-live-otelcol
 
 type instance G.RequestMetadata (G.Protobuf OLS.LogsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (G.Protobuf OLS.LogsService meth) = G.NoMetadata
