@@ -4,6 +4,14 @@ module GHC.Eventlog.Live.Test (
   -- * Running a machine-based assertion on `ResourceTelemetryData`
   assertResourceTelemetryData,
   hasInput,
+  hasLogRecordsWith,
+  hasMetricsWith,
+  hasProfilesWith,
+  hasSpansWith,
+  toResourceLogs,
+  toResourceMetrics,
+  toResourceProfiles,
+  toResourceSpans,
 
   -- * Running `ProgramTest`
   programTestFor,
@@ -26,7 +34,7 @@ import Control.Concurrent.STM (newTQueueIO, readTQueue)
 import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.STM (atomically)
-import Data.Machine (ProcessT, await, construct, repeatedly, runT_, stop, traversing, yield, (~>))
+import Data.Machine (ProcessT, asParts, await, construct, filtered, mapping, repeatedly, runT_, stop, traversing, yield, (~>))
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GHC.Eventlog.Socket.Test as Export.GEST hiding (programTestFor)
@@ -47,9 +55,14 @@ import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesServic
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
+import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
+import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
+import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
+import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OS
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
+import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OS
 import System.Process (getCurrentPid)
 import Test.Tasty (TestName)
 import Test.Tasty.HUnit (Assertion)
@@ -61,8 +74,104 @@ import Test.Tasty.HUnit (Assertion)
 {- |
 Assert that any input is received.
 -}
-hasInput :: ProcessT IO i o
+hasInput :: (Monad m) => ProcessT m i o
 hasInput = construct (await >>= const stop)
+
+{- |
+Assert that log records with the given property are received.
+-}
+hasLogRecordsWith :: (Monad m) => (OL.LogRecord -> Bool) -> ProcessT m ResourceTelemetryData x
+hasLogRecordsWith f =
+  toResourceLogs
+    ~> asParts
+    ~> mapping (^. OL.vec'scopeLogs)
+    ~> asParts
+    ~> mapping (^. OL.vec'logRecords)
+    ~> asParts
+    ~> filtered f
+    ~> hasInput
+
+{- |
+Assert that metrics with the given property are received.
+-}
+hasMetricsWith :: (Monad m) => (OM.Metric -> Bool) -> ProcessT m ResourceTelemetryData x
+hasMetricsWith f =
+  toResourceMetrics
+    ~> asParts
+    ~> mapping (^. OM.vec'scopeMetrics)
+    ~> asParts
+    ~> mapping (^. OM.vec'metrics)
+    ~> asParts
+    ~> filtered f
+    ~> hasInput
+
+{- |
+Assert that metrics with the given property are received.
+-}
+hasProfilesWith :: (Monad m) => (OP.Profile -> Bool) -> ProcessT m ResourceTelemetryData x
+hasProfilesWith f =
+  toResourceProfiles
+    ~> asParts
+    ~> mapping (^. OP.vec'scopeProfiles)
+    ~> asParts
+    ~> mapping (^. OP.vec'profiles)
+    ~> asParts
+    ~> filtered f
+    ~> hasInput
+
+{- |
+Assert that metrics with the given property are received.
+-}
+hasSpansWith :: (Monad m) => (OS.Span -> Bool) -> ProcessT m ResourceTelemetryData x
+hasSpansWith f =
+  toResourceSpans
+    ~> asParts
+    ~> mapping (^. OS.vec'scopeSpans)
+    ~> asParts
+    ~> mapping (^. OS.vec'spans)
+    ~> asParts
+    ~> filtered f
+    ~> hasInput
+
+{- |
+Filter a resource telemetry stream to just batches of resource logs.
+-}
+toResourceLogs :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OL.ResourceLogs)
+toResourceLogs =
+  repeatedly $
+    await >>= \case
+      ResourceTelemetryData'Logs logs -> yield logs
+      _otherwise -> pure ()
+
+{- |
+Filter a resource telemetry stream to just batches of resource metrics.
+-}
+toResourceMetrics :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OM.ResourceMetrics)
+toResourceMetrics =
+  repeatedly $
+    await >>= \case
+      ResourceTelemetryData'Metrics metrics -> yield metrics
+      _otherwise -> pure ()
+
+{- |
+Filter a resource telemetry stream to just batches of resource profiles.
+-}
+toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OP.ResourceProfiles)
+toResourceProfiles =
+  repeatedly $
+    await >>= \case
+      ResourceTelemetryData'Profiles profiles -> yield profiles
+      _otherwise -> pure ()
+
+{- |
+Filter a resource telemetry stream to just batches of resource spans.
+-}
+toResourceSpans :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OT.ResourceSpans)
+toResourceSpans =
+  repeatedly $
+    await >>= \case
+      ResourceTelemetryData'Spans spans -> yield spans
+      _otherwise -> pure ()
 
 {- |
 Run a machine-based assertion on `ResourceTelemetryData`.
