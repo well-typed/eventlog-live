@@ -1,22 +1,36 @@
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module GHC.Eventlog.Live.Test (
   -- * Running a machine-based assertion on `ResourceTelemetryData`
   assertResourceTelemetryData,
   hasInput,
-  hasLogRecordsWith,
-  hasMetricsWith,
-  hasProfilesWith,
-  hasSpansWith,
+  withLogRecord'body,
+  toLogRecords,
+  withMetric'name,
+  toMetrics,
+  toProfiles,
+  toSpans,
+  withScope,
+  toScopeLogs,
+  toScopeMetrics,
+  toScopeProfiles,
+  toScopeSpans,
+  withServiceName,
+  withResource,
   toResourceLogs,
   toResourceMetrics,
   toResourceProfiles,
   toResourceSpans,
+  logging,
 
   -- * Running `ProgramTest`
   programTestFor,
 
   -- * Running @eventlog-live-otelcol@
+  EventlogLiveOtelcolOptions (extraArgs, maybeConfigBody),
+  defaultOptions,
   HasEventlogLiveOtelcolInfo,
   withEventlogLiveOtelcol,
 
@@ -32,13 +46,17 @@ module GHC.Eventlog.Live.Test (
 
 import Control.Concurrent.STM (newTQueueIO, readTQueue)
 import Control.Concurrent.STM.TQueue (writeTQueue)
+import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.STM (atomically)
+import Data.Foldable (find, traverse_)
 import Data.Machine (ProcessT, asParts, await, construct, filtered, mapping, repeatedly, runT_, stop, traversing, yield, (~>))
+import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GHC.Eventlog.Socket.Test as Export.GEST hiding (programTestFor)
 import GHC.Eventlog.Socket.Test qualified as GEST (programTestFor)
+import GHC.Exts (Proxy#, proxy#)
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf ((^.))
 import Network.GRPC.Common.Protobuf qualified as G
@@ -54,15 +72,21 @@ import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesServic
 import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
+import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
+import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
+import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
+import Proto.Opentelemetry.Proto.Resource.V1.Resource_Fields qualified as OR
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OS
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OS
+import System.IO qualified as IO
+import System.IO.Temp (withSystemTempFile)
 import System.Process (getCurrentPid)
 import Test.Tasty (TestName)
 import Test.Tasty.HUnit (Assertion)
@@ -78,117 +102,176 @@ hasInput :: (Monad m) => ProcessT m i o
 hasInput = construct (await >>= const stop)
 
 {- |
-Assert that log records with the given property are received.
+Filters a stream of scope telemetry data to only those whose scope satisfies a given predicate.
 -}
-hasLogRecordsWith :: (Monad m) => (OL.LogRecord -> Bool) -> ProcessT m ResourceTelemetryData x
-hasLogRecordsWith f =
-  toResourceLogs
-    ~> asParts
-    ~> mapping (^. OL.vec'scopeLogs)
-    ~> asParts
-    ~> mapping (^. OL.vec'logRecords)
-    ~> asParts
-    ~> filtered f
-    ~> hasInput
+withScope ::
+  forall m s.
+  (Monad m, G.HasField s "maybe'scope" (Maybe OC.InstrumentationScope)) =>
+  (Maybe OC.InstrumentationScope -> Bool) -> ProcessT m s s
+withScope p = filtered (p . maybeScope)
+ where
+  maybeScope :: s -> Maybe OC.InstrumentationScope
+  maybeScope = (^. G.fieldOf (proxy# :: Proxy# "maybe'scope"))
 
 {- |
-Assert that metrics with the given property are received.
+Filters a stream of resource telemetry data to only those for a given service.
 -}
-hasMetricsWith :: (Monad m) => (OM.Metric -> Bool) -> ProcessT m ResourceTelemetryData x
-hasMetricsWith f =
-  toResourceMetrics
-    ~> asParts
-    ~> mapping (^. OM.vec'scopeMetrics)
-    ~> asParts
-    ~> mapping (^. OM.vec'metrics)
-    ~> asParts
-    ~> filtered f
-    ~> hasInput
+withServiceName ::
+  forall m s.
+  (Monad m, G.HasField s "maybe'resource" (Maybe OR.Resource)) =>
+  Text -> ProcessT m s s
+withServiceName serviceName =
+  withResource (maybe False $ (Just serviceName ==) . toServiceName)
+ where
+  toServiceName :: OR.Resource -> Maybe Text
+  toServiceName resource = do
+    let keyIsServiceName = ("service.name" ==) . (^. OC.key)
+    keyValue <- find keyIsServiceName (resource ^. OR.vec'attributes)
+    keyValue ^. OC.value . OC.maybe'stringValue
 
 {- |
-Assert that metrics with the given property are received.
+Filters a stream of resource telemetry data to only those whose resource satisfies a given predicate.
 -}
-hasProfilesWith :: (Monad m) => (OP.Profile -> Bool) -> ProcessT m ResourceTelemetryData x
-hasProfilesWith f =
-  toResourceProfiles
-    ~> asParts
-    ~> mapping (^. OP.vec'scopeProfiles)
-    ~> asParts
-    ~> mapping (^. OP.vec'profiles)
-    ~> asParts
-    ~> filtered f
-    ~> hasInput
+withResource ::
+  forall m s.
+  (Monad m, G.HasField s "maybe'resource" (Maybe OR.Resource)) =>
+  (Maybe OR.Resource -> Bool) -> ProcessT m s s
+withResource p = filtered (p . maybeResource)
+ where
+  maybeResource :: s -> Maybe OR.Resource
+  maybeResource = (^. G.fieldOf (proxy# :: Proxy# "maybe'resource"))
 
 {- |
-Assert that metrics with the given property are received.
+Filters a stream of log records to only those whose body satisfies a given predicate.
 -}
-hasSpansWith :: (Monad m) => (OS.Span -> Bool) -> ProcessT m ResourceTelemetryData x
-hasSpansWith f =
-  toResourceSpans
-    ~> asParts
-    ~> mapping (^. OS.vec'scopeSpans)
-    ~> asParts
-    ~> mapping (^. OS.vec'spans)
-    ~> asParts
-    ~> filtered f
-    ~> hasInput
+withLogRecord'body :: (Monad m) => (Text -> Bool) -> ProcessT m OL.LogRecord OL.LogRecord
+withLogRecord'body p = filtered (maybe False p . ((^. OC.maybe'stringValue) <=< (^. OL.maybe'body)))
 
 {- |
-Filter a resource telemetry stream to just batches of resource logs.
+Stream scope logs as individual log records.
 -}
-toResourceLogs :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OL.ResourceLogs)
+toLogRecords :: (Monad m) => ProcessT m OL.ScopeLogs OL.LogRecord
+toLogRecords = mapping (^. OL.vec'logRecords) ~> asParts
+
+{- |
+Filters a stream of metrics to only those whose name satisfies a given predicate.
+-}
+withMetric'name :: (Monad m) => (Text -> Bool) -> ProcessT m OM.Metric OM.Metric
+withMetric'name p = filtered (p . (^. OM.name))
+
+{- |
+Stream scope metrics as individual metrics.
+-}
+toMetrics :: (Monad m) => ProcessT m OM.ScopeMetrics OM.Metric
+toMetrics = mapping (^. OM.vec'metrics) ~> asParts
+
+{- |
+Stream scope profiles as individual profiles.
+-}
+toProfiles :: (Monad m) => ProcessT m OP.ScopeProfiles OP.Profile
+toProfiles = mapping (^. OP.vec'profiles) ~> asParts
+
+{- |
+Stream scope spans as individual spans.
+-}
+toSpans :: (Monad m) => ProcessT m OS.ScopeSpans OS.Span
+toSpans = mapping (^. OS.vec'spans) ~> asParts
+
+{- |
+Stream resource logs as individual scope logs.
+-}
+toScopeLogs :: (Monad m) => ProcessT m OL.ResourceLogs OL.ScopeLogs
+toScopeLogs = mapping (^. OL.vec'scopeLogs) ~> asParts
+
+{- |
+Stream resource metrics as individual scope metrics.
+-}
+toScopeMetrics :: (Monad m) => ProcessT m OM.ResourceMetrics OM.ScopeMetrics
+toScopeMetrics = mapping (^. OM.vec'scopeMetrics) ~> asParts
+
+{- |
+Stream resource profiles as individual scope profiles.
+-}
+toScopeProfiles :: (Monad m) => ProcessT m OP.ResourceProfiles OP.ScopeProfiles
+toScopeProfiles = mapping (^. OP.vec'scopeProfiles) ~> asParts
+
+{- |
+Stream resource spans as individual scope spans.
+-}
+toScopeSpans :: (Monad m) => ProcessT m OS.ResourceSpans OS.ScopeSpans
+toScopeSpans = mapping (^. OS.vec'scopeSpans) ~> asParts
+
+{- |
+Filter a resource telemetry stream to only resource logs.
+-}
+toResourceLogs :: (Monad m) => ProcessT m ResourceTelemetryData OL.ResourceLogs
 toResourceLogs =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Logs logs -> yield logs
+      ResourceTelemetryData'Logs logs -> traverse_ yield logs
       _otherwise -> pure ()
 
 {- |
-Filter a resource telemetry stream to just batches of resource metrics.
+Filter a resource telemetry stream to only resource metrics.
 -}
-toResourceMetrics :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OM.ResourceMetrics)
+toResourceMetrics :: (Monad m) => ProcessT m ResourceTelemetryData OM.ResourceMetrics
 toResourceMetrics =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Metrics metrics -> yield metrics
+      ResourceTelemetryData'Metrics metrics -> traverse_ yield metrics
       _otherwise -> pure ()
 
 {- |
-Filter a resource telemetry stream to just batches of resource profiles.
+Filter a resource telemetry stream to only resource profiles.
 -}
-toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OP.ResourceProfiles)
+toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetryData OP.ResourceProfiles
 toResourceProfiles =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Profiles profiles -> yield profiles
+      ResourceTelemetryData'Profiles profiles -> traverse_ yield profiles
       _otherwise -> pure ()
 
 {- |
-Filter a resource telemetry stream to just batches of resource spans.
+Filter a resource telemetry stream to only resource spans.
 -}
-toResourceSpans :: (Monad m) => ProcessT m ResourceTelemetryData (Vector OT.ResourceSpans)
+toResourceSpans :: (Monad m) => ProcessT m ResourceTelemetryData OT.ResourceSpans
 toResourceSpans =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Spans spans -> yield spans
+      ResourceTelemetryData'Spans spans -> traverse_ yield spans
       _otherwise -> pure ()
 
 {- |
 Run a machine-based assertion on `ResourceTelemetryData`.
 -}
-assertResourceTelemetryData :: (HasLogger, HasTestInfo, HasOtlpServerInfo) => ProcessT IO ResourceTelemetryData x -> Assertion
+assertResourceTelemetryData :: (HasOtlpServerInfo) => ProcessT IO ResourceTelemetryData x -> Assertion
 assertResourceTelemetryData validateResourceTelemetryData =
-  runT_ $ source ~> logging ~> validateResourceTelemetryData
+  runT_ $ source ~> validateResourceTelemetryData
  where
   OtlpServerInfo{..} = ?otlpServerInfo
   source = repeatedly (yield =<< liftIO next)
 
+{- |
+Log each input.
+-}
 logging :: (HasLogger, HasTestInfo, Show i) => ProcessT IO i i
 logging = traversing (\i -> liftIO (debugInfo (show i)) >> pure i)
 
 --------------------------------------------------------------------------------
 -- Running `ProgramTest`
 --------------------------------------------------------------------------------
+
+data EventlogLiveOtelcolOptions = EventlogLiveOtelcolOptions
+  { extraArgs :: [String]
+  , maybeConfigBody :: Maybe String
+  }
+
+defaultOptions :: EventlogLiveOtelcolOptions
+defaultOptions =
+  EventlogLiveOtelcolOptions
+    { extraArgs = []
+    , maybeConfigBody = Nothing
+    }
 
 {- |
 Variant of `GEST.programTestFor` for @eventlog-live-otelcol@ tests.
@@ -202,18 +285,18 @@ programTestFor ::
   -- | The program to test against.
   Program ->
   -- | The command-line arguments for @eventlog-live-otelcol@.
-  [String] ->
+  EventlogLiveOtelcolOptions ->
   -- | The test assertion.
   ((HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtelcolInfo) => Assertion) ->
   EventlogSocketAddr ->
   ProgramTest
-programTestFor testName program eventlogLiveOtelcolArgs assertion =
+programTestFor testName program eventlogLiveOtelcolOptions assertion =
   GEST.programTestFor testName program (const action)
  where
   action :: (HasTestInfo, HasProgramInfo) => Assertion
   action =
     withGrpcOtlpServer $
-      withEventlogLiveOtelcol eventlogLiveOtelcolArgs $
+      withEventlogLiveOtelcol eventlogLiveOtelcolOptions $
         assertion
 
 --------------------------------------------------------------------------------
@@ -234,10 +317,10 @@ The otelcol socket is automatically configured based on the port in the `OtlpSer
 -}
 withEventlogLiveOtelcol ::
   (HasLogger, HasTestInfo, HasProgramInfo, HasOtlpServerInfo) =>
-  [String] ->
+  EventlogLiveOtelcolOptions ->
   ((HasLogger, HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtelcolInfo) => IO ()) ->
   IO ()
-withEventlogLiveOtelcol extraArgs action = do
+withEventlogLiveOtelcol eventlogLiveOtelcolOptions action = do
   let programInfo@ProgramInfo{..} = ?programInfo
 
   -- Configure the eventlog socket.
@@ -255,14 +338,29 @@ withEventlogLiveOtelcol extraArgs action = do
   let otelcolArgs =
         ["--otelcol-host=" <> host, "--otelcol-port=" <> show port]
 
-  -- Configure the eventlog-live-otelcol program.
-  let args = extraArgs <> eventlogSocketArgs <> otelcolArgs
-  let eventlogLiveOtelcolProgram = (findProgram "eventlog-live-otelcol"){args = args}
-  withProgramResource (programResource eventlogLiveOtelcolProgram) $ do
-    -- NOTE: By the GHC gods, please let this have the correct semantics.
-    let ?eventlogLiveOtelcolInfo = ?programInfo
-    let ?programInfo = programInfo
-    action
+  -- Create the temporary configuration file, if needed.
+  withTempConfigFile eventlogLiveOtelcolOptions.maybeConfigBody $ \configArgs -> do
+    -- Configure the eventlog-live-otelcol program.
+    let args = eventlogLiveOtelcolOptions.extraArgs <> eventlogSocketArgs <> otelcolArgs <> configArgs
+    let eventlogLiveOtelcolProgram = (findProgram "eventlog-live-otelcol"){args = args}
+    withProgramResource (programResource eventlogLiveOtelcolProgram) $ do
+      -- NOTE: By the GHC gods, please let this have the correct semantics.
+      let ?eventlogLiveOtelcolInfo = ?programInfo
+      let ?programInfo = programInfo
+      action
+
+{- |
+Create a temporary configuration file with the given body, then run the action with access to that file.
+-}
+withTempConfigFile :: Maybe String -> ([String] -> IO a) -> IO a
+withTempConfigFile maybeConfigBody action =
+  case maybeConfigBody of
+    Nothing ->
+      action []
+    Just configBody ->
+      withSystemTempFile "eventlog-live-tests" $ \configFile configHandle -> do
+        IO.hPutStrLn configHandle configBody >> IO.hClose configHandle
+        action ["--config=" <> configFile]
 
 --------------------------------------------------------------------------------
 -- Running an OTLP server
