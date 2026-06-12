@@ -82,7 +82,7 @@ Run a `MetricProcessor`.
 -}
 runMetricProcessor ::
   forall metricProcessor metricProcessorConfig m a b c d.
-  (Default metricProcessorConfig) =>
+  (Default metricProcessorConfig, Show metricProcessorConfig) =>
   MetricProcessor metricProcessor metricProcessorConfig m a b c d ->
   -- | The full configuration.
   FullConfig ->
@@ -105,9 +105,13 @@ runMetricProcessor MetricProcessor{..} fullConfig =
 {-# INLINE runMetricProcessor #-}
 
 asMetricWith ::
-  (Default a, HasField "description" a (Maybe Text), HasField "name" a (Maybe Text)) =>
+  ( Show metricProcessorConfig
+  , Default metricProcessorConfig
+  , HasField "description" metricProcessorConfig (Maybe Text)
+  , HasField "name" metricProcessorConfig (Maybe Text)
+  ) =>
   FullConfig ->
-  (C.Metrics -> Maybe a) ->
+  (C.Metrics -> Maybe metricProcessorConfig) ->
   [OM.Metric -> OM.Metric] ->
   Process OM.Metric'Data OM.Metric
 asMetricWith fullConfig field f =

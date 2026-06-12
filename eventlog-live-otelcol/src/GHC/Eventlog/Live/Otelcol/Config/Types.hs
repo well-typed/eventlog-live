@@ -88,7 +88,7 @@ The configuration for @eventlog-live-otelcol@.
 newtype Config = Config
   { processors :: Maybe Processors
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML Config where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Config
@@ -112,7 +112,7 @@ data Processors = Processors
   , traces :: Maybe Traces
   , profiles :: Maybe Profiles
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML Processors where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Processors
@@ -149,7 +149,7 @@ data Logs = Logs
   , userMessage :: Maybe UserMessage
   , internalLogMessage :: Maybe InternalLogMessage
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML Logs where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Logs
@@ -194,7 +194,7 @@ data Metrics = Metrics
   , heapProfSample :: Maybe HeapProfSampleMetric
   , capabilityUsage :: Maybe CapabilityUsageMetric
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML Metrics where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Metrics
@@ -242,7 +242,7 @@ data Traces = Traces
   { capabilityUsage :: Maybe CapabilityUsageSpan
   , threadState :: Maybe ThreadStateSpan
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML Traces where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Traces
@@ -269,7 +269,7 @@ data Profiles = Profiles
   { stackSample :: Maybe StackSampleProfile
   , costCentreSample :: Maybe CostCentreSampleProfile
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML Profiles where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Profiles
@@ -301,7 +301,7 @@ data ThreadLabel = ThreadLabel
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML ThreadLabel where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabel
@@ -311,10 +311,6 @@ instance ToYAML ThreadLabel where
   toYAML :: ThreadLabel -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
-instance HasField "enabled" ThreadLabel Bool where
-  getField :: ThreadLabel -> Bool
-  getField = isEnabled . (.export)
-
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessageData`.
 -}
@@ -323,7 +319,7 @@ data UserMessage = UserMessage
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML UserMessage where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMessage
@@ -333,10 +329,6 @@ instance ToYAML UserMessage where
   toYAML :: UserMessage -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
-instance HasField "enabled" UserMessage Bool where
-  getField :: UserMessage -> Bool
-  getField = isEnabled . (.export)
-
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMarkerData`.
 -}
@@ -345,7 +337,7 @@ data UserMarker = UserMarker
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML UserMarker where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMarker
@@ -355,10 +347,6 @@ instance ToYAML UserMarker where
   toYAML :: UserMarker -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
-instance HasField "enabled" UserMarker Bool where
-  getField :: UserMarker -> Bool
-  getField = isEnabled . (.export)
-
 {- |
 The configuration options for internal log messages.
 -}
@@ -367,7 +355,7 @@ data InternalLogMessage = InternalLogMessage
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML InternalLogMessage where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser InternalLogMessage
@@ -376,10 +364,6 @@ instance FromYAML InternalLogMessage where
 instance ToYAML InternalLogMessage where
   toYAML :: InternalLogMessage -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
-
-instance HasField "enabled" InternalLogMessage Bool where
-  getField :: InternalLogMessage -> Bool
-  getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
 -- Metrics
@@ -394,7 +378,7 @@ data HeapAllocatedMetric = HeapAllocatedMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML HeapAllocatedMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapAllocatedMetric
@@ -403,10 +387,6 @@ instance FromYAML HeapAllocatedMetric where
 instance ToYAML HeapAllocatedMetric where
   toYAML :: HeapAllocatedMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" HeapAllocatedMetric Bool where
-  getField :: HeapAllocatedMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapSizeData`.
@@ -417,7 +397,7 @@ data HeapSizeMetric = HeapSizeMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML HeapSizeMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapSizeMetric
@@ -426,10 +406,6 @@ instance FromYAML HeapSizeMetric where
 instance ToYAML HeapSizeMetric where
   toYAML :: HeapSizeMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" HeapSizeMetric Bool where
-  getField :: HeapSizeMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processBlocksSizeData`.
@@ -440,7 +416,7 @@ data BlocksSizeMetric = BlocksSizeMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML BlocksSizeMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser BlocksSizeMetric
@@ -449,10 +425,6 @@ instance FromYAML BlocksSizeMetric where
 instance ToYAML BlocksSizeMetric where
   toYAML :: BlocksSizeMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" BlocksSizeMetric Bool where
-  getField :: BlocksSizeMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapLiveData`.
@@ -463,7 +435,7 @@ data HeapLiveMetric = HeapLiveMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML HeapLiveMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapLiveMetric
@@ -472,10 +444,6 @@ instance FromYAML HeapLiveMetric where
 instance ToYAML HeapLiveMetric where
   toYAML :: HeapLiveMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" HeapLiveMetric Bool where
-  getField :: HeapLiveMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for the @memCurrent@ field `GHC.Eventlog.Live.Machine.Analysis.Heap.processMemReturnData`.
@@ -486,7 +454,7 @@ data MemCurrentMetric = MemCurrentMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML MemCurrentMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemCurrentMetric
@@ -495,10 +463,6 @@ instance FromYAML MemCurrentMetric where
 instance ToYAML MemCurrentMetric where
   toYAML :: MemCurrentMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" MemCurrentMetric Bool where
-  getField :: MemCurrentMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for the @memNeeded@ field `GHC.Eventlog.Live.Machine.Analysis.Heap.processMemReturnData`.
@@ -509,7 +473,7 @@ data MemNeededMetric = MemNeededMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML MemNeededMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemNeededMetric
@@ -518,10 +482,6 @@ instance FromYAML MemNeededMetric where
 instance ToYAML MemNeededMetric where
   toYAML :: MemNeededMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" MemNeededMetric Bool where
-  getField :: MemNeededMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for the @memReturned@ field `GHC.Eventlog.Live.Machine.Analysis.Heap.processMemReturnData`.
@@ -532,7 +492,7 @@ data MemReturnedMetric = MemReturnedMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML MemReturnedMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemReturnedMetric
@@ -541,10 +501,6 @@ instance FromYAML MemReturnedMetric where
 instance ToYAML MemReturnedMetric where
   toYAML :: MemReturnedMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" MemReturnedMetric Bool where
-  getField :: MemReturnedMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapProfSampleData`.
@@ -555,7 +511,7 @@ data HeapProfSampleMetric = HeapProfSampleMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML HeapProfSampleMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapProfSampleMetric
@@ -564,10 +520,6 @@ instance FromYAML HeapProfSampleMetric where
 instance ToYAML HeapProfSampleMetric where
   toYAML :: HeapProfSampleMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" HeapProfSampleMetric Bool where
-  getField :: HeapProfSampleMetric -> Bool
-  getField = isEnabled . (.export)
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageMetrics`.
@@ -578,7 +530,7 @@ data CapabilityUsageMetric = CapabilityUsageMetric
   , aggregate :: Maybe AggregationStrategy
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML CapabilityUsageMetric where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CapabilityUsageMetric
@@ -587,10 +539,6 @@ instance FromYAML CapabilityUsageMetric where
 instance ToYAML CapabilityUsageMetric where
   toYAML :: CapabilityUsageMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
-
-instance HasField "enabled" CapabilityUsageMetric Bool where
-  getField :: CapabilityUsageMetric -> Bool
-  getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
 -- Traces
@@ -604,7 +552,7 @@ data CapabilityUsageSpan = CapabilityUsageSpan
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML CapabilityUsageSpan where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CapabilityUsageSpan
@@ -614,10 +562,6 @@ instance ToYAML CapabilityUsageSpan where
   toYAML :: CapabilityUsageSpan -> YAML.Node ()
   toYAML = genericToYAMLTraceProcessorConfig
 
-instance HasField "enabled" CapabilityUsageSpan Bool where
-  getField :: CapabilityUsageSpan -> Bool
-  getField = isEnabled . (.export)
-
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadStateSpan`.
 -}
@@ -626,7 +570,7 @@ data ThreadStateSpan = ThreadStateSpan
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML ThreadStateSpan where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadStateSpan
@@ -636,10 +580,6 @@ instance ToYAML ThreadStateSpan where
   toYAML :: ThreadStateSpan -> YAML.Node ()
   toYAML = genericToYAMLTraceProcessorConfig
 
-instance HasField "enabled" ThreadStateSpan Bool where
-  getField :: ThreadStateSpan -> Bool
-  getField = isEnabled . (.export)
-
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processStackProfSampleData`.
 -}
@@ -648,7 +588,7 @@ data StackSampleProfile = StackSampleProfile
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML StackSampleProfile where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser StackSampleProfile
@@ -658,10 +598,6 @@ instance ToYAML StackSampleProfile where
   toYAML :: StackSampleProfile -> YAML.Node ()
   toYAML = genericToYAMLProfilerProcessorConfig
 
-instance HasField "enabled" StackSampleProfile Bool where
-  getField :: StackSampleProfile -> Bool
-  getField = isEnabled . (.export)
-
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processCostCentreProfSampleData`.
 -}
@@ -670,7 +606,7 @@ data CostCentreSampleProfile = CostCentreSampleProfile
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
-  deriving (Lift)
+  deriving (Lift, Show)
 
 instance FromYAML CostCentreSampleProfile where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CostCentreSampleProfile
@@ -679,10 +615,6 @@ instance FromYAML CostCentreSampleProfile where
 instance ToYAML CostCentreSampleProfile where
   toYAML :: CostCentreSampleProfile -> YAML.Node ()
   toYAML = genericToYAMLProfilerProcessorConfig
-
-instance HasField "enabled" CostCentreSampleProfile Bool where
-  getField :: CostCentreSampleProfile -> Bool
-  getField = isEnabled . (.export)
 
 -------------------------------------------------------------------------------
 -- Configuration supertypes
@@ -695,7 +627,6 @@ type IsProcessorConfig :: Type -> Constraint
 type IsProcessorConfig config =
   ( HasField "name" config (Maybe Text)
   , HasField "description" config (Maybe Text)
-  , HasField "enabled" config Bool
   , HasField "export" config (Maybe ExportStrategy)
   )
 
@@ -736,7 +667,7 @@ type IsProfileProcessorConfig config =
 data Duration
   = DurationByBatches {batches :: !Int}
   | DurationBySeconds {seconds :: !Double}
-  deriving (Lift)
+  deriving (Lift, Show)
 
 {- |
 Internal helper.
@@ -788,7 +719,7 @@ The options for metric aggregation strategies.
 data AggregationStrategy
   = AggregationStrategyBool {isOn :: !Bool}
   | AggregationStrategyDuration {duration :: !Duration}
-  deriving (Lift)
+  deriving (Lift, Show)
 
 {- |
 Convert an `AggregationStrategy` to a number of seconds, if specified in seconds.
@@ -827,19 +758,26 @@ The options for export strategies.
 data ExportStrategy
   = ExportStrategyBool {isOn :: !Bool}
   | ExportStrategyDuration {duration :: !Duration}
-  deriving (Lift)
+  deriving (Lift, Show)
 
 {- |
 Check whether or not a processor is enabled based on its export strategy.
 -}
-isEnabled :: Maybe ExportStrategy -> Bool
-isEnabled = \case
-  Nothing -> False
-  Just ExportStrategyBool{..} -> isOn
-  Just ExportStrategyDuration{..} ->
-    case duration of
-      DurationByBatches{..} -> batches > 0
-      DurationBySeconds{..} -> seconds > 0
+isEnabled ::
+  forall processorConfig.
+  (HasField "export" processorConfig (Maybe ExportStrategy)) =>
+  Maybe processorConfig -> Bool
+isEnabled =
+  maybe False (isEnabledByExportStrategy . (.export))
+ where
+  isEnabledByExportStrategy :: Maybe ExportStrategy -> Bool
+  isEnabledByExportStrategy = \case
+    Nothing -> True
+    Just ExportStrategyBool{..} -> isOn
+    Just ExportStrategyDuration{..} ->
+      case duration of
+        DurationByBatches{..} -> batches > 0
+        DurationBySeconds{..} -> seconds > 0
 
 {- |
 Convert an `ExportStrategy` to a number of seconds, if specified in seconds.
