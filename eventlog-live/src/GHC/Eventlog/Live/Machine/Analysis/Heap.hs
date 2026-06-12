@@ -20,14 +20,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   heapProfSamples,
   processHeapProfSampleData,
 
-  -- ** Heap Profile Breakdown
-  heapProfBreakdownEitherReader,
-  heapProfBreakdownShow,
-
   -- ** Things fendor doesn't want to reimplement
-  InfoProv (..),
-  InfoProvPtr (..),
-  HeapProfBreakdown,
   metric,
 ) where
 
@@ -37,27 +30,24 @@ import Data.Either (isLeft)
 import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
-import Data.Hashable (Hashable (..))
 import Data.List qualified as L
 import Data.Machine (Process, ProcessT, await, construct, repeatedly, yield)
-import Data.Maybe (isJust, listToMaybe, mapMaybe)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
+import GHC.Eventlog.Live.Data.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
+import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
-import Numeric (showHex)
-import Text.ParserCombinators.ReadP (readP_to_S)
-import Text.ParserCombinators.ReadP qualified as P
 import Text.Printf (printf)
 import Text.Read (readMaybe)
-import Text.Read.Lex (readHexP)
 
 -------------------------------------------------------------------------------
 -- Heap events
@@ -217,37 +207,6 @@ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSamples =
         pure (Just heapProfSample)
   heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSamples.heapProfSampleMap
   pure HeapProfSampleData{heapProfSampleMap = heapProfSampleMap'}
-
-{- |
-Internal helper.
-The type of info table pointers.
--}
-newtype InfoProvPtr = InfoProvPtr Word64
-  deriving newtype (Eq, Hashable, Ord)
-
-instance Show InfoProvPtr where
-  showsPrec :: Int -> InfoProvPtr -> ShowS
-  showsPrec _ (InfoProvPtr ptr) =
-    showString "0x" . showHex ptr
-
-instance Read InfoProvPtr where
-  readsPrec :: Int -> ReadS InfoProvPtr
-  readsPrec _ = readP_to_S (InfoProvPtr <$> (P.string "0x" *> readHexP))
-
-{- |
-Internal helper.
-The type of an info table entry, as produced by the `E.InfoTableProv` event.
--}
-data InfoProv = InfoProv
-  { ipPtr :: !InfoProvPtr -- TODO: Remove this field.
-  , ipName :: !Text
-  , ipClosureDesc :: !Int
-  , ipTyDesc :: !Text
-  , ipLabel :: !Text
-  , ipModule :: !Text
-  , ipSrcLoc :: !Text
-  }
-  deriving (Show, Eq, Ord)
 
 {- |
 Internal helper.
@@ -447,81 +406,6 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
                   maybeHeapProfSampleData = Just heapProfSampleData'
                 }
       _otherwise -> go st
-
-{- |
-Parses the `HeapProfBreakdown` command-line arguments:
-
-> heapProfBreakdownEitherReader "T" == Left HeapProfBreakdownClosureType
-> heapProfBreakdownEitherReader "c" == Left HeapProfBreakdownCostCentre
-> heapProfBreakdownEitherReader "m" == Left HeapProfBreakdownModule
-> heapProfBreakdownEitherReader "d" == Left HeapProfBreakdownClosureDescr
-> heapProfBreakdownEitherReader "y" == Left HeapProfBreakdownTypeDescr
-> heapProfBreakdownEitherReader "e" == Left HeapProfBreakdownEra
-> heapProfBreakdownEitherReader "r" == Left HeapProfBreakdownRetainer
-> heapProfBreakdownEitherReader "b" == Left HeapProfBreakdownBiography
-> heapProfBreakdownEitherReader "i" == Left HeapProfBreakdownInfoTable
--}
-heapProfBreakdownEitherReader :: String -> Either String HeapProfBreakdown
-heapProfBreakdownEitherReader =
-  \case
-    "T" -> Right HeapProfBreakdownClosureType
-    "c" -> Right HeapProfBreakdownCostCentre
-    "m" -> Right HeapProfBreakdownModule
-    "d" -> Right HeapProfBreakdownClosureDescr
-    "y" -> Right HeapProfBreakdownTypeDescr
-    "e" -> Right HeapProfBreakdownEra
-    "r" -> Right HeapProfBreakdownRetainer
-    "b" -> Right HeapProfBreakdownBiography
-    "i" -> Right HeapProfBreakdownInfoTable
-    str -> Left $ "Unsupported heap profile breakdown -h" <> str
-
-{- |
-Shows a `HeapProfBreakdown` as its corresponding command-line flag:
-
-> heapProfBreakdownShow HeapProfBreakdownClosureType == "-hT"
-> heapProfBreakdownShow HeapProfBreakdownCostCentre == "-hc"
-> heapProfBreakdownShow HeapProfBreakdownModule == "-hm"
-> heapProfBreakdownShow HeapProfBreakdownClosureDescr == "-hd"
-> heapProfBreakdownShow HeapProfBreakdownTypeDescr == "-hy"
-> heapProfBreakdownShow HeapProfBreakdownEra == "-he"
-> heapProfBreakdownShow HeapProfBreakdownRetainer == "-hr"
-> heapProfBreakdownShow HeapProfBreakdownBiography == "-hb"
-> heapProfBreakdownShow HeapProfBreakdownInfoTable == "-hi"
--}
-heapProfBreakdownShow :: HeapProfBreakdown -> String
-heapProfBreakdownShow =
-  ("-h" <>) . \case
-    HeapProfBreakdownClosureType -> "T"
-    HeapProfBreakdownCostCentre -> "c"
-    HeapProfBreakdownModule -> "m"
-    HeapProfBreakdownClosureDescr -> "d"
-    HeapProfBreakdownTypeDescr -> "y"
-    HeapProfBreakdownEra -> "e"
-    HeapProfBreakdownRetainer -> "r"
-    HeapProfBreakdownBiography -> "b"
-    HeapProfBreakdownInfoTable -> "i"
-
-{- |
-Internal helper.
-Determine the `HeapProfBreakdown` from the list of program arguments.
-
-__Warning__: This scan is not fully correct. It merely scans for the presence
-of arguments that, as a whole, parse with `heapProfBreakdownEitherReader`.
-It does not handle @-with-rtsopts@ and does not restrict its search to those
-arguments between @+RTS@ and @-RTS@ tags.
--}
-findHeapProfBreakdown :: [Text] -> Maybe HeapProfBreakdown
-findHeapProfBreakdown = listToMaybe . mapMaybe parseHeapProfBreakdown
- where
-  parseHeapProfBreakdown :: Text -> Maybe HeapProfBreakdown
-  parseHeapProfBreakdown arg
-    | "-h" `T.isPrefixOf` arg =
-        either (const Nothing) Just
-          . heapProfBreakdownEitherReader
-          . T.unpack
-          . T.drop 2
-          $ arg
-    | otherwise = Nothing
 
 -------------------------------------------------------------------------------
 -- Internal Helpers

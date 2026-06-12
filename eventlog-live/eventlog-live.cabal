@@ -96,6 +96,8 @@ library
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
     GHC.Eventlog.Live.Data.Group
+    GHC.Eventlog.Live.Data.HeapProfBreakdown
+    GHC.Eventlog.Live.Data.InfoProv
     GHC.Eventlog.Live.Data.LogRecord
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Severity

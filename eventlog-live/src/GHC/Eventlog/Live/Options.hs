@@ -16,8 +16,8 @@ module GHC.Eventlog.Live.Options (
 ) where
 
 import Control.Applicative (asum)
+import GHC.Eventlog.Live.Data.HeapProfBreakdown (heapProfBreakdownEitherReader)
 import GHC.Eventlog.Live.Data.Severity (Severity (..), fromSeverityString)
-import GHC.Eventlog.Live.Machine.Analysis.Heap (heapProfBreakdownEitherReader)
 import GHC.Eventlog.Live.Source.Core (EventlogSocketAddr (..), EventlogSourceOptions (..))
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O

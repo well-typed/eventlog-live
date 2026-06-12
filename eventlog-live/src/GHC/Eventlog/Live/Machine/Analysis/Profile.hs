@@ -29,9 +29,10 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector.Unboxed qualified as UVector
 import Data.Word
+import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Logger (Logger, writeException)
-import GHC.Eventlog.Live.Machine.Analysis.Heap (InfoProv (..), InfoProvPtr (..), metric)
+import GHC.Eventlog.Live.Machine.Analysis.Heap (metric)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..))
