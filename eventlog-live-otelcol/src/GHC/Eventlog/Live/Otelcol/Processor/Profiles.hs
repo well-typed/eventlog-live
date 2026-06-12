@@ -18,9 +18,9 @@ import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Text (Text)
+import GHC.Eventlog.Live.Data.InfoProv qualified as M
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
