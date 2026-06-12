@@ -5,8 +5,8 @@
 #     blocks_size:
 #       name: ghc_eventlog_BlocksSize
 #       description: The current heap size, calculated by the allocated number of blocks.
-#       aggregate: 1x
-#       export: 60x
+#       aggregate: 1s
+#       export: 60s
 #
 # - The `name` property is added to each piece of telemetry data,
 #   and determines the name under which the data becomes available in your
@@ -42,7 +42,7 @@
 #     processor exports telemetry data as if configured with "1x" (see above).
 #
 #   The example `blocks_size` processor exports a batch of telemetry data every
-#   30 seconds.
+#   60 seconds.
 #
 # - The `aggregate` property determines whether or not the telemetry data is
 #   aggregated over time, and, if so, over what interval. Only metrics support
@@ -60,6 +60,9 @@
 #   The data produced by our example `blocks_size` processor aggregates data
 #   over 1 second intervals and only keeps the last metric in each interval.
 #
+# If the key for any specific processor is present in the file, even if it sets
+# none of the properties, the processor is _enabled_, and any missing keys will
+# default to the values in this file. Otherwise, the processor is _disabled_.
 processors:
   logs:
     thread_label:
