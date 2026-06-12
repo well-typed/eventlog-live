@@ -102,6 +102,7 @@ library
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Severity
     GHC.Eventlog.Live.Data.Span
+    GHC.Eventlog.Live.Data.SrcLoc
     GHC.Eventlog.Live.Logger
     GHC.Eventlog.Live.Machine.Analysis.Capability
     GHC.Eventlog.Live.Machine.Analysis.Heap
