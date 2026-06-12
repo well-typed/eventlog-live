@@ -90,7 +90,7 @@ import Data.Default (Default (..))
 import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
-import Data.Monoid (Any (..), First (..))
+import Data.Monoid (Any (..))
 import Data.Semigroup (Semigroup (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -267,48 +267,58 @@ instance Default CostCentreSampleProfile where
 -------------------------------------------------------------------------------
 
 {- |
+Get the user-specified processor configuration.
+-}
+userProcessorConfig ::
+  (Processors -> Maybe processorGroup) ->
+  (processorGroup -> Maybe processorConfig) ->
+  FullConfig ->
+  Maybe processorConfig
+userProcessorConfig group processor fullConfig =
+  processor =<< group =<< fullConfig.config.processors
+
+{- |
 Get whether or not a processor is enabled.
 -}
 processorEnabled ::
-  (HasField "enabled" b Bool) =>
-  (Processors -> Maybe a) ->
-  (a -> Maybe b) ->
+  (HasField "export" processorConfig (Maybe ExportStrategy)) =>
+  (Processors -> Maybe processorGroup) ->
+  (processorGroup -> Maybe processorConfig) ->
   FullConfig ->
   Bool
-processorEnabled group field =
-  getAny . with (.processors) (with group (with field (Any . (.enabled)))) . (.config)
+processorEnabled group processor =
+  isEnabled . userProcessorConfig group processor
 
 {- |
 Get the description corresponding to a processor.
 -}
 processorDescription ::
+  forall a b.
   (Default b, HasField "description" b (Maybe Text)) =>
   (Processors -> Maybe a) ->
   (a -> Maybe b) ->
   FullConfig ->
   Maybe Text
-processorDescription group field =
-  (.description) . fromMaybe def . getFirst . with (.processors) (with group (First . field)) . (.config)
+processorDescription group processor =
+  (.description) . fromMaybe (def :: b) . userProcessorConfig group processor
 
 {- |
 Get the name corresponding to a processor.
-
-__Warning:__ This assumes the value of @`def`.`name`@ is `Just` some `Text`.
 -}
 processorName ::
   forall a b.
-  (HasCallStack, Default b, HasField "name" b (Maybe Text)) =>
+  (HasCallStack, Show b, Default b, HasField "name" b (Maybe Text)) =>
   (Processors -> Maybe a) ->
   (a -> Maybe b) ->
   FullConfig ->
   Text
-processorName group field =
-  fromMaybe defaultName . ((.name) <=< getFirst) . with (.processors) (with group (First . field)) . (.config)
+processorName group processor =
+  fromMaybe defaultName . ((.name) <=< userProcessorConfig group processor)
  where
-  defaultName :: (HasCallStack) => Text
-  defaultName = case (def :: b).name of
-    Nothing -> error "The default configuration for this metric has no name."
-    Just name -> name
+  defaultName = fromMaybe (error errMsg) config.name
+   where
+    config = def :: b
+    errMsg = "The default configuration has no name: " <> show config
 
 --------------------------------------------------------------------------------
 -- Aggregation Strategy
@@ -323,7 +333,7 @@ processorAggregationStrategy ::
   FullConfig ->
   Maybe AggregationStrategy
 processorAggregationStrategy group field =
-  (.aggregate) . fromMaybe def . getFirst . with (.processors) (with group (First . field)) . (.config)
+  (.aggregate) . fromMaybe def . userProcessorConfig group field
 
 {- |
 Convert an `AggregationStrategy` to a number of batches.
@@ -375,7 +385,7 @@ allAggregationStrategies ::
   Config ->
   [AggregationStrategy]
 allAggregationStrategies =
-  catMaybes . with (.processors) (with (.metrics) (forEachMetricProcessor (.aggregate)))
+  catMaybes . with (.processors) (with (.metrics) (forEachMetricProcessor ((.aggregate) =<<)))
 
 {- |
 Get the largest aggregation strategy in batches.
@@ -400,7 +410,7 @@ processorExportStrategy ::
   FullConfig ->
   Maybe ExportStrategy
 processorExportStrategy group field =
-  (.export) . fromMaybe def . getFirst . with (.processors) (with group (First . field)) . (.config)
+  (.export) . fromMaybe def . userProcessorConfig group field
 
 {- |
 Convert an `ExportStrategy` to a number of batches.
@@ -449,7 +459,7 @@ allExportStrategies ::
   Config ->
   [ExportStrategy]
 allExportStrategies =
-  catMaybes . with (.processors) (forEachProcessor (.export))
+  catMaybes . with (.processors) (forEachProcessor ((.export) =<<))
 
 {- |
 Get the largest export strategy in batches.
@@ -510,7 +520,7 @@ shouldExportLogs =
       (.processors)
       ( with
           (.logs)
-          (mconcat . forEachLogProcessor (Any . isEnabled . (.export)))
+          (mconcat . forEachLogProcessor (Any . isEnabled))
       )
     . (.config)
 
@@ -521,7 +531,7 @@ shouldExportMetrics =
       (.processors)
       ( with
           (.metrics)
-          (mconcat . forEachMetricProcessor (Any . isEnabled . (.export)))
+          (mconcat . forEachMetricProcessor (Any . isEnabled))
       )
     . (.config)
 
@@ -532,7 +542,7 @@ shouldExportTraces =
       (.processors)
       ( with
           (.traces)
-          (mconcat . forEachTraceProcessor (Any . isEnabled . (.export)))
+          (mconcat . forEachTraceProcessor (Any . isEnabled))
       )
     . (.config)
 
@@ -543,7 +553,7 @@ shouldExportProfiles =
       (.processors)
       ( with
           (.profiles)
-          (mconcat . forEachProfileProcessor (Any . isEnabled . (.export)))
+          (mconcat . forEachProfileProcessor (Any . isEnabled))
       )
     . (.config)
 
@@ -557,16 +567,16 @@ Apply a function to each processor.
 forEachProcessor ::
   ( forall processorConfig.
     (IsProcessorConfig processorConfig) =>
-    processorConfig -> a
+    Maybe processorConfig -> a
   ) ->
   Processors ->
   [a]
 forEachProcessor f processors =
-  mconcat
-    [ forEachLogProcessor f (fromMaybe def processors.logs)
-    , forEachMetricProcessor f (fromMaybe def processors.metrics)
-    , forEachTraceProcessor f (fromMaybe def processors.traces)
-    , forEachProfileProcessor f (fromMaybe def processors.profiles)
+  concatMap (fromMaybe []) $
+    [ forEachLogProcessor f <$> processors.logs
+    , forEachMetricProcessor f <$> processors.metrics
+    , forEachTraceProcessor f <$> processors.traces
+    , forEachProfileProcessor f <$> processors.profiles
     ]
 
 {- |
@@ -575,16 +585,16 @@ Apply a function to each metric processor.
 forEachLogProcessor ::
   ( forall traceProcessorConfig.
     (IsLogProcessorConfig traceProcessorConfig) =>
-    traceProcessorConfig -> a
+    Maybe traceProcessorConfig -> a
   ) ->
   Logs ->
   [a]
 forEachLogProcessor f logs =
   [ -- NOTE: This should be kept in sync with the list of logs.
-    f $ fromMaybe def logs.threadLabel
-  , f $ fromMaybe def logs.userMarker
-  , f $ fromMaybe def logs.userMessage
-  , f $ fromMaybe def logs.internalLogMessage
+    f logs.threadLabel
+  , f logs.userMarker
+  , f logs.userMessage
+  , f logs.internalLogMessage
   ]
 
 {- |
@@ -593,21 +603,21 @@ Apply a function to each metric processor.
 forEachMetricProcessor ::
   ( forall metricProcessorConfig.
     (IsMetricProcessorConfig metricProcessorConfig) =>
-    metricProcessorConfig -> a
+    Maybe metricProcessorConfig -> a
   ) ->
   Metrics ->
   [a]
 forEachMetricProcessor f metrics =
   [ -- NOTE: This should be kept in sync with the list of metrics.
-    f $ fromMaybe def metrics.heapAllocated
-  , f $ fromMaybe def metrics.blocksSize
-  , f $ fromMaybe def metrics.heapSize
-  , f $ fromMaybe def metrics.heapLive
-  , f $ fromMaybe def metrics.memCurrent
-  , f $ fromMaybe def metrics.memNeeded
-  , f $ fromMaybe def metrics.memReturned
-  , f $ fromMaybe def metrics.heapProfSample
-  , f $ fromMaybe def metrics.capabilityUsage
+    f metrics.heapAllocated
+  , f metrics.blocksSize
+  , f metrics.heapSize
+  , f metrics.heapLive
+  , f metrics.memCurrent
+  , f metrics.memNeeded
+  , f metrics.memReturned
+  , f metrics.heapProfSample
+  , f metrics.capabilityUsage
   ]
 
 {- |
@@ -616,14 +626,14 @@ Apply a function to each metric processor.
 forEachTraceProcessor ::
   ( forall traceProcessorConfig.
     (IsTraceProcessorConfig traceProcessorConfig) =>
-    traceProcessorConfig -> a
+    Maybe traceProcessorConfig -> a
   ) ->
   Traces ->
   [a]
 forEachTraceProcessor f traces =
   [ -- NOTE: This should be kept in sync with the list of traces.
-    f $ fromMaybe def traces.capabilityUsage
-  , f $ fromMaybe def traces.threadState
+    f traces.capabilityUsage
+  , f traces.threadState
   ]
 
 {- |
@@ -632,14 +642,14 @@ Apply a function to each metric processor.
 forEachProfileProcessor ::
   ( forall profileProcessorConfig.
     (IsProfileProcessorConfig profileProcessorConfig) =>
-    profileProcessorConfig -> a
+    Maybe profileProcessorConfig -> a
   ) ->
   Profiles ->
   [a]
 forEachProfileProcessor f profiles =
   [ -- NOTE: This should be kept in sync with the list of profiles.
-    f $ fromMaybe def profiles.stackSample
-  , f $ fromMaybe def profiles.costCentreSample
+    f profiles.stackSample
+  , f profiles.costCentreSample
   ]
 
 -------------------------------------------------------------------------------
