@@ -1,3 +1,51 @@
+### 0.7.0.0
+
+- **BREAKING**: Change default semantics of the configuration file.
+
+  Starting from version 0.7.0.0, if the key for any specific processor
+  is present in the file, even if it sets none of the properties, the
+  processor is _enabled_, and any missing keys will default to the values
+  in this file. Otherwise, the processor is _disabled_. For instance,
+  the following configuration will run _only_ the `heap_prof_sample`
+  processor with the default configuration.
+
+  ```yaml
+  processors:
+    metrics:
+      heap_prof_sample:
+  ```
+
+  Previously, if any key in the configuration file was commented out,
+  it was given the value in the default configuration. Unfortunately,
+  this was very unintuitive. Consider the following configuration...
+
+  ```yaml
+  processors:
+    metrics:
+      heap_prof_sample:
+        name: ghc_eventlog_HeapProfSample
+        aggregate: 5s
+        export: 5s
+  ```
+
+  Previously, this would activate `heap_prof_sample` with the given
+  configuration and activate _all other processors_ with their default
+  configuration. Moreover, if the user edited the file and commented out
+  the `heap_prof_sample` section...
+
+  ```yaml
+  processors:
+    metrics:
+  #     heap_prof_sample:
+  #       name: ghc_eventlog_HeapProfSample
+  #       aggregate: 5s
+  #       export: 5s
+  ```
+
+  ...this would _not_ deactive the `heap_prof_sample` processor. Rather,
+  it would keep the `heap_prof_sample` processor active with its default
+  configuration.
+
 ### 0.6.1.0
 
 - Support eventlog over TCP/IP.
