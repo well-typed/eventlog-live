@@ -285,8 +285,7 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
             let ipPtr = InfoProvPtr itInfo
                 infoProv =
                   InfoProv
-                    { ipPtr = ipPtr
-                    , ipName = itTableName
+                    { ipName = itTableName
                     , ipClosureDesc = itClosureDesc
                     , ipTyDesc = itTyDesc
                     , ipLabel = itLabel

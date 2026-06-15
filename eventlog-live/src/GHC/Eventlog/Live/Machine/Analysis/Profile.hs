@@ -189,8 +189,7 @@ processStackProfSampleData logger =
             let infoTablePtr = InfoProvPtr itInfo
                 infoTable =
                   InfoProv
-                    { ipPtr = infoTablePtr
-                    , ipName = itTableName
+                    { ipName = itTableName
                     , ipClosureDesc = itClosureDesc
                     , ipTyDesc = itTyDesc
                     , ipLabel = itLabel

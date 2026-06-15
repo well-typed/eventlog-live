@@ -34,8 +34,7 @@ instance Read InfoProvPtr where
 The type of an info table provenance entry, as produced by the `GHC.RTS.Events.InfoTableProv` event.
 -}
 data InfoProv = InfoProv
-  { ipPtr :: !InfoProvPtr -- TODO: Remove this field.
-  , ipName :: !Text
+  { ipName :: !Text
   , ipClosureDesc :: !Int
   , ipTyDesc :: !Text
   , ipLabel :: !Text
