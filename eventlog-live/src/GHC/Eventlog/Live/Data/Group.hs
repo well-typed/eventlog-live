@@ -1,6 +1,6 @@
 {- |
 Module      : GHC.Eventlog.Live.Data.Group
-Description : Core machines for processing data in batches.
+Description : Reprsentation for grouped data.
 Stability   : experimental
 Portability : portable
 -}
