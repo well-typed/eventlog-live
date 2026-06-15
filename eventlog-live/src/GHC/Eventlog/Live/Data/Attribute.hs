@@ -1,6 +1,6 @@
 {- |
 Module      : GHC.Eventlog.Live.Attribute
-Description : Representation for attributes.
+Description : Representation for OTLP attributes.
 Stability   : experimental
 Portability : portable
 -}
