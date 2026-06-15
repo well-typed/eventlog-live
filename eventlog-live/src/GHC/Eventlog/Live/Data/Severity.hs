@@ -1,6 +1,6 @@
 {- |
 Module      : GHC.Eventlog.Live.Severity
-Description : Representation for metrics.
+Description : Representation for OTLP log record severities.
 Stability   : experimental
 Portability : portable
 -}
