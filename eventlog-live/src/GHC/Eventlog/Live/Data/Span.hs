@@ -1,6 +1,6 @@
 {- |
 Module      : GHC.Eventlog.Live.Span
-Description : Representation for spans.
+Description : Representation for OTLP spans.
 Stability   : experimental
 Portability : portable
 -}
