@@ -1,6 +1,6 @@
 {- |
 Module      : GHC.Eventlog.Live.Metric
-Description : Representation for metrics.
+Description : Representation for OTLP metrics.
 Stability   : experimental
 Portability : portable
 -}
