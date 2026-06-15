@@ -103,6 +103,7 @@ library
   hs-source-dirs: src
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
+    GHC.Eventlog.Live.Data.CostCentre
     GHC.Eventlog.Live.Data.Group
     GHC.Eventlog.Live.Data.HeapProfBreakdown
     GHC.Eventlog.Live.Data.InfoProv
