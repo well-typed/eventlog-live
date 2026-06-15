@@ -10,7 +10,11 @@ module GHC.Eventlog.Live.Data.SrcLoc (
   Point (..),
 ) where
 
+import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
 import Data.Char (isDigit)
+import Data.Maybe (fromMaybe)
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Word (Word32)
 import GHC.Generics (Generic)
 import GHC.Records (HasField (..))
@@ -221,3 +225,131 @@ pRange = pRange'MultiLine P.<++ (pRange'OneLine P.+++ pPointRange)
 instance Read Range where
   readPrec :: ReadPrec Range
   readPrec = P.readP_to_Prec (const pRange)
+
+--------------------------------------------------------------------------------
+-- Instances for binary serialisation of SrcLoc
+--------------------------------------------------------------------------------
+
+{- |
+Internal helper.
+
+Serialise source location information.
+-}
+putSrcLoc :: SrcLoc -> Put
+putSrcLoc SrcLoc{..} = do
+  putString (fromMaybe "" srcFilePath)
+  putMaybeRange srcRange
+ where
+  putString = put . TE.encodeUtf8 . T.pack
+
+{- |
+Internal helper.
+
+Deserialise source location information.
+-}
+getSrcLoc :: Get SrcLoc
+getSrcLoc = do
+  srcFilePath <- Just <$> getString
+  srcRange <- getMaybeRange
+  pure SrcLoc{..}
+ where
+  getString = T.unpack . TE.decodeUtf8 <$> get
+
+instance Binary SrcLoc where
+  put :: SrcLoc -> Put
+  put = putSrcLoc
+  get :: Get SrcLoc
+  get = getSrcLoc
+
+--------------------------------------------------------------------------------
+-- Instances for binary serialisation of optional ranges
+--------------------------------------------------------------------------------
+
+{- |
+Internal helper.
+
+Constructor tags for binary serialisation of ranges.
+-}
+data MaybeRangeTag
+  = TagNothing
+  | TagJustRange'Point
+  | TagJustRange'OneLine
+  | TagJustRange'MultiLine
+
+{- |
+Internal helper.
+
+Serialise a constructor tag for an optional range.
+-}
+putMaybeRangeTag :: MaybeRangeTag -> Put
+putMaybeRangeTag = \case
+  TagNothing -> putWord8 0x01
+  TagJustRange'Point -> putWord8 0x02
+  TagJustRange'OneLine -> putWord8 0x03
+  TagJustRange'MultiLine -> putWord8 0x04
+
+{- |
+Internal helper.
+
+Deserialise a constructor tag for an optional range.
+-}
+getMaybeRangeTag :: Get MaybeRangeTag
+getMaybeRangeTag = do
+  maybeRangeTag <- getWord8
+  case maybeRangeTag of
+    0x01 -> pure TagNothing
+    0x02 -> pure TagJustRange'Point
+    0x03 -> pure TagJustRange'OneLine
+    0x04 -> pure TagJustRange'MultiLine
+    _otherwise -> fail $ "Unexpected tag " <> show maybeRangeTag
+
+{- |
+Internal helper.
+
+Serialise an optional range to binary.
+-}
+putMaybeRange :: Maybe Range -> Put
+putMaybeRange = \case
+  Nothing ->
+    putMaybeRangeTag TagNothing
+  Just Range'Point{..} -> do
+    putMaybeRangeTag TagJustRange'Point
+    put line
+    put column
+  Just Range'OneLine{..} -> do
+    putMaybeRangeTag TagJustRange'OneLine
+    put line
+    put column
+    put endColumn
+  Just Range'MultiLine{..} -> do
+    putMaybeRangeTag TagJustRange'MultiLine
+    put line
+    put column
+    put endLine
+    put endColumn
+
+{- |
+Internal helper.
+
+Deserialise an optional range from binary.
+-}
+getMaybeRange :: Get (Maybe Range)
+getMaybeRange =
+  getMaybeRangeTag >>= \case
+    TagNothing ->
+      pure Nothing
+    TagJustRange'Point -> do
+      line <- get
+      column <- get
+      pure . Just $! Range'Point{..}
+    TagJustRange'OneLine -> do
+      line <- get
+      column <- get
+      endColumn <- get
+      pure . Just $! Range'OneLine{..}
+    TagJustRange'MultiLine -> do
+      line <- get
+      column <- get
+      endLine <- get
+      endColumn <- get
+      pure . Just $! Range'MultiLine{..}

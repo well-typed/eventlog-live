@@ -121,6 +121,7 @@ library
   build-depends:
     ansi-terminal >=1.1 && <1.2,
     base >=4.16 && <4.22,
+    binary >=0.8 && <0.9,
     bytestring >=0.11 && <0.13,
     clock >=0.8 && <0.9,
     co-log-core >=0.3 && <0.4,
