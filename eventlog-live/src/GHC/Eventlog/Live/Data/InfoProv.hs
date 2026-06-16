@@ -9,8 +9,10 @@ module GHC.Eventlog.Live.Data.InfoProv (
   InfoProv (..),
 ) where
 
+import Data.Binary (Binary (..), Get, Put)
 import Data.Hashable (Hashable)
 import Data.Text (Text)
+import Data.Text.Encoding qualified as TE
 import Data.Word (Word64)
 import Numeric (showHex)
 import Text.ParserCombinators.ReadP qualified as P
@@ -42,3 +44,33 @@ data InfoProv = InfoProv
   , ipSrcLoc :: !Text
   }
   deriving (Show, Eq, Ord)
+
+--------------------------------------------------------------------------------
+-- Instances for binary serialisation of InfoProv
+--------------------------------------------------------------------------------
+
+deriving newtype instance Binary InfoProvPtr
+
+instance Binary InfoProv where
+  get :: Get InfoProv
+  get = do
+    ipName <- getTextUtf8
+    ipClosureDesc <- get
+    ipTyDesc <- getTextUtf8
+    ipLabel <- getTextUtf8
+    ipModule <- getTextUtf8
+    ipSrcLoc <- getTextUtf8
+    pure InfoProv{..}
+   where
+    getTextUtf8 = TE.decodeUtf8 <$> get
+
+  put :: InfoProv -> Put
+  put InfoProv{..} = do
+    putTextUtf8 ipName
+    put ipClosureDesc
+    putTextUtf8 ipTyDesc
+    putTextUtf8 ipLabel
+    putTextUtf8 ipModule
+    putTextUtf8 ipSrcLoc
+   where
+    putTextUtf8 = put . TE.encodeUtf8
