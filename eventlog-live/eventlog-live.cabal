@@ -72,6 +72,7 @@ common language
     DeriveGeneric
     DeriveTraversable
     DerivingStrategies
+    DerivingVia
     DuplicateRecordFields
     FlexibleContexts
     FlexibleInstances

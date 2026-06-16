@@ -88,3 +88,5 @@ instance LSMT.SerialiseValue InfoProv where
 
   deserialiseValue :: LSMT.RawBytes -> InfoProv
   deserialiseValue = decode . LSMT.deserialiseValue
+
+deriving via LSMT.ResolveAsFirst InfoProv instance LSMT.ResolveValue InfoProv
