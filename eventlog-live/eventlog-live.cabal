@@ -138,6 +138,7 @@ library
     ghc-events >=0.20 && <0.21,
     ghc-stack-profiler-core >=0.3 && <0.4,
     hashable >=1.4 && <1.6,
+    lsm-tree >=1.1 && <1.2,
     machines >=0.7.4 && <0.8,
     monad-control >=1.0 && <1.1,
     network >=3.2.7 && <3.3,
