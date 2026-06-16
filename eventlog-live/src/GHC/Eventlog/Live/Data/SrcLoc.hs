@@ -10,6 +10,7 @@ module GHC.Eventlog.Live.Data.SrcLoc (
   Point (..),
 ) where
 
+import Codec.LEB128.Generic (decodeLEB128, encodeLEB128)
 import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
 import Data.Char (isDigit)
 import Data.Maybe (fromMaybe)
@@ -314,19 +315,19 @@ putMaybeRange = \case
     putMaybeRangeTag TagNothing
   Just Range'Point{..} -> do
     putMaybeRangeTag TagJustRange'Point
-    put line
-    put column
+    encodeLEB128 putWord8 line
+    encodeLEB128 putWord8 column
   Just Range'OneLine{..} -> do
     putMaybeRangeTag TagJustRange'OneLine
-    put line
-    put column
-    put endColumn
+    encodeLEB128 putWord8 line
+    encodeLEB128 putWord8 column
+    encodeLEB128 putWord8 endColumn
   Just Range'MultiLine{..} -> do
     putMaybeRangeTag TagJustRange'MultiLine
-    put line
-    put column
-    put endLine
-    put endColumn
+    encodeLEB128 putWord8 line
+    encodeLEB128 putWord8 column
+    encodeLEB128 putWord8 endLine
+    encodeLEB128 putWord8 endColumn
 
 {- |
 Internal helper.
@@ -339,17 +340,17 @@ getMaybeRange =
     TagNothing ->
       pure Nothing
     TagJustRange'Point -> do
-      line <- get
-      column <- get
+      line <- decodeLEB128 getWord8
+      column <- decodeLEB128 getWord8
       pure . Just $! Range'Point{..}
     TagJustRange'OneLine -> do
-      line <- get
-      column <- get
-      endColumn <- get
+      line <- decodeLEB128 getWord8
+      column <- decodeLEB128 getWord8
+      endColumn <- decodeLEB128 getWord8
       pure . Just $! Range'OneLine{..}
     TagJustRange'MultiLine -> do
-      line <- get
-      column <- get
-      endLine <- get
-      endColumn <- get
+      line <- decodeLEB128 getWord8
+      column <- decodeLEB128 getWord8
+      endLine <- decodeLEB128 getWord8
+      endColumn <- decodeLEB128 getWord8
       pure . Just $! Range'MultiLine{..}

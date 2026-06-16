@@ -44,6 +44,14 @@ flag use-concurrent-machines
   default: False
   manual: False
 
+-- 2025-12-09:
+-- This flag should enable switching between leb128 and the vendored copy
+-- of the packages.
+flag use-leb128
+  description: Use leb128 in place of the vendored copy
+  default: False
+  manual: False
+
 common language
   ghc-options:
     -Wall
@@ -138,6 +146,16 @@ library
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
+
+  -- 2026-06-16:
+  -- This configures the build requirements for the vendored copy of
+  -- the leb128 package version 0.1.0.0.
+  if flag(use-leb128)
+    build-depends: leb128 >=0.1 && <0.2
+  else
+    hs-source-dirs: vendor/leb128-0.1.0.0/src
+    other-modules:
+      Codec.LEB128.Generic
 
   -- 2025-12-09:
   -- This configures the build requirements for the vendored copy of
