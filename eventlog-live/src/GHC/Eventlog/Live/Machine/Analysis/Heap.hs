@@ -25,6 +25,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
 ) where
 
 import Control.Monad (unless, when)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Either (isLeft)
 import Data.Foldable (for_)
@@ -39,10 +40,11 @@ import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
-import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
+import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvDatabase, lookupInfoProv)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
@@ -214,23 +216,10 @@ The type of the state kept by `processHeapProfSampleData`.
 -}
 data HeapProfSampleState = HeapProfSampleState
   { eitherShouldWarnOrHeapProfBreakdown :: !(Either Bool HeapProfBreakdown)
-  , infoProvMap :: !(HashMap InfoProvPtr InfoProv)
   , heapProfSampleEraStack :: ![Word64]
   , maybeHeapProfSampleData :: !(Maybe HeapProfSampleData)
   }
   deriving (Show)
-
-{- |
-Internal helper.
-Decides whether or not `processHeapProfSampleData` should track info tables.
-We track info tables until (1) we learn that the RTS is not run with @-hi@,
-or (2) we see the first heap profiling sample and don't yet know for sure
-that the RTS is run with @-hi@.
--}
-shouldTrackInfoProvMap :: Either Bool HeapProfBreakdown -> Bool
-shouldTrackInfoProvMap (Left _shouldWarn) = True
-shouldTrackInfoProvMap (Right HeapProfBreakdownInfoTable) = True
-shouldTrackInfoProvMap _ = False
 
 {- |
 Internal helper.
@@ -250,16 +239,16 @@ build an info table map, if necessary, and processes `E.HeapProfSampleBegin`
 and `E.HeapProfSampleEnd` events to maintain an era stack.
 -}
 processHeapProfSampleData ::
-  (Monad m) =>
+  (MonadIO m) =>
   Logger m ->
+  InfoProvDatabase ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
-processHeapProfSampleData logger maybeHeapProfBreakdown =
+processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
         { eitherShouldWarnOrHeapProfBreakdown = maybe (Left True) Right maybeHeapProfBreakdown
-        , infoProvMap = mempty
         , heapProfSampleEraStack = mempty
         , maybeHeapProfSampleData = mempty
         }
@@ -279,20 +268,6 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
         | isLeft eitherShouldWarnOrHeapProfBreakdown
         , Just heapProfBreakdown <- findHeapProfBreakdown args ->
             go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
-      -- Announces an info table entry.
-      E.InfoTableProv{..}
-        | shouldTrackInfoProvMap eitherShouldWarnOrHeapProfBreakdown -> do
-            let ipPtr = InfoProvPtr itInfo
-                infoProv =
-                  InfoProv
-                    { ipName = itTableName
-                    , ipClosureDesc = itClosureDesc
-                    , ipTyDesc = itTyDesc
-                    , ipLabel = itLabel
-                    , ipModule = itModule
-                    , ipSrcLoc = itSrcLoc
-                    }
-            go st{infoProvMap = M.insert ipPtr infoProv infoProvMap}
       -- Announces the beginning of a heap profile sample.
       E.HeapProfSampleBegin{..} -> do
         -- Check that maybeHeapProfSampleData is Nothing.
@@ -350,7 +325,7 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
                   \         you must also pass the heap profile type to this executable.\n\
                   \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
             lift $ writeLog logger WARN $ msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoProvMap = mempty}
+            go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
             let msg =
@@ -359,15 +334,28 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
                       "Unsupported heap profile breakdown %s"
                       (heapProfBreakdownShow HeapProfBreakdownBiography)
             lift $ writeLog logger WARN $ msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False, infoProvMap = mempty}
+            go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
             -- If the heap profile breakdown is by info table, add the info table.
-            let maybeInfoProv
-                  | isHeapProfBreakdownInfoTable heapProfBreakdown = do
-                      !ipPtr <- readMaybe (T.unpack heapProfLabel)
-                      M.lookup ipPtr infoProvMap
-                  | otherwise = Nothing
+            maybeInfoProv <-
+              if isHeapProfBreakdownInfoTable heapProfBreakdown
+                then case readMaybe (T.unpack heapProfLabel) of
+                  Nothing -> do
+                    lift . writeLog logger WARN $
+                      "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
+                    pure Nothing
+                  Just infoProvPtr -> do
+                    maybeInfoProv <- liftIO $ lookupInfoProv infoProvDatabase infoProvPtr
+                    case maybeInfoProv of
+                      Nothing ->
+                        lift . writeLog logger WARN $
+                          "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
+                      Just infoProv ->
+                        lift . writeLog logger TRACE $
+                          "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipLabel <> "."
+                    pure maybeInfoProv
+                else pure Nothing
             -- Get the HeapProfSampleData
             heapProfSampleData <-
               case st.maybeHeapProfSampleData of
@@ -399,9 +387,7 @@ processHeapProfSampleData logger maybeHeapProfBreakdown =
             -- Continue with the updated HeapProfSampleState
             go
               st
-                { -- If we're not profiling with -hi, discard the info table map
-                  infoProvMap = if isHeapProfBreakdownInfoTable heapProfBreakdown then st.infoProvMap else mempty
-                , -- Add the update HeapProfSampleData
+                { -- Add the update HeapProfSampleData
                   maybeHeapProfSampleData = Just heapProfSampleData'
                 }
       _otherwise -> go st

@@ -8,6 +8,7 @@ module GHC.Eventlog.Live.Machine.Analysis.InfoProv (
   withNewInfoProvDatabase,
   InfoProvDatabase,
   indexInfoProv,
+  lookupInfoProv,
   lookupInfoProvs,
 ) where
 
@@ -61,6 +62,16 @@ lookupInfoProvs ::
   IO (Vector (Maybe InfoProv))
 lookupInfoProvs InfoProvDatabase{..} infoProvPtrs =
   fmap LSMT.getValue <$> LSMT.lookups infoProvTable infoProvPtrs
+
+{- |
+Resolve an `InfoProvPtr` key to a `InfoProv` value from an `InfoProvDatabase`.
+-}
+lookupInfoProv ::
+  InfoProvDatabase ->
+  InfoProvPtr ->
+  IO (Maybe InfoProv)
+lookupInfoProv InfoProvDatabase{..} infoProvPtr =
+  LSMT.getValue <$> LSMT.lookup infoProvTable infoProvPtr
 
 {- |
 Index `InfoProv` entries from a GHC event stream into an `InfoProvDatabase`.
