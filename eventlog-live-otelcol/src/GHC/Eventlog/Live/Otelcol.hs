@@ -13,23 +13,28 @@ module GHC.Eventlog.Live.Otelcol (
 
 import Control.Concurrent.STM.TChan (newTChanIO)
 import Control.Exception (bracket_)
+import Control.Monad (when)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
+import Data.Foldable (for_)
 import Data.Foldable qualified as F
-import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Machine (Process, ProcessT, asParts, mapping, stopped, (~>))
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Version (showVersion)
+import Data.Void (absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv qualified as MIPT
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
-import GHC.Eventlog.Live.Machine.Core (Tick)
+import GHC.Eventlog.Live.Machine.Core (Tick, (&>))
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
@@ -67,6 +72,8 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
+import System.Directory qualified as SD
+import System.Exit (exitFailure)
 
 {- |
 The main function for @eventlog-live-otelcol@.
@@ -130,13 +137,38 @@ main = do
                   ]
             ]
 
+    -- If an IPE table output path was provided, check that it does not exist.
+    for_ maybeIpeTableOutputFilePath $ \ipeTableOutputFilePath -> do
+      ipeTableOutputFilePathExists <- SD.doesPathExist ipeTableOutputFilePath
+      when ipeTableOutputFilePathExists $ do
+        writeLog logger FATAL . T.pack $
+          "Cannot write IPE table to " <> ipeTableOutputFilePath <> ": path exists."
+        exitFailure
+
+    -- Create machine that indexes InfoProv data.
+    let processInfoProvData :: InfoProvTable -> ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+        processInfoProvData infoProvTable
+          -- If an IPE table was provided, don't index any new entries.
+          | isJust maybeIpeTableInputFilePath = stopped
+          | otherwise = M.liftTick $ mapping (.value) ~> indexThenOutputTable ~> mapping absurd
+         where
+          indexThenOutputTable =
+            MIPT.indexing infoProvTable Nothing &> M.embed maybeOutputIpeTable
+          maybeOutputIpeTable =
+            for_ maybeIpeTableOutputFilePath $ \ipeTableOutputFilePath -> do
+              writeLog logger INFO . T.pack $
+                "Writing IPE table to " <> ipeTableOutputFilePath
+              MIPT.save logger infoProvTable ipeTableOutputFilePath
+
     -- Create machine that processes eventlog data into telemetry data
-    let processEventlogTelemetry :: ProcessT IO (Tick Event) (Tick ResourceTelemetryData)
-        processEventlogTelemetry =
+    let processEventlogTelemetry :: InfoProvTable -> ProcessT IO (Tick Event) (Tick ResourceTelemetryData)
+        processEventlogTelemetry infoProvTable =
           M.liftTick M.withStartTime
             ~> M.fanoutTick
-              [ -- Process the heap events.
-                processHeapEvents logger maybeHeapProfBreakdown fullConfig
+              [ -- Process InfoProv events.
+                processInfoProvData infoProvTable
+              , -- Process the heap events.
+                processHeapEvents logger infoProvTable maybeHeapProfBreakdown fullConfig
                   ~> mapping (fmap (fmap TelemetryData'Metric))
               , -- Process the log events.
                 processLogEvents fullConfig
@@ -172,7 +204,7 @@ main = do
             ~> M.liftTick (asResourceTelemetryData internalResource eventlogLiveScope)
 
     -- Create the full machine to process eventlog data.
-    let processAndExportTelemetry conn =
+    let processAndExportTelemetry infoProvDatabase conn =
           M.fanoutTick
             [ -- Log a warning if no input has been received after 10 ticks.
               M.validateInput logger 10
@@ -181,7 +213,7 @@ main = do
                 ~> mapping (fmap (D.singleton . EventCountStat))
             , -- Process eventlog and internal telemetry...
               M.fanoutTickCC
-                [ processEventlogTelemetry ~> mapping (fmap D.singleton)
+                [ processEventlogTelemetry infoProvDatabase ~> mapping (fmap D.singleton)
                 , processInternalTelemetry ~> mapping (fmap D.singleton)
                 ]
                 ~> M.liftTick asParts
@@ -198,24 +230,25 @@ main = do
     -- Open a connection to the OpenTelemetry Collector.
     let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
     G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-      withEventlogSourceHandle
-        logger
-        eventlogSocketTimeoutS
-        eventlogSocketTimeoutExponent
-        eventlogSourceOptions
-        $ \eventlogSourceHandle -> do
-          -- Notify the control server of the connection status.
-          let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
-          let endConnection = controlServerApi.notifyEndConnection serviceName
-          bracket_ newConnection endConnection $
-            -- Run the eventlog processor.
-            runWithEventlogSourceHandle
-              logger
-              eventlogSourceHandle
-              fullConfig.batchIntervalMs
-              Nothing
-              maybeEventlogLogFile
-              (processAndExportTelemetry conn)
+      MIPT.withInfoProvTable logger maybeIpeTableInputFilePath $ \infoProvTable -> do
+        withEventlogSourceHandle
+          logger
+          eventlogSocketTimeoutS
+          eventlogSocketTimeoutExponent
+          eventlogSourceOptions
+          $ \eventlogSourceHandle -> do
+            -- Notify the control server of the connection status.
+            let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
+            let endConnection = controlServerApi.notifyEndConnection serviceName
+            bracket_ newConnection endConnection $
+              -- Run the eventlog processor.
+              runWithEventlogSourceHandle
+                logger
+                eventlogSourceHandle
+                fullConfig.batchIntervalMs
+                Nothing
+                maybeEventlogLogFile
+                (processAndExportTelemetry infoProvTable conn)
 
 data TelemetryData
   = TelemetryData'Log OL.LogRecord

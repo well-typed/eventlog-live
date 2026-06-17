@@ -48,6 +48,8 @@ data Options = Options
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
+  , maybeIpeTableInputFilePath :: Maybe FilePath
+  , maybeIpeTableOutputFilePath :: Maybe FilePath
   , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
@@ -66,6 +68,8 @@ optionsParser =
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
+    <*> O.optional ipeTableInputFilePathParser
+    <*> O.optional ipeTableOutputFilePathParser
     <*> verbosityParser
     <*> statsParser
     <*> O.optional configFileParser
@@ -120,6 +124,25 @@ serviceNameParser =
           <> O.metavar "STRING"
           <> O.help "The name of the profiled service."
       )
+
+--------------------------------------------------------------------------------
+-- IPE Tables
+
+ipeTableInputFilePathParser :: O.Parser FilePath
+ipeTableInputFilePathParser =
+  O.strOption
+    ( O.long "ipe-table"
+        <> O.metavar "FILE"
+        <> O.help "The path to read the initial IPE table."
+    )
+
+ipeTableOutputFilePathParser :: O.Parser FilePath
+ipeTableOutputFilePathParser =
+  O.strOption
+    ( O.long "export-ipe-table-to"
+        <> O.metavar "FILE"
+        <> O.help "The path to write the final IPE table."
+    )
 
 --------------------------------------------------------------------------------
 -- OpenTelemetry Collector configuration

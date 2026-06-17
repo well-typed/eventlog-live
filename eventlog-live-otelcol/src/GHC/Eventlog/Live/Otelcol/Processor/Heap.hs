@@ -18,6 +18,7 @@ import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
@@ -37,17 +38,18 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 processHeapEvents ::
   (MonadIO m) =>
   Logger m ->
+  InfoProvTable ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapEvents verbosity maybeHeapProfBreakdown fullConfig =
+processHeapEvents verbosity infoProvDatabase maybeHeapProfBreakdown fullConfig =
   M.fanoutTick
     [ processHeapAllocated fullConfig
     , processBlocksSize fullConfig
     , processHeapSize fullConfig
     , processHeapLive fullConfig
     , processMemReturn fullConfig
-    , processHeapProfSample verbosity maybeHeapProfBreakdown fullConfig
+    , processHeapProfSample verbosity infoProvDatabase maybeHeapProfBreakdown fullConfig
     ]
 
 --------------------------------------------------------------------------------
@@ -170,14 +172,15 @@ shouldComputeMemReturn fullConfig =
 processHeapProfSample ::
   (MonadIO m) =>
   Logger m ->
+  InfoProvTable ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapProfSample logger maybeHeapProfBreakdown =
+processHeapProfSample logger infoProvDatabase maybeHeapProfBreakdown =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSampleData logger maybeHeapProfBreakdown
+      , dataProcessor = M.processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown
       , aggregators = viaLast
       , postProcessor = mapping M.heapProfSamples ~> asParts
       , unit = "By"
