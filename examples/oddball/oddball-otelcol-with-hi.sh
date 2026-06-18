@@ -11,11 +11,12 @@ export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 if [ "$GHC" = "" ]; then
 	GHC="$(which ghc)"
 fi
+PROJECT_FILE="$DIR/../../cabal.project.ipe"
 
 # Build oddball
 echo "Build oddball"
-cabal build oddball --with-compiler="$GHC" --constraint=eventlog-socket+control -v0
-ODDBALL_BIN=$(cabal list-bin exe:oddball --constraint=eventlog-socket+control -v0 | head -n1)
+cabal build oddball --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --constraint=eventlog-socket+control -v0
+ODDBALL_BIN=$(cabal list-bin exe:oddball --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --constraint=eventlog-socket+control -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
@@ -51,7 +52,7 @@ echo 'Start oddball' && \
 EVENTLOG_LIVE_OTELCOL_CMD="
 echo 'Start eventlog-live-otelcol (for oddball)' && \
 	${EVENTLOG_LIVE_OTELCOL_BIN} \
-		--verbosity=debug \
+		--verbosity=trace \
 		--stats \
 		--config='$DIR/oddball-otelcol-config.yaml' \
 		--service-name='oddball' \

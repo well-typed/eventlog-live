@@ -1,0 +1,8 @@
+import: cabal.project
+
+-- 2026-06-18:
+-- enable info-table maps for all packages
+package *
+  ghc-options:
+    -finfo-table-map
+    -fdistinct-constructor-tables
