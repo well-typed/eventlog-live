@@ -7,9 +7,14 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 
+# Find GHC version to build oddball
+if [ "$GHC" = "" ]; then
+	GHC="$(which ghc)"
+fi
+
 # Build oddball
 echo "Build oddball"
-cabal build oddball --constraint=eventlog-socket+control -v0
+cabal build oddball --with-compiler="$GHC" --constraint=eventlog-socket+control -v0
 ODDBALL_BIN=$(cabal list-bin exe:oddball --constraint=eventlog-socket+control -v0 | head -n1)
 
 # Build eventlog-live-otelcol
