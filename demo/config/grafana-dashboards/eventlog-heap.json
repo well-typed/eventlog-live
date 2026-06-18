@@ -251,7 +251,7 @@
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{heapProfLabel}}",
+          "legendFormat": "{{heapProfLabel}}\\{{ipName}}",
           "range": true,
           "refId": "A",
           "useBackend": false
@@ -262,14 +262,14 @@
         {
           "id": "renameByRegex",
           "options": {
-            "regex": "^[^:]+:(.*)$",
-            "renamePattern": "$1"
+            "regex": "^(0x[0-9a-f]+\\\\)?([^\\\\]*)(\\\\?)$",
+            "renamePattern": "$2"
           }
         },
         {
           "id": "renameByRegex",
           "options": {
-            "regex": "^${service_name}$",
+            "regex": "^\\\\$",
             "renamePattern": "Other"
           }
         }
