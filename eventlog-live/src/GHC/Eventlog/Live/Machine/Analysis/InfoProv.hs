@@ -5,87 +5,91 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.Analysis.InfoProv (
-  withNewInfoProvDatabase,
-  InfoProvDatabase,
-  indexInfoProv,
-  lookupInfoProv,
-  lookupInfoProvs,
+  InfoProvTable,
+  withInfoProvTable,
+  save,
+  indexing,
+  lookup,
+  lookups,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Coerce (coerce)
 import Data.Machine (Process, ProcessT, await, buffered, construct, mapping, repeatedly, yield, (~>))
 import Data.Maybe (fromMaybe)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Void (Void)
-import Database.LSMTree qualified as LSMT
+import Data.Word (Word64)
+import Database.LSMTree.Compat (Table, TableOptions (..))
+import Database.LSMTree.Compat qualified as T
 import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events qualified as E
-import System.FS.API (HasFS (..))
-import System.FS.API.Strict qualified as FS
-import System.FS.IO qualified as FS.IO
-import System.IO.Temp (withSystemTempDirectory)
+import Prelude hiding (lookup)
 
 {- |
-An `InfoProv` store.
+Representation of an `InfoProv` table.
 -}
-newtype InfoProvDatabase = InfoProvDatabase
-  { infoProvTable :: LSMT.Table IO InfoProvPtr InfoProv Void
-  }
+newtype InfoProvTable = InfoProvTable (Table (T.SerialiseVia InfoProvPtr Word64) (T.SerialiseViaBinary InfoProv))
 
 {- |
-Create an empty `InfoProvDatabase`.
+Create an empty `InfoProv` table.
+
+If the first argument is @`Just` tableFilePath@, the table is loaded from @tableFilePath@.
+Otherwise, an empty table is created.
 -}
-withNewInfoProvDatabase :: Maybe String -> (InfoProvDatabase -> IO a) -> IO a
-withNewInfoProvDatabase maybeLabel action = do
-  -- Create a temporary directory for the LSM Tree.
-  let !label = fromMaybe "eventlog-live-InfoProvDatabase" maybeLabel
-  withSystemTempDirectory label $ \storeDir -> do
-    -- Open the LSM Tree session.
-    let mountPoint = FS.MountPoint storeDir
-    let sessionDirFsPath = FS.mkFsPath ["session"]
-    let hasFS = FS.IO.ioHasFS @IO mountPoint
-    createDirectoryIfMissing hasFS True sessionDirFsPath
-    LSMT.withOpenMountedSessionIO mempty storeDir sessionDirFsPath $ \session -> do
-      -- Create a new LSM Tree Table.
-      LSMT.withTable session $ \infoProvTable -> do
-        -- Run the action.
-        action InfoProvDatabase{..}
+withInfoProvTable :: Logger IO -> Maybe FilePath -> (InfoProvTable -> IO a) -> IO a
+withInfoProvTable logger maybeInfoProvTableFilePath action = do
+  -- Create the table options.
+  let tableOptions =
+        LSMTreeTableOptions
+          { tableName = "info-prov-table"
+          , tableLabel = "InfoProvPtr-InfoProv"
+          , maybeTableFilePath = maybeInfoProvTableFilePath
+          , maybeSessionRoot = Nothing
+          }
+  -- Create the table.
+  T.withTable logger tableOptions $ action . InfoProvTable
 
 {- |
-Resolve `InfoProvPtr` keys to `InfoProv` values from an `InfoProvDatabase`.
+Save an `InfoProv` table to a file.
 -}
-lookupInfoProvs ::
-  InfoProvDatabase ->
-  Vector InfoProvPtr ->
-  IO (Vector (Maybe InfoProv))
-lookupInfoProvs InfoProvDatabase{..} infoProvPtrs =
-  fmap LSMT.getValue <$> LSMT.lookups infoProvTable infoProvPtrs
+save :: Logger IO -> InfoProvTable -> FilePath -> IO ()
+save = coerce T.saveTable
 
 {- |
-Resolve an `InfoProvPtr` key to a `InfoProv` value from an `InfoProvDatabase`.
+Resolve `InfoProvPtr` keys to `InfoProv` values from an `InfoProvTable`.
 -}
-lookupInfoProv ::
-  InfoProvDatabase ->
-  InfoProvPtr ->
-  IO (Maybe InfoProv)
-lookupInfoProv InfoProvDatabase{..} infoProvPtr =
-  LSMT.getValue <$> LSMT.lookup infoProvTable infoProvPtr
+lookups :: InfoProvTable -> Vector InfoProvPtr -> IO (Vector (Maybe InfoProv))
+lookups = coerce T.lookups
 
 {- |
-Index `InfoProv` entries from a GHC event stream into an `InfoProvDatabase`.
+Resolve an `InfoProvPtr` key to a `InfoProv` value from an `InfoProvTable`.
 -}
-indexInfoProv ::
-  InfoProvDatabase ->
+lookup :: InfoProvTable -> InfoProvPtr -> IO (Maybe InfoProv)
+lookup = coerce T.lookup
+
+{- |
+Insert @(`InfoProvPtr`, `InfoProv`)@ entries into an `InfoProvTable`.
+-}
+inserts :: InfoProvTable -> Vector (InfoProvPtr, InfoProv) -> IO ()
+inserts = coerce T.inserts
+
+{- |
+Index `InfoProv` entries from a GHC event stream into an `InfoProvTable`.
+-}
+indexing ::
+  InfoProvTable ->
   -- | The buffer size. Defaults to 10.
   Maybe Int ->
   ProcessT IO Event Void
-indexInfoProv InfoProvDatabase{..} maybeBufferSize =
+indexing infoProvTable maybeBufferSize =
   extractInfoProv
     ~> buffered (fromMaybe 10 maybeBufferSize)
-    ~> mapping (V.fromList . fmap (\(ipPtr, ip) -> (ipPtr, ip, Nothing)))
-    ~> repeatedly (await >>= liftIO . LSMT.inserts infoProvTable)
+    ~> mapping V.fromList
+    ~> repeatedly (await >>= liftIO . inserts infoProvTable)
 
 {- |
 Extract `InfoProv` entries from a stream of GHC events.

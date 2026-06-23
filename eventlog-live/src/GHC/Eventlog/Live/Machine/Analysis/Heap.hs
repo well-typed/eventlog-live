@@ -44,7 +44,8 @@ import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvDatabase, lookupInfoProv)
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv qualified as IPT
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
@@ -241,7 +242,7 @@ and `E.HeapProfSampleEnd` events to maintain an era stack.
 processHeapProfSampleData ::
   (MonadIO m) =>
   Logger m ->
-  InfoProvDatabase ->
+  InfoProvTable ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
 processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown =
@@ -346,7 +347,7 @@ processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown =
                       "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
                     pure Nothing
                   Just infoProvPtr -> do
-                    maybeInfoProv <- liftIO $ lookupInfoProv infoProvDatabase infoProvPtr
+                    maybeInfoProv <- liftIO $ IPT.lookup infoProvDatabase infoProvPtr
                     case maybeInfoProv of
                       Nothing ->
                         lift . writeLog logger WARN $

@@ -9,12 +9,11 @@ module GHC.Eventlog.Live.Data.InfoProv (
   InfoProv (..),
 ) where
 
-import Data.Binary (Binary (..), Get, Put, decode, encode)
+import Data.Binary (Binary (..), Get, Put)
 import Data.Hashable (Hashable)
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
 import Data.Word (Word64)
-import Database.LSMTree qualified as LSMT
 import Numeric (showHex)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Read.Lex (readHexP)
@@ -75,18 +74,3 @@ instance Binary InfoProv where
     putTextUtf8 ipSrcLoc
    where
     putTextUtf8 = put . TE.encodeUtf8
-
---------------------------------------------------------------------------------
--- Instances for LSM Tree storage of InfoProv
---------------------------------------------------------------------------------
-
-deriving newtype instance LSMT.SerialiseKey InfoProvPtr
-
-instance LSMT.SerialiseValue InfoProv where
-  serialiseValue :: InfoProv -> LSMT.RawBytes
-  serialiseValue = LSMT.serialiseValue . encode
-
-  deserialiseValue :: LSMT.RawBytes -> InfoProv
-  deserialiseValue = decode . LSMT.deserialiseValue
-
-deriving via LSMT.ResolveAsFirst InfoProv instance LSMT.ResolveValue InfoProv

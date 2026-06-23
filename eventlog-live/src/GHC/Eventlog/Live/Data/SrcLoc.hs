@@ -11,13 +11,12 @@ module GHC.Eventlog.Live.Data.SrcLoc (
 ) where
 
 import Codec.LEB128.Generic (decodeLEB128, encodeLEB128)
-import Data.Binary (Binary (..), Get, Put, decode, encode, getWord8, putWord8)
+import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
 import Data.Char (isDigit)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Word (Word32)
-import Database.LSMTree qualified as LSMT
 import GHC.Generics (Generic)
 import GHC.Records (HasField (..))
 import Text.ParserCombinators.ReadP (ReadP)
@@ -355,14 +354,3 @@ getMaybeRange =
       endLine <- decodeLEB128 getWord8
       endColumn <- decodeLEB128 getWord8
       pure . Just $! Range'MultiLine{..}
-
---------------------------------------------------------------------------------
--- Instances for LSM Tree storage of InfoProv
---------------------------------------------------------------------------------
-
-instance LSMT.SerialiseValue SrcLoc where
-  serialiseValue :: SrcLoc -> LSMT.RawBytes
-  serialiseValue = LSMT.serialiseValue . encode
-
-  deserialiseValue :: LSMT.RawBytes -> SrcLoc
-  deserialiseValue = decode . LSMT.deserialiseValue
