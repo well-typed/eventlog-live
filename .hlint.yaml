@@ -28,7 +28,12 @@
 # - flags:
 #   - {name: -w, within: []} # -w is allowed nowhere
 #
-# - modules:
+- modules:
+    - {
+        name: [Database.LSMTree, Database.LSMTree.Simple],
+        as: LSMT,
+        within: [Database.LSMTree.Compat],
+      }
 #   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
 #   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
 #
