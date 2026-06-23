@@ -23,6 +23,10 @@ module GHC.Eventlog.Live.Machine.Core (
   onlyTick,
   liftTick,
 
+  -- * Machine combinators
+  (&>),
+  embed,
+
   -- * Routers
   liftRouter,
 
@@ -368,6 +372,28 @@ onlyTick =
 -------------------------------------------------------------------------------
 -- Machine combinators
 -------------------------------------------------------------------------------
+
+infixl 7 &>
+
+{- |
+Run two machines in sequence.
+-}
+(&>) :: (Monad m) => MachineT m k a -> MachineT m k a -> MachineT m k a
+m &> n =
+  MachineT $
+    runMachineT m >>= \case
+      Stop ->
+        runMachineT n
+      Yield o k ->
+        pure (Yield o (k &> n))
+      Await onNext k onStop ->
+        pure (Await (\t -> onNext t &> n) k (onStop &> n))
+
+{- |
+Run a monadic action as a machine.
+-}
+embed :: (Monad m) => m () -> MachineT m k a
+embed action = MachineT $! action >> pure Stop
 
 --------------------------------------------------------------------------------
 -- Lift a machine to a machine that passes on ticks unchanged
