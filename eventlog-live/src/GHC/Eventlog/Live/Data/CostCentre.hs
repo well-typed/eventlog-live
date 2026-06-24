@@ -13,13 +13,13 @@ import Data.Binary (Binary (..), Get, Put)
 import Data.Binary.Text (getTextUtf8, putTextUtf8)
 import Data.Hashable (Hashable)
 import Data.Text (Text)
-import Data.Word (Word64)
+import Data.Word (Word32)
 
 {- |
 The type of cost-centre IDs.
 -}
 newtype CostCentreId = CostCentreId
-  { value :: Word64
+  { value :: Word32
   }
   deriving newtype (Show, Eq, Ord, Hashable)
 
@@ -27,8 +27,7 @@ newtype CostCentreId = CostCentreId
 The type of a cost-centre entry, as produced by the `GHC.RTS.Events.HeapProfCostCentre` event.
 -}
 data CostCentre = CostCentre
-  { ccId :: !CostCentreId
-  , ccLabel :: !Text
+  { ccLabel :: !Text
   , ccModule :: !Text
   , ccSrcLoc :: !Text
   , ccIsCAF :: !Bool
@@ -44,7 +43,6 @@ deriving newtype instance Binary CostCentreId
 instance Binary CostCentre where
   get :: Get CostCentre
   get = do
-    ccId <- get
     ccLabel <- getTextUtf8
     ccModule <- getTextUtf8
     ccSrcLoc <- getTextUtf8
@@ -53,7 +51,6 @@ instance Binary CostCentre where
 
   put :: CostCentre -> Put
   put CostCentre{..} = do
-    put ccId
     putTextUtf8 ccLabel
     putTextUtf8 ccModule
     putTextUtf8 ccSrcLoc

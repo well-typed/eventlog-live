@@ -114,11 +114,10 @@ processCostCentreProfSampleData _logger =
       -- Announces an info table entry.
       E.HeapProfCostCentre{..}
         | shouldTrackCostCentreMap -> do
-            let costCentreId = CostCentreId $ fromIntegral heapProfCostCentreId
-                costCentre =
+            let costCentreId = CostCentreId heapProfCostCentreId
+            let costCentre =
                   CostCentre
-                    { ccId = costCentreId
-                    , ccLabel = heapProfLabel
+                    { ccLabel = heapProfLabel
                     , ccModule = heapProfModule
                     , ccSrcLoc = heapProfSrcLoc
                     , ccIsCAF = toBool (coerce @_ @CBool heapProfFlags)
@@ -126,8 +125,8 @@ processCostCentreProfSampleData _logger =
             go st{costCentreMap = M.insert costCentreId costCentre st.costCentreMap}
       E.ProfSampleCostCentre{..} -> do
         let lookupCostCentreStackById :: Word32 -> Maybe StackItemData
-            lookupCostCentreStackById costCentreId32 =
-              CostCentreData <$> HashMap.lookup (CostCentreId $ fromIntegral costCentreId32) st.costCentreMap
+            lookupCostCentreStackById costCentreId =
+              CostCentreData <$> HashMap.lookup (CostCentreId costCentreId) st.costCentreMap
 
             callStackMessage =
               CallStackData
