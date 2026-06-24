@@ -34,7 +34,7 @@ executable jumpy-jump
     random >=1.2 && <1.4,
 
   if flag(use-ghc-stack-profiler)
-    build-depends: ghc-stack-profiler >=0.2 && <0.3
+    build-depends: ghc-stack-profiler >=0.3 && <0.4
     cpp-options: -DJUMPY_JUMP_USE_GHC_STACK_PROFILER
 
   if impl(ghc <9.4)
