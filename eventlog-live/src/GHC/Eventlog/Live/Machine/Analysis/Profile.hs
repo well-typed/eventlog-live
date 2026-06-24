@@ -15,11 +15,11 @@ where
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString.Lazy qualified as LBS
+import Data.Coerce (coerce)
 import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HashMap
 import Data.HashMap.Strict qualified as M
-import Data.Hashable (Hashable)
 import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
@@ -29,12 +29,14 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector.Unboxed qualified as UVector
 import Data.Word
+import Foreign (toBool)
+import Foreign.C (CBool (CBool))
+import GHC.Eventlog.Live.Data.CostCentre (CostCentre (..), CostCentreId (..))
 import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Logger (Logger, writeException)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (metric)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
-import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
 import GHC.Stack.Profiler.Core.Eventlog qualified as SPCE
@@ -49,55 +51,38 @@ data StackProfSampleState = StackProfSampleState
   , stackProfSymbolTableReader :: !SPCS.IntMapTable
   , maybeStackProfSampleData :: !(Maybe StackProfSampleData)
   }
-  deriving (Generic)
 
 newtype CostCentreProfSampleState = CostCentreProfSampleState
   { costCentreMap :: HashMap CostCentreId CostCentre
   }
-  deriving (Generic)
 
 newtype StackProfSampleData = StackProfSampleData
   { stackProfSample :: Metric CallStackData
   }
-  deriving (Show, Generic)
+  deriving (Show)
 
 newtype ThreadId = ThreadId
   { value :: Word64
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord)
 
 newtype CapabilityId = CapabilityId
   { value :: Word64
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord)
 
 data CallStackData = CallStackData
   { threadId :: !(Maybe ThreadId)
   , capabilityId :: !CapabilityId
   , stack :: [StackItemData]
   }
-  deriving (Show, Eq, Generic)
-
-newtype CostCentreId = CostCentreId
-  { id :: Word64
-  }
-  deriving (Show, Eq, Ord, Generic)
-  deriving newtype (Hashable)
-
-data CostCentre = CostCentre
-  { costCentreId :: !CostCentreId
-  , costCentreLabel :: !Text
-  , costCentreModule :: !Text
-  , costCentreSrcLoc :: !Text
-  -- , heapProfFlags :: !HeapProfFlags
-  }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq)
 
 data StackItemData
   = IpeData !InfoProv
   | UserMessageData !Text !(Maybe SPCT.SourceLocation)
   | CostCentreData !CostCentre
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq)
 
 shouldTrackInfoProvMap :: Bool
 shouldTrackInfoProvMap = True
@@ -132,10 +117,11 @@ processCostCentreProfSampleData _logger =
             let costCentreId = CostCentreId $ fromIntegral heapProfCostCentreId
                 costCentre =
                   CostCentre
-                    { costCentreId = costCentreId
-                    , costCentreLabel = heapProfLabel
-                    , costCentreModule = heapProfModule
-                    , costCentreSrcLoc = heapProfSrcLoc
+                    { ccId = costCentreId
+                    , ccLabel = heapProfLabel
+                    , ccModule = heapProfModule
+                    , ccSrcLoc = heapProfSrcLoc
+                    , ccIsCAF = toBool (coerce @_ @CBool heapProfFlags)
                     }
             go st{costCentreMap = M.insert costCentreId costCentre st.costCentreMap}
       E.ProfSampleCostCentre{..} -> do

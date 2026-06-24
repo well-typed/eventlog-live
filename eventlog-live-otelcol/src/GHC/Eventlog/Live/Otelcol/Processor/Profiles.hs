@@ -251,17 +251,17 @@ getLocationIndexForInfoTable infoProv = do
 
 getLocationIndexForCostCentre :: M.CostCentre -> State ProfilesDictionary SymbolIndex
 getLocationIndexForCostCentre costCentre = do
-  let label = costCentre.costCentreModule <> ":" <> costCentre.costCentreLabel
+  let label = costCentre.ccModule <> ":" <> costCentre.ccLabel
   costCentreFuncNameId <- PD.getString label
   -- tyDesc <- getText infoProv.infoProvTyDesc
   --
-  costCentreSrcLocId <- PD.getString costCentre.costCentreSrcLoc
+  ccSrcLocId <- PD.getString costCentre.ccSrcLoc
   funcIdx <-
     PD.getFunction $
       messageWith
         [ OP.nameStrindex .~ costCentreFuncNameId
         , OP.systemNameStrindex .~ costCentreFuncNameId
-        , OP.filenameStrindex .~ costCentreSrcLocId -- 0 means unset
+        , OP.filenameStrindex .~ ccSrcLocId -- 0 means unset
         , OP.startLine .~ 0 -- 0 means unset
         ]
 
