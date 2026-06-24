@@ -130,6 +130,7 @@ library
     GHC.Eventlog.Live.Source.Core
 
   other-modules:
+    Data.Binary.Text
     Database.LSMTree.Compat
 
   build-depends:

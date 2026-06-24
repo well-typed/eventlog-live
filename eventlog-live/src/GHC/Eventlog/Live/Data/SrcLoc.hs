@@ -12,10 +12,10 @@ module GHC.Eventlog.Live.Data.SrcLoc (
 
 import Codec.LEB128.Generic (decodeLEB128, encodeLEB128)
 import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
+import Data.Binary.Text (getTextUtf8, putTextUtf8)
 import Data.Char (isDigit)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Word (Word32)
 import GHC.Generics (Generic)
 import GHC.Records (HasField (..))
@@ -238,10 +238,8 @@ Serialise source location information.
 -}
 putSrcLoc :: SrcLoc -> Put
 putSrcLoc SrcLoc{..} = do
-  putString (fromMaybe "" srcFilePath)
+  putTextUtf8 . T.pack . fromMaybe "" $ srcFilePath
   putMaybeRange srcRange
- where
-  putString = put . TE.encodeUtf8 . T.pack
 
 {- |
 Internal helper.
@@ -250,11 +248,9 @@ Deserialise source location information.
 -}
 getSrcLoc :: Get SrcLoc
 getSrcLoc = do
-  srcFilePath <- Just <$> getString
+  srcFilePath <- Just . T.unpack <$> getTextUtf8
   srcRange <- getMaybeRange
   pure SrcLoc{..}
- where
-  getString = T.unpack . TE.decodeUtf8 <$> get
 
 instance Binary SrcLoc where
   put :: SrcLoc -> Put
