@@ -23,6 +23,11 @@ packages: eventlog-live-otelcol
 -- disable snappy support in grpc-spec
 package grpc-spec
   flags: -snappy
+
+-- 2026-06-24:
+-- disable io_uring support in blockio
+package blockio
+  flags: +serialblockio
 EOF
 
 # Install protoc
