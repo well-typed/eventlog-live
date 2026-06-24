@@ -43,7 +43,7 @@ data InfoProv = InfoProv
   , ipModule :: !Text
   , ipSrcLoc :: !Text
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq)
 
 --------------------------------------------------------------------------------
 -- Instances for binary serialisation of InfoProv

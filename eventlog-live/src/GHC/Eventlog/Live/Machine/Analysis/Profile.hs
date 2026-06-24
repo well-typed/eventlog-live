@@ -19,7 +19,7 @@ import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HashMap
 import Data.HashMap.Strict qualified as M
-import Data.Hashable qualified as Hashable
+import Data.Hashable (Hashable)
 import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
@@ -76,13 +76,13 @@ data CallStackData = CallStackData
   , capabilityId :: !CapabilityId
   , stack :: [StackItemData]
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 newtype CostCentreId = CostCentreId
   { id :: Word64
   }
   deriving (Show, Eq, Ord, Generic)
-  deriving newtype (Hashable.Hashable)
+  deriving newtype (Hashable)
 
 data CostCentre = CostCentre
   { costCentreId :: !CostCentreId
@@ -97,7 +97,7 @@ data StackItemData
   = IpeData !InfoProv
   | UserMessageData !Text !(Maybe SPCT.SourceLocation)
   | CostCentreData !CostCentre
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 shouldTrackInfoProvMap :: Bool
 shouldTrackInfoProvMap = True
