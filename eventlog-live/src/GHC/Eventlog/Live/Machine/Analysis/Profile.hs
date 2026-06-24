@@ -94,8 +94,7 @@ data CostCentre = CostCentre
 
 data StackItemData
   = IpeData !InfoProv
-  | UserMessageData !Text
-  | SourceLocationData !SPCT.SourceLocation
+  | UserMessageData !Text !(Maybe SPCT.SourceLocation)
   | CostCentreData !CostCentre
   deriving (Show, Eq, Ord, Generic)
 
@@ -264,8 +263,7 @@ hydrateBinaryEventlog spst msg = (callStackData, spst{stackProfSampleChunk = []}
 toStackItemData :: HashMap InfoProvPtr InfoProv -> SPCT.StackItem -> Maybe StackItemData
 toStackItemData tbl = \case
   SPCT.IpeId iid -> IpeData <$> HashMap.lookup (InfoProvPtr $ SPCE.getIpeId iid) tbl
-  SPCT.UserMessage msg -> Just $ UserMessageData $ Text.pack msg
-  SPCT.SourceLocation srcLoc -> Just $ SourceLocationData srcLoc
+  SPCT.UserAnnotation msg mSrcLoc -> Just $ UserMessageData (Text.pack msg) mSrcLoc
 
 {- |
 Get the elements of a heap profile sample collection.
