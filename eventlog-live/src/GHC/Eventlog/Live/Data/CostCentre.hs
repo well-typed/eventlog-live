@@ -9,6 +9,8 @@ module GHC.Eventlog.Live.Data.CostCentre (
   CostCentre (..),
 ) where
 
+import Data.Binary (Binary (..), Get, Put)
+import Data.Binary.Text (getTextUtf8, putTextUtf8)
 import Data.Hashable (Hashable)
 import Data.Text (Text)
 import Data.Word (Word64)
@@ -32,3 +34,27 @@ data CostCentre = CostCentre
   , ccIsCAF :: !Bool
   }
   deriving stock (Show, Eq)
+
+--------------------------------------------------------------------------------
+-- Instances for binary serialisation of CostCentre
+--------------------------------------------------------------------------------
+
+deriving newtype instance Binary CostCentreId
+
+instance Binary CostCentre where
+  get :: Get CostCentre
+  get = do
+    ccId <- get
+    ccLabel <- getTextUtf8
+    ccModule <- getTextUtf8
+    ccSrcLoc <- getTextUtf8
+    ccIsCAF <- get
+    pure CostCentre{..}
+
+  put :: CostCentre -> Put
+  put CostCentre{..} = do
+    put ccId
+    putTextUtf8 ccLabel
+    putTextUtf8 ccModule
+    putTextUtf8 ccSrcLoc
+    put ccIsCAF
