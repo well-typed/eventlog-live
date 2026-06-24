@@ -17,6 +17,7 @@ import Control.Monad.Trans.State.Strict (State, runState)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
+import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Logger (Logger)
@@ -174,18 +175,20 @@ asSample six stackData = do
   toIndex :: M.StackItemData -> State ProfilesDictionary SymbolIndex
   toIndex = \case
     M.IpeData infoProv -> getLocationIndexForInfoTable infoProv
-    M.UserMessageData message -> getLocationIndexForText message
-    M.SourceLocationData srcLoc -> getLocationIndexForSourceLocation srcLoc
+    M.UserMessageData message mSrcLoc -> getLocationIndexForText message mSrcLoc
     M.CostCentreData costCentre -> getLocationIndexForCostCentre costCentre
 
-getLocationIndexForSourceLocation :: Profiler.SourceLocation -> State ProfilesDictionary SymbolIndex
-getLocationIndexForSourceLocation srcLoc = do
-  functionNameId <- PD.getString $ Profiler.functionName srcLoc
-  fileNameId <- PD.getString $ Profiler.fileName srcLoc
+getLocationIndexForText :: Text -> Maybe Profiler.SourceLocation -> State ProfilesDictionary SymbolIndex
+getLocationIndexForText msg mSrcLoc = do
+  let srcLoc = Maybe.fromMaybe unhelpfulSrcLoc mSrcLoc
+  fileNameId <- case mSrcLoc of
+    Nothing -> pure 0 -- 0 means unset
+    Just loc -> PD.getString $ Profiler.fileName loc
+  textId <- PD.getString msg
   funcIdx <-
     PD.getFunction $
       messageWith
-        [ OP.nameStrindex .~ functionNameId
+        [ OP.nameStrindex .~ textId
         , OP.systemNameStrindex .~ 0 -- 0 means unset
         , OP.filenameStrindex .~ fileNameId
         , OP.startLine .~ fromIntegral (Profiler.line srcLoc) -- TODO: better casts
@@ -202,33 +205,15 @@ getLocationIndexForSourceLocation srcLoc = do
   PD.getLocation $
     messageWith
       [ OP.lines .~ [line]
-      , OP.mappingIndex .~ 0 -- 0 means unset
       ]
 
-getLocationIndexForText :: Text -> State ProfilesDictionary SymbolIndex
-getLocationIndexForText msg = do
-  textId <- PD.getString msg
-  funcIdx <-
-    PD.getFunction $
-      messageWith
-        [ OP.nameStrindex .~ textId
-        , OP.systemNameStrindex .~ 0 -- 0 means unset
-        , OP.filenameStrindex .~ 0 -- 0 means unset
-        , OP.startLine .~ 0 -- 0 means unset
-        ]
-
-  let line :: OP.Line
-      line =
-        messageWith
-          [ OP.functionIndex .~ funcIdx
-          , OP.line .~ 0 -- 0 means unset
-          , OP.column .~ 0 -- 0 means unset
-          ]
-
-  PD.getLocation $
-    messageWith
-      [ OP.lines .~ [line]
-      ]
+unhelpfulSrcLoc :: Profiler.SourceLocation
+unhelpfulSrcLoc =
+  Profiler.MkSourceLocation
+    { line = 0 -- 0 means unset
+    , column = 0 -- 0 means unset
+    , fileName = ""
+    }
 
 getLocationIndexForInfoTable :: M.InfoProv -> State ProfilesDictionary SymbolIndex
 getLocationIndexForInfoTable infoProv = do
