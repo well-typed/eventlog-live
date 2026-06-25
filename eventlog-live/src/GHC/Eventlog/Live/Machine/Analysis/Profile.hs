@@ -1,5 +1,4 @@
 module GHC.Eventlog.Live.Machine.Analysis.Profile (
-  StackProfSampleData (..),
   ThreadId (..),
   CapabilityId (..),
   CallStackData (..),
@@ -33,9 +32,7 @@ import Foreign (toBool)
 import Foreign.C (CBool (CBool))
 import GHC.Eventlog.Live.Data.CostCentre (CostCentre (..), CostCentreId (..))
 import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
-import GHC.Eventlog.Live.Data.Metric
 import GHC.Eventlog.Live.Logger (Logger, writeException)
-import GHC.Eventlog.Live.Machine.Analysis.Heap (metric)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
@@ -49,17 +46,12 @@ data StackProfSampleState = StackProfSampleState
     -- We could report when interleaved messages are present
     stackProfSampleChunk :: ![SPCE.BinaryCallStackMessage]
   , stackProfSymbolTableReader :: !SPCS.IntMapTable
-  , maybeStackProfSampleData :: !(Maybe StackProfSampleData)
+  , maybeStackProfSampleData :: !(Maybe CallStackData)
   }
 
 newtype CostCentreProfSampleState = CostCentreProfSampleState
   { costCentreMap :: HashMap CostCentreId CostCentre
   }
-
-newtype StackProfSampleData = StackProfSampleData
-  { stackProfSample :: Metric CallStackData
-  }
-  deriving (Show)
 
 newtype ThreadId = ThreadId
   { value :: Word64
@@ -101,7 +93,7 @@ Furthermore, it processes the `E.InfoTableProv` events to
 processCostCentreProfSampleData ::
   (MonadIO m) =>
   Logger m ->
-  ProcessT m (WithStartTime Event) StackProfSampleData
+  ProcessT m (WithStartTime Event) CallStackData
 processCostCentreProfSampleData _logger =
   construct $
     go
@@ -137,10 +129,7 @@ processCostCentreProfSampleData _logger =
                     mapMaybe lookupCostCentreStackById (UVector.toList profCcsStack)
                 }
 
-            stackProfSample =
-              metric i callStackMessage mempty
-
-        yield $ StackProfSampleData stackProfSample
+        yield $ callStackMessage
         go st
       _otherwise -> go st
 
@@ -155,7 +144,7 @@ Furthermore, it processes the `E.InfoTableProv` events to
 processStackProfSampleData ::
   (MonadIO m) =>
   Logger m ->
-  ProcessT m (WithStartTime Event) StackProfSampleData
+  ProcessT m (WithStartTime Event) CallStackData
 processStackProfSampleData logger =
   construct $
     go
@@ -190,8 +179,7 @@ processStackProfSampleData logger =
             SPCE.CallStackFinal msg -> do
               let (callStackMessage, st', callStackDecodeErrors) = hydrateBinaryEventlog st msg
               for_ callStackDecodeErrors (lift . writeException logger)
-              let stackProfSample = metric i callStackMessage mempty
-              yield $ StackProfSampleData stackProfSample
+              yield callStackMessage
               go st'
             SPCE.CallStackChunk msg ->
               go st{stackProfSampleChunk = msg : st.stackProfSampleChunk}
@@ -253,5 +241,5 @@ toStackItemData tbl = \case
 {- |
 Get the elements of a heap profile sample collection.
 -}
-stackProfSamples :: StackProfSampleData -> [Metric CallStackData]
-stackProfSamples = List.singleton . (.stackProfSample)
+stackProfSamples :: CallStackData -> [CallStackData]
+stackProfSamples = List.singleton

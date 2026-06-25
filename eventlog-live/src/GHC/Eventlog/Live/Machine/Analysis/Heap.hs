@@ -19,9 +19,6 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   HeapProfSampleData,
   heapProfSamples,
   processHeapProfSampleData,
-
-  -- ** Things fendor doesn't want to reimplement
-  metric,
 ) where
 
 import Control.Monad (unless, when)
