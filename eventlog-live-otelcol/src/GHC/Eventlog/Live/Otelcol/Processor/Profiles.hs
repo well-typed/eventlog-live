@@ -16,11 +16,14 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State.Strict (State, runState)
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Machine (ProcessT, asParts, mapping, (~>))
+import Data.Machine (ProcessT, mapping, (~>))
 import Data.Maybe qualified as Maybe
 import Data.Text (Text)
+import GHC.Eventlog.Live.Data.CostCentre qualified as M
 import GHC.Eventlog.Live.Data.InfoProv qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
+import GHC.Eventlog.Live.Machine.Analysis.CostCentre (CostCentreTable)
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -46,43 +49,43 @@ import Proto.Opentelemetry.Proto.Resource.V1.Resource (Resource)
 processProfileEvents ::
   (MonadIO m) =>
   Logger m ->
+  CostCentreTable ->
+  InfoProvTable ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
-processProfileEvents verbosity config =
+processProfileEvents verbosity costCentreTable infoProvTable config =
   M.fanoutTick
-    [ processStackProfSample verbosity config
-    , processCostCentreProfSample verbosity config
+    [ processProfSampleCostCentre verbosity costCentreTable config
+    , processGhcStackProfilerData verbosity infoProvTable config
     ]
 
 --------------------------------------------------------------------------------
 -- StackProfSample
 
-processStackProfSample ::
+processGhcStackProfilerData ::
   (MonadIO m) =>
   Logger m ->
+  InfoProvTable ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
-processStackProfSample logger config =
+processGhcStackProfilerData logger infoProvTable config =
   runIf (C.processorEnabled (.profiles) (.stackSample) config) $
     M.liftTick
-      ( M.processStackProfSampleData logger
-          ~> mapping M.stackProfSamples
-          ~> asParts
+      ( M.processGhcStackProfilerData logger infoProvTable
           ~> mapping D.singleton
       )
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.stackSample) config)
 
-processCostCentreProfSample ::
+processProfSampleCostCentre ::
   (MonadIO m) =>
   Logger m ->
+  CostCentreTable ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
-processCostCentreProfSample logger config =
+processProfSampleCostCentre logger costCentreTable config =
   runIf (C.processorEnabled (.profiles) (.costCentreSample) config) $
     M.liftTick
-      ( M.processCostCentreProfSampleData logger
-          ~> mapping M.stackProfSamples
-          ~> asParts
+      ( M.processProfSampleCostCentre logger costCentreTable
           ~> mapping D.singleton
       )
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.costCentreSample) config)

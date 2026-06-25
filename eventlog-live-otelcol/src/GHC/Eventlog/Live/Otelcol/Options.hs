@@ -48,8 +48,10 @@ data Options = Options
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
-  , maybeIpeTableInputFilePath :: Maybe FilePath
-  , maybeIpeTableOutputFilePath :: Maybe FilePath
+  , maybeIpTableInputFilePath :: Maybe FilePath
+  , maybeIpTableOutputFilePath :: Maybe FilePath
+  , maybeCcTableInputFilePath :: Maybe FilePath
+  , maybeCcTableOutputFilePath :: Maybe FilePath
   , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
@@ -68,8 +70,10 @@ optionsParser =
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
-    <*> O.optional ipeTableInputFilePathParser
-    <*> O.optional ipeTableOutputFilePathParser
+    <*> O.optional ipTableInputFilePathParser
+    <*> O.optional ipTableOutputFilePathParser
+    <*> O.optional ccTableInputFilePathParser
+    <*> O.optional ccTableOutputFilePathParser
     <*> verbosityParser
     <*> statsParser
     <*> O.optional configFileParser
@@ -126,22 +130,41 @@ serviceNameParser =
       )
 
 --------------------------------------------------------------------------------
--- IPE Tables
+-- InfoProv Tables
 
-ipeTableInputFilePathParser :: O.Parser FilePath
-ipeTableInputFilePathParser =
+ipTableInputFilePathParser :: O.Parser FilePath
+ipTableInputFilePathParser =
   O.strOption
-    ( O.long "ipe-table"
+    ( O.long "ip-table"
         <> O.metavar "FILE"
-        <> O.help "The path to read the initial IPE table."
+        <> O.help "The path to read the initial info-prov table."
     )
 
-ipeTableOutputFilePathParser :: O.Parser FilePath
-ipeTableOutputFilePathParser =
+ipTableOutputFilePathParser :: O.Parser FilePath
+ipTableOutputFilePathParser =
   O.strOption
-    ( O.long "export-ipe-table-to"
+    ( O.long "export-ip-table-to"
         <> O.metavar "FILE"
-        <> O.help "The path to write the final IPE table."
+        <> O.help "The path to write the final info-prov table."
+    )
+
+--------------------------------------------------------------------------------
+-- CostCentre Tables
+
+ccTableInputFilePathParser :: O.Parser FilePath
+ccTableInputFilePathParser =
+  O.strOption
+    ( O.long "cc-table"
+        <> O.metavar "FILE"
+        <> O.help "The path to read the initial cost-centre table."
+    )
+
+ccTableOutputFilePathParser :: O.Parser FilePath
+ccTableOutputFilePathParser =
+  O.strOption
+    ( O.long "export-cc-table-to"
+        <> O.metavar "FILE"
+        <> O.help "The path to write the final cost-centre table."
     )
 
 --------------------------------------------------------------------------------
