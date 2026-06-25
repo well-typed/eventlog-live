@@ -242,7 +242,7 @@ processHeapProfSampleData ::
   InfoProvTable ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
-processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown =
+processHeapProfSampleData logger infoProvTable maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
@@ -344,7 +344,7 @@ processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown =
                       "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
                     pure Nothing
                   Just infoProvPtr -> do
-                    maybeInfoProv <- liftIO $ IPT.lookup infoProvDatabase infoProvPtr
+                    maybeInfoProv <- liftIO $ IPT.lookup infoProvTable infoProvPtr
                     case maybeInfoProv of
                       Nothing ->
                         lift . writeLog logger WARN $
