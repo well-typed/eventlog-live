@@ -31,7 +31,7 @@ Unfortunately, `eventlog-live-otelcol` depends on the `crc32c` package, which do
 > On any system where these aren't enabled by default, this requires the following extra command-line options:
 >
 > ```sh
-> --extra-experimental-features nix-command flakes
+> --extra-experimental-features 'nix-command flakes'
 > ```
 
 ## Building the VM

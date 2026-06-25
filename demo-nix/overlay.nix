@@ -1,11 +1,19 @@
-{ hlib, ... }:
-final: prev: with hlib; {
+{ fetchzip, haskell, ... }:
+final: prev: with haskell.lib.compose; {
 
   eventlog-live = final.callPackage ./eventlog-live.nix { };
   eventlog-live-otelcol = final.callPackage ./eventlog-live-otelcol.nix { };
   oddball = final.callPackage ./oddball.nix { };
 
   # Jailbreak proto-lens to allow it to build with newer dependencies
+  blockio =
+    let
+      src = fetchzip {
+        url = "https://hackage.haskell.org/package/blockio-0.2.0.0/blockio-0.2.0.0.tar.gz";
+        hash = "sha256-4tI6WfDOH5JzeL1YXjKsOLJesMh7ZX9m3lioFlsk8UI=";
+      };
+    in
+    prev.callCabal2nixWithOptions "blockio" src "-fserialblockio" { };
   grapesy = dontCheck prev.grapesy;
   ghc-stack-profiler-core = prev.callHackage "ghc-stack-profiler-core" "0.3.0.0" { };
   ghc-stack-profiler = prev.callHackage "ghc-stack-profiler" "0.3.0.0" { };
@@ -18,6 +26,7 @@ final: prev: with hlib; {
   proto-lens = doJailbreak prev.proto-lens;
   proto-lens-protobuf-types = doJailbreak prev.proto-lens-protobuf-types;
   proto-lens-protoc = prev.callHackage "proto-lens-protoc" "0.9.0.0" { };
+  quickcheck-state-machine = unmarkBroken prev.quickcheck-state-machine;
   snappy-c = doJailbreak prev.snappy-c;
   tasty-quickcheck = doJailbreak prev.tasty-quickcheck;
   tls = prev.callHackage "tls" "2.1.4" { };

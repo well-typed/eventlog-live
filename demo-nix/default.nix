@@ -2,7 +2,7 @@
 let
   haskellPackages = pkgs.haskell.packages.ghc9103.override {
     inherit all-cabal-hashes;
-    overrides = import ./overlay.nix { hlib = pkgs.haskell.lib.compose; };
+    overrides = pkgs.callPackage ./overlay.nix { };
   };
 in
 rec {
