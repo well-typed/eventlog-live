@@ -7,10 +7,16 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
 
+# Find GHC version to build jumpy-jump
+if [ "$GHC" = "" ]; then
+	GHC="$(which ghc)"
+fi
+PROJECT_FILE="$DIR/../../cabal.project.ipe"
+
 # Build jumpy-jump
 echo "Build jumpy-jump"
-cabal build jumpy-jump -wghc-9.14 --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump -wghc-9.14 --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control -v0 | head -n1)
+cabal build jumpy-jump --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control -v0
+JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
