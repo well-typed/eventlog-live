@@ -3,62 +3,48 @@ module GHC.Eventlog.Live.Machine.Analysis.Profile (
   CapabilityId (..),
   CallStackData (..),
   StackItemData (..),
-  CostCentreId (..),
-  CostCentre (..),
-  processStackProfSampleData,
-  processCostCentreProfSampleData,
-  stackProfSamples,
+
+  -- * Cost-centre profiling
+  processProfSampleCostCentre,
+
+  -- * @ghc-stack-profiler@ profiling
+  processGhcStackProfilerData,
 )
 where
 
+import Control.Exception (assert)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString.Lazy qualified as LBS
-import Data.Coerce (coerce)
 import Data.Foldable (for_)
-import Data.HashMap.Strict (HashMap)
-import Data.HashMap.Strict qualified as HashMap
-import Data.HashMap.Strict qualified as M
-import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
-import Data.Machine (ProcessT, await, construct, yield)
-import Data.Maybe (mapMaybe)
+import Data.Machine (Is, PlanT, ProcessT, await, construct, repeatedly, yield)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Vector.Unboxed qualified as UVector
+import Data.Vector qualified as V
 import Data.Word
-import Foreign (toBool)
-import Foreign.C (CBool (CBool))
 import GHC.Eventlog.Live.Data.CostCentre (CostCentre (..), CostCentreId (..))
 import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Logger (Logger, writeException)
+import GHC.Eventlog.Live.Machine.Analysis.CostCentre (CostCentreTable)
+import GHC.Eventlog.Live.Machine.Analysis.CostCentre qualified as CCT
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
+import GHC.Eventlog.Live.Machine.Analysis.InfoProv qualified as IPT
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
-import GHC.Stack.Profiler.Core.Eventlog qualified as SPCE
-import GHC.Stack.Profiler.Core.SymbolTable qualified as SPCS
-import GHC.Stack.Profiler.Core.ThreadSample qualified as SPCT
+import GHC.Stack.Profiler.Core.Eventlog qualified as GSP
+import GHC.Stack.Profiler.Core.SymbolTable qualified as GSP
+import GHC.Stack.Profiler.Core.ThreadSample qualified as GSP
 
-data StackProfSampleState = StackProfSampleState
-  { infoTableMap :: !(HashMap InfoProvPtr InfoProv)
-  , -- TODO: this should probably be a maybe?
-    -- We could report when interleaved messages are present
-    stackProfSampleChunk :: ![SPCE.BinaryCallStackMessage]
-  , stackProfSymbolTableReader :: !SPCS.IntMapTable
-  , maybeStackProfSampleData :: !(Maybe CallStackData)
-  }
-
-newtype CostCentreProfSampleState = CostCentreProfSampleState
-  { costCentreMap :: HashMap CostCentreId CostCentre
-  }
-
-newtype ThreadId = ThreadId
+newtype CapabilityId = CapabilityId
   { value :: Word64
   }
   deriving (Show, Eq, Ord)
 
-newtype CapabilityId = CapabilityId
+newtype ThreadId = ThreadId
   { value :: Word64
   }
   deriving (Show, Eq, Ord)
@@ -72,133 +58,103 @@ data CallStackData = CallStackData
 
 data StackItemData
   = IpeData !InfoProv
-  | UserMessageData !Text !(Maybe SPCT.SourceLocation)
+  | UserMessageData !Text !(Maybe GSP.SourceLocation)
   | CostCentreData !CostCentre
   deriving (Show, Eq)
 
-shouldTrackInfoProvMap :: Bool
-shouldTrackInfoProvMap = True
-
-shouldTrackCostCentreMap :: Bool
-shouldTrackCostCentreMap = True
-
--- ----------------------------------------------------------------------------
--- `cost centre stack` processor
--- ----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Processor for cost-centre stack samples
+--------------------------------------------------------------------------------
 
 {- |
 This machine processes `E.UserBinaryMessage` events into metrics.
 Furthermore, it processes the `E.InfoTableProv` events to
 -}
-processCostCentreProfSampleData ::
+processProfSampleCostCentre ::
   (MonadIO m) =>
   Logger m ->
+  CostCentreTable ->
   ProcessT m (WithStartTime Event) CallStackData
-processCostCentreProfSampleData _logger =
-  construct $
-    go
-      CostCentreProfSampleState
-        { costCentreMap = mempty
-        }
- where
-  go st = do
+processProfSampleCostCentre _logger costCentreTable =
+  repeatedly $
     await >>= \i -> case i.value.evSpec of
-      -- Announces an info table entry.
-      E.HeapProfCostCentre{..}
-        | shouldTrackCostCentreMap -> do
-            let costCentreId = CostCentreId heapProfCostCentreId
-            let costCentre =
-                  CostCentre
-                    { ccLabel = heapProfLabel
-                    , ccModule = heapProfModule
-                    , ccSrcLoc = heapProfSrcLoc
-                    , ccIsCAF = toBool (coerce @_ @CBool heapProfFlags)
-                    }
-            go st{costCentreMap = M.insert costCentreId costCentre st.costCentreMap}
       E.ProfSampleCostCentre{..} -> do
-        let lookupCostCentreStackById :: Word32 -> Maybe StackItemData
-            lookupCostCentreStackById costCentreId =
-              CostCentreData <$> HashMap.lookup (CostCentreId costCentreId) st.costCentreMap
-
-            callStackMessage =
+        let !costCentreIds = CostCentreId <$> V.convert profCcsStack
+        !maybeCostCentres <- liftIO $ CCT.lookups costCentreTable costCentreIds
+        let !callStackMessage =
               CallStackData
                 { threadId = Nothing
-                , capabilityId = CapabilityId $ fromIntegral profCap
-                , stack =
-                    -- TODO: log if we are encountering unknown cost centre ids
-                    mapMaybe lookupCostCentreStackById (UVector.toList profCcsStack)
+                , capabilityId = CapabilityId (fromIntegral profCap)
+                , stack = mapMaybe (fmap CostCentreData) . V.toList $ maybeCostCentres
                 }
-
         yield $ callStackMessage
-        go st
-      _otherwise -> go st
+      _otherwise -> pure ()
 
--- ----------------------------------------------------------------------------
--- `ghc-stack-profiler` processor
--- ----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Processor for `ghc-stack-profiler` call-stack samples
+--------------------------------------------------------------------------------
+
+data GspProcessorState = GspProcessorState
+  { -- TODO: this should probably be a maybe?
+    -- We could report when interleaved messages are present
+    stackProfSampleChunk :: ![GSP.BinaryCallStackMessage]
+  , stackProfSymbolTableReader :: !GSP.IntMapTable
+  , maybeStackProfSampleData :: !(Maybe CallStackData)
+  }
 
 {- |
-This machine processes `E.UserBinaryMessage` events into metrics.
-Furthermore, it processes the `E.InfoTableProv` events to
+This machine processes the `E.UserBinaryMessage` events produced by
+@ghc-stack-profiler@ into `CallStackData`.
 -}
-processStackProfSampleData ::
+processGhcStackProfilerData ::
+  forall m.
   (MonadIO m) =>
   Logger m ->
+  InfoProvTable ->
   ProcessT m (WithStartTime Event) CallStackData
-processStackProfSampleData logger =
+processGhcStackProfilerData logger infoProvTable =
   construct $
     go
-      StackProfSampleState
-        { infoTableMap = mempty
-        , stackProfSampleChunk = mempty
-        , stackProfSymbolTableReader = SPCS.emptyIntMapTable
+      GspProcessorState
+        { stackProfSampleChunk = mempty
+        , stackProfSymbolTableReader = GSP.emptyIntMapTable
         , maybeStackProfSampleData = Nothing
         }
  where
+  go :: GspProcessorState -> PlanT (Is (WithStartTime Event)) CallStackData m ()
   go st = do
     await >>= \i -> case i.value.evSpec of
-      -- Announces an info table entry.
-      E.InfoTableProv{..}
-        | shouldTrackInfoProvMap -> do
-            let infoTablePtr = InfoProvPtr itInfo
-                infoTable =
-                  InfoProv
-                    { ipName = itTableName
-                    , ipClosureDesc = itClosureDesc
-                    , ipTyDesc = itTyDesc
-                    , ipLabel = itLabel
-                    , ipModule = itModule
-                    , ipSrcLoc = itSrcLoc
-                    }
-            go st{infoTableMap = M.insert infoTablePtr infoTable st.infoTableMap}
       E.UserBinaryMessage{payload} ->
-        case SPCT.deserializeEventlogMessage $ LBS.fromStrict payload of
+        case GSP.deserializeEventlogMessage $ LBS.fromStrict payload of
           Left _err ->
             go st
           Right evMsg -> case evMsg of
-            SPCE.CallStackFinal msg -> do
-              let (callStackMessage, st', callStackDecodeErrors) = hydrateBinaryEventlog st msg
+            GSP.CallStackFinal msg -> do
+              (callStackMessage, st', callStackDecodeErrors) <-
+                liftIO $
+                  hydrateGspBinaryCallStackMessage infoProvTable st msg
               for_ callStackDecodeErrors (lift . writeException logger)
               yield callStackMessage
               go st'
-            SPCE.CallStackChunk msg ->
+            GSP.CallStackChunk msg ->
               go st{stackProfSampleChunk = msg : st.stackProfSampleChunk}
-            SPCE.StringDef msg ->
-              go st{stackProfSymbolTableReader = SPCS.insertTextMessage msg st.stackProfSymbolTableReader}
-            SPCE.SourceLocationDef msg -> do
+            GSP.StringDef msg ->
+              go st{stackProfSymbolTableReader = GSP.insertTextMessage msg st.stackProfSymbolTableReader}
+            GSP.SourceLocationDef msg -> do
               let old = st.stackProfSymbolTableReader
-              let errOrnew = SPCS.insertSourceLocationMessage msg old
+              let errOrnew = GSP.insertSourceLocationMessage msg old
               new <- either (\err -> lift $ writeException logger err >> pure old) pure errOrnew
               go st{stackProfSymbolTableReader = new}
       _otherwise -> go st
 
-hydrateBinaryEventlog ::
-  StackProfSampleState ->
-  SPCE.BinaryCallStackMessage ->
-  (CallStackData, StackProfSampleState, [SPCT.BinaryCallStackDecodeError])
-hydrateBinaryEventlog spst msg = (callStackData, spst{stackProfSampleChunk = []}, callStackDecodeErrors)
- where
-  chunks = spst.stackProfSampleChunk
+hydrateGspBinaryCallStackMessage ::
+  InfoProvTable ->
+  GspProcessorState ->
+  GSP.BinaryCallStackMessage ->
+  IO (CallStackData, GspProcessorState, [GSP.BinaryCallStackDecodeError])
+hydrateGspBinaryCallStackMessage infoProvTable spst msg = do
+  let !chunks = spst.stackProfSampleChunk
+
   -- Why reverse?
   -- When decoding the stack, we walk the stack from the top down.
   -- Afterwards, the stack is chunked to fit into a single eventlog line,
@@ -218,28 +174,43 @@ hydrateBinaryEventlog spst msg = (callStackData, spst{stackProfSampleChunk = []}
   --    [5,6] [3,4] [1,2]
   -- 4. One reverse later: @[1,2] [3,4] [5,6]@
   -- 5. Now we can finally concat the stack frame chunks.
-  orderedChunks = NonEmpty.reverse $ msg :| chunks
-  fullBinaryCallStackMessage = SPCT.catCallStackMessage orderedChunks
-  (callStackMessage, callStackDecodeErrors) =
-    SPCT.hydrateEventlogCallStackMessage
-      (SPCS.mkIntMapSymbolTableReader spst.stackProfSymbolTableReader)
-      fullBinaryCallStackMessage
-  callStackData =
-    CallStackData
-      { threadId = Just $ ThreadId $ SPCT.callThreadId callStackMessage
-      , capabilityId = CapabilityId $ SPCE.getCapabilityId $ SPCT.callCapabilityId callStackMessage
-      , stack =
-          -- TODO: log if we are encountering unknown ipe ids
-          mapMaybe (toStackItemData spst.infoTableMap) $ SPCT.callStack callStackMessage
-      }
+  let !orderedChunks = NonEmpty.reverse $ msg :| chunks
+  let !fullBinaryCallStackMessage = GSP.catCallStackMessage orderedChunks
+  let !(callStackMessage, callStackDecodeErrors) =
+        GSP.hydrateEventlogCallStackMessage
+          (GSP.mkIntMapSymbolTableReader spst.stackProfSymbolTableReader)
+          fullBinaryCallStackMessage
+  let !callStack = GSP.callStack callStackMessage
 
-toStackItemData :: HashMap InfoProvPtr InfoProv -> SPCT.StackItem -> Maybe StackItemData
-toStackItemData tbl = \case
-  SPCT.IpeId iid -> IpeData <$> HashMap.lookup (InfoProvPtr $ SPCE.getIpeId iid) tbl
-  SPCT.UserAnnotation msg mSrcLoc -> Just $ UserMessageData (Text.pack msg) mSrcLoc
+  -- Extract the IPE IDs and look all of them up in a single database query,
+  -- relying on the fact that IPT.lookups preserves the order.
+  let !infoProvPtrs = V.fromList . flip mapMaybe callStack $ \case
+        GSP.IpeId iid -> Just $! InfoProvPtr (GSP.getIpeId iid)
+        _otherwise -> Nothing
+  !maybeInfoProvs <- V.toList <$> IPT.lookups infoProvTable infoProvPtrs
 
-{- |
-Get the elements of a heap profile sample collection.
--}
-stackProfSamples :: CallStackData -> [CallStackData]
-stackProfSamples = List.singleton
+  -- Merge the maybeInfoProvs results into the StackItemData.
+  -- TODO: There's probably a less explicit and more optimiseable way to do this.
+  let toStackItemData :: [Maybe InfoProv] -> [GSP.StackItem] -> [Maybe StackItemData]
+      toStackItemData infoProvAcc [] =
+        assert (null infoProvAcc) []
+      toStackItemData [] (GSP.IpeId _iid : stackItems) = do
+        Nothing : toStackItemData [] stackItems
+      toStackItemData (Nothing : infoProvAcc) (GSP.IpeId _iid : stackItems) =
+        Nothing : toStackItemData infoProvAcc stackItems
+      toStackItemData (Just infoProv : infoProvAcc) (GSP.IpeId _iid : stackItems) =
+        -- Resolve an IPE ID against the top result in the InfoProv stack.
+        let !stackItemData = IpeData infoProv
+         in Just stackItemData : toStackItemData infoProvAcc stackItems
+      toStackItemData infoProvAcc (GSP.UserAnnotation userMessage maybeSrcLoc : stackItems) =
+        -- Repackage a user annotation.
+        let !stackItemData = UserMessageData (Text.pack userMessage) maybeSrcLoc
+         in Just stackItemData : toStackItemData infoProvAcc stackItems
+
+  let !callStackData =
+        CallStackData
+          { threadId = Just $ ThreadId $ GSP.callThreadId callStackMessage
+          , capabilityId = CapabilityId $ GSP.getCapabilityId (GSP.callCapabilityId callStackMessage)
+          , stack = catMaybes (toStackItemData maybeInfoProvs callStack)
+          }
+  pure (callStackData, spst{stackProfSampleChunk = []}, callStackDecodeErrors)
