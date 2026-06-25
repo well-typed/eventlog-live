@@ -115,6 +115,7 @@ library
     GHC.Eventlog.Live.Data.SrcLoc
     GHC.Eventlog.Live.Logger
     GHC.Eventlog.Live.Machine.Analysis.Capability
+    GHC.Eventlog.Live.Machine.Analysis.CostCentre
     GHC.Eventlog.Live.Machine.Analysis.Heap
     GHC.Eventlog.Live.Machine.Analysis.InfoProv
     GHC.Eventlog.Live.Machine.Analysis.Log
