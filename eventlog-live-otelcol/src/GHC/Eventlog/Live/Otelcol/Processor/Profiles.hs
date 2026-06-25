@@ -20,7 +20,6 @@ import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import GHC.Eventlog.Live.Data.InfoProv qualified as M
-import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -69,7 +68,7 @@ processStackProfSample logger config =
       ( M.processStackProfSampleData logger
           ~> mapping M.stackProfSamples
           ~> asParts
-          ~> mapping (D.singleton . (.value))
+          ~> mapping D.singleton
       )
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.stackSample) config)
 
@@ -84,7 +83,7 @@ processCostCentreProfSample logger config =
       ( M.processCostCentreProfSampleData logger
           ~> mapping M.stackProfSamples
           ~> asParts
-          ~> mapping (D.singleton . (.value))
+          ~> mapping D.singleton
       )
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.costCentreSample) config)
 
