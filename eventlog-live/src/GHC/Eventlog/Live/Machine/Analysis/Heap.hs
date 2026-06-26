@@ -351,7 +351,7 @@ processHeapProfSampleData logger infoProvTable maybeHeapProfBreakdown =
                           "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
                       Just infoProv ->
                         lift . writeLog logger TRACE $
-                          "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipLabel <> "."
+                          "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipName <> "."
                     pure maybeInfoProv
                 else pure Nothing
             -- Get the HeapProfSampleData
