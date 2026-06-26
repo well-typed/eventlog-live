@@ -38,18 +38,18 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 processHeapEvents ::
   (MonadIO m) =>
   Logger m ->
-  InfoProvTable ->
+  Maybe InfoProvTable ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapEvents verbosity infoProvDatabase maybeHeapProfBreakdown fullConfig =
+processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig =
   M.fanoutTick
     [ processHeapAllocated fullConfig
     , processBlocksSize fullConfig
     , processHeapSize fullConfig
     , processHeapLive fullConfig
     , processMemReturn fullConfig
-    , processHeapProfSample verbosity infoProvDatabase maybeHeapProfBreakdown fullConfig
+    , processHeapProfSample verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
     ]
 
 --------------------------------------------------------------------------------
@@ -172,15 +172,15 @@ shouldComputeMemReturn fullConfig =
 processHeapProfSample ::
   (MonadIO m) =>
   Logger m ->
-  InfoProvTable ->
+  Maybe InfoProvTable ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processHeapProfSample logger infoProvDatabase maybeHeapProfBreakdown =
+processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSampleData logger infoProvDatabase maybeHeapProfBreakdown
+      , dataProcessor = M.processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown
       , aggregators = viaLast
       , postProcessor = mapping M.heapProfSamples ~> asParts
       , unit = "By"

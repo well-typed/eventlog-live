@@ -199,7 +199,7 @@ main = do
               , -- Process InfoProv events.
                 processInfoProvData infoProvTable
               , -- Process the heap events.
-                processHeapEvents logger infoProvTable maybeHeapProfBreakdown fullConfig
+                processHeapEvents logger (Just infoProvTable) maybeHeapProfBreakdown fullConfig
                   ~> mapping (fmap (fmap TelemetryData'Metric))
               , -- Process the log events.
                 processLogEvents fullConfig
