@@ -120,7 +120,9 @@ extractCostCentre logger = construct $ go False
         -- If the event is an `E.InfoTableProv` event, process it, and set @started@...
         | E.HeapProfCostCentre{..} <- i.evSpec -> do
             let ccId = CostCentreId heapProfCostCentreId
-            let !maybeCcSrcLoc = readMaybe . T.unpack $ heapProfSrcLoc
+            let !maybeCcSrcLoc
+                  | heapProfSrcLoc `elem` ["<built-in>", "<entire-module>"] = Just UnhelpfulSrcLoc
+                  | otherwise = readMaybe . T.unpack $ heapProfSrcLoc
             when (isNothing maybeCcSrcLoc) . lift . writeLog logger WARN $
               "Could not parse SrcLoc '" <> heapProfSrcLoc <> "' for CostCentre " <> T.pack (show ccId) <> " (" <> heapProfLabel <> ")"
             let cc =
