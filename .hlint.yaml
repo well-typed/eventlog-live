@@ -32,7 +32,7 @@
     - {
         name: [Database.LSMTree, Database.LSMTree.Simple],
         as: LSMT,
-        within: [Database.LSMTree.Compat],
+        within: [GHC.Eventlog.Live.Database],
       }
 #   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
 #   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
