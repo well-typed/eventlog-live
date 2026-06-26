@@ -29,6 +29,7 @@ import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Database qualified as DB
 import GHC.Eventlog.Live.Logger (MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.CostCentre (CostCentreTable)
@@ -260,26 +261,27 @@ main = do
     -- Open a connection to the OpenTelemetry Collector.
     let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
     G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-      MCCT.withCostCentreTable logger Nothing $ \costCentreTable -> do
-        MIPT.withInfoProvTable logger maybeIpTableInputFilePath $ \infoProvTable -> do
-          withEventlogSourceHandle
-            logger
-            eventlogSocketTimeoutS
-            eventlogSocketTimeoutExponent
-            eventlogSourceOptions
-            $ \eventlogSourceHandle -> do
-              -- Notify the control server of the connection status.
-              let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
-              let endConnection = controlServerApi.notifyEndConnection serviceName
-              bracket_ newConnection endConnection $
-                -- Run the eventlog processor.
-                runWithEventlogSourceHandle
-                  logger
-                  eventlogSourceHandle
-                  fullConfig.batchIntervalMs
-                  Nothing
-                  maybeEventlogLogFile
-                  (processAndExportTelemetry costCentreTable infoProvTable conn)
+      DB.withNewSession logger DB.defaultSessionOptions $ \session ->
+        MCCT.withCostCentreTable logger session Nothing $ \costCentreTable -> do
+          MIPT.withInfoProvTable logger session maybeIpTableInputFilePath $ \infoProvTable -> do
+            withEventlogSourceHandle
+              logger
+              eventlogSocketTimeoutS
+              eventlogSocketTimeoutExponent
+              eventlogSourceOptions
+              $ \eventlogSourceHandle -> do
+                -- Notify the control server of the connection status.
+                let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
+                let endConnection = controlServerApi.notifyEndConnection serviceName
+                bracket_ newConnection endConnection $
+                  -- Run the eventlog processor.
+                  runWithEventlogSourceHandle
+                    logger
+                    eventlogSourceHandle
+                    fullConfig.batchIntervalMs
+                    Nothing
+                    maybeEventlogLogFile
+                    (processAndExportTelemetry costCentreTable infoProvTable conn)
 
 data TelemetryData
   = TelemetryData'Log OL.LogRecord
