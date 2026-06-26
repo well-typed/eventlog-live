@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Machine.Analysis.InfoProv
 Description : Machine for gathering info table provenance information.
@@ -13,20 +15,26 @@ module GHC.Eventlog.Live.Machine.Analysis.InfoProv (
   lookups,
 ) where
 
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Coerce (coerce)
-import Data.Machine (Process, ProcessT, await, buffered, construct, mapping, repeatedly, yield, (~>))
-import Data.Maybe (fromMaybe)
+import Data.Machine (ProcessT, await, buffered, construct, mapping, repeatedly, yield, (~>))
+import Data.Maybe (fromMaybe, isNothing)
+import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Void (Void)
 import Data.Word (Word64)
+import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Data.SrcLoc (SrcLoc (..))
 import GHC.Eventlog.Live.Database (Session, Table, TableOptions (..))
 import GHC.Eventlog.Live.Database qualified as DB
-import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
-import GHC.Eventlog.Live.Logger (Logger)
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events qualified as E
+import Text.Read (readMaybe)
 import Prelude hiding (lookup)
 
 {- |
@@ -80,12 +88,13 @@ inserts = coerce DB.inserts
 Index `InfoProv` entries from a GHC event stream into an `InfoProvTable`.
 -}
 indexing ::
+  Logger IO ->
   InfoProvTable ->
   -- | The buffer size. Defaults to 10.
   Maybe Int ->
   ProcessT IO Event Void
-indexing infoProvTable maybeBufferSize =
-  extractInfoProv
+indexing logger infoProvTable maybeBufferSize =
+  extractInfoProv logger
     ~> buffered (fromMaybe 10 maybeBufferSize)
     ~> mapping V.fromList
     ~> repeatedly (await >>= liftIO . inserts infoProvTable)
@@ -97,8 +106,11 @@ This machine starts yielding `InfoProv` entries when the first
 `E.InfoTableProv` event is received, and stops altogether once
 the first subsequent non-`E.InfoTableProv` event is received.
 -}
-extractInfoProv :: Process Event (InfoProvPtr, InfoProv)
-extractInfoProv = construct $ go False
+extractInfoProv ::
+  (Monad m) =>
+  Logger m ->
+  ProcessT m Event (InfoProvPtr, InfoProv)
+extractInfoProv logger = construct $ go False
  where
   go started =
     await >>= \case
@@ -106,6 +118,9 @@ extractInfoProv = construct $ go False
         -- If the event is an `E.InfoTableProv` event, process it, and set @started@...
         | E.InfoTableProv{..} <- i.evSpec -> do
             let !ipPtr = InfoProvPtr itInfo
+            let !maybeIpSrcLoc = readMaybe . T.unpack $ itSrcLoc
+            when (isNothing maybeIpSrcLoc) . lift . writeLog logger WARN $
+              "Could not parse SrcLoc '" <> itSrcLoc <> "' for InfoProv " <> T.pack (show ipPtr) <> " (" <> itTableName <> ")"
             let !ip =
                   InfoProv
                     { ipName = itTableName
@@ -113,7 +128,7 @@ extractInfoProv = construct $ go False
                     , ipTyDesc = itTyDesc
                     , ipLabel = itLabel
                     , ipModule = itModule
-                    , ipSrcLoc = itSrcLoc
+                    , ipSrcLoc = fromMaybe UnhelpfulSrcLoc maybeIpSrcLoc
                     }
             yield (ipPtr, ip)
             go True

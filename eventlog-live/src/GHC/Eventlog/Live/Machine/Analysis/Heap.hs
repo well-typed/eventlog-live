@@ -378,7 +378,7 @@ processHeapProfSampleData logger infoProvTable maybeHeapProfBreakdown =
                     , "ipTyDesc" ~= fmap (.ipTyDesc) maybeInfoProv
                     , "ipLabel" ~= fmap (.ipLabel) maybeInfoProv
                     , "ipModule" ~= fmap (.ipModule) maybeInfoProv
-                    , "ipSrcLoc" ~= fmap (.ipSrcLoc) maybeInfoProv
+                    , "ipSrcLoc" ~= fmap (show . (.ipSrcLoc)) maybeInfoProv
                     ]
             heapProfSampleData' <-
               lift $ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData

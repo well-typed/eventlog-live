@@ -14,6 +14,7 @@ import Data.Binary.Text (getTextUtf8, putTextUtf8)
 import Data.Hashable (Hashable)
 import Data.Text (Text)
 import Data.Word (Word64)
+import GHC.Eventlog.Live.Data.SrcLoc (SrcLoc)
 import Numeric (showHex)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Read.Lex (readHexP)
@@ -41,7 +42,7 @@ data InfoProv = InfoProv
   , ipTyDesc :: !Text
   , ipLabel :: !Text
   , ipModule :: !Text
-  , ipSrcLoc :: !Text
+  , ipSrcLoc :: !SrcLoc
   }
   deriving (Show, Eq)
 
@@ -59,7 +60,7 @@ instance Binary InfoProv where
     ipTyDesc <- getTextUtf8
     ipLabel <- getTextUtf8
     ipModule <- getTextUtf8
-    ipSrcLoc <- getTextUtf8
+    ipSrcLoc <- get
     pure InfoProv{..}
 
   put :: InfoProv -> Put
@@ -69,4 +70,4 @@ instance Binary InfoProv where
     putTextUtf8 ipTyDesc
     putTextUtf8 ipLabel
     putTextUtf8 ipModule
-    putTextUtf8 ipSrcLoc
+    put ipSrcLoc

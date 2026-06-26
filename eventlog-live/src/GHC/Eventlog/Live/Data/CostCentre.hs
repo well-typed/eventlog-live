@@ -14,6 +14,7 @@ import Data.Binary.Text (getTextUtf8, putTextUtf8)
 import Data.Hashable (Hashable)
 import Data.Text (Text)
 import Data.Word (Word32)
+import GHC.Eventlog.Live.Data.SrcLoc (SrcLoc)
 
 {- |
 The type of cost-centre IDs.
@@ -29,7 +30,7 @@ The type of a cost-centre entry, as produced by the `GHC.RTS.Events.HeapProfCost
 data CostCentre = CostCentre
   { ccLabel :: !Text
   , ccModule :: !Text
-  , ccSrcLoc :: !Text
+  , ccSrcLoc :: !SrcLoc
   , ccIsCAF :: !Bool
   }
   deriving stock (Show, Eq)
@@ -45,7 +46,7 @@ instance Binary CostCentre where
   get = do
     ccLabel <- getTextUtf8
     ccModule <- getTextUtf8
-    ccSrcLoc <- getTextUtf8
+    ccSrcLoc <- get
     ccIsCAF <- get
     pure CostCentre{..}
 
@@ -53,5 +54,5 @@ instance Binary CostCentre where
   put CostCentre{..} = do
     putTextUtf8 ccLabel
     putTextUtf8 ccModule
-    putTextUtf8 ccSrcLoc
+    put ccSrcLoc
     put ccIsCAF

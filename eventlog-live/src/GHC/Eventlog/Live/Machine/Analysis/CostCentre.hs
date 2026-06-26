@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Machine.Analysis.CostCentre
 Description : Machine for gathering info table provenance information.
@@ -13,22 +15,28 @@ module GHC.Eventlog.Live.Machine.Analysis.CostCentre (
   lookups,
 ) where
 
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Coerce (coerce)
-import Data.Machine (Process, ProcessT, await, buffered, construct, mapping, repeatedly, yield, (~>))
-import Data.Maybe (fromMaybe)
+import Data.Machine (ProcessT, await, buffered, construct, mapping, repeatedly, yield, (~>))
+import Data.Maybe (fromMaybe, isNothing)
+import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Void (Void)
 import Data.Word (Word32)
-import GHC.Eventlog.Live.Database (Session, Table, TableOptions (..))
-import GHC.Eventlog.Live.Database qualified as DB
 import Foreign (toBool)
 import Foreign.C.Types (CBool (..))
 import GHC.Eventlog.Live.Data.CostCentre (CostCentre (..), CostCentreId (..))
-import GHC.Eventlog.Live.Logger (Logger)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Data.SrcLoc (SrcLoc (..))
+import GHC.Eventlog.Live.Database (Session, Table, TableOptions (..))
+import GHC.Eventlog.Live.Database qualified as DB
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events qualified as E
+import Text.Read (readMaybe)
 import Prelude hiding (lookup)
 
 {- |
@@ -82,12 +90,13 @@ inserts = coerce DB.inserts
 Index `CostCentre` entries from a GHC event stream into an `CostCentreTable`.
 -}
 indexing ::
+  Logger IO ->
   CostCentreTable ->
   -- | The buffer size. Defaults to 10.
   Maybe Int ->
   ProcessT IO Event Void
-indexing infoProvTable maybeBufferSize =
-  extractCostCentre
+indexing logger infoProvTable maybeBufferSize =
+  extractCostCentre logger
     ~> buffered (fromMaybe 10 maybeBufferSize)
     ~> mapping V.fromList
     ~> repeatedly (await >>= liftIO . inserts infoProvTable)
@@ -99,8 +108,11 @@ This machine starts yielding `CostCentre` entries when the first
 `E.InfoTableProv` event is received, and stops altogether once
 the first subsequent non-`E.InfoTableProv` event is received.
 -}
-extractCostCentre :: Process Event (CostCentreId, CostCentre)
-extractCostCentre = construct $ go False
+extractCostCentre ::
+  (Monad m) =>
+  Logger m ->
+  ProcessT m Event (CostCentreId, CostCentre)
+extractCostCentre logger = construct $ go False
  where
   go started =
     await >>= \case
@@ -108,11 +120,14 @@ extractCostCentre = construct $ go False
         -- If the event is an `E.InfoTableProv` event, process it, and set @started@...
         | E.HeapProfCostCentre{..} <- i.evSpec -> do
             let ccId = CostCentreId heapProfCostCentreId
+            let !maybeCcSrcLoc = readMaybe . T.unpack $ heapProfSrcLoc
+            when (isNothing maybeCcSrcLoc) . lift . writeLog logger WARN $
+              "Could not parse SrcLoc '" <> heapProfSrcLoc <> "' for CostCentre " <> T.pack (show ccId) <> " (" <> heapProfLabel <> ")"
             let cc =
                   CostCentre
                     { ccLabel = heapProfLabel
                     , ccModule = heapProfModule
-                    , ccSrcLoc = heapProfSrcLoc
+                    , ccSrcLoc = fromMaybe UnhelpfulSrcLoc maybeCcSrcLoc
                     , ccIsCAF = toBool (coerce @_ @CBool heapProfFlags)
                     }
             yield (ccId, cc)

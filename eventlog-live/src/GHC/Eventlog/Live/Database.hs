@@ -62,9 +62,10 @@ newtype SessionOptions
 The default database session options.
 -}
 defaultSessionOptions :: SessionOptions
-defaultSessionOptions = LSMTreeSessionOptions
-  { maybeSessionRoot = Nothing
-  }
+defaultSessionOptions =
+  LSMTreeSessionOptions
+    { maybeSessionRoot = Nothing
+    }
 
 {- |
 Run an action with a new session.

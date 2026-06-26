@@ -5,7 +5,7 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Data.SrcLoc (
-  SrcLoc (SrcLoc, srcFilePath, srcRange),
+  SrcLoc (SrcLoc, UnhelpfulSrcLoc, srcFilePath, srcRange),
   Range (Range, start, end, ..),
   Point (..),
 ) where
@@ -57,6 +57,12 @@ pattern SrcLoc{srcFilePath, srcRange} <- SrcLoc_ srcFilePath srcRange
     SrcLoc srcFilePath srcRange = toSrcLoc srcFilePath srcRange
 
 {-# COMPLETE SrcLoc #-}
+
+{- |
+Simple constructor for unhelpful source locations.
+-}
+pattern UnhelpfulSrcLoc :: SrcLoc
+pattern UnhelpfulSrcLoc = SrcLoc_ Nothing Nothing
 
 {- |
 Internal helper.
