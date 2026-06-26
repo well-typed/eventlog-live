@@ -85,8 +85,9 @@ Parser for source location information.
 pSrcLoc :: ReadP SrcLoc
 pSrcLoc = SrcLoc <$> pSrcFilePath <* P.char ':' <*> pSrcRange
  where
+  -- TODO: This won't work on Windows, where file paths contain a drive letter.
   pSrcFilePath :: ReadP (Maybe FilePath)
-  pSrcFilePath = (Just <$> P.munch1 (/= ':')) P.<++ (Nothing <$ P.eof)
+  pSrcFilePath = Just <$> P.munch (/= ':')
 
   pSrcRange :: ReadP (Maybe Range)
   pSrcRange = (Just <$> pRange) P.<++ (Nothing <$ P.eof)
