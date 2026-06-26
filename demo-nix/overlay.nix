@@ -12,8 +12,9 @@ final: prev: with haskell.lib.compose; {
         url = "https://hackage.haskell.org/package/blockio-0.2.0.0/blockio-0.2.0.0.tar.gz";
         hash = "sha256-4tI6WfDOH5JzeL1YXjKsOLJesMh7ZX9m3lioFlsk8UI=";
       };
+      pkg = prev.callCabal2nixWithOptions "blockio" src "-fserialblockio" { };
     in
-    prev.callCabal2nixWithOptions "blockio" src "-fserialblockio" { };
+    enableCabalFlag pkg "serialblockio";
   grapesy = dontCheck prev.grapesy;
   ghc-stack-profiler-core = prev.callHackage "ghc-stack-profiler-core" "0.3.0.0" { };
   ghc-stack-profiler = prev.callHackage "ghc-stack-profiler" "0.3.0.0" { };
