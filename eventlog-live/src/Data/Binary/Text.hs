@@ -6,7 +6,6 @@ module Data.Binary.Text (
 ) where
 
 import Codec.LEB128.Generic (decodeLEB128, encodeLEB128)
-import Data.Binary (Binary (..))
 import Data.Binary.Get (Get, getByteString, getWord8)
 import Data.Binary.Put (Put, putByteString, putWord8)
 import Data.ByteString (ByteString)
@@ -15,16 +14,16 @@ import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
 
 {- |
-Decode `Text` into a UTF-8 `ByteString`.
+Decode `Text` from a UTF-8 `ByteString` using a LEB128-encoded length.
 -}
 getTextUtf8 :: Get Text
-getTextUtf8 = TE.decodeUtf8 <$> get
+getTextUtf8 = TE.decodeUtf8 <$> getByteStringLEB128
 
 {- |
-Encode `Text` from a UTF-8 `ByteString`.
+Encode `Text` into a UTF-8 `ByteString` using a LEB128-encoded length.
 -}
 putTextUtf8 :: Text -> Put
-putTextUtf8 = put . TE.encodeUtf8
+putTextUtf8 = putByteStringLEB128 . TE.encodeUtf8
 
 {- |
 Encode a `ByteString` using a LEB128-encoded length.
