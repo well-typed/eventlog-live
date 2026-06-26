@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Machine.Analysis.Heap
@@ -197,7 +196,7 @@ insertHeapProfSampleString ::
   Metric Word64 ->
   HeapProfSampleData ->
   m HeapProfSampleData
-insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSamples = do
+insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData = do
   let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
       insert heapProfSample' = do
         when (isJust heapProfSample') $ do
@@ -205,7 +204,7 @@ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSamples =
           writeLog logger WARN $ msg
 
         pure (Just heapProfSample)
-  heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSamples.heapProfSampleMap
+  heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSampleData.heapProfSampleMap
   pure HeapProfSampleData{heapProfSampleMap = heapProfSampleMap'}
 
 {- |
@@ -220,16 +219,6 @@ data HeapProfSampleState = HeapProfSampleState
   deriving (Show)
 
 {- |
-Internal helper.
-Checks whether a `HeapProfBreakdown` is `HeapProfBreakdownInfoTable`.
-This is needed because the ghc-events package does not define an `Eq`
-instance for the `HeapProfBreakdown` type.
--}
-isHeapProfBreakdownInfoTable :: HeapProfBreakdown -> Bool
-isHeapProfBreakdownInfoTable HeapProfBreakdownInfoTable = True
-isHeapProfBreakdownInfoTable _ = False
-
-{- |
 This machine processes `E.HeapProfSampleString` events into metrics.
 Furthermore, it processes the `E.HeapProfBegin` and `E.ProgramArgs` events
 to determine the heap profile breakdown, processes `E.InfoTableProv` events to
@@ -239,10 +228,10 @@ and `E.HeapProfSampleEnd` events to maintain an era stack.
 processHeapProfSampleData ::
   (MonadIO m) =>
   Logger m ->
-  InfoProvTable ->
+  Maybe InfoProvTable ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
-processHeapProfSampleData logger infoProvTable maybeHeapProfBreakdown =
+processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
@@ -324,36 +313,46 @@ processHeapProfSampleData logger infoProvTable maybeHeapProfBreakdown =
                   \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
             lift $ writeLog logger WARN $ msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
+        -- If the heap profile breakdown is by info table, but the shared info
+        -- prov table was not provided, issue a warning, then disable warnings.
+        | Right HeapProfBreakdownInfoTable <- eitherShouldWarnOrHeapProfBreakdown
+        , Nothing <- maybeInfoProvTable -> do
+            let msg =
+                  "Heap profile breakdown is "
+                    <> heapProfBreakdownShow HeapProfBreakdownInfoTable
+                    <> ", but no shared InfoProv table was provided."
+            lift $ writeLog logger WARN $ T.pack msg
+            go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
             let msg =
-                  T.pack $
-                    printf
-                      "Unsupported heap profile breakdown %s"
-                      (heapProfBreakdownShow HeapProfBreakdownBiography)
-            lift $ writeLog logger WARN $ msg
+                  "Unsupported heap profile breakdown "
+                    <> heapProfBreakdownShow HeapProfBreakdownBiography
+            lift $ writeLog logger WARN $ T.pack msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
             -- If the heap profile breakdown is by info table, add the info table.
             maybeInfoProv <-
-              if isHeapProfBreakdownInfoTable heapProfBreakdown
-                then case readMaybe (T.unpack heapProfLabel) of
-                  Nothing -> do
-                    lift . writeLog logger WARN $
-                      "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
-                    pure Nothing
-                  Just infoProvPtr -> do
-                    maybeInfoProv <- liftIO $ IPT.lookup infoProvTable infoProvPtr
-                    case maybeInfoProv of
-                      Nothing ->
-                        when (infoProvPtr /= InfoProvPtr 0) . lift . writeLog logger WARN $
-                          "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
-                      Just infoProv ->
-                        lift . writeLog logger TRACE $
-                          "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipName <> "."
-                    pure maybeInfoProv
-                else pure Nothing
+              case heapProfBreakdown of
+                -- NOTE: The case where maybeInfoProvTable is Nothing is handled above.
+                HeapProfBreakdownInfoTable | Just infoProvTable <- maybeInfoProvTable ->
+                  case readMaybe (T.unpack heapProfLabel) of
+                    Nothing -> do
+                      lift . writeLog logger WARN $
+                        "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
+                      pure Nothing
+                    Just infoProvPtr -> do
+                      maybeInfoProv <- liftIO $ IPT.lookup infoProvTable infoProvPtr
+                      case maybeInfoProv of
+                        Nothing ->
+                          when (infoProvPtr /= InfoProvPtr 0) . lift . writeLog logger WARN $
+                            "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
+                        Just infoProv ->
+                          lift . writeLog logger TRACE $
+                            "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipName <> "."
+                      pure maybeInfoProv
+                _otherwise -> pure Nothing
             -- Get the HeapProfSampleData
             heapProfSampleData <-
               case st.maybeHeapProfSampleData of
