@@ -21,8 +21,8 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Void (Void)
 import Data.Word (Word32)
-import Database.LSMTree.Compat (Table, TableOptions (..))
-import Database.LSMTree.Compat qualified as T
+import GHC.Eventlog.Live.Database (Session, Table, TableOptions (..))
+import GHC.Eventlog.Live.Database qualified as DB
 import Foreign (toBool)
 import Foreign.C.Types (CBool (..))
 import GHC.Eventlog.Live.Data.CostCentre (CostCentre (..), CostCentreId (..))
@@ -34,7 +34,7 @@ import Prelude hiding (lookup)
 {- |
 Representation of an `CostCentre` table.
 -}
-newtype CostCentreTable = CostCentreTable (Table (T.SerialiseVia CostCentreId Word32) (T.SerialiseViaBinary CostCentre))
+newtype CostCentreTable = CostCentreTable (Table (DB.SerialiseVia CostCentreId Word32) (DB.SerialiseViaBinary CostCentre))
 
 {- |
 Create an empty `CostCentre` table.
@@ -42,42 +42,41 @@ Create an empty `CostCentre` table.
 If the first argument is @`Just` tableFilePath@, the table is loaded from @tableFilePath@.
 Otherwise, an empty table is created.
 -}
-withCostCentreTable :: Logger IO -> Maybe FilePath -> (CostCentreTable -> IO a) -> IO a
-withCostCentreTable logger maybeCostCentreTableFilePath action = do
+withCostCentreTable :: Logger IO -> Session -> Maybe FilePath -> (CostCentreTable -> IO a) -> IO a
+withCostCentreTable logger session maybeCostCentreTableFilePath action = do
   -- Create the table options.
   let tableOptions =
         LSMTreeTableOptions
           { tableName = "cost-centre-table"
           , tableLabel = "CostCentreId-CostCentre"
           , maybeTableFilePath = maybeCostCentreTableFilePath
-          , maybeSessionRoot = Nothing
           }
   -- Create the table.
-  T.withTable logger tableOptions $ action . CostCentreTable
+  DB.withTable logger session tableOptions $ action . CostCentreTable
 
 {- |
 Save an `CostCentre` table to a file.
 -}
 save :: Logger IO -> CostCentreTable -> FilePath -> IO ()
-save = coerce T.saveTable
+save = coerce DB.saveTable
 
 {- |
 Resolve `CostCentreId` keys to `CostCentre` values from an `CostCentreTable`.
 -}
 lookups :: CostCentreTable -> Vector CostCentreId -> IO (Vector (Maybe CostCentre))
-lookups = coerce T.lookups
+lookups = coerce DB.lookups
 
 {- |
 Resolve an `CostCentreId` key to a `CostCentre` value from an `CostCentreTable`.
 -}
 lookup :: CostCentreTable -> CostCentreId -> IO (Maybe CostCentre)
-lookup = coerce T.lookup
+lookup = coerce DB.lookup
 
 {- |
 Insert @(`CostCentreId`, `CostCentre`)@ entries into an `CostCentreTable`.
 -}
 inserts :: CostCentreTable -> Vector (CostCentreId, CostCentre) -> IO ()
-inserts = coerce T.inserts
+inserts = coerce DB.inserts
 
 {- |
 Index `CostCentre` entries from a GHC event stream into an `CostCentreTable`.
@@ -119,7 +118,7 @@ extractCostCentre = construct $ go False
             yield (ccId, cc)
             go True
 
-        -- If the event is NOT an `E.HeapProfCostCentre` event...
+        -- If the event is NOT an `E.HeapProfCostCentre` evenDB...
         | otherwise ->
             -- ...and we have started...
             if started

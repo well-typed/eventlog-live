@@ -113,6 +113,7 @@ library
     GHC.Eventlog.Live.Data.Severity
     GHC.Eventlog.Live.Data.Span
     GHC.Eventlog.Live.Data.SrcLoc
+    GHC.Eventlog.Live.Database
     GHC.Eventlog.Live.Logger
     GHC.Eventlog.Live.Machine.Analysis.Capability
     GHC.Eventlog.Live.Machine.Analysis.CostCentre
@@ -132,7 +133,6 @@ library
 
   other-modules:
     Data.Binary.Text
-    Database.LSMTree.Compat
 
   build-depends:
     ansi-terminal >=1.1 && <1.2,

@@ -1,4 +1,8 @@
-module Database.LSMTree.Compat (
+module GHC.Eventlog.Live.Database (
+  Session,
+  SessionOptions (maybeSessionRoot),
+  defaultSessionOptions,
+  withNewSession,
   Table,
   TableOptions (..),
   withTable,
@@ -8,6 +12,7 @@ module Database.LSMTree.Compat (
   inserts,
   SerialiseViaBinary (..),
   SerialiseVia (..),
+  TargetExistsError (..),
 ) where
 
 import Control.Exception (Exception (..), IOException, bracket_, catch, throwIO)
@@ -34,25 +39,7 @@ import System.IO.Temp (withSystemTempDirectory, withTempDirectory)
 import Prelude hiding (lookup)
 
 {- |
-Representation of tables.
--}
-type Table :: Type -> Type -> Type
-data Table k v
-  = (LSMT.SerialiseKey k, LSMT.SerialiseValue v, LSMT.ResolveValue v) =>
-  LSMTreeTable
-  { mountPoint :: FS.MountPoint
-  , sessionRoot :: FS.FsPath
-  , session :: LSMT.Session IO
-  , table :: LSMT.Table IO k v Void
-  , tableName :: String
-  , snapshotName :: LSMT.SnapshotName
-  , snapshotLabel :: LSMT.SnapshotLabel
-  }
-
-{- |
-Internal helper.
-
-Representation of sessions.
+Representation of database sessions.
 -}
 type Session :: Type
 data Session
@@ -60,12 +47,76 @@ data Session
   { mountPoint :: FS.MountPoint
   , sessionRoot :: FS.FsPath
   , session :: LSMT.Session IO
+  }
+
+{- |
+The options for database sessions.
+-}
+type SessionOptions :: Type
+newtype SessionOptions
+  = LSMTreeSessionOptions
+  { maybeSessionRoot :: Maybe FilePath
+  }
+
+{- |
+The default database session options.
+-}
+defaultSessionOptions :: SessionOptions
+defaultSessionOptions = LSMTreeSessionOptions
+  { maybeSessionRoot = Nothing
+  }
+
+{- |
+Run an action with a new session.
+-}
+withNewSession ::
+  Logger IO ->
+  SessionOptions ->
+  (Session -> IO r) ->
+  IO r
+withNewSession logger LSMTreeSessionOptions{..} action = do
+  -- Create a temporary directory for the database session.
+  let withSessionDir :: (FilePath -> IO a) -> IO a
+      withSessionDir = case maybeSessionRoot of
+        Nothing -> withSystemTempDirectory "eventlog-live"
+        Just sessionRoot -> withTempDirectory sessionRoot "eventlog-live"
+  withSessionDir $ \sessionRoot -> do
+    writeLog logger DEBUG . T.pack $
+      "Creating database session at " <> sessionRoot <> "."
+    -- Create the LSM Tree session.
+    !sessionAbsRoot <- SD.makeAbsolute sessionRoot
+    let (!mountPointPath, !sessionRelRoot) = SF.splitDrive sessionAbsRoot
+    let !mountPoint = FS.MountPoint mountPointPath
+    let !sessionRelRootDirs = SF.splitDirectories sessionRelRoot
+    let !sessionRootFsPath = FS.mkFsPath sessionRelRootDirs
+    let !sessionDirFsPath = sessionRootFsPath FS.</> FS.mkFsPath ["session"]
+    BIO.withIOHasBlockIO mountPoint BIO.defaultIOCtxParams $ \hasFS hasBlockIO -> do
+      -- Create the session directory.
+      FS.createDirectoryIfMissing hasFS True sessionDirFsPath
+      -- Create the LSM Tree session.
+      let sessionSalt = 0
+      LSMT.withNewSession mempty hasFS hasBlockIO sessionSalt sessionDirFsPath $ \session -> do
+        writeLog logger DEBUG . T.pack $
+          "Created database session."
+        -- Run the action with the session.
+        action LSMTreeSession{sessionRoot = sessionRootFsPath, ..}
+
+{- |
+Representation of database tables.
+-}
+type Table :: Type -> Type -> Type
+data Table k v
+  = (LSMT.SerialiseKey k, LSMT.SerialiseValue v, LSMT.ResolveValue v) =>
+  LSMTreeTable
+  { session :: Session
+  , table :: LSMT.Table IO k v Void
+  , tableName :: String
   , snapshotName :: LSMT.SnapshotName
   , snapshotLabel :: LSMT.SnapshotLabel
   }
 
 {- |
-The options for tables.
+The options for database tables.
 -}
 type TableOptions :: Type -> Type -> Type
 data TableOptions k v
@@ -73,7 +124,6 @@ data TableOptions k v
   { tableName :: String
   , tableLabel :: String
   , maybeTableFilePath :: Maybe FilePath
-  , maybeSessionRoot :: Maybe FilePath
   }
 
 newtype TargetExistsError = TargetExistsError FilePath
@@ -86,77 +136,83 @@ Run an action with a table.
 
 If @`TableOptions`.`maybeTableFilePath`@ is set, the table is imported from the given snapshot.
 -}
-withTable :: Logger IO -> TableOptions k v -> (Table k v -> IO a) -> IO a
-withTable logger tableOptions@LSMTreeTableOptions{..} action = do
-  withNewSession logger tableOptions $ \LSMTreeSession{..} -> do
-    case maybeTableFilePath of
-      Nothing ->
-        -- Create a new LSM Tree table.
-        LSMT.withTable session $ \table ->
+withTable ::
+  Logger IO ->
+  Session ->
+  TableOptions k v ->
+  (Table k v -> IO a) ->
+  IO a
+withTable logger session@LSMTreeSession{session = lsmtSession, ..} LSMTreeTableOptions{..} action = do
+  let !snapshotName = LSMT.toSnapshotName tableName
+  let !snapshotLabel = fromString tableLabel
+  case maybeTableFilePath of
+    Nothing ->
+      -- Create a new LSM Tree table.
+      LSMT.withTable lsmtSession $ \table ->
+        -- Run the action.
+        action LSMTreeTable{..}
+    Just tableRelFilePath -> do
+      -- Find the absolute file path to the table.
+      tableAbsFilePath <- SD.makeAbsolute tableRelFilePath
+
+      -- Load the LSM Tree table.
+      let loadSnapshot :: IO ()
+          loadSnapshot = do
+            success <- tryLoadTableByHardlink
+            unless success loadTableByCopy
+
+          tryLoadTableByHardlink :: IO Bool
+          tryLoadTableByHardlink = do
+            writeLog logger DEBUG . T.pack $
+              "Trying to load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath
+            success <-
+              case FS.fsFromFilePath mountPoint tableAbsFilePath of
+                Nothing -> do
+                  writeLog logger DEBUG . T.pack $
+                    let FS.MountPoint !mountPointPath = mountPoint
+                     in "Could not load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath <> ": not under mount point " <> mountPointPath
+                  pure False
+                Just tableFsPath -> do
+                  let loadTableByHardlink = do
+                        LSMT.importSnapshot lsmtSession snapshotName tableFsPath
+                        pure True
+                  -- NOTE: @base@ does not expose EXDEV, so we fall back to exporting via
+                  --       copy if we encounter _any_ IOException, not just EXDEV.
+                  let handleIOException :: IOException -> IO Bool
+                      handleIOException e = do
+                        writeLog logger DEBUG . T.pack $
+                          "Could not load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath <> ": " <> displayException e
+                        pure False
+                  loadTableByHardlink `catch` handleIOException
+            if success
+              then
+                writeLog logger DEBUG . T.pack $
+                  "Hardlink table " <> tableName <> " from " <> tableAbsFilePath <> " succeeded."
+              else
+                writeLog logger DEBUG . T.pack $
+                  "Hardlink table " <> tableName <> " from " <> tableAbsFilePath <> " failed..."
+            pure success
+
+          loadTableByCopy :: IO ()
+          loadTableByCopy = do
+            -- Copy to temporary directory, then import...
+            let !sessionRootPath = FS.fsToFilePath mountPoint sessionRoot
+            withTempDirectory sessionRootPath "active-imports" $ \importDir -> do
+              !importAbsDir <- SD.makeAbsolute importDir
+              let !importDirFsPath = fromJust (FS.fsFromFilePath mountPoint importAbsDir)
+              writeLog logger DEBUG . T.pack $
+                "Trying to load table " <> tableName <> " by copying from " <> tableAbsFilePath <> " to " <> importAbsDir
+              copyRecursive tableAbsFilePath importDir
+              writeLog logger DEBUG . T.pack $
+                "Trying to load table " <> tableName <> " by hardlinking from " <> importAbsDir
+              LSMT.importSnapshot lsmtSession snapshotName importDirFsPath
+
+      -- Load the snapshot.
+      bracket_ loadSnapshot (deleteSnapshot lsmtSession snapshotName) $
+        -- Open the table from the snapshot.
+        LSMT.withTableFromSnapshot lsmtSession snapshotName snapshotLabel $ \table ->
           -- Run the action.
           action LSMTreeTable{..}
-      Just tableRelFilePath -> do
-        -- Find the absolute file path to the table.
-        tableAbsFilePath <- SD.makeAbsolute tableRelFilePath
-
-        -- Load the LSM Tree table.
-        let loadSnapshot :: IO ()
-            loadSnapshot = do
-              success <- tryLoadTableByHardlink
-              unless success loadTableByCopy
-
-            tryLoadTableByHardlink :: IO Bool
-            tryLoadTableByHardlink = do
-              writeLog logger DEBUG . T.pack $
-                "Trying to load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath
-              success <-
-                case FS.fsFromFilePath mountPoint tableAbsFilePath of
-                  Nothing -> do
-                    writeLog logger DEBUG . T.pack $
-                      let FS.MountPoint mountPointPath = mountPoint
-                       in "Could not load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath <> ": not under mount point " <> mountPointPath
-                    pure False
-                  Just tableFsPath -> do
-                    let loadTableByHardlink = do
-                          LSMT.importSnapshot session snapshotName tableFsPath
-                          pure True
-                    -- NOTE: @base@ does not expose EXDEV, so we fall back to exporting via
-                    --       copy if we encounter _any_ IOException, not just EXDEV.
-                    let handleIOException :: IOException -> IO Bool
-                        handleIOException e = do
-                          writeLog logger DEBUG . T.pack $
-                            "Could not load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath <> ": " <> displayException e
-                          pure False
-                    loadTableByHardlink `catch` handleIOException
-              if success
-                then
-                  writeLog logger DEBUG . T.pack $
-                    "Hardlink table " <> tableName <> " from " <> tableAbsFilePath <> " succeeded."
-                else
-                  writeLog logger DEBUG . T.pack $
-                    "Hardlink table " <> tableName <> " from " <> tableAbsFilePath <> " failed..."
-              pure success
-
-            loadTableByCopy :: IO ()
-            loadTableByCopy = do
-              -- Copy to temporary directory, then import...
-              let !sessionRootPath = FS.fsToFilePath mountPoint sessionRoot
-              withTempDirectory sessionRootPath "active-imports" $ \importDir -> do
-                !importAbsDir <- SD.makeAbsolute importDir
-                let !importDirFsPath = fromJust (FS.fsFromFilePath mountPoint importAbsDir)
-                writeLog logger DEBUG . T.pack $
-                  "Trying to load table " <> tableName <> " by copying from " <> tableAbsFilePath <> " to " <> importAbsDir
-                copyRecursive tableAbsFilePath importDir
-                writeLog logger DEBUG . T.pack $
-                  "Trying to load table " <> tableName <> " by hardlinking from " <> importAbsDir
-                LSMT.importSnapshot session snapshotName importDirFsPath
-
-        -- Load the snapshot.
-        bracket_ loadSnapshot (deleteSnapshot session snapshotName) $
-          -- Open the table from the snapshot.
-          LSMT.withTableFromSnapshot session snapshotName snapshotLabel $ \table ->
-            -- Run the action.
-            action LSMTreeTable{..}
 
 {- |
 Save a table.
@@ -164,7 +220,7 @@ Save a table.
 The target directory must not already exist.
 -}
 saveTable :: Logger IO -> Table k v -> FilePath -> IO ()
-saveTable logger LSMTreeTable{..} targetDir = do
+saveTable logger LSMTreeTable{session = LSMTreeSession{..}, ..} targetDir = do
   -- Test if the target exists...
   targetDirExists <- SD.doesPathExist targetDir
   when targetDirExists . throwIO $ TargetExistsError targetDir
@@ -213,46 +269,6 @@ deleteSnapshot :: LSMT.Session IO -> LSMT.SnapshotName -> IO ()
 deleteSnapshot session snapshotName =
   LSMT.deleteSnapshot session snapshotName
     `catch` \LSMT.ErrSnapshotDoesNotExist{} -> pure ()
-
-{- |
-Internal helper.
-
-Run an action with a new session.
--}
-withNewSession ::
-  Logger IO ->
-  TableOptions k v ->
-  (Session -> IO r) ->
-  IO r
-withNewSession logger LSMTreeTableOptions{..} action = do
-  -- Create the snapshot name and label.
-  let !snapshotName = LSMT.toSnapshotName tableName
-  let !snapshotLabel = fromString tableLabel
-  -- Create a temporary directory for the database session.
-  let withSessionDir :: (FilePath -> IO a) -> IO a
-      withSessionDir = case maybeSessionRoot of
-        Nothing -> withSystemTempDirectory tableName
-        Just sessionRoot -> withTempDirectory sessionRoot tableName
-  withSessionDir $ \sessionRoot -> do
-    writeLog logger DEBUG . T.pack $
-      "Creating database session for " <> tableName <> " at " <> sessionRoot
-    -- Create the LSM Tree session.
-    !sessionAbsRoot <- SD.makeAbsolute sessionRoot
-    let (!mountPointPath, !sessionRelRoot) = SF.splitDrive sessionAbsRoot
-    let !mountPoint = FS.MountPoint mountPointPath
-    let !sessionRelRootDirs = SF.splitDirectories sessionRelRoot
-    let !sessionRootFsPath = FS.mkFsPath sessionRelRootDirs
-    let !sessionDirFsPath = sessionRootFsPath FS.</> FS.mkFsPath ["session"]
-    BIO.withIOHasBlockIO mountPoint BIO.defaultIOCtxParams $ \hasFS hasBlockIO -> do
-      -- Create the session directory.
-      FS.createDirectoryIfMissing hasFS True sessionDirFsPath
-      -- Create the LSM Tree session.
-      let sessionSalt = 0
-      LSMT.withOpenSession mempty hasFS hasBlockIO sessionSalt sessionDirFsPath $ \session -> do
-        writeLog logger DEBUG . T.pack $
-          "Created database session for " <> tableName
-        -- Run the action with the session.
-        action LSMTreeSession{sessionRoot = sessionRootFsPath, ..}
 
 {- |
 Internal helper.
