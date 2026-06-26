@@ -37,7 +37,7 @@ import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
-import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..))
+import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
@@ -347,7 +347,7 @@ processHeapProfSampleData logger infoProvTable maybeHeapProfBreakdown =
                     maybeInfoProv <- liftIO $ IPT.lookup infoProvTable infoProvPtr
                     case maybeInfoProv of
                       Nothing ->
-                        lift . writeLog logger WARN $
+                        when (infoProvPtr /= InfoProvPtr 0) . lift . writeLog logger WARN $
                           "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
                       Just infoProv ->
                         lift . writeLog logger TRACE $
