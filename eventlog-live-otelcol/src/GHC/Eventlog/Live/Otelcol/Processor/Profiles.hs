@@ -19,6 +19,7 @@ import Data.DList qualified as D
 import Data.Machine (ProcessT, mapping, (~>))
 import Data.Maybe qualified as Maybe
 import Data.Text (Text)
+import Data.Text qualified as T
 import GHC.Eventlog.Live.Data.CostCentre qualified as M
 import GHC.Eventlog.Live.Data.InfoProv qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
@@ -227,7 +228,7 @@ getLocationIndexForInfoTable infoProv = do
   infoProvFuncNameId <- PD.getString label
   -- tyDesc <- getText infoProv.infoProvTyDesc
   --
-  ipSrcLocId <- PD.getString infoProv.ipSrcLoc
+  ipSrcLocId <- PD.getString (T.pack (show infoProv.ipSrcLoc))
   funcIdx <-
     PD.getFunction $
       messageWith
@@ -257,7 +258,7 @@ getLocationIndexForCostCentre costCentre = do
   costCentreFuncNameId <- PD.getString label
   -- tyDesc <- getText infoProv.infoProvTyDesc
   --
-  ccSrcLocId <- PD.getString costCentre.ccSrcLoc
+  ccSrcLocId <- PD.getString (T.pack (show costCentre.ccSrcLoc))
   funcIdx <-
     PD.getFunction $
       messageWith

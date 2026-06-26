@@ -156,7 +156,7 @@ main = do
           | otherwise = M.liftTick $ mapping (.value) ~> indexThenOutputTable ~> mapping absurd
          where
           indexThenOutputTable =
-            MCCT.indexing costCentreTable Nothing &> M.embed maybeOutputCcTable
+            MCCT.indexing logger costCentreTable Nothing &> M.embed maybeOutputCcTable
           maybeOutputCcTable =
             for_ maybeCcTableOutputFilePath $ \ccTableOutputFilePath -> do
               writeLog logger DEBUG . T.pack $
@@ -179,7 +179,7 @@ main = do
           | otherwise = M.liftTick $ mapping (.value) ~> indexThenOutputTable ~> mapping absurd
          where
           indexThenOutputTable =
-            MIPT.indexing infoProvTable Nothing &> M.embed maybeOutputIpeTable
+            MIPT.indexing logger infoProvTable Nothing &> M.embed maybeOutputIpeTable
           maybeOutputIpeTable =
             for_ maybeIpTableOutputFilePath $ \ipTableOutputFilePath -> do
               writeLog logger DEBUG . T.pack $
