@@ -6,3 +6,7 @@ package *
   ghc-options:
     -finfo-table-map
     -fdistinct-constructor-tables
+
+-- 2026-06-26
+-- relax all package constraints
+allow-newer: *
