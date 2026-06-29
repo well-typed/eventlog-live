@@ -155,11 +155,13 @@ library
     network >=3.2.7 && <3.3,
     optparse-applicative >=0.17 && <0.20,
     stm >=2.5 && <2.6,
+    tar >=0.7 && <0.8,
     temporary >=1.1 && <1.4,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
+    zlib >=0.7 && <0.8,
 
   -- 2026-06-16:
   -- This configures the build requirements for the vendored copy of

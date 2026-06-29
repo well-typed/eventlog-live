@@ -7,22 +7,32 @@ module GHC.Eventlog.Live.Database (
   TableOptions (..),
   withTable,
   saveTable,
+  TableFormat (..),
+  inferTableFormat,
   lookup,
   lookups,
   inserts,
+
+  -- * Serialisation
   SerialiseViaBinary (..),
   SerialiseVia (..),
+
+  -- * Errors
   TargetExistsError (..),
 ) where
 
-import Control.Exception (Exception (..), IOException, bracket_, catch, throwIO)
-import Control.Monad (unless, when)
+import Codec.Archive.Tar qualified as Tar
+import Codec.Archive.Tar.Check qualified as Tar
+import Codec.Compression.GZip qualified as GZip
+import Control.Exception (Exception (..), SomeException (..), bracket_, catch, throwIO)
+import Control.Monad (when)
 import Data.Binary (Binary)
 import Data.Binary qualified as B
+import Data.ByteString.Lazy qualified as BSL
 import Data.Coerce (Coercible, coerce)
-import Data.Foldable (for_)
 import Data.Kind (Type)
-import Data.Maybe (fromJust)
+import Data.List qualified as L
+import Data.Maybe (fromJust, fromMaybe)
 import Data.String (IsString (..))
 import Data.Text qualified as T
 import Data.Vector (Vector)
@@ -33,7 +43,6 @@ import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import System.Directory qualified as SD
 import System.FS.API.Strict qualified as FS
 import System.FS.BlockIO.IO qualified as BIO
-import System.FilePath ((</>))
 import System.FilePath qualified as SF
 import System.IO.Temp (withSystemTempDirectory, withTempDirectory)
 import Prelude hiding (lookup)
@@ -156,57 +165,48 @@ withTable logger session@LSMTreeSession{session = lsmtSession, ..} LSMTreeTableO
       -- Find the absolute file path to the table.
       tableAbsFilePath <- SD.makeAbsolute tableRelFilePath
 
-      -- Load the LSM Tree table.
-      let loadSnapshot :: IO ()
-          loadSnapshot = do
-            success <- tryLoadTableByHardlink
-            unless success loadTableByCopy
-
-          tryLoadTableByHardlink :: IO Bool
-          tryLoadTableByHardlink = do
+      -- Load a table in the LSMTreeSnapshotV2 format.
+      let loadLSMTreeSnapshotV2 :: IO ()
+          loadLSMTreeSnapshotV2 = do
+            -- Write a log message.
             writeLog logger DEBUG . T.pack $
-              "Trying to load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath
-            success <-
-              case FS.fsFromFilePath mountPoint tableAbsFilePath of
-                Nothing -> do
-                  writeLog logger DEBUG . T.pack $
-                    let FS.MountPoint !mountPointPath = mountPoint
-                     in "Could not load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath <> ": not under mount point " <> mountPointPath
-                  pure False
-                Just tableFsPath -> do
-                  let loadTableByHardlink = do
-                        LSMT.importSnapshot lsmtSession snapshotName tableFsPath
-                        pure True
-                  -- NOTE: @base@ does not expose EXDEV, so we fall back to exporting via
-                  --       copy if we encounter _any_ IOException, not just EXDEV.
-                  let handleIOException :: IOException -> IO Bool
-                      handleIOException e = do
-                        writeLog logger DEBUG . T.pack $
-                          "Could not load table " <> tableName <> " by hardlinking from " <> tableAbsFilePath <> ": " <> displayException e
-                        pure False
-                  loadTableByHardlink `catch` handleIOException
-            if success
-              then
-                writeLog logger DEBUG . T.pack $
-                  "Hardlink table " <> tableName <> " from " <> tableAbsFilePath <> " succeeded."
-              else
-                writeLog logger DEBUG . T.pack $
-                  "Hardlink table " <> tableName <> " from " <> tableAbsFilePath <> " failed..."
-            pure success
+              "Import table " <> tableName <> " from " <> tableRelFilePath <> " by hard linking."
+            -- Try to represent the target directory as an FsPath.
+            let FS.MountPoint mountPointPath = mountPoint
+            let !targetFsPath =
+                  fromMaybe (error $ "Cannot hardlink from " <> tableAbsFilePath <> "; not under mount point " <> mountPointPath <> ".") $
+                    FS.fsFromFilePath mountPoint tableAbsFilePath
+            -- Export the snapshot.
+            let snapshotFsPath = targetFsPath FS.</> FS.mkFsPath [tableName]
+            LSMT.importSnapshot lsmtSession snapshotName snapshotFsPath
 
-          loadTableByCopy :: IO ()
-          loadTableByCopy = do
-            -- Copy to temporary directory, then import...
+      -- Load a table in the LSMTreeSnapshotV2Tar format.
+      let loadLSMTreeSnapshotV2Tar :: (BSL.ByteString -> BSL.ByteString) -> IO ()
+          loadLSMTreeSnapshotV2Tar decompress = do
+            -- Write a log message.
+            writeLog logger DEBUG . T.pack $
+              "Import table " <> tableName <> " from " <> tableRelFilePath <> " by unarchiving."
+            -- Create temporary @active-import@ directory in the database session root.
             let !sessionRootPath = FS.fsToFilePath mountPoint sessionRoot
-            withTempDirectory sessionRootPath "active-imports" $ \importDir -> do
+            withTempDirectory sessionRootPath "active-import" $ \importDir -> do
+              -- Extract the snapshot to @active-import/$tableName@.
               !importAbsDir <- SD.makeAbsolute importDir
               let !importDirFsPath = fromJust (FS.fsFromFilePath mountPoint importAbsDir)
-              writeLog logger DEBUG . T.pack $
-                "Trying to load table " <> tableName <> " by copying from " <> tableAbsFilePath <> " to " <> importAbsDir
-              copyRecursive tableAbsFilePath importDir
-              writeLog logger DEBUG . T.pack $
-                "Trying to load table " <> tableName <> " by hardlinking from " <> importAbsDir
-              LSMT.importSnapshot lsmtSession snapshotName importDirFsPath
+              let !snapshotDirFsPath = importDirFsPath FS.</> FS.mkFsPath [tableName]
+              tarByteString <- BSL.readFile tableAbsFilePath
+              let tarEntries = Tar.read . decompress $ tarByteString
+              let tarCheck entry = SomeException <$> Tar.checkEntrySecurity entry
+              Tar.unpackAndCheck tarCheck importAbsDir tarEntries
+              -- Import the snapshot from @active-import/$tableName@.
+              LSMT.importSnapshot lsmtSession snapshotName snapshotDirFsPath
+
+      -- Load a table based on the inferred table format.
+      let loadSnapshot :: IO ()
+          loadSnapshot =
+            case inferTableFormat tableAbsFilePath of
+              LSMTreeSnapshotV2 -> loadLSMTreeSnapshotV2
+              LSMTreeSnapshotV2Tar -> loadLSMTreeSnapshotV2Tar id
+              LSMTreeSnapshotV2TarGz -> loadLSMTreeSnapshotV2Tar GZip.decompress
 
       -- Load the snapshot.
       bracket_ loadSnapshot (deleteSnapshot lsmtSession snapshotName) $
@@ -216,50 +216,87 @@ withTable logger session@LSMTreeSession{session = lsmtSession, ..} LSMTreeTableO
           action LSMTreeTable{..}
 
 {- |
+An enumeration of table formats.
+-}
+data TableFormat
+  = -- | The table is exported as a directory that contains an `lsm-tree` snapshot.
+    LSMTreeSnapshotV2
+  | -- | The table is exported as the tar archive of an `LSMTreeSnapshotV2` export.
+    LSMTreeSnapshotV2Tar
+  | -- | The table is exported as the GZip-compressed tar archive of an `LSMTreeSnapshotV2` export.
+    LSMTreeSnapshotV2TarGz
+
+{- |
+Infer the table format from a filename.
+
+[If the filename matches @*.lsm2.d@]:
+  The format is `LSMTreeSnapshotV2`.
+[If the filename matches @*.lsm2@]:
+  The format is `LSMTreeSnapshotV2Tar`.
+[If the filename matches @*.lsm2.gz@]:
+  The format is `LSMTreeSnapshotV2TarGz`.
+[Otherwise]:
+  The format defaults to `LSMTreeSnapshotV2Tar`.
+-}
+inferTableFormat :: FilePath -> TableFormat
+inferTableFormat filePath
+  | ".lsm2.d" `L.isSuffixOf` filePath = LSMTreeSnapshotV2
+  | ".lsm2" `L.isSuffixOf` filePath = LSMTreeSnapshotV2Tar
+  | ".lsm2.gz" `L.isSuffixOf` filePath = LSMTreeSnapshotV2TarGz
+  | otherwise = LSMTreeSnapshotV2Tar
+
+{- |
 Save a table.
 
 The target directory must not already exist.
 -}
 saveTable :: Logger IO -> Table k v -> FilePath -> IO ()
-saveTable logger LSMTreeTable{session = LSMTreeSession{..}, ..} targetDir = do
+saveTable logger LSMTreeTable{session = LSMTreeSession{..}, ..} target = do
   -- Test if the target exists...
-  targetDirExists <- SD.doesPathExist targetDir
-  when targetDirExists . throwIO $ TargetExistsError targetDir
+  targetExists <- SD.doesPathExist target
+  when targetExists . throwIO $ TargetExistsError target
+
   -- Save a table snapshot...
   let !saveSnapshot = LSMT.saveSnapshot snapshotName snapshotLabel table
-  bracket_ saveSnapshot (deleteSnapshot session snapshotName) $ do
-    success <- trySaveTableByHardlink
-    unless success saveTableByCopy
+  bracket_ saveSnapshot (deleteSnapshot session snapshotName) $
+    case inferTableFormat target of
+      LSMTreeSnapshotV2 -> saveLSMTreeSnapshotV2
+      LSMTreeSnapshotV2Tar -> saveLSMTreeSnapshotV2Tar id
+      LSMTreeSnapshotV2TarGz -> saveLSMTreeSnapshotV2Tar GZip.compress
  where
-  trySaveTableByHardlink :: IO Bool
-  trySaveTableByHardlink =
-    case FS.fsFromFilePath mountPoint targetDir of
-      Nothing ->
-        pure False
-      Just targetDirFsPath -> do
-        let saveTableByHardlink :: IO Bool
-            saveTableByHardlink = do
-              LSMT.exportSnapshot session snapshotName targetDirFsPath
-              pure True
-        -- NOTE: @base@ does not expose EXDEV, so we fall back to exporting via
-        --       copy if we encounter _any_ IOException, not just EXDEV.
-        let handleIOException :: IOException -> IO Bool
-            handleIOException e = do
-              writeLog logger WARN . T.pack $
-                "Could not export table " <> tableName <> " by hardlink: " <> displayException e
-              pure False
-        saveTableByHardlink `catch` handleIOException
+  saveLSMTreeSnapshotV2 :: IO ()
+  saveLSMTreeSnapshotV2 = do
+    -- Write a log message.
+    writeLog logger DEBUG . T.pack $
+      "Export table " <> tableName <> " to " <> target <> " by hard linking."
+    -- Try to represent the target directory as an FsPath.
+    let FS.MountPoint mountPointPath = mountPoint
+    absTarget <- SD.makeAbsolute target
+    let !targetFsPath =
+          fromMaybe (error $ "Cannot hardlink to " <> target <> "; not under mount point " <> mountPointPath <> ".") $
+            FS.fsFromFilePath mountPoint absTarget
 
-  saveTableByCopy :: IO ()
-  saveTableByCopy = do
-    -- Export to temporary directory, then copy...
+    -- Create the target directory.
+    SD.createDirectory target
+    -- Export the snapshot.
+    let snapshotFsPath = targetFsPath FS.</> FS.mkFsPath [tableName]
+    LSMT.exportSnapshot session snapshotName snapshotFsPath
+
+  saveLSMTreeSnapshotV2Tar :: (BSL.ByteString -> BSL.ByteString) -> IO ()
+  saveLSMTreeSnapshotV2Tar compress = do
+    -- Write a log message.
+    writeLog logger DEBUG . T.pack $
+      "Export table " <> tableName <> " to " <> target <> " by archiving."
+    -- Create temporary @active-export@ directory in the database session root.
     let !sessionRootPath = FS.fsToFilePath mountPoint sessionRoot
-    withTempDirectory sessionRootPath "active-exports" $ \exportRootDir -> do
-      let !exportDir = exportRootDir SF.</> tableName
-      !exportAbsDir <- SD.makeAbsolute exportDir
-      let !exportDirFsPath = fromJust (FS.fsFromFilePath mountPoint exportAbsDir)
-      LSMT.exportSnapshot session snapshotName exportDirFsPath
-      copyRecursive exportDir targetDir
+    withTempDirectory sessionRootPath "active-export" $ \exportRootDir -> do
+      -- Export the snapshot to the temporary @active-export@ directory.
+      let !snapshotDir = exportRootDir SF.</> tableName
+      !snapshotAbsDir <- SD.makeAbsolute snapshotDir
+      let !snapshotDirFsPath = fromJust (FS.fsFromFilePath mountPoint snapshotAbsDir)
+      LSMT.exportSnapshot session snapshotName snapshotDirFsPath
+      -- Create the output tar archive.
+      BSL.writeFile target . compress =<< Tar.write' =<< Tar.pack' exportRootDir [tableName]
 
 {- |
 Internal helper.
@@ -271,25 +308,9 @@ deleteSnapshot session snapshotName =
   LSMT.deleteSnapshot session snapshotName
     `catch` \LSMT.ErrSnapshotDoesNotExist{} -> pure ()
 
-{- |
-Internal helper.
-
-Copy a directory tree recursively.
--}
-copyRecursive :: FilePath -> FilePath -> IO ()
-copyRecursive source target = do
-  sourceIsDirectory <- SD.doesDirectoryExist source
-  if sourceIsDirectory
-    then do
-      -- If target exists, this throws the expected error.
-      SD.createDirectory target
-      entries <- SD.listDirectory source
-      for_ entries $ \entry ->
-        copyRecursive (source </> entry) (target </> entry)
-    else do
-      -- If source is a file, this succeeds.
-      -- If source does not exist, this throws the expected error.
-      SD.copyFile source target
+-- entries <- SD.listDirectory base
+-- for entries $ \entry ->
+--   entry
 
 {- |
 Insert entries into a table.
@@ -321,6 +342,8 @@ lookups = \case
 {- |
 Wrapper that derives the required `LSMT.SerialiseKey` and `LSMT.SerialiseValue`
 instances from a `Binary` instance.
+
+Derives `LSMT.ResolveValue` via `LSMT.ResolveAsFirst`.
 -}
 newtype SerialiseViaBinary v = SerialiseViaBinary {value :: v}
 
@@ -343,6 +366,8 @@ deriving via LSMT.ResolveAsFirst (SerialiseViaBinary v) instance LSMT.ResolveVal
 {- |
 Wrapper that derives the required `LSMT.SerialiseKey` and `LSMT.SerialiseValue`
 instances by unwrapping the newtype.
+
+Derives `LSMT.ResolveValue` via `LSMT.ResolveAsFirst`.
 -}
 newtype SerialiseVia v u = SerialiseVia {value :: v}
 
