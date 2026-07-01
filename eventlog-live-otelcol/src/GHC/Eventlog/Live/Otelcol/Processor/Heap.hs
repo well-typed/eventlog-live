@@ -18,7 +18,6 @@ import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
@@ -27,6 +26,8 @@ import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (runIf)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast, viaSum)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
+import IpeDB.Database qualified as DB
+import IpeDB.Types.InfoProv qualified as IP
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
@@ -38,7 +39,7 @@ import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 processHeapEvents ::
   (MonadIO m) =>
   Logger m ->
-  Maybe InfoProvTable ->
+  Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
@@ -172,7 +173,7 @@ shouldComputeMemReturn fullConfig =
 processHeapProfSample ::
   (MonadIO m) =>
   Logger m ->
-  Maybe InfoProvTable ->
+  Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))

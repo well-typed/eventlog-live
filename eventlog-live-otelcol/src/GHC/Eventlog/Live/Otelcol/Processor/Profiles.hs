@@ -20,11 +20,7 @@ import Data.Machine (ProcessT, mapping, (~>))
 import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Data.CostCentre qualified as M
-import GHC.Eventlog.Live.Data.InfoProv qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Analysis.CostCentre (CostCentreTable)
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -36,6 +32,9 @@ import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (ProfilesDi
 import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary qualified as PD
 import GHC.RTS.Events (Event (..))
 import GHC.Stack.Profiler.Core.SourceLocation qualified as Profiler
+import IpeDB.Database qualified as DB
+import IpeDB.Types.CostCentre qualified as CC
+import IpeDB.Types.InfoProv qualified as IP
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
@@ -50,8 +49,8 @@ import Proto.Opentelemetry.Proto.Resource.V1.Resource (Resource)
 processProfileEvents ::
   (MonadIO m) =>
   Logger m ->
-  CostCentreTable ->
-  InfoProvTable ->
+  DB.Table CC.CostCentreId CC.CostCentre ->
+  DB.Table IP.InfoProvId IP.InfoProv ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
 processProfileEvents verbosity costCentreTable infoProvTable config =
@@ -66,7 +65,7 @@ processProfileEvents verbosity costCentreTable infoProvTable config =
 processGhcStackProfilerData ::
   (MonadIO m) =>
   Logger m ->
-  InfoProvTable ->
+  DB.Table IP.InfoProvId IP.InfoProv ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
 processGhcStackProfilerData logger infoProvTable config =
@@ -80,7 +79,7 @@ processGhcStackProfilerData logger infoProvTable config =
 processProfSampleCostCentre ::
   (MonadIO m) =>
   Logger m ->
-  CostCentreTable ->
+  DB.Table CC.CostCentreId CC.CostCentre ->
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
 processProfSampleCostCentre logger costCentreTable config =
@@ -218,7 +217,9 @@ unhelpfulSrcLoc =
     , fileName = ""
     }
 
-getLocationIndexForInfoTable :: M.InfoProv -> State ProfilesDictionary SymbolIndex
+getLocationIndexForInfoTable ::
+  IP.InfoProv ->
+  State ProfilesDictionary SymbolIndex
 getLocationIndexForInfoTable infoProv = do
   ipNameId <- PD.getString infoProv.ipName
   let label =
@@ -252,7 +253,9 @@ getLocationIndexForInfoTable infoProv = do
       , OP.address .~ 0 -- 0 means unset
       ]
 
-getLocationIndexForCostCentre :: M.CostCentre -> State ProfilesDictionary SymbolIndex
+getLocationIndexForCostCentre ::
+  CC.CostCentre ->
+  State ProfilesDictionary SymbolIndex
 getLocationIndexForCostCentre costCentre = do
   let label = costCentre.ccModule <> ":" <> costCentre.ccLabel
   costCentreFuncNameId <- PD.getString label

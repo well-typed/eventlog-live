@@ -29,13 +29,8 @@ import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Database qualified as DB
 import GHC.Eventlog.Live.Logger (MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.CostCentre (CostCentreTable)
-import GHC.Eventlog.Live.Machine.Analysis.CostCentre qualified as MCCT
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv qualified as MIPT
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick, (&>))
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -61,6 +56,9 @@ import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.RTS.Events (Event (..))
+import IpeDB.Database qualified as DB
+import IpeDB.Types.CostCentre qualified as CC
+import IpeDB.Types.InfoProv qualified as IP
 import Lens.Family2 ((.~))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
@@ -149,19 +147,21 @@ main = do
         exitFailure
 
     -- Create machine that indexes CostCentre data.
-    let processCostCentreData :: CostCentreTable -> ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+    let processCostCentreData ::
+          DB.Table CC.CostCentreId CC.CostCentre ->
+          ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
         processCostCentreData costCentreTable
           -- If a CostCentre table was provided, don't index any new entries.
           | isJust maybeCcTableInputFilePath = stopped
           | otherwise = M.liftTick $ mapping (.value) ~> indexThenOutputTable ~> mapping absurd
          where
           indexThenOutputTable =
-            MCCT.indexing logger costCentreTable Nothing &> M.embed maybeOutputCcTable
+            DB.indexer CC.toCostCentre def costCentreTable &> M.embed maybeOutputCcTable
           maybeOutputCcTable =
             for_ maybeCcTableOutputFilePath $ \ccTableOutputFilePath -> do
               writeLog logger DEBUG . T.pack $
                 "Writing CostCentre table to " <> ccTableOutputFilePath
-              MCCT.save logger costCentreTable ccTableOutputFilePath
+              DB.saveTable costCentreTable ccTableOutputFilePath def
 
     -- If an info-prov table output path was provided, check that it does not exist.
     for_ maybeIpTableOutputFilePath $ \ipTableOutputFilePath -> do
@@ -172,24 +172,26 @@ main = do
         exitFailure
 
     -- Create machine that indexes InfoProv data.
-    let processInfoProvData :: InfoProvTable -> ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+    let processInfoProvData ::
+          DB.Table IP.InfoProvId IP.InfoProv ->
+          ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
         processInfoProvData infoProvTable
           -- If an InfoProv table was provided, don't index any new entries.
           | isJust maybeIpTableInputFilePath = stopped
           | otherwise = M.liftTick $ mapping (.value) ~> indexThenOutputTable ~> mapping absurd
          where
           indexThenOutputTable =
-            MIPT.indexing logger infoProvTable Nothing &> M.embed maybeOutputIpeTable
+            DB.indexer IP.toInfoProv def infoProvTable &> M.embed maybeOutputIpeTable
           maybeOutputIpeTable =
             for_ maybeIpTableOutputFilePath $ \ipTableOutputFilePath -> do
               writeLog logger DEBUG . T.pack $
                 "Writing InfoProv table to " <> ipTableOutputFilePath
-              MIPT.save logger infoProvTable ipTableOutputFilePath
+              DB.saveTable infoProvTable ipTableOutputFilePath def
 
     -- Create machine that processes eventlog data into telemetry data
     let processEventlogTelemetry ::
-          CostCentreTable ->
-          InfoProvTable ->
+          DB.Table CC.CostCentreId CC.CostCentre ->
+          DB.Table IP.InfoProvId IP.InfoProv ->
           ProcessT IO (Tick Event) (Tick ResourceTelemetryData)
         processEventlogTelemetry costCentreTable infoProvTable =
           M.liftTick M.withStartTime
@@ -261,9 +263,17 @@ main = do
     -- Open a connection to the OpenTelemetry Collector.
     let OpenTelemetryCollectorOptions{..} = openTelemetryCollectorOptions
     G.withConnection G.def openTelemetryCollectorServer $ \conn -> do
-      DB.withNewSession logger DB.defaultSessionOptions $ \session ->
-        MCCT.withCostCentreTable logger session Nothing $ \costCentreTable -> do
-          MIPT.withInfoProvTable logger session maybeIpTableInputFilePath $ \infoProvTable -> do
+      DB.withNewSession def $ \session -> do
+        let withCostCentreTable =
+              case maybeCcTableInputFilePath of
+                Nothing -> DB.withNewTable session def
+                Just ccTableInputFilePath -> DB.withTableFrom session ccTableInputFilePath def
+        let withInfoProvTable =
+              case maybeIpTableInputFilePath of
+                Nothing -> DB.withNewTable session def
+                Just ipTableInputFilePath -> DB.withTableFrom session ipTableInputFilePath def
+        withCostCentreTable $ \costCentreTable ->
+          withInfoProvTable $ \infoProvTable ->
             withEventlogSourceHandle
               logger
               eventlogSocketTimeoutS
