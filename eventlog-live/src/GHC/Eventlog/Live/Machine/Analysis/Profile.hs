@@ -25,19 +25,17 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector qualified as V
 import Data.Word
-import GHC.Eventlog.Live.Data.CostCentre (CostCentre (..), CostCentreId (..))
-import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Logger (Logger, writeException)
-import GHC.Eventlog.Live.Machine.Analysis.CostCentre (CostCentreTable)
-import GHC.Eventlog.Live.Machine.Analysis.CostCentre qualified as CCT
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv qualified as IPT
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
 import GHC.Stack.Profiler.Core.Eventlog qualified as GSP
 import GHC.Stack.Profiler.Core.SymbolTable qualified as GSP
 import GHC.Stack.Profiler.Core.ThreadSample qualified as GSP
+import IpeDB.Database (Table)
+import IpeDB.Database qualified as DB
+import IpeDB.Types.CostCentre (CostCentre (..), CostCentreId (..))
+import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
 
 newtype CapabilityId = CapabilityId
   { value :: Word64
@@ -73,14 +71,14 @@ Furthermore, it processes the `E.InfoTableProv` events to
 processProfSampleCostCentre ::
   (MonadIO m) =>
   Logger m ->
-  CostCentreTable ->
+  DB.Table CostCentreId CostCentre ->
   ProcessT m (WithStartTime Event) CallStackData
 processProfSampleCostCentre _logger costCentreTable =
   repeatedly $
     await >>= \i -> case i.value.evSpec of
       E.ProfSampleCostCentre{..} -> do
         let !costCentreIds = CostCentreId <$> V.convert profCcsStack
-        !maybeCostCentres <- liftIO $ CCT.lookups costCentreTable costCentreIds
+        !maybeCostCentres <- liftIO $ DB.lookups costCentreTable costCentreIds
         let !callStackMessage =
               CallStackData
                 { threadId = Nothing
@@ -110,7 +108,7 @@ processGhcStackProfilerData ::
   forall m.
   (MonadIO m) =>
   Logger m ->
-  InfoProvTable ->
+  Table InfoProvId InfoProv ->
   ProcessT m (WithStartTime Event) CallStackData
 processGhcStackProfilerData logger infoProvTable =
   construct $
@@ -148,7 +146,7 @@ processGhcStackProfilerData logger infoProvTable =
       _otherwise -> go st
 
 hydrateGspBinaryCallStackMessage ::
-  InfoProvTable ->
+  Table InfoProvId InfoProv ->
   GspProcessorState ->
   GSP.BinaryCallStackMessage ->
   IO (CallStackData, GspProcessorState, [GSP.BinaryCallStackDecodeError])
@@ -185,9 +183,9 @@ hydrateGspBinaryCallStackMessage infoProvTable spst msg = do
   -- Extract the IPE IDs and look all of them up in a single database query,
   -- relying on the fact that IPT.lookups preserves the order.
   let !infoProvPtrs = V.fromList . flip mapMaybe callStack $ \case
-        GSP.IpeId iid -> Just $! InfoProvPtr (GSP.getIpeId iid)
+        GSP.IpeId iid -> Just $! InfoProvId (GSP.getIpeId iid)
         _otherwise -> Nothing
-  !maybeInfoProvs <- V.toList <$> IPT.lookups infoProvTable infoProvPtrs
+  !maybeInfoProvs <- V.toList <$> DB.lookups infoProvTable infoProvPtrs
 
   -- Merge the maybeInfoProvs results into the StackItemData.
   -- TODO: There's probably a less explicit and more optimiseable way to do this.

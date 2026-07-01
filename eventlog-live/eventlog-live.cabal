@@ -44,14 +44,6 @@ flag use-concurrent-machines
   default: False
   manual: False
 
--- 2025-12-09:
--- This flag should enable switching between leb128 and the vendored copy
--- of the packages.
-flag use-leb128
-  description: Use leb128 in place of the vendored copy
-  default: False
-  manual: False
-
 common language
   ghc-options:
     -Wall
@@ -104,21 +96,15 @@ library
   hs-source-dirs: src
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
-    GHC.Eventlog.Live.Data.CostCentre
     GHC.Eventlog.Live.Data.Group
     GHC.Eventlog.Live.Data.HeapProfBreakdown
-    GHC.Eventlog.Live.Data.InfoProv
     GHC.Eventlog.Live.Data.LogRecord
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Severity
     GHC.Eventlog.Live.Data.Span
-    GHC.Eventlog.Live.Data.SrcLoc
-    GHC.Eventlog.Live.Database
     GHC.Eventlog.Live.Logger
     GHC.Eventlog.Live.Machine.Analysis.Capability
-    GHC.Eventlog.Live.Machine.Analysis.CostCentre
     GHC.Eventlog.Live.Machine.Analysis.Heap
-    GHC.Eventlog.Live.Machine.Analysis.InfoProv
     GHC.Eventlog.Live.Machine.Analysis.Log
     GHC.Eventlog.Live.Machine.Analysis.Profile
     GHC.Eventlog.Live.Machine.Analysis.Thread
@@ -131,47 +117,26 @@ library
     GHC.Eventlog.Live.Source
     GHC.Eventlog.Live.Source.Core
 
-  other-modules:
-    Data.Binary.Text
-
   build-depends:
     ansi-terminal >=1.1 && <1.2,
     base >=4.16 && <4.22,
-    binary >=0.8 && <0.9,
-    blockio >=0.1 && <0.3,
     bytestring >=0.11 && <0.13,
     clock >=0.8 && <0.9,
     co-log-core >=0.3 && <0.4,
-    directory >=1.3 && <1.4,
     dlist >=1.0 && <1.1,
-    filepath >=1.4 && <1.6,
-    fs-api >=0.4 && <0.5,
     ghc-events >=0.20 && <0.21,
     ghc-stack-profiler-core >=0.3 && <0.4,
     hashable >=1.4 && <1.6,
-    lsm-tree >=1.1 && <1.2,
+    ipedb >=0.2 && <0.3,
     machines >=0.7.4 && <0.8,
     monad-control >=1.0 && <1.1,
     network >=3.2.7 && <3.3,
     optparse-applicative >=0.17 && <0.20,
     stm >=2.5 && <2.6,
-    tar >=0.7 && <0.8,
-    temporary >=1.1 && <1.4,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
-    zlib >=0.7 && <0.8,
-
-  -- 2026-06-16:
-  -- This configures the build requirements for the vendored copy of
-  -- the leb128 package version 0.1.0.0.
-  if flag(use-leb128)
-    build-depends: leb128 >=0.1 && <0.2
-  else
-    hs-source-dirs: vendor/leb128-0.1.0.0/src
-    other-modules:
-      Codec.LEB128.Generic
 
   -- 2025-12-09:
   -- This configures the build requirements for the vendored copy of

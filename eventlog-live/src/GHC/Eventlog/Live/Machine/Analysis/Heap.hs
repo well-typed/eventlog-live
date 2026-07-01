@@ -36,15 +36,15 @@ import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
-import GHC.Eventlog.Live.Data.InfoProv (InfoProv (..), InfoProvPtr (..))
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv (InfoProvTable)
-import GHC.Eventlog.Live.Machine.Analysis.InfoProv qualified as IPT
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
+import IpeDB.Database (Table)
+import IpeDB.Database qualified as DB
+import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
@@ -228,7 +228,7 @@ and `E.HeapProfSampleEnd` events to maintain an era stack.
 processHeapProfSampleData ::
   (MonadIO m) =>
   Logger m ->
-  Maybe InfoProvTable ->
+  Maybe (Table InfoProvId InfoProv) ->
   Maybe HeapProfBreakdown ->
   ProcessT m (WithStartTime Event) HeapProfSampleData
 processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
@@ -343,10 +343,10 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
                         "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
                       pure Nothing
                     Just infoProvPtr -> do
-                      maybeInfoProv <- liftIO $ IPT.lookup infoProvTable infoProvPtr
+                      maybeInfoProv <- liftIO $ DB.lookup infoProvTable infoProvPtr
                       case maybeInfoProv of
                         Nothing ->
-                          when (infoProvPtr /= InfoProvPtr 0) . lift . writeLog logger WARN $
+                          when (infoProvPtr /= InfoProvId 0) . lift . writeLog logger WARN $
                             "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
                         Just infoProv ->
                           lift . writeLog logger TRACE $
