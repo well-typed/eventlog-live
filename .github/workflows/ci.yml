@@ -56,7 +56,7 @@ jobs:
         run: cabal build all ${{ matrix.cabal-flags }} --dry-run
 
       - name: 💾 Restore Cabal dependencies
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         id: cache-cabal
         env:
           key: build-${{ runner.os }}-ghc-${{ steps.setup-haskell.outputs.ghc-version }}-cabal-${{ steps.setup-haskell.outputs.cabal-version }}-flags-${{ matrix.cabal-flags }}
@@ -69,7 +69,7 @@ jobs:
         run: cabal build all ${{ matrix.cabal-flags }} --only-dependencies
 
       - name: 💾 Save Cabal dependencies
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         if: ${{ steps.cache-cabal.outputs.cache-hit != 'true' }}
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
