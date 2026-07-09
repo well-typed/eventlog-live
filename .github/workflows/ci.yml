@@ -174,7 +174,7 @@ jobs:
           submodules: true
 
       - name: 🛠️ Install Nix
-        uses: nixbuild/nix-quick-install-action@v30
+        uses: nixbuild/nix-quick-install-action@v35
         with:
           nix_conf: |
             keep-env-derivations = true
