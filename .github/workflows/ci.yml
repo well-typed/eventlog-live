@@ -83,7 +83,7 @@ jobs:
 
       - name: 📦 Upload test logs
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: eventlog-live-tests-${{ runner.os }}-${{ runner.arch }}-ghc-${{ matrix.ghc-version }}.err.log
           path: eventlog-live-tests.err.log
@@ -233,7 +233,7 @@ jobs:
         working-directory: "demo-nix"
 
       - name: 📦 Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: "demo-nix.qcow2"
           path: "${{ github.workspace }}/demo-nix/result/nixos.qcow2"
