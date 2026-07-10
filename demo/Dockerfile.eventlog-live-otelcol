@@ -28,6 +28,13 @@ package grpc-spec
 -- disable io_uring support in blockio
 package blockio
   flags: +serialblockio
+
+-- 2026-07-06:
+-- Add latest ipedb as a dependency.
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/ipedb.git
+    tag: b5bf44fb252805acaeec0e557b5043e79c6e1e68
 EOF
 
 # Install protoc
