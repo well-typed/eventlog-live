@@ -14,7 +14,7 @@ final: prev: with haskell.lib.compose; {
       };
       pkg = prev.callCabal2nixWithOptions "blockio" src "-fserialblockio" { };
     in
-    enableCabalFlag pkg "serialblockio";
+    enableCabalFlag "serialblockio" pkg;
   grapesy = dontCheck prev.grapesy;
   ghc-stack-profiler-core = prev.callHackage "ghc-stack-profiler-core" "0.3.0.0" { };
   ghc-stack-profiler = prev.callHackage "ghc-stack-profiler" "0.3.0.0" { };
