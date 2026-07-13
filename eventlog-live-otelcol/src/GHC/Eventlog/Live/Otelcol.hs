@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-name-shadowing -fconstraint-solver-iterations=0 #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol
@@ -384,9 +383,9 @@ partitionTelemetryData = go ([], [], [], [])
   go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData])
   go (logs, metrics, spans, profiles) = \case
     [] -> (reverse logs, reverse metrics, reverse spans, reverse profiles)
-    (TelemetryData'Log log : rest) -> go (log : logs, metrics, spans, profiles) rest
+    (TelemetryData'Log log_ : rest) -> go (log_ : logs, metrics, spans, profiles) rest
     (TelemetryData'Metric metric : rest) -> go (logs, metric : metrics, spans, profiles) rest
-    (TelemetryData'Span span : rest) -> go (logs, metrics, span : spans, profiles) rest
+    (TelemetryData'Span span_ : rest) -> go (logs, metrics, span_ : spans, profiles) rest
     (TelemetryData'Profile profile : rest) -> go (logs, metrics, spans, profile : profiles) rest
 
 {- |
