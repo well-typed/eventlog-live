@@ -142,7 +142,7 @@ ipeDBPathParser =
 ccDBPathParser :: O.Parser FilePath
 ccDBPathParser =
   O.strOption
-    ( O.long "cc-table"
+    ( O.long "ccdb"
         <> O.metavar "FILE"
         <> O.help "The path a cost-centre database."
     )
