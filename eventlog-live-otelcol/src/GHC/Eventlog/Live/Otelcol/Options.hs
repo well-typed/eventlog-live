@@ -48,10 +48,8 @@ data Options = Options
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeServiceName :: Maybe ServiceName
-  , maybeIpTableInputFilePath :: Maybe FilePath
-  , maybeIpTableOutputFilePath :: Maybe FilePath
-  , maybeCcTableInputFilePath :: Maybe FilePath
-  , maybeCcTableOutputFilePath :: Maybe FilePath
+  , maybeIpeDBPath :: Maybe FilePath
+  , maybeCCDBPath :: Maybe FilePath
   , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
@@ -70,10 +68,8 @@ optionsParser =
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
     <*> O.optional serviceNameParser
-    <*> O.optional ipTableInputFilePathParser
-    <*> O.optional ipTableOutputFilePathParser
-    <*> O.optional ccTableInputFilePathParser
-    <*> O.optional ccTableOutputFilePathParser
+    <*> O.optional ipeDBPathParser
+    <*> O.optional ccDBPathParser
     <*> verbosityParser
     <*> statsParser
     <*> O.optional configFileParser
@@ -132,39 +128,23 @@ serviceNameParser =
 --------------------------------------------------------------------------------
 -- InfoProv Tables
 
-ipTableInputFilePathParser :: O.Parser FilePath
-ipTableInputFilePathParser =
+ipeDBPathParser :: O.Parser FilePath
+ipeDBPathParser =
   O.strOption
-    ( O.long "ip-table"
+    ( O.long "ipedb"
         <> O.metavar "FILE"
-        <> O.help "The path to read the initial info-prov table."
-    )
-
-ipTableOutputFilePathParser :: O.Parser FilePath
-ipTableOutputFilePathParser =
-  O.strOption
-    ( O.long "export-ip-table-to"
-        <> O.metavar "FILE"
-        <> O.help "The path to write the final info-prov table."
+        <> O.help "The path to an IPE database."
     )
 
 --------------------------------------------------------------------------------
 -- CostCentre Tables
 
-ccTableInputFilePathParser :: O.Parser FilePath
-ccTableInputFilePathParser =
+ccDBPathParser :: O.Parser FilePath
+ccDBPathParser =
   O.strOption
     ( O.long "cc-table"
         <> O.metavar "FILE"
-        <> O.help "The path to read the initial cost-centre table."
-    )
-
-ccTableOutputFilePathParser :: O.Parser FilePath
-ccTableOutputFilePathParser =
-  O.strOption
-    ( O.long "export-cc-table-to"
-        <> O.metavar "FILE"
-        <> O.help "The path to write the final cost-centre table."
+        <> O.help "The path a cost-centre database."
     )
 
 --------------------------------------------------------------------------------
