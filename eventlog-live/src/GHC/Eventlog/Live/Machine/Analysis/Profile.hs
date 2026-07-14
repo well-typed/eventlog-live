@@ -1,6 +1,5 @@
 module GHC.Eventlog.Live.Machine.Analysis.Profile (
   ThreadId (..),
-  CapabilityId (..),
   CallStackData (..),
   StackItemData (..),
 
@@ -25,6 +24,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector qualified as V
 import Data.Word
+import GHC.Eventlog.Live.Data.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Logger (Logger, writeException)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.RTS.Events (Event (..))
@@ -37,11 +37,6 @@ import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre (CostCentre (..), CostCentreId (..))
 import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
 
-newtype CapabilityId = CapabilityId
-  { value :: Word64
-  }
-  deriving (Show, Eq, Ord)
-
 newtype ThreadId = ThreadId
   { value :: Word64
   }
@@ -49,7 +44,7 @@ newtype ThreadId = ThreadId
 
 data CallStackData = CallStackData
   { threadId :: !(Maybe ThreadId)
-  , capabilityId :: !CapabilityId
+  , capNo :: !CapNo
   , stack :: [StackItemData]
   }
   deriving (Show, Eq)
@@ -82,7 +77,7 @@ processProfSampleCostCentre _logger costCentreTable =
         let !callStackMessage =
               CallStackData
                 { threadId = Nothing
-                , capabilityId = CapabilityId (fromIntegral profCap)
+                , capNo = CapNo profCap
                 , stack = mapMaybe (fmap CostCentreData) . V.toList $ maybeCostCentres
                 }
         yield $ callStackMessage
@@ -208,7 +203,7 @@ hydrateGspBinaryCallStackMessage infoProvTable spst msg = do
   let !callStackData =
         CallStackData
           { threadId = Just $ ThreadId $ GSP.callThreadId callStackMessage
-          , capabilityId = CapabilityId $ GSP.getCapabilityId (GSP.callCapabilityId callStackMessage)
+          , capNo = fromCapabilityId (GSP.callCapabilityId callStackMessage)
           , stack = catMaybes (toStackItemData maybeInfoProvs callStack)
           }
   pure (callStackData, spst{stackProfSampleChunk = []}, callStackDecodeErrors)
