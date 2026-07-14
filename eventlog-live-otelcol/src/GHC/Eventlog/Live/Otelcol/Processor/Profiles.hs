@@ -20,6 +20,7 @@ import Data.Machine (ProcessT, mapping, (~>))
 import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.Eventlog.Live.Data.Capability (CapNo (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -160,7 +161,7 @@ asSample six stackData = do
       messageWith @OP.KeyValueAndUnit
         [ OP.keyStrindex .~ sampleCapKeyStrId
         , OP.unitStrindex .~ sampleNumberUnitStrId
-        , OP.value .~ messageWith [OC.intValue .~ fromIntegral stackData.capabilityId.value]
+        , OP.value .~ messageWith [OC.intValue .~ fromIntegral stackData.capNo.value]
         ]
 
   pure $
