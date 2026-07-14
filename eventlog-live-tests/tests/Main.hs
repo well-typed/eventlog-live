@@ -33,6 +33,8 @@ main = do
   tests =
     [ test_oddball_HasHeapProfSample
     , test_oddball_HasUserMarker'Summing
+    , test_jumpyJump_HasCostCentreProfile
+    , test_jumpyJump_HasGhcStackProfilerProfile
     ]
 
 test_oddball_HasHeapProfSample :: (HasLogger) => EventlogSocketAddr -> ProgramTest
@@ -90,4 +92,58 @@ test_oddball_HasUserMarker'Summing =
             ~> toScopeLogs
             ~> toLogRecords
             ~> withLogRecord'body ("Summing " `T.isPrefixOf`)
+            ~> hasInput
+
+test_jumpyJump_HasCostCentreProfile :: (HasLogger) => EventlogSocketAddr -> ProgramTest
+test_jumpyJump_HasCostCentreProfile =
+  let jumpyJump =
+        (buildProgramWith "jumpy-jump" ["-f-use-ghc-stack-profiler", "--enable-profiling"])
+          { rtsopts = ["-l", "-p", "--eventlog-flush-interval=1"]
+          }
+      options =
+        defaultOptions
+          { extraArgs = ["--service-name=jumpy-jump", "--eventlog-flush-interval=1"]
+          , maybeConfigBody =
+              Just
+                "processors:\n\
+                \  profiles:\n\
+                \    cost_centre_sample:\n\
+                \      name: ghc_eventlog_CostCentreProfile\n\
+                \      description: A cost centre callstack sample.\n\
+                \      export: 1s\n\
+                \"
+          }
+   in programTestFor "test_jumpyJump_HasCostCentreProfile" jumpyJump options $ do
+        assertResourceTelemetryData $
+          toResourceProfiles
+            ~> toScopeProfiles
+            ~> toProfiles
+            ~> logging
+            ~> hasInput
+
+test_jumpyJump_HasGhcStackProfilerProfile :: (HasLogger) => EventlogSocketAddr -> ProgramTest
+test_jumpyJump_HasGhcStackProfilerProfile =
+  let jumpyJump =
+        (buildProgramWith "jumpy-jump" ["-f+use-ghc-stack-profiler"])
+          { rtsopts = ["-l", "--eventlog-flush-interval=1"]
+          }
+      options =
+        defaultOptions
+          { extraArgs = ["--service-name=jumpy-jump", "--eventlog-flush-interval=1"]
+          , maybeConfigBody =
+              Just
+                "processors:\n\
+                \  profiles:\n\
+                \    stack_sample:\n\
+                \      name: ghc_eventlog_StackSampleProfile\n\
+                \      description: A thread RTS callstack sample.\n\
+                \      export: 1s\n\
+                \"
+          }
+   in programTestFor "test_jumpyJump_HasGhcStackProfilerProfile" jumpyJump options $ do
+        assertResourceTelemetryData $
+          toResourceProfiles
+            ~> toScopeProfiles
+            ~> toProfiles
+            ~> logging
             ~> hasInput
