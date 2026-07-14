@@ -23,8 +23,8 @@ import Data.Maybe (catMaybes, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector qualified as V
-import Data.Word
 import GHC.Eventlog.Live.Data.Capability (CapNo (..), fromCapabilityId)
+import GHC.Eventlog.Live.Data.Thread (ThreadId (..))
 import GHC.Eventlog.Live.Logger (Logger, writeException)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.RTS.Events (Event (..))
@@ -36,11 +36,6 @@ import IpeDB.Database (Table)
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre (CostCentre (..), CostCentreId (..))
 import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
-
-newtype ThreadId = ThreadId
-  { value :: Word64
-  }
-  deriving (Show, Eq, Ord)
 
 data CallStackData = CallStackData
   { threadId :: !(Maybe ThreadId)
