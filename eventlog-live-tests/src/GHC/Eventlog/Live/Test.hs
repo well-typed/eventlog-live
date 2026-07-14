@@ -168,8 +168,8 @@ toMetrics = mapping (^. OM.vec'metrics) ~> asParts
 {- |
 Stream scope profiles as individual profiles.
 -}
-toProfiles :: (Monad m) => ProcessT m OP.ScopeProfiles OP.Profile
-toProfiles = mapping (^. OP.vec'profiles) ~> asParts
+toProfiles :: (Monad m) => ProcessT m (OP.ProfilesDictionary, OP.ScopeProfiles) (OP.ProfilesDictionary, OP.Profile)
+toProfiles = mapping (traverse (^. OP.vec'profiles)) ~> asParts
 
 {- |
 Stream scope spans as individual spans.
@@ -192,8 +192,8 @@ toScopeMetrics = mapping (^. OM.vec'scopeMetrics) ~> asParts
 {- |
 Stream resource profiles as individual scope profiles.
 -}
-toScopeProfiles :: (Monad m) => ProcessT m OP.ResourceProfiles OP.ScopeProfiles
-toScopeProfiles = mapping (^. OP.vec'scopeProfiles) ~> asParts
+toScopeProfiles :: (Monad m) => ProcessT m (OP.ProfilesDictionary, OP.ResourceProfiles) (OP.ProfilesDictionary, OP.ScopeProfiles)
+toScopeProfiles = mapping (traverse (^. OP.vec'scopeProfiles)) ~> asParts
 
 {- |
 Stream resource spans as individual scope spans.
@@ -224,11 +224,12 @@ toResourceMetrics =
 {- |
 Filter a resource telemetry stream to only resource profiles.
 -}
-toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetryData OP.ResourceProfiles
+toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetryData (OP.ProfilesDictionary, OP.ResourceProfiles)
 toResourceProfiles =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Profiles profiles -> traverse_ yield profiles
+      ResourceTelemetryData'Profiles dictionary profiles ->
+        traverse_ (\profile -> yield (dictionary, profile)) profiles
       _otherwise -> pure ()
 
 {- |
@@ -377,7 +378,7 @@ A batch of resource telemetry data.
 data ResourceTelemetryData
   = ResourceTelemetryData'Logs !(Vector OL.ResourceLogs)
   | ResourceTelemetryData'Metrics !(Vector OM.ResourceMetrics)
-  | ResourceTelemetryData'Profiles !(Vector OP.ResourceProfiles)
+  | ResourceTelemetryData'Profiles !OP.ProfilesDictionary !(Vector OP.ResourceProfiles)
   | ResourceTelemetryData'Spans !(Vector OT.ResourceSpans)
   deriving (Show)
 
@@ -436,9 +437,10 @@ withGrpcOtlpServer action = do
         pure G.defMessage
   let profilesServiceExportHandler :: G.ServerHandler IO (G.Protobuf OPS.ProfilesService "export")
       profilesServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
+        let dictionary = req ^. OPS.dictionary
         let profiles = req ^. OPS.vec'resourceProfiles
         debugServerInfo $ "Received " <> show (V.length profiles) <> " resource profiles"
-        enqueue (ResourceTelemetryData'Profiles profiles)
+        enqueue (ResourceTelemetryData'Profiles dictionary profiles)
         pure G.defMessage
   let tracesServiceExportHandler :: G.ServerHandler IO (G.Protobuf OTS.TraceService "export")
       tracesServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
