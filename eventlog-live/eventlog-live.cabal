@@ -125,6 +125,7 @@ library
     bytestring >=0.11 && <0.13,
     clock >=0.8 && <0.9,
     co-log-core >=0.3 && <0.4,
+    containers >=0.6 && <0.9,
     dlist >=1.0 && <1.1,
     ghc-events >=0.20 && <0.21,
     ghc-stack-profiler-core >=0.3 && <0.4,
@@ -138,7 +139,7 @@ library
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
-    vector >=0.11 && <0.14,
+    vector >=0.12.2 && <0.14,
 
   -- 2025-12-09:
   -- This configures the build requirements for the vendored copy of
