@@ -24,8 +24,8 @@ import GHC.RTS.Events qualified as E
 {- |
 This machine processes `E.UserMessage` events into logs.
 -}
-processUserMessageData :: Process (WithStartTime Event) LogRecord
-processUserMessageData =
+processStackFrame'Message :: Process (WithStartTime Event) LogRecord
+processStackFrame'Message =
   repeatedly $
     await >>= \case
       i
