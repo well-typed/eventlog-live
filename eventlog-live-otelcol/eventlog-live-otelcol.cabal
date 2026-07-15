@@ -188,10 +188,13 @@ common language
 
 library
   import: language
-  hs-source-dirs: src
-  exposed-modules: GHC.Eventlog.Live.Otelcol
+  hs-source-dirs:
+    src
+
+  exposed-modules:
+    GHC.Eventlog.Live.Otelcol
+
   other-modules:
-    GHC.Debug.Stub.Compat
     GHC.Eventlog.Live.Otelcol.Config
     GHC.Eventlog.Live.Otelcol.Config.Default
     GHC.Eventlog.Live.Otelcol.Config.Default.Raw
@@ -213,6 +216,12 @@ library
     GHC.Eventlog.Live.Otelcol.Processor.Profiles
     GHC.Eventlog.Live.Otelcol.Processor.Threads
     GHC.Eventlog.Live.Otelcol.Stats
+
+  hs-source-dirs:
+    src-internal
+
+  other-modules:
+    GHC.Debug.Stub.Compat
     GHC.Eventlog.Socket.Compat
     Language.Haskell.TH.Lift.Compat
     Options.Applicative.Compat
