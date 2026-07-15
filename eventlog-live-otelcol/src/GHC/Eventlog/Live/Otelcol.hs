@@ -47,7 +47,7 @@ import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (toExportPr
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
 import GHC.Eventlog.Live.Otelcol.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Otelcol.Processor.Logs (processLogEvents)
-import GHC.Eventlog.Live.Otelcol.Processor.Profiles (processCallStackData, processProfileEvents)
+import GHC.Eventlog.Live.Otelcol.Processor.Profiles (processCallStack, processProfileEvents)
 import GHC.Eventlog.Live.Otelcol.Processor.Threads (processThreadEvents)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
@@ -134,10 +134,10 @@ main = do
             ]
 
     -- Create machine that indexes CostCentre data.
-    let processCostCentreData ::
+    let processStackFrame'CostCentre ::
           DB.Table CC.CostCentreId CC.CostCentre ->
           ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
-        processCostCentreData ccTable
+        processStackFrame'CostCentre ccTable
           -- If a cost-centre database was provided, don't index any new entries.
           | isJust maybeCCDBPath = stopped
           | otherwise = M.liftTick $ mapping (.value) ~> DB.indexer CC.toCostCentre def ccTable ~> mapping absurd
@@ -160,7 +160,7 @@ main = do
           M.liftTick M.withStartTime
             ~> M.fanoutTick
               [ -- Process CostCentre events.
-                processCostCentreData ccTable
+                processStackFrame'CostCentre ccTable
               , -- Process InfoProv events.
                 processInfoProvData ipeTable
               , -- Process the heap events.
@@ -260,7 +260,7 @@ data TelemetryData
   = TelemetryData'Log OL.LogRecord
   | TelemetryData'Metric OM.Metric
   | TelemetryData'Span OT.Span
-  | TelemetryData'Profile M.CallStackData
+  | TelemetryData'Profile M.CallStack
 
 data ResourceTelemetryData
   = ResourceTelemetryData'Log OL.ResourceLogs
@@ -366,7 +366,7 @@ asResourceTelemetryData resource instrumentationScope =
     maybeProfiles = do
       (resourceProfile, dictionary) <-
         ifNonEmpty profiles $
-          processCallStackData resource instrumentationScope profiles
+          processCallStack resource instrumentationScope profiles
       pure $
         ResourceTelemetryData'Profile $
           messageWith
@@ -377,10 +377,10 @@ asResourceTelemetryData resource instrumentationScope =
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData])
+partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStack])
 partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStackData])
+  go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStack]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStack])
   go (logs, metrics, spans, profiles) = \case
     [] -> (reverse logs, reverse metrics, reverse spans, reverse profiles)
     (TelemetryData'Log log_ : rest) -> go (log_ : logs, metrics, spans, profiles) rest

@@ -8,7 +8,7 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Otelcol.Processor.Profiles (
   processProfileEvents,
-  processCallStackData,
+  processCallStack,
 )
 where
 
@@ -16,10 +16,11 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State.Strict (State, runState)
 import Data.DList (DList)
 import Data.DList qualified as D
+import Data.Int (Int64)
 import Data.Machine (ProcessT, mapping, (~>))
-import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Word (Word32)
 import GHC.Eventlog.Live.Data.Capability (CapNo (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
@@ -32,10 +33,10 @@ import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
 import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (ProfilesDictionary, SymbolIndex)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary qualified as PD
 import GHC.RTS.Events (Event (..))
-import GHC.Stack.Profiler.Core.SourceLocation qualified as Profiler
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
+import IpeDB.Types.SrcLoc (Point (..), SrcLoc (..))
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
@@ -53,7 +54,7 @@ processProfileEvents ::
   DB.Table CC.CostCentreId CC.CostCentre ->
   DB.Table IP.InfoProvId IP.InfoProv ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStack))
 processProfileEvents verbosity costCentreTable infoProvTable config =
   M.fanoutTick
     [ processProfSampleCostCentre verbosity costCentreTable config
@@ -68,7 +69,7 @@ processGhcStackProfilerData ::
   Logger m ->
   DB.Table IP.InfoProvId IP.InfoProv ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStack))
 processGhcStackProfilerData logger infoProvTable config =
   runIf (C.processorEnabled (.profiles) (.stackSample) config) $
     M.liftTick
@@ -82,7 +83,7 @@ processProfSampleCostCentre ::
   Logger m ->
   DB.Table CC.CostCentreId CC.CostCentre ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStackData))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList M.CallStack))
 processProfSampleCostCentre logger costCentreTable config =
   runIf (C.processorEnabled (.profiles) (.costCentreSample) config) $
     M.liftTick
@@ -91,8 +92,8 @@ processProfSampleCostCentre logger costCentreTable config =
       )
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.costCentreSample) config)
 
-processCallStackData :: Resource -> OC.InstrumentationScope -> [M.CallStackData] -> (OP.ResourceProfiles, OP.ProfilesDictionary)
-processCallStackData resource instrumentationScope callstacks = (resourceProfiles, profilesDictionary)
+processCallStack :: Resource -> OC.InstrumentationScope -> [M.CallStack] -> (OP.ResourceProfiles, OP.ProfilesDictionary)
+processCallStack resource instrumentationScope callstacks = (resourceProfiles, profilesDictionary)
  where
   scopedProfiles =
     messageWith
@@ -135,7 +136,7 @@ processCallStackData resource instrumentationScope callstacks = (resourceProfile
         , OP.sampleType .~ sampleType
         ]
 
-asSample :: SymbolIndex -> M.CallStackData -> State ProfilesDictionary OP.Sample
+asSample :: SymbolIndex -> M.CallStack -> State ProfilesDictionary OP.Sample
 asSample six stackData = do
   locIndices <- traverse toIndex stackData.stack
   s <-
@@ -175,48 +176,42 @@ asSample six stackData = do
              ]
       ]
  where
-  toIndex :: M.StackItemData -> State ProfilesDictionary SymbolIndex
+  toIndex :: M.StackFrame -> State ProfilesDictionary SymbolIndex
   toIndex = \case
-    M.IpeData infoProv -> getLocationIndexForInfoTable infoProv
-    M.UserMessageData message mSrcLoc -> getLocationIndexForText message mSrcLoc
-    M.CostCentreData costCentre -> getLocationIndexForCostCentre costCentre
+    M.StackFrame'InfoProv infoProv -> getLocationIndexForInfoTable infoProv
+    M.StackFrame'Message message mSrcLoc -> getLocationIndexForText message mSrcLoc
+    M.StackFrame'CostCentre costCentre -> getLocationIndexForCostCentre costCentre
 
-getLocationIndexForText :: Text -> Maybe Profiler.SourceLocation -> State ProfilesDictionary SymbolIndex
-getLocationIndexForText msg mSrcLoc = do
-  let srcLoc = Maybe.fromMaybe unhelpfulSrcLoc mSrcLoc
-  fileNameId <- case mSrcLoc of
-    Nothing -> pure 0 -- 0 means unset
-    Just loc -> PD.getString $ Profiler.fileName loc
-  textId <- PD.getString msg
-  funcIdx <-
+getLocationIndexForText :: Text -> SrcLoc -> State ProfilesDictionary SymbolIndex
+getLocationIndexForText msg srcLoc = do
+  filenameStrindex <-
+    if null srcLoc.srcFilePath
+      then pure 0 -- 0 means unset.
+      else PD.getString (T.pack srcLoc.srcFilePath)
+  messageStrindex <-
+    PD.getString msg
+  let !maybeStart = (.start) <$> srcLoc.srcRange
+  let !maybeStartLine = fromIntegral @Word32 @Int64 . (.line) <$> maybeStart
+  let !maybeStartColumn = fromIntegral @Word32 @Int64 . (.column) <$> maybeStart
+  functionIndex <-
     PD.getFunction $
       messageWith
-        [ OP.nameStrindex .~ textId
+        [ OP.nameStrindex .~ messageStrindex
         , OP.systemNameStrindex .~ 0 -- 0 means unset
-        , OP.filenameStrindex .~ fileNameId
-        , OP.startLine .~ fromIntegral (Profiler.line srcLoc) -- TODO: better casts
+        , OP.filenameStrindex .~ filenameStrindex
+        , maybe id (OP.startLine .~) maybeStartLine
         ]
-
   let line :: OP.Line
       line =
         messageWith
-          [ OP.functionIndex .~ funcIdx
-          , OP.line .~ fromIntegral (Profiler.line srcLoc)
-          , OP.column .~ fromIntegral (Profiler.column srcLoc)
+          [ OP.functionIndex .~ functionIndex
+          , maybe id (OP.line .~) maybeStartLine
+          , maybe id (OP.column .~) maybeStartColumn
           ]
-
   PD.getLocation $
     messageWith
       [ OP.lines .~ [line]
       ]
-
-unhelpfulSrcLoc :: Profiler.SourceLocation
-unhelpfulSrcLoc =
-  Profiler.MkSourceLocation
-    { line = 0 -- 0 means unset
-    , column = 0 -- 0 means unset
-    , fileName = ""
-    }
 
 getLocationIndexForInfoTable ::
   IP.InfoProv ->
