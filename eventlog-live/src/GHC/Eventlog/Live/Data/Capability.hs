@@ -11,6 +11,7 @@ module GHC.Eventlog.Live.Data.Capability (
 ) where
 
 import Data.Word (Word16)
+import GHC.Eventlog.Live.Data.Attribute (IsAttrValue)
 import GHC.RTS.Events (Event (..))
 import GHC.Stack.Profiler.Core.Eventlog (CapabilityId (..))
 
@@ -29,6 +30,7 @@ newtype CapNo = CapNo
   { value :: Word16
   }
   deriving (Show, Eq, Ord)
+  deriving newtype (IsAttrValue)
 
 {- |
 Get the capability number from a @ghc-events@ `Event`.

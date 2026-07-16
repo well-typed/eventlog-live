@@ -9,6 +9,7 @@ module GHC.Eventlog.Live.Data.Thread (
 ) where
 
 import Data.Word (Word64)
+import GHC.Eventlog.Live.Data.Attribute (IsAttrValue)
 
 {- |
 A thread ID.
@@ -23,4 +24,5 @@ In @ghc-stack-profiler@, the thread ID is retrieved and posted as a `Word64` val
 newtype ThreadId = ThreadId
   { value :: Word64
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
+  deriving newtype (IsAttrValue)

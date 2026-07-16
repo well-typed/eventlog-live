@@ -5,6 +5,7 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Attribute (
+  HasAttrs (..),
   Attrs,
   lookup,
   toList,
@@ -25,6 +26,12 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Generics (Generic)
 import GHC.IsList (IsList (..))
 import Prelude hiding (lookup)
+
+{- |
+A class for types that have attributes.
+-}
+class HasAttrs a where
+  getAttrs :: a -> Attrs
 
 {- |
 A set of attributes is a t`HashMap`

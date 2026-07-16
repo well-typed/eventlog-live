@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Machine.Analysis.Profile (
@@ -8,13 +9,14 @@ module GHC.Eventlog.Live.Machine.Analysis.Profile (
 
   -- * Cost-centre profiling
   CostCentreStack (..),
+  CostCentreStackFrame (..),
   processProfSampleCostCentreData,
 )
 where
 
 import Control.Applicative (Alternative (..))
 import Control.Exception (Exception (..))
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString.Lazy qualified as BSL
@@ -22,7 +24,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NE
 import Data.Machine (Is, PlanT, ProcessT, await, construct, repeatedly, yield)
 import Data.Map.Strict qualified as M
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (catMaybes, isNothing, mapMaybe)
 import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -30,6 +32,7 @@ import Data.Text qualified as Text
 import Data.Traversable (mapAccumM)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Data.Attribute (Attrs, HasAttrs (..), (~=))
 import GHC.Eventlog.Live.Data.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Thread (ThreadId (..))
@@ -58,13 +61,22 @@ data CallStack = CallStack
   , callStack :: !(Vector CallStackFrame)
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   }
+  deriving stock (Show)
+
+instance HasAttrs CallStack where
+  getAttrs :: CallStack -> Attrs
+  getAttrs callStack =
+    [ "capability" ~= callStack.capNo
+    , "thread" ~= callStack.threadId
+    ]
 
 {- |
 A GHC call-stack frame as produced by @ghc-stack-profiler@.
 -}
 data CallStackFrame
-  = CallStackFrame !InfoProv
+  = CallStackFrame !InfoProvId !(Maybe InfoProv)
   | CallStackMessage !Text !SrcLoc
+  deriving stock (Show)
 
 {- |
 Internal helper.
@@ -107,9 +119,9 @@ processGhcStackProfilerData logger infoProvTable =
  where
   go :: GhcStackProfilerState -> PlanT (Is (WithStartTime Event)) CallStack m ()
   go st =
-    await >>= \i ->
+    await >>= \i -> do
       case i.value.evSpec of
-        E.UserBinaryMessage{..} ->
+        E.UserBinaryMessage{..} -> do
           case GSP.deserializeEventlogMessage (BSL.fromStrict payload) of
             Left errMsg
               | st.warnOnDeserializeError -> do
@@ -154,7 +166,7 @@ processGhcStackProfilerData logger infoProvTable =
                   go st
                 Right symbolTable' ->
                   go st{symbolTable = symbolTable'}
-        _otherwise -> pure ()
+        _otherwise -> go st
 
   decodeCallStack ::
     Maybe Timestamp ->
@@ -182,17 +194,16 @@ processGhcStackProfilerData logger infoProvTable =
 
     -- Convert each `GSP.StackItem` to a `CallStackFrame`.
     let toCallStackFrame :: [Maybe InfoProv] -> GSP.StackItem -> m ([Maybe InfoProv], Maybe CallStackFrame)
-        toCallStackFrame (Just infoProv : acc) (GSP.IpeId _iid) =
-          pure (acc, Just $! CallStackFrame infoProv)
+        toCallStackFrame (maybeInfoProv : acc) (GSP.IpeId iid) = do
+          when (isNothing maybeInfoProv) $
+            writeLog logger WARN $
+              "Could not resolve IPE ID " <> T.pack (show (toInfoProvId iid))
+          pure (acc, Just $! CallStackFrame (toInfoProvId iid) maybeInfoProv)
         toCallStackFrame acc (GSP.UserAnnotation msg maybeSourceLocation) =
           pure (acc, Just $! CallStackMessage (T.pack msg) (toSrcLoc maybeSourceLocation))
-        toCallStackFrame (Nothing : acc) (GSP.IpeId iid) = do
-          writeLog logger WARN $
-            "Could not resolve IPE ID " <> T.pack (show (toInfoProvId iid))
-          pure (acc, Nothing)
         toCallStackFrame [] (GSP.IpeId _iid) = do
           writeLog logger ERROR $
-            "Did not lookup all IPE IDs. Please report this as a bug."
+            "Did not receive enough IPEs to annotate each call-stack item. Please report this as a bug."
           pure ([], Nothing)
     callStack <-
       V.fromList . catMaybes . snd
@@ -231,9 +242,23 @@ A GHC cost-centre stack.
 -}
 data CostCentreStack = CostCentreStack
   { capNo :: !CapNo
-  , costCentreStack :: !(Vector CostCentre)
+  , costCentreStack :: !(Vector CostCentreStackFrame)
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   }
+  deriving stock (Show)
+
+instance HasAttrs CostCentreStack where
+  getAttrs :: CostCentreStack -> Attrs
+  getAttrs costCentreStack =
+    [ "capability" ~= costCentreStack.capNo
+    ]
+
+{- |
+A GHC cost-centre stack frame.
+-}
+data CostCentreStackFrame
+  = CostCentreStackFrame !CostCentreId !(Maybe CostCentre)
+  deriving stock (Show)
 
 {- |
 This machine processes `E.ProfSampleCostCentre` events into `CostCentreStack` samples.
@@ -251,19 +276,15 @@ processProfSampleCostCentreData logger costCentreTable =
         E.ProfSampleCostCentre{..} -> do
           -- Look up all cost centre IDs in the cost centre stack.
           let !costCentreIds = CostCentreId <$> V.convert profCcsStack
-          -- TODO: This does not deduplicate the entries in costCentreIds.
-          !maybeCostCentresAssocs <- liftIO $ lookups costCentreTable costCentreIds
-
-          -- NOTE: The following code is equivalent to `V.catMaybes`, except
-          --       that a warning a logged for each unresolved cost centre ID.
-          let warnIfNotFound ix maybeCostCentre
-                | Nothing <- maybeCostCentre
-                , Just costCentreId <- costCentreIds V.!? ix = do
-                    writeLog logger WARN . T.pack $
-                      "Could not resolve cost centre ID " <> show costCentreId
-                    pure Nothing
-                | otherwise = pure maybeCostCentre
-          !costCentreStack <- lift $ V.imapMaybeM warnIfNotFound maybeCostCentresAssocs
+          !maybeCostCentres <- liftIO $ lookups costCentreTable costCentreIds
+          -- NOTE: The following is equivalent to `CostCentreStackFrame`, but
+          --       logs a warning if the cost centre was not resolved.
+          let warnIfNotFound costCentreId maybeCostCentre = do
+                lift . when (isNothing maybeCostCentre) $ do
+                  writeLog logger WARN . T.pack $
+                    "Could not resolve cost centre ID " <> show costCentreId
+                pure $ CostCentreStackFrame costCentreId maybeCostCentre
+          costCentreStack <- V.zipWithM warnIfNotFound costCentreIds maybeCostCentres
 
           -- Yield the cost centre stack.
           let !capNo = CapNo profCap
