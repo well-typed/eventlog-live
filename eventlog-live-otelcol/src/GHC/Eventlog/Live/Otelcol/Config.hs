@@ -58,8 +58,8 @@ module GHC.Eventlog.Live.Otelcol.Config (
   Profiles (..),
   IsProfileProcessorConfig,
   shouldExportProfiles,
-  StackSampleProfile (..),
-  CostCentreSampleProfile (..),
+  CallStackProfile (..),
+  CostCentreStackProfile (..),
 
   -- ** Property types
 
@@ -254,13 +254,13 @@ instance Default ThreadStateSpan where
   def :: ThreadStateSpan
   def = $(getDefault @'["processors", "traces", "threadState"] defaultConfig)
 
-instance Default StackSampleProfile where
-  def :: StackSampleProfile
-  def = $(getDefault @'["processors", "profiles", "stackSample"] defaultConfig)
+instance Default CallStackProfile where
+  def :: CallStackProfile
+  def = $(getDefault @'["processors", "profiles", "callStackProfile"] defaultConfig)
 
-instance Default CostCentreSampleProfile where
-  def :: CostCentreSampleProfile
-  def = $(getDefault @'["processors", "profiles", "costCentreSample"] defaultConfig)
+instance Default CostCentreStackProfile where
+  def :: CostCentreStackProfile
+  def = $(getDefault @'["processors", "profiles", "costCentreStackProfile"] defaultConfig)
 
 -------------------------------------------------------------------------------
 -- Accessors
@@ -648,8 +648,8 @@ forEachProfileProcessor ::
   [a]
 forEachProfileProcessor f profiles =
   [ -- NOTE: This should be kept in sync with the list of profiles.
-    f profiles.stackSample
-  , f profiles.costCentreSample
+    f profiles.callStackProfile
+  , f profiles.costCentreStackProfile
   ]
 
 -------------------------------------------------------------------------------

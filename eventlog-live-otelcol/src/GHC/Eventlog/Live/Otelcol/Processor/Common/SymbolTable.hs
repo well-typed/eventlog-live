@@ -28,7 +28,7 @@ data SymbolTable a
   {- ^
   The next unused `SymbolIndex`.
 
-  > st.nextSymbolIndex == length st.entriesReversed
+  > st.nextSymbolIndex == length st.entriesRev
   -}
   , entryToSymbolIndex :: !(Map a SymbolIndex)
   {- ^
@@ -36,7 +36,7 @@ data SymbolTable a
 
   > toList st !! (st.entryToSymbolIndex Map.! a) == a
   -}
-  , entriesReversed :: ![a] -- reverse order of insertion into entryToSymbolIndex
+  , entriesRev :: ![a] -- reverse order of insertion into entryToSymbolIndex
 
   {- ^
   A list of entries in the `SymbolTable` in reverse order.
@@ -49,14 +49,14 @@ empty =
   SymbolTable
     { nextSymbolIndex = 0
     , entryToSymbolIndex = Map.empty
-    , entriesReversed = []
+    , entriesRev = []
     }
 
 elemIndex :: (Ord a) => a -> SymbolTable a -> Maybe SymbolIndex
 elemIndex a st = Map.lookup a st.entryToSymbolIndex
 
 toList :: SymbolTable a -> [a]
-toList st = reverse st.entriesReversed
+toList st = reverse st.entriesRev
 
 fromList :: (Ord a) => [a] -> SymbolTable a
 fromList = foldr (\val st -> snd (insert val st)) empty
@@ -65,8 +65,8 @@ insert :: (Ord a) => a -> SymbolTable a -> (SymbolIndex, SymbolTable a)
 insert a st = (si, st'')
  where
   ((si, isNew, st'), entryToSymbolIndex') = Map.alterF (updateEntry st) a st.entryToSymbolIndex
-  entriesReversed' = if isNew then a : st'.entriesReversed else st'.entriesReversed
-  st'' = st'{entryToSymbolIndex = entryToSymbolIndex', entriesReversed = entriesReversed'}
+  entriesRev' = if isNew then a : st'.entriesRev else st'.entriesRev
+  st'' = st'{entryToSymbolIndex = entryToSymbolIndex', entriesRev = entriesRev'}
 
 updateEntry :: SymbolTable a -> Maybe SymbolIndex -> ((SymbolIndex, Bool, SymbolTable a), Maybe SymbolIndex)
 updateEntry st Nothing = let (si, st') = freshSymbolIndex st in ((si, True, st'), Just si)

@@ -12,23 +12,23 @@ module GHC.Eventlog.Live.Otelcol (
 
 import Control.Concurrent.STM.TChan (newTChanIO)
 import Control.Exception (bracket_)
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Foldable qualified as F
-import Data.Machine (Process, ProcessT, asParts, mapping, stopped, (~>))
-import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
+import Data.Machine (Process, ProcessT, asParts, await, buffered, droppingWhile, mapping, repeatedly, stopped, takingJusts, (~>))
+import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Vector qualified as V
 import Data.Version (showVersion)
-import Data.Void (absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
-import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
@@ -43,11 +43,10 @@ import GHC.Eventlog.Live.Otelcol.Options
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (toExportMetricsServiceRequest, toResourceMetrics, toScopeMetrics)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (toExportProfileServiceRequest)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
 import GHC.Eventlog.Live.Otelcol.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Otelcol.Processor.Logs (processLogEvents)
-import GHC.Eventlog.Live.Otelcol.Processor.Profiles (processCallStack, processProfileEvents)
+import GHC.Eventlog.Live.Otelcol.Processor.Profiles (Sample, Stack, processProfileEvents, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
 import GHC.Eventlog.Live.Otelcol.Processor.Threads (processThreadEvents)
 import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
@@ -61,7 +60,6 @@ import Network.GRPC.Client qualified as G
 import Network.GRPC.Common qualified as G
 import Options.Applicative qualified as O
 import Paths_eventlog_live_otelcol qualified as EventlogLive
-import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
@@ -134,37 +132,51 @@ main = do
             ]
 
     -- Create machine that indexes CostCentre data.
-    let processStackFrame'CostCentre ::
+    let indexCostCentreEvents ::
           DB.Table CC.CostCentreId CC.CostCentre ->
           ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
-        processStackFrame'CostCentre ccTable
+        indexCostCentreEvents ccdb
           -- If a cost-centre database was provided, don't index any new entries.
           | isJust maybeCCDBPath = stopped
-          | otherwise = M.liftTick $ mapping (.value) ~> DB.indexer CC.toCostCentre def ccTable ~> mapping absurd
+          | otherwise =
+              -- TODO: Replace with patched `indexer` from ipedb-0.2.0.1.
+              M.liftTick $
+                mapping (CC.toCostCentre . (.value))
+                  ~> droppingWhile isNothing
+                  ~> takingJusts
+                  ~> buffered 10
+                  ~> repeatedly (liftIO . DB.inserts ccdb . V.fromList =<< await)
 
     -- Create machine that indexes InfoProv data.
-    let processInfoProvData ::
+    let indexInfoProvEvents ::
           DB.Table IP.InfoProvId IP.InfoProv ->
           ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
-        processInfoProvData ipeTable
+        indexInfoProvEvents ipedb
           -- If an IPE database was provided, don't index any new entries.
           | isJust maybeIpeDBPath = stopped
-          | otherwise = M.liftTick $ mapping (.value) ~> DB.indexer IP.toInfoProv def ipeTable ~> mapping absurd
+          | otherwise =
+              -- TODO: Replace with patched `indexer` from ipedb-0.2.0.1.
+              M.liftTick $
+                mapping (IP.toInfoProv . (.value))
+                  ~> droppingWhile isNothing
+                  ~> takingJusts
+                  ~> buffered 10
+                  ~> repeatedly (liftIO . DB.inserts ipedb . V.fromList =<< await)
 
     -- Create machine that processes eventlog data into telemetry data
     let processEventlogTelemetry ::
           DB.Table CC.CostCentreId CC.CostCentre ->
           DB.Table IP.InfoProvId IP.InfoProv ->
           ProcessT IO (Tick Event) (Tick ResourceTelemetryData)
-        processEventlogTelemetry ccTable ipeTable =
+        processEventlogTelemetry ccdb ipedb =
           M.liftTick M.withStartTime
             ~> M.fanoutTick
               [ -- Process CostCentre events.
-                processStackFrame'CostCentre ccTable
+                indexCostCentreEvents ccdb
               , -- Process InfoProv events.
-                processInfoProvData ipeTable
+                indexInfoProvEvents ipedb
               , -- Process the heap events.
-                processHeapEvents logger (Just ipeTable) maybeHeapProfBreakdown fullConfig
+                processHeapEvents logger (Just ipedb) maybeHeapProfBreakdown fullConfig
                   ~> mapping (fmap (fmap TelemetryData'Metric))
               , -- Process the log events.
                 processLogEvents fullConfig
@@ -173,8 +185,8 @@ main = do
                 processThreadEvents logger fullConfig
                   ~> mapping (fmap (fmap (either TelemetryData'Metric TelemetryData'Span)))
               , -- Process the profile events.
-                processProfileEvents logger ccTable ipeTable fullConfig
-                  ~> mapping (fmap (fmap TelemetryData'Profile))
+                processProfileEvents logger ccdb ipedb fullConfig
+                  ~> mapping (fmap (fmap TelemetryData'Sample))
               ]
             ~> M.liftTick (asResourceTelemetryData eventlogResource eventlogLiveScope)
 
@@ -200,7 +212,7 @@ main = do
             ~> M.liftTick (asResourceTelemetryData internalResource eventlogLiveScope)
 
     -- Create the full machine to process eventlog data.
-    let processAndExportTelemetry ccTable ipeTable conn =
+    let processAndExportTelemetry ccdb ipedb conn =
           M.fanoutTick
             [ -- Log a warning if no input has been received after 10 ticks.
               M.validateInput logger 10
@@ -209,7 +221,7 @@ main = do
                 ~> mapping (fmap (D.singleton . EventCountStat))
             , -- Process eventlog and internal telemetry...
               M.fanoutTickCC
-                [ processEventlogTelemetry ccTable ipeTable ~> mapping (fmap D.singleton)
+                [ processEventlogTelemetry ccdb ipedb ~> mapping (fmap D.singleton)
                 , processInternalTelemetry ~> mapping (fmap D.singleton)
                 ]
                 ~> M.liftTick asParts
@@ -235,8 +247,8 @@ main = do
               case maybeIpeDBPath of
                 Nothing -> DB.withNewTable session def
                 Just ipeDBPath -> DB.withTableFrom session ipeDBPath def
-        withCostCentreTable $ \ccTable ->
-          withInfoProvTable $ \ipeTable ->
+        withCostCentreTable $ \ccdb ->
+          withInfoProvTable $ \ipedb ->
             withEventlogSourceHandle
               logger
               eventlogSocketTimeoutS
@@ -254,13 +266,13 @@ main = do
                     fullConfig.batchIntervalMs
                     Nothing
                     maybeEventlogLogFile
-                    (processAndExportTelemetry ccTable ipeTable conn)
+                    (processAndExportTelemetry ccdb ipedb conn)
 
 data TelemetryData
   = TelemetryData'Log OL.LogRecord
   | TelemetryData'Metric OM.Metric
   | TelemetryData'Span OT.Span
-  | TelemetryData'Profile M.CallStack
+  | TelemetryData'Sample (Sample Stack)
 
 data ResourceTelemetryData
   = ResourceTelemetryData'Log OL.ResourceLogs
@@ -333,6 +345,7 @@ getResourceProfiles = \case
 
 {- |
 Internal helper.
+
 Repack a stream of `TelemetryData` to batched `ResourceTelemetryData`.
 -}
 asResourceTelemetryData ::
@@ -349,7 +362,7 @@ asResourceTelemetryData resource instrumentationScope =
   toResourceTelemetryData telemetryData =
     catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
    where
-    (logRecords, metrics, spans, profiles) = partitionTelemetryData telemetryData
+    (logRecords, metrics, spans, samples) = partitionTelemetryData telemetryData
 
     maybeResourceLogs = do
       scopeLogs <- toScopeLogs instrumentationScope logRecords
@@ -364,29 +377,25 @@ asResourceTelemetryData resource instrumentationScope =
       resourceSpans <- toResourceSpans resource [scopeSpans]
       pure $ ResourceTelemetryData'Span resourceSpans
     maybeProfiles = do
-      (resourceProfile, dictionary) <-
-        ifNonEmpty profiles $
-          processCallStack resource instrumentationScope profiles
-      pure $
-        ResourceTelemetryData'Profile $
-          messageWith
-            [ OPS.dictionary .~ dictionary
-            , OPS.resourceProfiles .~ [resourceProfile]
-            ]
+      (profiles, dictionary) <- toProfiles samples
+      scopeProfiles <- toScopeProfiles instrumentationScope profiles
+      resourceProfiles <- toResourceProfiles resource [scopeProfiles]
+      profilesData <- toProfilesData [resourceProfiles] dictionary
+      pure $ ResourceTelemetryData'Profile profilesData
 
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStack])
+partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [Sample Stack])
 partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStack]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [M.CallStack])
-  go (logs, metrics, spans, profiles) = \case
-    [] -> (reverse logs, reverse metrics, reverse spans, reverse profiles)
-    (TelemetryData'Log log_ : rest) -> go (log_ : logs, metrics, spans, profiles) rest
-    (TelemetryData'Metric metric : rest) -> go (logs, metric : metrics, spans, profiles) rest
-    (TelemetryData'Span span_ : rest) -> go (logs, metrics, span_ : spans, profiles) rest
-    (TelemetryData'Profile profile : rest) -> go (logs, metrics, spans, profile : profiles) rest
+  go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [Sample Stack]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [Sample Stack])
+  go (logsRev, metricsRev, spansRev, samplesRev) = \case
+    [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
+    (TelemetryData'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
+    (TelemetryData'Metric metric : rest) -> go (logsRev, metric : metricsRev, spansRev, samplesRev) rest
+    (TelemetryData'Span span_ : rest) -> go (logsRev, metricsRev, span_ : spansRev, samplesRev) rest
+    (TelemetryData'Sample sample : rest) -> go (logsRev, metricsRev, spansRev, sample : samplesRev) rest
 
 {- |
 Internal helper.

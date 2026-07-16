@@ -15,14 +15,15 @@ module GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (
   SymbolIndex,
   getLocation,
   getFunction,
+  getText,
   getString,
   getMapping,
   getLink,
   getAttribute,
+  getAttr,
   getStack,
 
   -- * Convert data to the formats used by @hs-opentelemetry-otlp@.
-  toExportProfileServiceRequest,
   toProfilesDictionary,
 )
 where
@@ -31,23 +32,16 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Control.Monad.Trans.State.Strict qualified as State
 import Data.ProtoLens (Message (..))
 import Data.Text (Text)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (messageWith)
+import Data.Text qualified as T
+import GHC.Eventlog.Live.Data.Attribute (Attr)
+import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (messageWith, toMaybeAnyValue)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable (SymbolIndex, SymbolTable)
 import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable qualified as ST
 import GHC.Generics (Generic)
 import Lens.Family2 (Lens', (.~), (^.))
 import Lens.Family2.Unchecked (lens)
-import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService qualified as OPS
-import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
-
-toExportProfileServiceRequest :: OP.ProfilesData -> OPS.ExportProfilesServiceRequest
-toExportProfileServiceRequest profilesData =
-  messageWith
-    [ OPS.resourceProfiles .~ profilesData ^. OPS.resourceProfiles
-    , OPS.dictionary .~ profilesData ^. OPS.dictionary
-    ]
 
 data ProfilesDictionary = ProfilesDictionary
   { locationTable :: SymbolTable OP.Location
@@ -145,8 +139,11 @@ getLocation = getSymbolIndexFor (lens (.locationTable) (\pd st -> pd{locationTab
 getFunction :: (Monad m) => OP.Function -> StateT ProfilesDictionary m SymbolIndex
 getFunction = getSymbolIndexFor (lens (.functionTable) (\pd st -> pd{functionTable = st}))
 
-getString :: (Monad m) => Text -> StateT ProfilesDictionary m SymbolIndex
-getString = getSymbolIndexFor (lens (.stringTable) (\pd st -> pd{stringTable = st}))
+getText :: (Monad m) => Text -> StateT ProfilesDictionary m SymbolIndex
+getText = getSymbolIndexFor (lens (.stringTable) (\pd st -> pd{stringTable = st}))
+
+getString :: (Monad m) => String -> StateT ProfilesDictionary m SymbolIndex
+getString = getText . T.pack
 
 getMapping :: (Monad m) => OP.Mapping -> StateT ProfilesDictionary m SymbolIndex
 getMapping = getSymbolIndexFor (lens (.mappingTable) (\pd st -> pd{mappingTable = st}))
@@ -156,6 +153,21 @@ getLink = getSymbolIndexFor (lens (.linkTable) (\pd st -> pd{linkTable = st}))
 
 getAttribute :: (Monad m) => OP.KeyValueAndUnit -> StateT ProfilesDictionary m SymbolIndex
 getAttribute = getSymbolIndexFor (lens (.attributeTable) (\pd st -> pd{attributeTable = st}))
+
+getAttr :: (Monad m) => Attr -> StateT ProfilesDictionary m (Maybe SymbolIndex)
+getAttr (key, value) =
+  case toMaybeAnyValue value of
+    Nothing ->
+      pure Nothing
+    Just anyValue -> do
+      keyStrindex <- getText key
+      let keyValueAndUnit :: OP.KeyValueAndUnit
+          keyValueAndUnit =
+            messageWith
+              [ OP.keyStrindex .~ keyStrindex
+              , OP.value .~ anyValue
+              ]
+      Just <$> getAttribute keyValueAndUnit
 
 getStack :: (Monad m) => OP.Stack -> StateT ProfilesDictionary m SymbolIndex
 getStack = getSymbolIndexFor (lens (.stackTable) (\pd st -> pd{stackTable = st}))

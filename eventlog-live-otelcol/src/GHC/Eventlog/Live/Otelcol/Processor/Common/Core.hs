@@ -6,9 +6,11 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Otelcol.Processor.Common.Core (
   messageWith,
+  (.~?),
   runIf,
   ifNonEmpty,
   toMaybeKeyValue,
+  toMaybeAnyValue,
 )
 where
 
@@ -16,13 +18,17 @@ import Data.Functor ((<&>))
 import Data.Machine (MachineT, stopped)
 import Data.ProtoLens (Message (..))
 import GHC.Eventlog.Live.Data.Attribute (Attr, AttrValue (..))
-import Lens.Family2 ((.~))
+import Lens.Family2 (Setter, (.~))
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 
 -- | Construct a message with a list of modifications applied.
 messageWith :: (Message msg) => [msg -> msg] -> msg
 messageWith = foldr ($) defMessage
+
+-- | Set a value if it is `Just`.
+(.~?) :: Setter s s a a -> Maybe a -> s -> s
+setter .~? maybeValue = maybe id (setter .~) maybeValue
 
 -- | Run a machine if a boolean is @True@, otherwise stop.
 runIf :: (Monad m) => Bool -> MachineT m k o -> MachineT m k o

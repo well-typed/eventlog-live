@@ -46,8 +46,8 @@ module GHC.Eventlog.Live.Otelcol.Config.Types (
   -- *** Profile processor configuration types
   Profiles (..),
   IsProfileProcessorConfig,
-  StackSampleProfile (..),
-  CostCentreSampleProfile (..),
+  CallStackProfile (..),
+  CostCentreStackProfile (..),
 
   -- ** Property types
   Duration (..),
@@ -266,8 +266,8 @@ instance ToYAML Traces where
 The configuration options for the profile processors.
 -}
 data Profiles = Profiles
-  { stackSample :: Maybe StackSampleProfile
-  , costCentreSample :: Maybe CostCentreSampleProfile
+  { callStackProfile :: Maybe CallStackProfile
+  , costCentreStackProfile :: Maybe CostCentreStackProfile
   }
   deriving (Lift, Show)
 
@@ -277,16 +277,16 @@ instance FromYAML Profiles where
     -- NOTE: This should be kept in sync with the list of profiles.
     YAML.withMap "Profiles" $ \m ->
       Profiles
-        <$> m .:? "stack_sample"
-        <*> m .:? "cost_centre_sample"
+        <$> m .:? "call_stack_profile"
+        <*> m .:? "cost_centre_stack_profile"
 
 instance ToYAML Profiles where
   toYAML :: Profiles -> YAML.Node ()
   toYAML profiles =
     -- NOTE: This should be kept in sync with the list of profiles.
     YAML.mapping
-      [ "stack_sample" .= profiles.stackSample
-      , "cost_centre_sample" .= profiles.costCentreSample
+      [ "call_stack_profile" .= profiles.callStackProfile
+      , "cost_centre_stack_profile" .= profiles.costCentreStackProfile
       ]
 
 -------------------------------------------------------------------------------
@@ -580,40 +580,44 @@ instance ToYAML ThreadStateSpan where
   toYAML :: ThreadStateSpan -> YAML.Node ()
   toYAML = genericToYAMLTraceProcessorConfig
 
+-------------------------------------------------------------------------------
+-- Profiles
+-------------------------------------------------------------------------------
+
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processStackProfSampleData`.
 -}
-data StackSampleProfile = StackSampleProfile
+data CallStackProfile = CallStackProfile
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift, Show)
 
-instance FromYAML StackSampleProfile where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser StackSampleProfile
-  parseYAML = genericParseYAMLProfilerProcessorConfig "StackSampleProfile" StackSampleProfile
+instance FromYAML CallStackProfile where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CallStackProfile
+  parseYAML = genericParseYAMLProfilerProcessorConfig "CallStackProfile" CallStackProfile
 
-instance ToYAML StackSampleProfile where
-  toYAML :: StackSampleProfile -> YAML.Node ()
+instance ToYAML CallStackProfile where
+  toYAML :: CallStackProfile -> YAML.Node ()
   toYAML = genericToYAMLProfilerProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processCostCentreProfSampleData`.
 -}
-data CostCentreSampleProfile = CostCentreSampleProfile
+data CostCentreStackProfile = CostCentreStackProfile
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift, Show)
 
-instance FromYAML CostCentreSampleProfile where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CostCentreSampleProfile
-  parseYAML = genericParseYAMLProfilerProcessorConfig "CostCentreSampleProfile" CostCentreSampleProfile
+instance FromYAML CostCentreStackProfile where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CostCentreStackProfile
+  parseYAML = genericParseYAMLProfilerProcessorConfig "CostCentreStackProfile" CostCentreStackProfile
 
-instance ToYAML CostCentreSampleProfile where
-  toYAML :: CostCentreSampleProfile -> YAML.Node ()
+instance ToYAML CostCentreStackProfile where
+  toYAML :: CostCentreStackProfile -> YAML.Node ()
   toYAML = genericToYAMLProfilerProcessorConfig
 
 -------------------------------------------------------------------------------

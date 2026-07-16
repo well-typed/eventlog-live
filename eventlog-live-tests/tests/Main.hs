@@ -107,9 +107,9 @@ test_jumpyJump_HasCostCentreProfile =
               Just
                 "processors:\n\
                 \  profiles:\n\
-                \    cost_centre_sample:\n\
-                \      name: ghc_eventlog_CostCentreProfile\n\
-                \      description: A cost centre callstack sample.\n\
+                \    cost_centre_stack_profile:\n\
+                \      name: ghc_eventlog_CostCentreStackProfile\n\
+                \      description: A GHC cost-centre stack profile.\n\
                 \      export: 1s\n\
                 \"
           }
@@ -134,9 +134,9 @@ test_jumpyJump_HasGhcStackProfilerProfile =
               Just
                 "processors:\n\
                 \  profiles:\n\
-                \    stack_sample:\n\
-                \      name: ghc_eventlog_StackSampleProfile\n\
-                \      description: A thread RTS callstack sample.\n\
+                \    call_stack_profile:\n\
+                \      name: ghc_eventlog_CallStackProfile\n\
+                \      description: A GHC call-stack profile.\n\
                 \      export: 1s\n\
                 \"
           }

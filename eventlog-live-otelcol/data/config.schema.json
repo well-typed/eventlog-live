@@ -45,8 +45,8 @@
           "type": "object",
           "properties": {
             "defaults": { "#ref": "#/definitions/profile_defaults" },
-            "stack_sample": { "$ref": "#/definitions/profile" },
-            "cost_centre_sample": { "$ref": "#/definitions/profile" }
+            "call_stack_profile": { "$ref": "#/definitions/profile" },
+            "cost_centre_stack_profile": { "$ref": "#/definitions/profile" }
           },
           "additionalProperties": false
         }

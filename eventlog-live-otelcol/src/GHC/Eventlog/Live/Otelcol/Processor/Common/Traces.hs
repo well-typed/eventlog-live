@@ -35,7 +35,6 @@ import GHC.RTS.Events (ThreadId)
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
-import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
@@ -49,7 +48,7 @@ toExportTracesServiceRequest = (defMessage &) . (OTS.resourceSpans .~)
 toResourceSpans :: OR.Resource -> [OT.ScopeSpans] -> Maybe OT.ResourceSpans
 toResourceSpans resource scopeSpans =
   ifNonEmpty scopeSpans $
-    messageWith [OL.resource .~ resource, OT.scopeSpans .~ scopeSpans]
+    messageWith [OT.resource .~ resource, OT.scopeSpans .~ scopeSpans]
 
 toScopeSpans :: OC.InstrumentationScope -> [OT.Span] -> Maybe OT.ScopeSpans
 toScopeSpans instrumentationScope spans =
