@@ -68,11 +68,11 @@ processors:
       description: A trace of thread state changes (either running or stopped).
       export: false
   profiles:
-    stack_sample:
-      name: ghc_eventlog_StackSampleProfile
-      description: A thread RTS callstack sample
+    call_stack_profile:
+      name: ghc_eventlog_CallStackProfile
+      description: A GHC call-stack profile.
       export: 5s
-    cost_centre_sample:
-      name: ghc_eventlog_CostCentreProfile
-      description: A cost centre callstack sample.
+    cost_centre_stack_profile:
+      name: ghc_eventlog_CostCentreStackProfile
+      description: A GHC cost-centre stack profile.
       export: 5s
