@@ -7,10 +7,13 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
 
+# Find project file
+PROJECT_FILE="$DIR/../../cabal.profiling.project"
+
 # Build jumpy-jump
 echo "Build jumpy-jump"
-cabal build jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling -v0 | head -n1)
+cabal build jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling -v0
+JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling -v0 | head -n1)
 
 # Build eventlog-live-otelcol
 echo "Build eventlog-live-otelcol"
