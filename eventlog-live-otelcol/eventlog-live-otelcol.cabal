@@ -244,7 +244,7 @@ library
     hashable >=1.4 && <1.6,
     hs-opentelemetry-otlp >=0.2.0 && <0.3,
     HsYAML >=0.2 && <0.3,
-    ipedb >=0.2 && <0.3,
+    ipedb >=0.2.0.1 && <0.3,
     lens-family >=2.1.3 && <2.2,
     machines >=0.7.4 && <0.8,
     optparse-applicative >=0.17 && <0.20,

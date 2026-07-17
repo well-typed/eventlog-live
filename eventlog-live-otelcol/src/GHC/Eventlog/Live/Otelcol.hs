@@ -12,17 +12,16 @@ module GHC.Eventlog.Live.Otelcol (
 
 import Control.Concurrent.STM.TChan (newTChanIO)
 import Control.Exception (bracket_)
-import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Foldable qualified as F
-import Data.Machine (Process, ProcessT, asParts, await, buffered, droppingWhile, mapping, repeatedly, stopped, takingJusts, (~>))
-import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
+import Data.Machine (Process, ProcessT, asParts, mapping, stopped, (~>))
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Vector qualified as V
 import Data.Version (showVersion)
+import Data.Void (absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
@@ -138,14 +137,7 @@ main = do
         indexCostCentreEvents ccdb
           -- If a cost-centre database was provided, don't index any new entries.
           | isJust maybeCCDBPath = stopped
-          | otherwise =
-              -- TODO: Replace with patched `indexer` from ipedb-0.2.0.1.
-              M.liftTick $
-                mapping (CC.toCostCentre . (.value))
-                  ~> droppingWhile isNothing
-                  ~> takingJusts
-                  ~> buffered 10
-                  ~> repeatedly (liftIO . DB.inserts ccdb . V.fromList =<< await)
+          | otherwise = M.liftTick (DB.indexer (CC.toCostCentre . (.value)) def ccdb ~> mapping absurd)
 
     -- Create machine that indexes InfoProv data.
     let indexInfoProvEvents ::
@@ -154,14 +146,7 @@ main = do
         indexInfoProvEvents ipedb
           -- If an IPE database was provided, don't index any new entries.
           | isJust maybeIpeDBPath = stopped
-          | otherwise =
-              -- TODO: Replace with patched `indexer` from ipedb-0.2.0.1.
-              M.liftTick $
-                mapping (IP.toInfoProv . (.value))
-                  ~> droppingWhile isNothing
-                  ~> takingJusts
-                  ~> buffered 10
-                  ~> repeatedly (liftIO . DB.inserts ipedb . V.fromList =<< await)
+          | otherwise = M.liftTick (DB.indexer (IP.toInfoProv . (.value)) def ipedb ~> mapping absurd)
 
     -- Create machine that processes eventlog data into telemetry data
     let processEventlogTelemetry ::
