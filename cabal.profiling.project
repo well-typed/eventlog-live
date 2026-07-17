@@ -1,0 +1,10 @@
+import: cabal.project
+
+-- 2026-07-16:
+-- enable profiling
+profiling: True
+
+-- 2026-07-16:
+-- add late cost centres
+package *
+    profiling-detail: late
