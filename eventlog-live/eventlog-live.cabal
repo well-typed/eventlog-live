@@ -93,7 +93,9 @@ common language
 
 library
   import: language
-  hs-source-dirs: src
+  hs-source-dirs:
+    src
+
   exposed-modules:
     GHC.Eventlog.Live.Data.Attribute
     GHC.Eventlog.Live.Data.Capability
@@ -140,6 +142,15 @@ library
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.12.2 && <0.14,
+
+  -- 2026-07-17:
+  -- This includes a vendored copy of mapAccumM from the base-compat
+  -- package version 0.15.0.
+  hs-source-dirs:
+    vendor/base-compat-0.15.0
+
+  other-modules:
+    Data.Traversable.Compat
 
   -- 2025-12-09:
   -- This configures the build requirements for the vendored copy of

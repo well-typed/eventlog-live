@@ -29,7 +29,7 @@ import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text qualified as Text
-import Data.Traversable (mapAccumM)
+import Data.Traversable.Compat (mapAccumM)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Data.Attribute (Attrs, HasAttrs (..), (~=))
