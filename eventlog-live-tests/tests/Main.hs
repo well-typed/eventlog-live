@@ -2,13 +2,17 @@
 
 module Main (main) where
 
+import Data.Char (isDigit)
 import Data.Machine ((~>))
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
+import Data.Version (Version)
+import Data.Version qualified as V (makeVersion)
 import GHC.Eventlog.Live.Test
 import System.Environment (lookupEnv)
 import System.FilePath ((</>))
 import System.IO.Temp (withTempDirectory)
+import System.Process (readProcess)
 import Test.Tasty (defaultIngredients, defaultMainWithIngredients, includingOptions, testGroup)
 import Text.Read (readMaybe)
 
@@ -17,8 +21,22 @@ main = do
   -- Allow the user to overwrite the TCP port:
   tcpPort <- fromMaybe "4242" . (readMaybe =<<) <$> lookupEnv "GHC_EVENTLOG_INET_PORT"
 
+  -- Check if GHC version supports @ghc-stack-profiler@.
+  ghc <- fromMaybe "ghc" <$> lookupEnv "GHC"
+  ghcVersion <- parseVersion <$> readProcess ghc ["--numeric-version"] ""
+
   -- Create list of tasty ingredients:
   let ingredients = [includingOptions [keepProgramBuildOption]] <> defaultIngredients
+
+  -- Create list of tests:
+  let tests :: (HasLogger) => [EventlogSocketAddr -> ProgramTest]
+      tests =
+        concat
+          [ [test_oddball_HasHeapProfSample]
+          , [test_oddball_HasUserMarker'Summing]
+          , [test_jumpyJump_HasCostCentreProfile]
+          , [test_jumpyJump_HasGhcStackProfilerProfile | ghcVersion >= V.makeVersion [9, 10]]
+          ]
 
   -- Create logger:
   withLogger $ do
@@ -28,14 +46,6 @@ main = do
       let unixTests = tests <*> pure (EventlogSocketUnixAddr $ tmpDir </> "ghc_eventlog.sock")
       let inetTests = tests <*> pure (EventlogSocketInetAddr "127.0.0.1" tcpPort)
       defaultMainWithIngredients ingredients . testGroup "Tests" . runProgramTests $ unixTests <> inetTests
- where
-  tests :: (HasLogger) => [EventlogSocketAddr -> ProgramTest]
-  tests =
-    [ test_oddball_HasHeapProfSample
-    , test_oddball_HasUserMarker'Summing
-    , test_jumpyJump_HasCostCentreProfile
-    , test_jumpyJump_HasGhcStackProfilerProfile
-    ]
 
 test_oddball_HasHeapProfSample :: (HasLogger) => EventlogSocketAddr -> ProgramTest
 test_oddball_HasHeapProfSample =
@@ -147,3 +157,15 @@ test_jumpyJump_HasGhcStackProfilerProfile =
             ~> toProfiles
             ~> logging
             ~> hasInput
+
+{- |
+Internal helper.
+
+Parse the output of @ghc --numeric-version@.
+-}
+parseVersion :: String -> Version
+parseVersion =
+  V.makeVersion
+    . fmap (read . T.unpack . T.takeWhile isDigit)
+    . T.splitOn "."
+    . T.pack
