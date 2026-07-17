@@ -1,0 +1,677 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "aa8c5f9f-b641-493d-bbe2-31e1b4ea71ed",
+    "namespace": "default",
+    "uid": "98ff22ff-6777-4684-a169-81c629ffb259",
+    "resourceVersion": "1784288076117982",
+    "generation": 1,
+    "creationTimestamp": "2026-07-17T11:34:36Z",
+    "labels": {
+      "grafana.app/deprecatedInternalID": "1921497053278208"
+    },
+    "annotations": {
+      "grafana.app/createdBy": "access-policy:service",
+      "grafana.app/managedBy": "classic-file-provisioning",
+      "grafana.app/managerId": "Dashboards",
+      "grafana.app/sourceChecksum": "5dd377b088d3e86e437507b618ecf1f8",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/eventlog-threads.json",
+      "grafana.app/sourceTimestamp": "1779466941000",
+      "grafana.app/folder": ""
+    }
+  },
+  "spec": {
+    "annotations": [
+      {
+        "kind": "AnnotationQuery",
+        "spec": {
+          "builtIn": true,
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "query": {
+            "datasource": {
+              "name": "-- Grafana --"
+            },
+            "group": "grafana",
+            "kind": "DataQuery",
+            "spec": {},
+            "version": "v0"
+          }
+        }
+      }
+    ],
+    "cursorSync": "Off",
+    "editable": true,
+    "elements": {
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "PBFA97CFB590B2093"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "alias": "$tag_category",
+                        "disableTextWrap": false,
+                        "editorMode": "builder",
+                        "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total[$__interval]))",
+                        "fullMetaSearch": false,
+                        "groupBy": [
+                          {
+                            "params": ["50ms"],
+                            "type": "time"
+                          },
+                          {
+                            "params": ["category::tag"],
+                            "type": "tag"
+                          },
+                          {
+                            "params": ["0"],
+                            "type": "fill"
+                          }
+                        ],
+                        "includeNullMetadata": true,
+                        "legendFormat": "__auto",
+                        "measurement": "CapabilityUsage",
+                        "orderByTime": "ASC",
+                        "policy": "default",
+                        "range": true,
+                        "resultFormat": "time_series",
+                        "select": [
+                          [
+                            {
+                              "params": ["CapabilityUsage"],
+                              "type": "field"
+                            },
+                            {
+                              "params": [],
+                              "type": "sum"
+                            },
+                            {
+                              "params": [20],
+                              "type": "moving_average"
+                            }
+                          ]
+                        ],
+                        "tags": [],
+                        "useBackend": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 5,
+          "links": [],
+          "title": "Productivity",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 100,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "percent"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "unit": "ns"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "PBFA97CFB590B2093"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "alias": "$tag_category",
+                        "disableTextWrap": false,
+                        "editorMode": "builder",
+                        "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{exported_job=\"$service_name\", category!=\"Idle\"}[$__interval]))",
+                        "fullMetaSearch": false,
+                        "groupBy": [
+                          {
+                            "params": ["50ms"],
+                            "type": "time"
+                          },
+                          {
+                            "params": ["category::tag"],
+                            "type": "tag"
+                          },
+                          {
+                            "params": ["0"],
+                            "type": "fill"
+                          }
+                        ],
+                        "includeNullMetadata": true,
+                        "legendFormat": "__auto",
+                        "measurement": "CapabilityUsage",
+                        "orderByTime": "ASC",
+                        "policy": "default",
+                        "range": true,
+                        "resultFormat": "time_series",
+                        "select": [
+                          [
+                            {
+                              "params": ["CapabilityUsage"],
+                              "type": "field"
+                            },
+                            {
+                              "params": [],
+                              "type": "sum"
+                            },
+                            {
+                              "params": [20],
+                              "type": "moving_average"
+                            }
+                          ]
+                        ],
+                        "tags": [
+                          {
+                            "key": "category::tag",
+                            "operator": "!=",
+                            "value": "Idle"
+                          }
+                        ],
+                        "useBackend": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "group": "concatenate",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "frameNameLabel": "frame",
+                      "frameNameMode": "field"
+                    }
+                  }
+                },
+                {
+                  "group": "organize",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "IDLE · Time": true,
+                        "MUTATOR · Time": true
+                      },
+                      "includeByName": {},
+                      "indexByName": {},
+                      "renameByName": {
+                        "GC · Time": "Time"
+                      }
+                    }
+                  }
+                },
+                {
+                  "group": "calculateField",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "alias": "Total",
+                      "binary": {
+                        "left": {
+                          "matcher": {
+                            "id": "byName",
+                            "options": "MUTATOR"
+                          }
+                        },
+                        "operator": "/",
+                        "right": {
+                          "matcher": {
+                            "id": "byName",
+                            "options": "IDLE"
+                          }
+                        }
+                      },
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [],
+                        "reducer": "sum"
+                      },
+                      "window": {
+                        "reducer": "mean",
+                        "windowAlignment": "trailing",
+                        "windowSize": 0.1,
+                        "windowSizeMode": "percentage"
+                      }
+                    }
+                  }
+                },
+                {
+                  "group": "calculateField",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "alias": "Productivity",
+                      "binary": {
+                        "left": {
+                          "matcher": {
+                            "id": "byName",
+                            "options": "Mutator"
+                          }
+                        },
+                        "operator": "/",
+                        "right": {
+                          "matcher": {
+                            "id": "byName",
+                            "options": "Total"
+                          }
+                        }
+                      },
+                      "mode": "binary",
+                      "reduce": {
+                        "reducer": "sum"
+                      },
+                      "replaceFields": true
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "",
+          "id": 6,
+          "links": [],
+          "title": "Productivity",
+          "vizConfig": {
+            "group": "gauge",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "percentunit"
+                },
+                "overrides": []
+              },
+              "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
+                "minVizHeight": 75,
+                "minVizWidth": 75,
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": ["lastNotNull"],
+                  "fields": "",
+                  "values": false
+                },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true,
+                "sizing": "auto",
+                "sparkline": false,
+                "textMode": "auto"
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "P214B5B846CF3925F"
+                      },
+                      "group": "tempo",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "filters": [
+                          {
+                            "id": "5e0c753b",
+                            "operator": "=",
+                            "scope": "span"
+                          },
+                          {
+                            "id": "service-name",
+                            "isCustomValue": false,
+                            "operator": "=",
+                            "scope": "resource",
+                            "tag": "service.name",
+                            "value": ["$service_name"],
+                            "valueType": "string"
+                          },
+                          {
+                            "id": "span-name",
+                            "isCustomValue": false,
+                            "operator": "=",
+                            "scope": "span",
+                            "tag": "name",
+                            "value": [
+                              "ghc_eventlog_ThreadState Running",
+                              "ghc_eventlog_ThreadState Blocked"
+                            ],
+                            "valueType": "string"
+                          }
+                        ],
+                        "limit": 20,
+                        "metricsQueryType": "range",
+                        "queryType": "traceqlSearch",
+                        "serviceMapUseNativeHistograms": false,
+                        "spss": 3,
+                        "tableType": "traces"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 8,
+          "links": [],
+          "title": "Traces",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        },
+                        "height": 8,
+                        "width": 4,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        },
+                        "height": 8,
+                        "width": 20,
+                        "x": 4,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        },
+                        "height": 7,
+                        "width": 24,
+                        "x": 0,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "repeat": {
+                "mode": "variable",
+                "value": "service_name"
+              },
+              "title": "${service_name}"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [],
+    "timeSettings": {
+      "autoRefresh": "",
+      "autoRefreshIntervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-5m",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Threads",
+    "variables": [
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "oddball",
+            "value": "oddball"
+          },
+          "definition": "",
+          "description": "The service name used for the visualisations on this dashboard.",
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Service Name",
+          "multi": true,
+          "name": "service_name",
+          "options": [],
+          "query": {
+            "datasource": {
+              "name": "P214B5B846CF3925F"
+            },
+            "group": "tempo",
+            "kind": "DataQuery",
+            "spec": {
+              "label": "service.name",
+              "refId": "TempoDatasourceVariableQueryEditor-VariableQuery",
+              "type": 1
+            },
+            "version": "v0"
+          },
+          "refresh": "onTimeRangeChanged",
+          "regex": "",
+          "regexApplyTo": "value",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}

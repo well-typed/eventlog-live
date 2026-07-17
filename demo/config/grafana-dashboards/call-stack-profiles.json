@@ -1,0 +1,465 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "adkxq5r",
+    "namespace": "default",
+    "uid": "64b81035-1030-4cc6-9e25-c3b9310e16be",
+    "resourceVersion": "1784290526068000",
+    "generation": 4,
+    "creationTimestamp": "2026-07-17T11:39:34Z",
+    "labels": {
+      "grafana.app/deprecatedInternalID": "1922750350004224"
+    },
+    "annotations": {
+      "grafana.app/createdBy": "access-policy:service",
+      "grafana.app/managedBy": "classic-file-provisioning",
+      "grafana.app/managerId": "Dashboards",
+      "grafana.app/sourceChecksum": "4f0aaba746ddc8fdd8565303612c9c47",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/call-stack-profiles.json",
+      "grafana.app/sourceTimestamp": "1784290520000",
+      "grafana.app/updatedBy": "access-policy:service",
+      "grafana.app/updatedTimestamp": "2026-07-17T12:15:26Z",
+      "grafana.app/folder": ""
+    }
+  },
+  "spec": {
+    "annotations": [
+      {
+        "kind": "AnnotationQuery",
+        "spec": {
+          "builtIn": true,
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "query": {
+            "group": "grafana",
+            "kind": "DataQuery",
+            "spec": {},
+            "version": "v0"
+          }
+        }
+      }
+    ],
+    "cursorSync": "Off",
+    "description": "Dashboard for GHC call-stack profiles.",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "group": "grafana-pyroscope-datasource",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "groupBy": ["service_name"],
+                        "heatmapType": "individual",
+                        "includeExemplars": false,
+                        "includeHeatmap": false,
+                        "labelSelector": "{\"service_name\"=\"${service_name}\"}",
+                        "profileIdSelector": [],
+                        "profileTypeId": "ghc_eventlog_CallStackProfile:cpu:samples::",
+                        "queryType": "profile",
+                        "spanSelector": []
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 1,
+          "links": [],
+          "title": "",
+          "vizConfig": {
+            "group": "flamegraph",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              },
+              "options": {}
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "group": "loki",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "direction": "backward",
+                        "editorMode": "builder",
+                        "expr": "",
+                        "queryType": "range"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 2,
+          "links": [],
+          "title": "",
+          "vizConfig": {
+            "group": "canvas",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "inlineEditing": true,
+                "panZoom": false,
+                "root": {
+                  "background": {
+                    "color": {
+                      "fixed": "transparent"
+                    }
+                  },
+                  "border": {
+                    "color": {
+                      "fixed": "dark-green"
+                    }
+                  },
+                  "constraint": {
+                    "horizontal": "left",
+                    "vertical": "top"
+                  },
+                  "elements": [
+                    {
+                      "background": {
+                        "color": {
+                          "fixed": "transparent"
+                        }
+                      },
+                      "border": {
+                        "color": {
+                          "fixed": "dark-green"
+                        }
+                      },
+                      "config": {
+                        "align": "center",
+                        "api": {
+                          "contentType": "application/x-www-form-urlencoded",
+                          "data": "service-name=${service_name}",
+                          "endpoint": "http://localhost:30719/control/ghc-stack-profiler/2",
+                          "headerParams": [],
+                          "method": "POST",
+                          "queryParams": [],
+                          "successMessage": "Requested Call-Stack Profiling Stop"
+                        },
+                        "color": {
+                          "fixed": "#F0F4FD"
+                        },
+                        "size": 14,
+                        "style": {
+                          "variant": "destructive"
+                        },
+                        "text": {
+                          "fixed": "Stop",
+                          "mode": "fixed"
+                        }
+                      },
+                      "constraint": {
+                        "horizontal": "left",
+                        "vertical": "top"
+                      },
+                      "name": "StopCallStackProfiling",
+                      "placement": {
+                        "height": 30,
+                        "left": 200,
+                        "rotation": 0,
+                        "top": 0,
+                        "width": 90
+                      },
+                      "type": "button"
+                    },
+                    {
+                      "background": {
+                        "color": {
+                          "fixed": "transparent"
+                        }
+                      },
+                      "border": {
+                        "color": {
+                          "fixed": "dark-green"
+                        }
+                      },
+                      "config": {
+                        "align": "center",
+                        "api": {
+                          "contentType": "application/x-www-form-urlencoded",
+                          "data": "service-name=${service_name}",
+                          "endpoint": "http://localhost:30719/control/ghc-stack-profiler/1",
+                          "headerParams": [],
+                          "method": "POST",
+                          "queryParams": [],
+                          "successMessage": "Requested Call-Stack Profiling Start"
+                        },
+                        "color": {
+                          "fixed": "#F0F4FD"
+                        },
+                        "size": 14,
+                        "style": {
+                          "variant": "destructive"
+                        },
+                        "text": {
+                          "fixed": "Start",
+                          "mode": "fixed"
+                        }
+                      },
+                      "constraint": {
+                        "horizontal": "left",
+                        "vertical": "top"
+                      },
+                      "name": "StartCallStackProfiling",
+                      "placement": {
+                        "height": 30,
+                        "left": 100,
+                        "rotation": 0,
+                        "top": 0,
+                        "width": 90
+                      },
+                      "type": "button"
+                    },
+                    {
+                      "background": {
+                        "color": {
+                          "fixed": "transparent"
+                        }
+                      },
+                      "border": {
+                        "color": {
+                          "fixed": "dark-green"
+                        }
+                      },
+                      "config": {
+                        "align": "right",
+                        "color": {
+                          "fixed": "rgb(204, 204, 220)"
+                        },
+                        "size": 14,
+                        "text": {
+                          "fixed": "Controls"
+                        },
+                        "valign": "middle"
+                      },
+                      "constraint": {
+                        "horizontal": "left",
+                        "vertical": "top"
+                      },
+                      "links": [],
+                      "name": "Label",
+                      "placement": {
+                        "height": 30,
+                        "left": 0,
+                        "rotation": 0,
+                        "top": 0,
+                        "width": 90
+                      },
+                      "type": "text"
+                    }
+                  ],
+                  "name": "Element 1784282579975",
+                  "placement": {
+                    "height": 100,
+                    "left": 0,
+                    "rotation": 0,
+                    "top": 0,
+                    "width": 100
+                  },
+                  "type": "frame"
+                },
+                "showAdvancedTypes": true,
+                "tooltip": {
+                  "disableForOneClick": false,
+                  "mode": "single"
+                },
+                "zoomToContent": false
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        },
+                        "height": 26,
+                        "repeat": {
+                          "direction": "v",
+                          "mode": "variable",
+                          "value": "service_name"
+                        },
+                        "width": 24,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        },
+                        "height": 1,
+                        "repeat": {
+                          "direction": "v",
+                          "mode": "variable",
+                          "value": "service_name"
+                        },
+                        "width": 24,
+                        "x": 0,
+                        "y": 26
+                      }
+                    }
+                  ]
+                }
+              },
+              "repeat": {
+                "mode": "variable",
+                "value": "service_name"
+              },
+              "title": "${service_name}"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preferences": {
+      "layout": {
+        "kind": "GridLayout",
+        "spec": {
+          "items": []
+        }
+      }
+    },
+    "preload": false,
+    "tags": [],
+    "timeSettings": {
+      "autoRefresh": "",
+      "autoRefreshIntervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-6h",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Call-Stack Profiles",
+    "variables": [
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "definition": "",
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Service Name",
+          "multi": true,
+          "name": "service_name",
+          "options": [],
+          "query": {
+            "group": "grafana-pyroscope-datasource",
+            "kind": "DataQuery",
+            "spec": {
+              "labelName": "service_name",
+              "profileTypeId": "ghc_eventlog_CallStackProfile:cpu:samples::",
+              "type": "labelValue"
+            },
+            "version": "v0"
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "regexApplyTo": "value",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}
