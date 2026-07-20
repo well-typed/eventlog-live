@@ -1,0 +1,90 @@
+diff -ur lsm-tree-1.1.0.0/lsm-tree.cabal lsm-tree-1.1.0.0-patched/lsm-tree.cabal
+--- lsm-tree-1.1.0.0/lsm-tree.cabal	2026-07-20 16:23:40
++++ lsm-tree-1.1.0.0-patched/lsm-tree.cabal	2001-09-09 02:46:40
+@@ -551,7 +551,7 @@
+     , lsm-tree:control
+     , lsm-tree:core
+     , primitive               ^>=0.9
+-    , random                  ^>=1.0   || ^>=1.1 || ^>=1.2     || ^>=1.3
++    , random                  ^>=1.2   || ^>=1.3
+     , text                    ^>=2.1.1
+     , vector                  ^>=0.13
+
+@@ -797,7 +797,7 @@
+     , quickcheck-dynamic
+     , quickcheck-instances
+     , quickcheck-lockstep     >=0.8
+-    , random
++    , random                  ^>=1.3
+     , safe-wild-cards
+     , semialign
+     , split
+@@ -847,7 +847,7 @@
+     , lsm-tree:core
+     , lsm-tree:extras
+     , QuickCheck
+-    , random
++    , random               ^>=1.3
+     , temporary
+     , vector
+
+@@ -863,7 +863,7 @@
+     , bloomfilter-blocked
+     , lsm-tree:core
+     , lsm-tree:extras
+-    , random
++    , random               ^>=1.3
+     , time
+     , vector
+     , wide-word
+@@ -886,7 +886,7 @@
+     , lsm-tree:core
+     , lsm-tree:extras
+     , primitive
+-    , random
++    , random               ^>=1.3
+     , time
+     , vector
+     , vector-algorithms
+@@ -920,7 +920,7 @@
+     , mtl
+     , optparse-applicative
+     , primitive
+-    , random
++    , random                ^>=1.3
+     , vector
+
+   ghc-options:    -rtsopts -with-rtsopts=-T -threaded
+diff -ur lsm-tree-1.1.0.0/src-extras/Database/LSMTree/Extras/Random.hs lsm-tree-1.1.0.0-patched/src-extras/Database/LSMTree/Extras/Random.hs
+--- lsm-tree-1.1.0.0/src-extras/Database/LSMTree/Extras/Random.hs	2001-09-09 02:46:40
++++ lsm-tree-1.1.0.0-patched/src-extras/Database/LSMTree/Extras/Random.hs	2001-09-09 02:46:40
+@@ -1,4 +1,5 @@
+ {-# LANGUAGE BangPatterns #-}
++{-# LANGUAGE CPP          #-}
+
+ module Database.LSMTree.Extras.Random (
+     -- * Sampling from uniform distributions
+@@ -38,8 +39,7 @@
+ sampleUniformWithoutReplacement rng0 n (Set.fromList -> xs0)
+   | n > Set.size xs0 =
+       error $
+-        printf "sampleUniformWithoutReplacement: n > length xs0 for n=%d, \
+-               \ length xs0=%d"
++        printf "sampleUniformWithoutReplacement: n > length xs0 for n=%d, length xs0=%d"
+                n
+                (Set.size xs0)
+   | otherwise =
+@@ -115,6 +115,13 @@
+ -- | Generates a random bytestring. Its length is uniformly distributed within
+ -- the provided range.
+ randomByteStringR :: (Int, Int) -> StdGen -> (BS.ByteString, StdGen)
++#if MIN_VERSION_random(1,3,0)
+ randomByteStringR range g =
+     let (!l, !g')  = uniformR range g
+     in  R.uniformByteString l g'
++#else
++-- MIN_VERSION_random(1,2,0)
++randomByteStringR range g =
++    let (!l, !g')  = uniformR range g
++    in  R.genByteString l g'
++#endif

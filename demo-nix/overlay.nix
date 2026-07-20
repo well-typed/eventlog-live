@@ -15,15 +15,23 @@ final: prev: with haskell.lib.compose; {
       pkg = prev.callCabal2nixWithOptions "blockio" src "-fserialblockio" { };
     in
     enableCabalFlag "serialblockio" pkg;
+  data-elevator = prev.callHackage "data-elevator" "0.2" { };
   grapesy = dontCheck prev.grapesy;
   ghc-stack-profiler-core = prev.callHackage "ghc-stack-profiler-core" "0.3.0.0" { };
   ghc-stack-profiler = prev.callHackage "ghc-stack-profiler" "0.3.0.0" { };
   hs-opentelemetry-otlp = prev.callHackage "hs-opentelemetry-otlp" "0.2.0.0" { };
   http2 = prev.callHackage "http2" "5.3.9" { };
   http2-tls = prev.callHackage "http2-tls" "0.4.5" { };
+  # io-classes = prev.callHackage "io-classes" "1.9.0.0" { };
+  # io-sim = prev.callHackage "io-sim" "1.9.1.0" { };
   ipedb = prev.callHackage "ipedb" "0.2.0.1" { };
   eventlog-socket = prev.callHackage "eventlog-socket" "0.1.3.0" { };
   eventlog-socket-control = prev.callHackage "eventlog-socket-control" "0.1.1.0" { };
+  lsm-tree =
+    let
+      pkg = prev.callHackage "lsm-tree" "1.1.0.0" { };
+    in
+    dontCheck (appendPatches [ ./patches/lsm-tree-1.1.0.0-random-1.2.patch ] pkg);
   optparse-applicative = prev.callHackage "optparse-applicative" "0.19.0.0" { };
   proto-lens = doJailbreak prev.proto-lens;
   proto-lens-protobuf-types = doJailbreak prev.proto-lens-protobuf-types;
@@ -31,5 +39,6 @@ final: prev: with haskell.lib.compose; {
   quickcheck-state-machine = unmarkBroken prev.quickcheck-state-machine;
   snappy-c = doJailbreak prev.snappy-c;
   tasty-quickcheck = doJailbreak prev.tasty-quickcheck;
+  tar = prev.callHackage "tar" "0.7.2.0" { };
   tls = prev.callHackage "tls" "2.1.4" { };
 }
