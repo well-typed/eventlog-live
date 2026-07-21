@@ -16,13 +16,10 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OpenTelemetryExporter (..), export)
 import Lens.Family2 ((^.))
-import Network.GRPC.Client qualified as G
-import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
-import Network.GRPC.Common.Protobuf qualified as G
 import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS
 import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService_Fields qualified as OLS
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
@@ -86,37 +83,31 @@ exportResourceLogs exporter = construct $ go False
 
   sendResourceLogs :: OLS.ExportLogsServiceRequest -> IO ExportLogsResult
   sendResourceLogs exportLogsServiceRequest =
-    doGrpc `catch` handleSomeException
+    doExport `catch` handleSomeException
    where
     !exportedLogRecords = countLogRecordsInExportLogsServiceRequest exportLogsServiceRequest
 
-    doGrpc :: IO ExportLogsResult
-    doGrpc = do
-      sendExportLogsServiceRequest exportLogsServiceRequest >>= \case
-        G.Proto resp
-          | resp ^. OLS.partialSuccess . OLS.rejectedLogRecords == 0 -> do
-              pure $ ExportLogsSuccess exportedLogRecords
-          | otherwise -> do
-              let !rejectedLogRecords = resp ^. OLS.partialSuccess . OLS.rejectedLogRecords
-              let !rejectedLogsError = RejectedLogsError{errorMessage = resp ^. OLS.partialSuccess . OLS.errorMessage, ..}
-              pure $ ExportLogsError exportedLogRecords rejectedLogRecords (SomeException rejectedLogsError)
+    doExport :: IO ExportLogsResult
+    doExport = do
+      resp <- export @OLS.LogsService @"export" exporter exportLogsServiceRequest
+      if resp ^. OLS.partialSuccess . OLS.rejectedLogRecords == 0
+        then
+          pure $ ExportLogsSuccess exportedLogRecords
+        else do
+          let !rejectedLogRecords = resp ^. OLS.partialSuccess . OLS.rejectedLogRecords
+          let !rejectedLogsError = RejectedLogsError{errorMessage = resp ^. OLS.partialSuccess . OLS.errorMessage, ..}
+          pure $ ExportLogsError exportedLogRecords rejectedLogRecords (SomeException rejectedLogsError)
 
     handleSomeException :: SomeException -> IO ExportLogsResult
     handleSomeException someException = pure $ ExportLogsError 0 exportedLogRecords someException
 
-  sendExportLogsServiceRequest ::
-    OLS.ExportLogsServiceRequest ->
-    IO (G.Proto OLS.ExportLogsServiceResponse)
-  sendExportLogsServiceRequest exportLogsServiceRequest =
-    case exporter of
-      OpenTelemetryExporter'Grpc conn ->
-        G.nonStreaming conn (G.rpc @(Protobuf OLS.LogsService "export")) (G.Proto exportLogsServiceRequest)
-      OpenTelemetryExporter'Http httpProtobufExporter ->
-        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1/logs" exportLogsServiceRequest
-
 type instance G.RequestMetadata (Protobuf OLS.LogsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OLS.LogsService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OLS.LogsService meth) = G.NoMetadata
+
+instance CanExportViaHttpProtobuf OLS.LogsService "export" where
+  apiPath :: String
+  apiPath = "/v1/logs"
 
 --------------------------------------------------------------------------------
 -- Internal Helpers

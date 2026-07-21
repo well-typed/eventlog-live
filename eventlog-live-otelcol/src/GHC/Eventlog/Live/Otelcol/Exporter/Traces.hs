@@ -16,13 +16,10 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OpenTelemetryExporter (..), export)
 import Lens.Family2 ((^.))
-import Network.GRPC.Client qualified as G
-import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
-import Network.GRPC.Common.Protobuf qualified as G
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
@@ -89,31 +86,25 @@ exportResourceSpans exporter =
 
     doGrpc :: IO ExportTraceResult
     doGrpc = do
-      sendExportTraceServiceRequest exportTraceServiceRequest >>= \case
-        G.Proto resp
-          | resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0 ->
-              pure $ ExportTraceSuccess exportedSpans
-          | otherwise -> do
-              let !rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
-              let !rejectedMetricsError = RejectedSpansError{errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage, ..}
-              pure $ ExportTraceError exportedSpans rejectedSpans (SomeException rejectedMetricsError)
+      resp <- export @OTS.TraceService @"export" exporter exportTraceServiceRequest
+      if resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0
+        then
+          pure $ ExportTraceSuccess exportedSpans
+        else do
+          let !rejectedSpans = resp ^. OTS.partialSuccess . OTS.rejectedSpans
+          let !rejectedMetricsError = RejectedSpansError{errorMessage = resp ^. OTS.partialSuccess . OTS.errorMessage, ..}
+          pure $ ExportTraceError exportedSpans rejectedSpans (SomeException rejectedMetricsError)
 
     handleSomeException :: SomeException -> IO ExportTraceResult
     handleSomeException someException = pure $ ExportTraceError 0 exportedSpans someException
 
-  sendExportTraceServiceRequest ::
-    OTS.ExportTraceServiceRequest ->
-    IO (G.Proto OTS.ExportTraceServiceResponse)
-  sendExportTraceServiceRequest exportTraceServiceRequest =
-    case exporter of
-      OpenTelemetryExporter'Grpc conn ->
-        G.nonStreaming conn (G.rpc @(Protobuf OTS.TraceService "export")) (G.Proto exportTraceServiceRequest)
-      OpenTelemetryExporter'Http httpProtobufExporter ->
-        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1/traces" exportTraceServiceRequest
-
 type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
+
+instance CanExportViaHttpProtobuf OTS.TraceService "export" where
+  apiPath :: String
+  apiPath = "/v1/traces"
 
 --------------------------------------------------------------------------------
 -- Internal Helpers

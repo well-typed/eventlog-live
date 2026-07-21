@@ -17,13 +17,10 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OpenTelemetryExporter (..), export)
 import Lens.Family2 ((^.))
-import Network.GRPC.Client qualified as G
-import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
-import Network.GRPC.Common.Protobuf qualified as G
 import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService qualified as OPS
 import Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields qualified as OPS
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
@@ -81,39 +78,31 @@ exportResourceProfiles exporter =
 
   sendResourceProfiles :: OPS.ExportProfilesServiceRequest -> IO ExportProfileResult
   sendResourceProfiles exportProfilesServiceRequest =
-    doGrpc `catch` handleSomeException
+    doExport `catch` handleSomeException
    where
     !exportedProfiles = countSamplesInExportProfileServiceRequest exportProfilesServiceRequest
 
-    doGrpc :: IO ExportProfileResult
-    doGrpc = do
-      sendExportProfilesServiceRequest exportProfilesServiceRequest >>= \case
-        G.Proto resp
-          | resp ^. OPS.partialSuccess . OPS.rejectedProfiles == 0 ->
-              pure $ ExportProfileSuccess exportedProfiles
-          | otherwise -> do
-              let !rejectedProfiles = resp ^. OPS.partialSuccess . OPS.rejectedProfiles
-              let !rejectedMetricsError = RejectedProfilesError{errorMessage = resp ^. OPS.partialSuccess . OPS.errorMessage, ..}
-              pure $ ExportProfileError exportedProfiles rejectedProfiles (SomeException rejectedMetricsError)
+    doExport :: IO ExportProfileResult
+    doExport = do
+      resp <- export @OPS.ProfilesService @"export" exporter exportProfilesServiceRequest
+      if resp ^. OPS.partialSuccess . OPS.rejectedProfiles == 0
+        then
+          pure $ ExportProfileSuccess exportedProfiles
+        else do
+          let !rejectedProfiles = resp ^. OPS.partialSuccess . OPS.rejectedProfiles
+          let !rejectedMetricsError = RejectedProfilesError{errorMessage = resp ^. OPS.partialSuccess . OPS.errorMessage, ..}
+          pure $ ExportProfileError exportedProfiles rejectedProfiles (SomeException rejectedMetricsError)
 
     handleSomeException :: SomeException -> IO ExportProfileResult
     handleSomeException someException = pure $ ExportProfileError 0 exportedProfiles someException
 
-  sendExportProfilesServiceRequest ::
-    OPS.ExportProfilesServiceRequest ->
-    IO (G.Proto OPS.ExportProfilesServiceResponse)
-  sendExportProfilesServiceRequest exportProfilesServiceRequest =
-    case exporter of
-      OpenTelemetryExporter'Grpc conn ->
-        G.nonStreaming conn (G.rpc @(Protobuf OPS.ProfilesService "export")) (G.Proto exportProfilesServiceRequest)
-      OpenTelemetryExporter'Http httpProtobufExporter ->
-        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1development/profiles" exportProfilesServiceRequest
-
 type instance G.RequestMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
-
 type instance G.ResponseInitialMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
-
 type instance G.ResponseTrailingMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
+
+instance CanExportViaHttpProtobuf OPS.ProfilesService "export" where
+  apiPath :: String
+  apiPath = "/v1development/profiles"
 
 {- |
 Internal helper.
