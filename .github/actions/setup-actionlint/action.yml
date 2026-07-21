@@ -8,7 +8,7 @@ runs:
   using: composite
   steps:
     - name: 💾 Restore cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       if: ${{ !env.ACT }}
       with:
         path: "${{ github.workspace }}/.actionlint/bin"
@@ -27,7 +27,7 @@ runs:
       shell: sh
 
     - name: 💾 Save Cabal dependencies
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       if: ${{ !env.ACT && steps.cache-actionlint.outputs.cache-hit != 'true' }}
       with:
         path: "${{ github.workspace }}/.actionlint/bin"
