@@ -16,13 +16,10 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter (..), sendHttpProtobuf)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OpenTelemetryExporter (..), export)
 import Lens.Family2 ((^.))
-import Network.GRPC.Client qualified as G
-import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
-import Network.GRPC.Common.Protobuf qualified as G
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
@@ -86,40 +83,31 @@ exportResourceMetrics exporter = construct $ go False
 
   sendResourceMetrics :: OMS.ExportMetricsServiceRequest -> IO ExportMetricsResult
   sendResourceMetrics exportMetricsServiceRequest =
-    doGrpc `catch` handleSomeException
+    doExport `catch` handleSomeException
    where
     !exportedDataPoints = countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest
 
-    doGrpc :: IO ExportMetricsResult
-    doGrpc = do
-      sendExportMetricsServiceRequest exportMetricsServiceRequest >>= \case
-        G.Proto resp
-          | resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0 -> do
-              pure $ ExportMetricsSuccess exportedDataPoints
-          | otherwise -> do
-              let !rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-              let !rejectedMetricsError = RejectedMetricsError{errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage, ..}
-              pure $ ExportMetricsError exportedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
-
-    -- handleGrpcError :: G.GrpcError -> IO ExportMetricsResult
-    -- handleGrpcError grpcError = pure $ ExportMetricsError 0 exportedDataPoints (SomeException grpcError)
+    doExport :: IO ExportMetricsResult
+    doExport = do
+      resp <- export @OMS.MetricsService @"export" exporter exportMetricsServiceRequest
+      if resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0
+        then
+          pure $ ExportMetricsSuccess exportedDataPoints
+        else do
+          let !rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
+          let !rejectedMetricsError = RejectedMetricsError{errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage, ..}
+          pure $ ExportMetricsError exportedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
 
     handleSomeException :: SomeException -> IO ExportMetricsResult
     handleSomeException someException = pure $ ExportMetricsError 0 exportedDataPoints someException
 
-  sendExportMetricsServiceRequest ::
-    OMS.ExportMetricsServiceRequest ->
-    IO (G.Proto OMS.ExportMetricsServiceResponse)
-  sendExportMetricsServiceRequest exportMetricsServiceRequest =
-    case exporter of
-      OpenTelemetryExporter'Grpc conn ->
-        G.nonStreaming conn (G.rpc @(Protobuf OMS.MetricsService "export")) (G.Proto exportMetricsServiceRequest)
-      OpenTelemetryExporter'Http httpProtobufExporter ->
-        G.Proto <$> sendHttpProtobuf httpProtobufExporter "/v1/metrics" exportMetricsServiceRequest
-
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
+
+instance CanExportViaHttpProtobuf OMS.MetricsService "export" where
+  apiPath :: String
+  apiPath = "/v1/metrics"
 
 --------------------------------------------------------------------------------
 -- Internal Helpers
