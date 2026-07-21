@@ -199,11 +199,11 @@ otelcolProtocolParser =
   O.option
     ( O.eitherReader $ \case
         "grpc" -> Right OpenTelemetryCollectorProtocol'Grpc
-        "http-protobuf" -> Right OpenTelemetryCollectorProtocol'HttpProtobuf
+        "http/protobuf" -> Right OpenTelemetryCollectorProtocol'HttpProtobuf
         protocol -> Left $ "Unknown OpenTelemetry Collector protocol: " <> protocol
     )
     ( O.long "otelcol-protocol"
-        <> O.metavar "grpc|http-protobuf"
+        <> O.metavar "grpc|http/protobuf"
         <> O.help "OpenTelemetry Collector protocol."
         <> O.value OpenTelemetryCollectorProtocol'Grpc
         <> O.showDefaultWith (const "grpc")

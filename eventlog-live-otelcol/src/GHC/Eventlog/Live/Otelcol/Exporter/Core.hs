@@ -91,7 +91,7 @@ toExporterOptions OpenTelemetryCollectorOptions{..} =
     OpenTelemetryCollectorProtocol'Grpc -> do
       case otelcolHeaders of
         [] -> Right ()
-        _ : _ -> Left "--otelcol-header is only supported with --otelcol-protocol=http-protobuf."
+        _ : _ -> Left "--otelcol-header is only supported with --otelcol-protocol=http/protobuf."
       Right . ExporterOptions'Grpc $
         makeServer
           (G.Address otelcolHost (maybe 4317 fromIntegral maybeOtelcolPort) maybeOtelcolAuthority)
