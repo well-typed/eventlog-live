@@ -58,7 +58,7 @@ echo 'Start eventlog-live-otelcol (for oddball)' && \
 	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
 		--enable-my-eventlog-socket-unix '$MY_GHC_EVENTLOG_SOCKET' \
 	    -hT \
-	    --otelcol-host=localhost \
+	    --otlp-endpoint=localhost \
 		+RTS -l -hT --eventlog-flush-interval=1 -RTS
 "
 
@@ -74,7 +74,7 @@ ${EVENTLOG_LIVE_OTELCOL_BIN} \
 	--eventlog-flush-interval=1 \
     --eventlog-socket '$MY_GHC_EVENTLOG_SOCKET' \
     -hT \
-    --otelcol-host=localhost
+    --otlp-endpoint=localhost
 "
 
 # Create the screen conf file
