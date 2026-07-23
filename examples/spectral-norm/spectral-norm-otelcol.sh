@@ -54,7 +54,7 @@ echo 'Start eventlog-live-otelcol (for spectral-norm)' && \
 		--service-name='spectral-norm' \
 	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
 	    -hT \
-	    --otelcol-host=localhost \
+	    --otlp-endpoint=localhost \
 		+RTS -l -hT --eventlog-flush-interval=1 -RTS
 "
 
