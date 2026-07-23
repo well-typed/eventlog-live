@@ -58,7 +58,7 @@ echo 'Start eventlog-live-otelcol (for jumpy-jump)' && \
 		--service-name='jumpy-jump' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
-	    --otelcol-host=localhost \
+	    --otlp-endpoint=localhost \
 		--control \
 		--control-port 30719 \
 		--control-cors-ignore-failure
