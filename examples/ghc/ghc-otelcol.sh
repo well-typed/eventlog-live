@@ -122,7 +122,7 @@ echo 'Start eventlog-live-otelcol' && \
 		--service-name='ghc' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
-	    --otelcol-host=localhost
+	    --otlp-endpoint=localhost
 "
 
 # Create the screen conf file
