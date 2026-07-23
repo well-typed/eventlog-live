@@ -45,7 +45,7 @@ services:
       - "--eventlog-socket=/run/oddball/ghc_eventlog.sock"
       - "-hT"
       - "--eventlog-flush-interval=1"
-      - "--otelcol-host=otelcol"
+      - "--otlp-endpoint=otelcol"
       - "--control"
       - "--control-port=30719"
       - "--control-cors-ignore-failure"
