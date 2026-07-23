@@ -101,7 +101,7 @@ in
         Type = "simple";
         User = "eventlog";
         Group = "eventlog";
-        ExecStart = "${eventlog-live-otelcol}/bin/eventlog-live-otelcol --service-name=oddball --eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock --otelcol-host=0.0.0.0 --otelcol-port=4317";
+        ExecStart = "${eventlog-live-otelcol}/bin/eventlog-live-otelcol --service-name=oddball --eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock --otlp-endpoint=0.0.0.0:4317";
         Restart = "always";
         RestartSec = 5;
       };
