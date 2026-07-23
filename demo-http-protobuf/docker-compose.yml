@@ -1,0 +1,81 @@
+services:
+  oddball:
+    # container_name: oddball
+    build:
+      context: ".."
+      dockerfile: "./demo-http-protobuf/Dockerfile.oddball"
+    volumes:
+      - "oddball:/run/oddball"
+    environment:
+      GHC_EVENTLOG_UNIX_PATH: "/run/oddball/ghc_eventlog.sock"
+      LANG: C.UTF-8
+    command:
+      - "+RTS"
+      - "-l"
+      - "-hT"
+      - "--eventlog-flush-interval=1"
+      - "-RTS"
+
+  eventlog-live-otelcol:
+    # container_name: eventlog-live-otelcol
+    build:
+      context: ".."
+      dockerfile: "./demo-http-protobuf/Dockerfile.eventlog-live-otelcol"
+    depends_on:
+      oddball:
+        condition: "service_started"
+      prometheus:
+        condition: "service_started"
+    ports:
+      - "30719:30719"
+    healthcheck:
+      test: "curl -f http://localhost:30719/health"
+      interval: 1m
+      timeout: 10s
+      retries: 5
+    volumes:
+      - "oddball:/run/oddball"
+      - "./config/eventlog-live-otelcol.yaml:/etc/eventlog-live-otelcol/config.yaml"
+    environment:
+      LANG: C.UTF-8
+    command:
+      - "--verbosity=debug"
+      - "--config=/etc/eventlog-live-otelcol/config.yaml"
+      - "--service-name=oddball"
+      - "--eventlog-socket=/run/oddball/ghc_eventlog.sock"
+      - "-hT"
+      - "--eventlog-flush-interval=1"
+      - "--otlp-protocol=http/protobuf"
+      - "--otlp-endpoint=http://prometheus:9090/api/v1/otlp"
+      - "--control"
+      - "--control-port=30719"
+      - "--control-cors-ignore-failure"
+
+  grafana:
+    # container_name: grafana
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: "curl -f http://localhost:3000/api/health"
+      interval: 1m
+      timeout: 10s
+      retries: 5
+    volumes:
+      - "./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml"
+      - "./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml"
+      - "./config/grafana-dashboards:/var/lib/grafana/dashboards"
+
+  prometheus:
+    # container_name: prometheus
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--web.enable-otlp-receiver"
+    volumes:
+      - "./config/prometheus.yaml:/etc/prometheus/prometheus.yaml"
+    ports:
+      - "9090:9090" # Prometheus
+
+volumes:
+  oddball:
