@@ -34,7 +34,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otelcol.Config qualified as C
 import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otelcol.Control (ControlServerApi (..), startControlServer)
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (OpenTelemetryExporter, validateOpenTelemetryCollectorOptions, withOpenTelemetryExporter)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (OtlpExporter, parseOtlpExporterOptions, withOtlpExporter)
 import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otelcol.Exporter.Profiles (exportResourceProfiles)
@@ -74,7 +74,7 @@ The main function for @eventlog-live-otelcol@.
 main :: IO ()
 main = do
   Options{..} <- O.execParser options
-  either die pure (validateOpenTelemetryCollectorOptions openTelemetryCollectorOptions)
+  otlpExporterOptions' <- either die pure (parseOtlpExporterOptions otlpExporterOptions)
 
   -- Construct the logging action
   myTelemetryDataChan <- newTChanIO
@@ -198,7 +198,7 @@ main = do
             ~> M.liftTick (asResourceTelemetryData internalResource eventlogLiveScope)
 
     -- Create the full machine to process eventlog data.
-    let processAndExportTelemetry ccdb ipedb openTelemetryExporter =
+    let processAndExportTelemetry ccdb ipedb otlpExporter =
           M.fanoutTick
             [ -- Log a warning if no input has been received after 10 ticks.
               M.validateInput logger 10
@@ -212,7 +212,7 @@ main = do
                 ]
                 ~> M.liftTick asParts
                 -- ...and export it.
-                ~> exportResourceTelemetryData fullConfig openTelemetryExporter
+                ~> exportResourceTelemetryData fullConfig otlpExporter
             ]
             -- Process the statistics
             -- TODO: windowSize should be the maximum of all aggregation and export intervals
@@ -222,7 +222,7 @@ main = do
             ~> M.dropTick
 
     -- Open a connection to the OpenTelemetry Collector.
-    withOpenTelemetryExporter openTelemetryCollectorOptions $ \openTelemetryExporter -> do
+    withOtlpExporter otlpExporterOptions' $ \otlpExporter -> do
       DB.withNewSession def $ \session -> do
         let withCostCentreTable =
               case maybeCCDBPath of
@@ -251,7 +251,7 @@ main = do
                     fullConfig.batchIntervalMs
                     Nothing
                     maybeEventlogLogFile
-                    (processAndExportTelemetry ccdb ipedb openTelemetryExporter)
+                    (processAndExportTelemetry ccdb ipedb otlpExporter)
 
 data TelemetryData
   = TelemetryData'Log OL.LogRecord
@@ -271,9 +271,9 @@ Export resource telemetry data and yield statistics.
 -}
 exportResourceTelemetryData ::
   FullConfig ->
-  OpenTelemetryExporter ->
+  OtlpExporter ->
   ProcessT IO (Tick ResourceTelemetryData) (Tick (DList Stat))
-exportResourceTelemetryData fullConfig openTelemetryExporter =
+exportResourceTelemetryData fullConfig otlpExporter =
   M.fanoutTick
     [ -- Export logs.
       runIf (C.shouldExportLogs fullConfig) $
@@ -283,7 +283,7 @@ exportResourceTelemetryData fullConfig openTelemetryExporter =
           --       making it impossible to not batch once per interval.
           ~> M.batchByTick
           ~> M.liftTick (mapping (toExportLogsServiceRequest . D.toList))
-          ~> exportResourceLogs openTelemetryExporter
+          ~> exportResourceLogs otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportLogsResultStat))
     , -- Export metrics.
       runIf (C.shouldExportMetrics fullConfig) $
@@ -291,7 +291,7 @@ exportResourceTelemetryData fullConfig openTelemetryExporter =
           -- NOTE: See note above.
           ~> M.batchByTick
           ~> M.liftTick (mapping (toExportMetricsServiceRequest . D.toList))
-          ~> exportResourceMetrics openTelemetryExporter
+          ~> exportResourceMetrics otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportMetricsResultStat))
     , -- Export spans.
       runIf (C.shouldExportTraces fullConfig) $
@@ -299,12 +299,12 @@ exportResourceTelemetryData fullConfig openTelemetryExporter =
           -- NOTE: See note above.
           ~> M.batchByTick
           ~> M.liftTick (mapping (toExportTracesServiceRequest . D.toList))
-          ~> exportResourceSpans openTelemetryExporter
+          ~> exportResourceSpans otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
     , -- Export profiles.
       runIf (C.shouldExportProfiles fullConfig) $
         M.liftTick (mapping getResourceProfiles ~> asParts ~> mapping toExportProfileServiceRequest)
-          ~> exportResourceProfiles openTelemetryExporter
+          ~> exportResourceProfiles otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
     ]
 

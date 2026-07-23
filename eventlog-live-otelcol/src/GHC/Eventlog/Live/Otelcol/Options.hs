@@ -2,14 +2,15 @@ module GHC.Eventlog.Live.Otelcol.Options (
   Options (..),
   MyDebugOptions (..),
   ServiceName (..),
-  OpenTelemetryCollectorOptions (..),
-  OpenTelemetryCollectorProtocol (..),
-  HttpProtobufOptions (..),
-  HttpHeader (..),
+  OtlpExporterOptions (..),
+  OtlpProtocol (..),
   options,
 ) where
 
+import Data.Char (toLower)
 import Data.Default (Default (..))
+import Data.Functor (void)
+import Data.List qualified as L
 import Data.Text qualified as T
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
@@ -27,7 +28,10 @@ import Network.GRPC.Common qualified as G
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
+import Options.Applicative.Help.Pretty qualified as OP
 import Paths_eventlog_live_otelcol qualified as EventlogLive
+import Text.ParserCombinators.ReadP (ReadP)
+import Text.ParserCombinators.ReadP qualified as P
 
 options :: O.ParserInfo Options
 options =
@@ -54,7 +58,7 @@ data Options = Options
   , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
-  , openTelemetryCollectorOptions :: OpenTelemetryCollectorOptions
+  , otlpExporterOptions :: OtlpExporterOptions String
   , controlOptions :: ControlOptions
   , myDebugOptions :: MyDebugOptions
   }
@@ -74,7 +78,7 @@ optionsParser =
     <*> verbosityParser
     <*> statsParser
     <*> O.optional configFileParser
-    <*> openTelemetryCollectorOptionsParser
+    <*> otlpExporterOptionsParser
     <*> controlOptionsParser
     <*> myDebugOptionsParser
 
@@ -151,126 +155,102 @@ ccDBPathParser =
 --------------------------------------------------------------------------------
 -- OpenTelemetry Collector configuration
 
-data OpenTelemetryCollectorOptions = OpenTelemetryCollectorOptions
-  { openTelemetryCollectorProtocol :: OpenTelemetryCollectorProtocol
-  , otelcolHost :: String
-  , maybeOtelcolPort :: Maybe Int
-  , maybeOtelcolAuthority :: Maybe String
-  , otelcolSsl :: Bool
-  , maybeOtelcolCertificateStore :: Maybe FilePath
-  , maybeOtelcolSslKeyLog :: Maybe G.SslKeyLog
-  , otelcolHeaders :: [HttpHeader]
+data OtlpExporterOptions a = OtlpExporterOptions
+  { otlpProtocol :: !OtlpProtocol
+  , otlpEndpoint :: !a
+  , otlpGrpcCertificateStore :: !(Maybe FilePath)
+  , otlpGrpcSslKeyLog :: !(Maybe G.SslKeyLog)
+  , otlpHttpHeaders :: !(Maybe [(String, String)])
   }
+  deriving stock (Functor, Foldable, Traversable)
 
-data OpenTelemetryCollectorProtocol
-  = OpenTelemetryCollectorProtocol'Grpc
-  | OpenTelemetryCollectorProtocol'HttpProtobuf
-  deriving (Eq, Show)
+otlpExporterOptionsParser :: O.Parser (OtlpExporterOptions String)
+otlpExporterOptionsParser =
+  OC.parserOptionGroup "OTLP Exporter Options" $
+    OtlpExporterOptions
+      <$> otlpProtocolParser
+      <*> otlpEndpointParser
+      <*> O.optional otlpGrpcCertificateStoreParser
+      <*> O.optional otlpGrpcSslKeyLogParser
+      <*> O.optional otlpHttpHeadersParser
 
-data HttpProtobufOptions = HttpProtobufOptions
-  { httpProtobufScheme :: String
-  , httpProtobufHost :: String
-  , httpProtobufPort :: Int
-  , httpProtobufHeaders :: [HttpHeader]
-  }
+data OtlpProtocol
+  = OtlpProtocolGrpc
+  | OtlpProtocolHttpProtobuf
   deriving (Show)
 
-data HttpHeader = HttpHeader
-  { httpHeaderName :: String
-  , httpHeaderValue :: String
-  }
-  deriving (Show)
+otlpProtocolParser :: O.Parser OtlpProtocol
+otlpProtocolParser =
+  O.option (O.maybeReader readOtlpProtocol) . mconcat $
+    [ O.long "otlp-protocol"
+    , O.helpDoc . Just . OP.vcat . fmap OP.pretty $
+        [ "The OTLP transport protocol to be used for all telemetry data (gRPC, HTTP/Protobuf)."
+        , "Default value: gRPC"
+        ]
+    , O.value OtlpProtocolGrpc
+    ]
+ where
+  readOtlpProtocol :: String -> Maybe OtlpProtocol
+  readOtlpProtocol protocol =
+    case map toLower protocol of
+      "grpc" -> Just OtlpProtocolGrpc
+      "http/protobuf" -> Just OtlpProtocolHttpProtobuf
+      _ -> Nothing
 
-openTelemetryCollectorOptionsParser :: O.Parser OpenTelemetryCollectorOptions
-openTelemetryCollectorOptionsParser =
-  OC.parserOptionGroup "OpenTelemetry Collector Server Options" $
-    OpenTelemetryCollectorOptions
-      <$> otelcolProtocolParser
-      <*> otelcolHostParser
-      <*> O.optional otelcolPortParser
-      <*> O.optional otelcolAuthorityParser
-      <*> O.switch (O.long "otelcol-ssl" <> O.help "Use SSL.")
-      <*> O.optional otelcolCertificateStoreParser
-      <*> O.optional otelcolSslKeyLogParser
-      <*> O.many otelcolHeaderParser
+otlpEndpointParser :: O.Parser String
+otlpEndpointParser =
+  O.strOption . mconcat $
+    [ O.long "otlp-endpoint"
+    , O.helpDoc . Just . OP.vcat . fmap OP.pretty $
+        [ "The OTLP endpoint URL for all telemetry data, with an optionally-specified port number."
+        , "Default value:"
+        , "  gRPC: http://localhost:4317"
+        , "  HTTP: http://localhost:4318"
+        , "Example:"
+        , "  gRPC: https://my-api-endpoint:443"
+        , "  HTTP: http://my-api-endpoint/"
+        ]
+    ]
 
-otelcolProtocolParser :: O.Parser OpenTelemetryCollectorProtocol
-otelcolProtocolParser =
-  O.option
-    ( O.eitherReader $ \case
-        "grpc" -> Right OpenTelemetryCollectorProtocol'Grpc
-        "http/protobuf" -> Right OpenTelemetryCollectorProtocol'HttpProtobuf
-        protocol -> Left $ "Unknown OpenTelemetry Collector protocol: " <> protocol
-    )
-    ( O.long "otelcol-protocol"
-        <> O.metavar "grpc|http/protobuf"
-        <> O.help "OpenTelemetry Collector protocol."
-        <> O.value OpenTelemetryCollectorProtocol'Grpc
-        <> O.showDefaultWith (const "grpc")
-    )
-
-otelcolHostParser :: O.Parser String
-otelcolHostParser =
+otlpGrpcCertificateStoreParser :: O.Parser FilePath
+otlpGrpcCertificateStoreParser =
   O.strOption
-    ( O.long "otelcol-host"
-        <> O.metavar "HOST"
-        <> O.help "Otelcol server hostname."
-    )
-
-otelcolPortParser :: O.Parser Int
-otelcolPortParser =
-  O.option
-    O.auto
-    ( O.long "otelcol-port"
-        <> O.metavar "PORT"
-        <> O.help "Otelcol server TCP port. Defaults to 4317 for gRPC and 4318 for HTTP/protobuf."
-    )
-
-otelcolAuthorityParser :: O.Parser String
-otelcolAuthorityParser =
-  O.strOption
-    ( O.long "otelcol-authority"
-        <> O.metavar "HOST"
-        <> O.help "Otelcol server authority."
-    )
-
-otelcolCertificateStoreParser :: O.Parser FilePath
-otelcolCertificateStoreParser =
-  O.strOption
-    ( O.long "otelcol-certificate-store"
+    ( O.long "otlp-grpc-certificate-store"
         <> O.metavar "FILE"
         <> O.help "Store for certificate validation."
     )
 
-otelcolHeaderParser :: O.Parser HttpHeader
-otelcolHeaderParser =
-  O.option
-    ( O.eitherReader $ \header ->
-        case break (== '=') header of
-          ("", _) -> Left "Header name must not be empty."
-          (_, "") -> Left "Header must have the form NAME=VALUE."
-          (httpHeaderName, _ : httpHeaderValue) -> Right HttpHeader{..}
-    )
-    ( O.long "otelcol-header"
-        <> O.metavar "NAME=VALUE"
-        <> O.help "Add an HTTP header for OTLP HTTP/protobuf. May be repeated."
-    )
-
-otelcolSslKeyLogParser :: O.Parser G.SslKeyLog
-otelcolSslKeyLogParser =
+otlpGrpcSslKeyLogParser :: O.Parser G.SslKeyLog
+otlpGrpcSslKeyLogParser =
   O.asum
     [ G.SslKeyLogPath
         <$> O.strOption
-          ( O.long "otelcol-ssl-key-log"
+          ( O.long "otlp-grpc-ssl-key-log"
               <> O.metavar "FILE"
               <> O.help "Use file to log SSL keys."
           )
     , O.flag'
         G.SslKeyLogFromEnv
-        ( O.long "otelcol-ssl-key-log-from-env"
+        ( O.long "otlp-grpc-ssl-key-log-from-env"
             <> O.help "Use SSLKEYLOGFILE to log SSL keys."
         )
     ]
+
+otlpHttpHeadersParser :: O.Parser [(String, String)]
+otlpHttpHeadersParser =
+  O.option (O.maybeReader readHeaders) . mconcat $
+    [ O.long "otlp-http-headers"
+    , O.help "A list of headers to apply to all outgoing data."
+    ]
+
+readHeaders :: String -> Maybe [(String, String)]
+readHeaders = runReadP pHeaders
+ where
+  pHeaders :: ReadP [(String, String)]
+  pHeaders = P.many (pHeader <* (void (P.char ',') P.<++ P.eof))
+
+  pHeader :: ReadP (String, String)
+  pHeader = (,) <$> P.munch1 (/= '=') <*> P.munch1 (/= ',')
 
 --------------------------------------------------------------------------------
 -- Debug Options
@@ -286,3 +266,15 @@ myDebugOptionsParser =
     MyDebugOptions
       <$> maybeMyEventlogSocketParser
       <*> maybeMyGhcDebugSocketParser
+
+--------------------------------------------------------------------------------
+-- Internal helpers
+--------------------------------------------------------------------------------
+
+{- |
+Internal helper.
+
+Run a ReadP parser.
+-}
+runReadP :: ReadP a -> String -> Maybe a
+runReadP p = fmap fst . L.find (null . snd) . P.readP_to_S p

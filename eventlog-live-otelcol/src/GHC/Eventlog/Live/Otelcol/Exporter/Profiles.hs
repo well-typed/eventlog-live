@@ -17,7 +17,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OpenTelemetryExporter (..), export)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
@@ -59,7 +59,7 @@ instance Exception RejectedProfilesError where
 -- OpenTelemetry gRPC Exporter for Profiles
 
 exportResourceProfiles ::
-  OpenTelemetryExporter ->
+  OtlpExporter ->
   ProcessT IO (Tick OPS.ExportProfilesServiceRequest) (Tick ExportProfileResult)
 exportResourceProfiles exporter =
   construct $ go False
