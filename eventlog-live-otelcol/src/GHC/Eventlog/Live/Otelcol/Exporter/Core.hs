@@ -26,6 +26,7 @@ import Data.Maybe (fromMaybe)
 import Data.ProtoLens.Encoding qualified as Proto
 import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
+import Data.Word (Word16)
 import GHC.Eventlog.Live.Otelcol.Options (OtlpExporterOptions (..), OtlpProtocol (..))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -37,8 +38,8 @@ import Network.HTTP.Client qualified as H
 import Network.HTTP.Client.TLS qualified as H
 import Network.HTTP.Types.Header qualified as HTTP
 import Network.HTTP.Types.Status qualified as HTTP
-import Network.URL (URL (url_path))
-import Network.URL qualified as URL
+import Network.URI qualified as URI
+import Text.Read (readMaybe)
 
 --------------------------------------------------------------------------------
 -- OTLP Exporter
@@ -54,17 +55,17 @@ Construct an t`OtlpExporter` from t`OtlpExporterOptions`.
 withOtlpExporter :: OtlpExporterOptions OtlpEndpoint -> (OtlpExporter -> IO a) -> IO a
 withOtlpExporter options action =
   case options of
-    OtlpExporterOptions{otlpEndpoint = Left otlpEndpointGrpc, ..} -> do
-      let options' = OtlpExporterOptions{otlpEndpoint = otlpEndpointGrpc, ..}
+    OtlpExporterOptions{otlpEndpoint = Left otlpGrpcEndpoint, ..} -> do
+      let options' = OtlpExporterOptions{otlpEndpoint = otlpGrpcEndpoint, ..}
       withOtlpGrpcExporter options' $ action . OtlpExporterGrpc
-    OtlpExporterOptions{otlpEndpoint = Right otlpEndpointHttp, ..} -> do
-      let options' = OtlpExporterOptions{otlpEndpoint = otlpEndpointHttp, ..}
+    OtlpExporterOptions{otlpEndpoint = Right otlpHttpEndpoint, ..} -> do
+      let options' = OtlpExporterOptions{otlpEndpoint = otlpHttpEndpoint, ..}
       withOtlpHttpProtobufExporter options' $ action . OtlpExporterHttpProtobuf
 
 {- |
 The options for an OTLP endpoint.
 -}
-type OtlpEndpoint = Either OtlpEndpointGrpc OtlpEndpointHttp
+type OtlpEndpoint = Either OtlpGrpcEndpoint OtlpHttpEndpoint
 
 {- |
 Parse the OTLP endpoint from a t`String` to an t`OtlpEndpoint`.
@@ -95,50 +96,41 @@ parseOtlpEndpoint = go True
  where
   go :: Bool -> OtlpProtocol -> String -> Either String OtlpEndpoint
   go retry otlpProtocol url =
-    case URL.importURL url of
-      Just URL.URL{url_type = URL.Absolute URL.Host{..}, ..} ->
+    case URI.parseURI url of
+      Just URI.URI{..} ->
         case otlpProtocol of
           OtlpProtocolGrpc
-            | not (null url_path) ->
-                Left $ "The grpc protocol does not support an URL path, found: " <> URL.encString False URL.ok_path url_path
-            | not (null url_params) ->
-                Left $ "The grpc protocol does not support URL parameters, found: " <> URL.exportParams url_params
-            | URL.HTTP secure <- protocol ->
-                Right . Left $
-                  OtlpEndpointGrpc
-                    { otlpGrpcHost = host
-                    , otlpGrpcPort = fromMaybe 4317 port
-                    , otlpGrpcSecure = secure
-                    }
+            | uriScheme `elem` ["http:", "https:"]
+            , null uriPath
+            , null uriQuery
+            , null uriFragment -> do
+                let !host = maybe "localhost" (.uriRegName) uriAuthority
+                let !port = fromMaybe 4317 (readMaybe @Word16 . drop 1 . (.uriPort) =<< uriAuthority)
+                let !secure = uriScheme == "https:"
+                pure $ Left OtlpGrpcEndpoint{..}
             | otherwise ->
-                Left $ "The grpc protocol does not support " <> exportProt protocol
+                Left $ "The gRPC protocol only supports HTTP and HTTPS and does not support an URI path, query, or fragment, found: " <> url
           OtlpProtocolHttpProtobuf
-            | URL.HTTP secure <- protocol ->
-                Right . Right $
-                  OtlpEndpointHttp
-                    { otlpHttpHost = host
-                    , otlpHttpPort = fromMaybe 4318 port
-                    , otlpHttpSecure = secure
-                    , otlpHttpPath = url_path
-                    , otlpHttpParams = url_params
-                    }
+            | uriScheme `elem` ["http:", "https:"]
+            , null uriQuery
+            , null uriFragment -> do
+                let !host = maybe "localhost" (.uriRegName) uriAuthority
+                let !port = fromMaybe 4317 (readMaybe @Word16 . drop 1 . (.uriPort) =<< uriAuthority)
+                let !baseUrl =
+                      show
+                        URI.nullURI
+                          { URI.uriScheme = uriScheme
+                          , URI.uriAuthority = Just URI.URIAuth{uriUserInfo = "", uriRegName = host, uriPort = show port}
+                          , URI.uriPath = uriPath
+                          }
+                pure $ Right OtlpHttpEndpoint{..}
             | otherwise ->
-                Left $ "The http/protobuf protocol does not support " <> exportProt protocol
-      Just URL.URL{url_type = URL.PathRelative{}}
+                Left $ "The HTTP/Protobuf protocol only supports HTTP and HTTPS and does not support an URI query or fragment, found: " <> url
+      Nothing
         | retry ->
-            go False otlpProtocol ("http://" <> url)
-      Just URL.URL{} ->
-        Left $ "Endpoint must be absolute URL, found " <> url
-      Nothing ->
-        Left $ "Could not parse url " <> url
-
-  exportProt :: URL.Protocol -> String
-  exportProt prot = case prot of
-    URL.HTTP True -> "https"
-    URL.HTTP False -> "http"
-    URL.FTP True -> "ftps"
-    URL.FTP False -> "ftp"
-    URL.RawProt s -> s
+            go False otlpProtocol $ "http://" <> url
+        | otherwise ->
+            Left $ "Could not parse url " <> url
 
 export ::
   forall serv meth.
@@ -168,10 +160,10 @@ newtype OtlpGrpcExporter = OtlpGrpcExporter
 {- |
 The options for an OTLP gRPC endpoint.
 -}
-data OtlpEndpointGrpc = OtlpEndpointGrpc
-  { otlpGrpcHost :: !String
-  , otlpGrpcPort :: !Integer
-  , otlpGrpcSecure :: !Bool
+data OtlpGrpcEndpoint = OtlpGrpcEndpoint
+  { host :: !String
+  , port :: !Word16
+  , secure :: !Bool
   }
 
 type CanExportViaGrpc serv meth =
@@ -180,16 +172,16 @@ type CanExportViaGrpc serv meth =
   , G.RequestMetadata (Protobuf serv meth) ~ G.NoMetadata
   )
 
-withOtlpGrpcExporter :: OtlpExporterOptions OtlpEndpointGrpc -> (OtlpGrpcExporter -> IO a) -> IO a
-withOtlpGrpcExporter OtlpExporterOptions{otlpEndpoint = OtlpEndpointGrpc{..}, ..} action =
+withOtlpGrpcExporter :: OtlpExporterOptions OtlpGrpcEndpoint -> (OtlpGrpcExporter -> IO a) -> IO a
+withOtlpGrpcExporter OtlpExporterOptions{otlpEndpoint = OtlpGrpcEndpoint{..}, ..} action =
   G.withConnection G.def server $ \connection -> action OtlpGrpcExporter{..}
  where
   server :: G.Server
   server
-    | otlpGrpcSecure = G.ServerSecure serverValidation sslKeyLog address
+    | secure = G.ServerSecure serverValidation sslKeyLog address
     | otherwise = G.ServerInsecure address
 
-  address = G.Address otlpGrpcHost (fromIntegral otlpGrpcPort) Nothing
+  address = G.Address host (fromIntegral port) Nothing
   sslKeyLog = fromMaybe G.SslKeyLogNone otlpGrpcSslKeyLog
   serverValidation = G.ValidateServer $ maybe G.certStoreFromSystem G.certStoreFromPath otlpGrpcCertificateStore
 
@@ -209,12 +201,8 @@ exportGrpc grpcExporter input =
 {- |
 The options for an OTLP HTTP/Protobuf endpoint.
 -}
-data OtlpEndpointHttp = OtlpEndpointHttp
-  { otlpHttpHost :: !String
-  , otlpHttpPort :: !Integer
-  , otlpHttpSecure :: !Bool
-  , otlpHttpPath :: !String
-  , otlpHttpParams :: ![(String, String)]
+newtype OtlpHttpEndpoint = OtlpHttpEndpoint
+  { baseUrl :: String
   }
   deriving (Show)
 
@@ -254,19 +242,14 @@ Internal helper.
 
 Run an action with an t`OtlpHttpProtobufExporter`.
 -}
-withOtlpHttpProtobufExporter :: OtlpExporterOptions OtlpEndpointHttp -> (OtlpHttpProtobufExporter -> IO a) -> IO a
-withOtlpHttpProtobufExporter OtlpExporterOptions{otlpEndpoint = OtlpEndpointHttp{..}, ..} action = do
+withOtlpHttpProtobufExporter :: OtlpExporterOptions OtlpHttpEndpoint -> (OtlpHttpProtobufExporter -> IO a) -> IO a
+withOtlpHttpProtobufExporter OtlpExporterOptions{otlpEndpoint = OtlpHttpEndpoint{..}, ..} action = do
   -- Create an HTTP manager.
   manager <- H.newManager H.tlsManagerSettings
-  -- Create the HTTP baseUrl.
-  let baseUrlType = URL.Absolute URL.Host{protocol = URL.HTTP otlpHttpSecure, host = otlpHttpHost, port = Just otlpHttpPort}
-  let baseUrl = URL.URL{url_type = baseUrlType, url_path = otlpHttpPath, url_params = otlpHttpParams}
   -- Create the HTTP headers.
   let headers = [(CI.mk (BSC.pack name), BSC.pack value) | (name, value) <- fromMaybe [] otlpHttpHeaders]
-  -- Create the HTTP/Protobuf exporter.
-  let exporter = OtlpHttpProtobufExporter{manager = manager, baseUrl = URL.exportURL baseUrl, headers = headers}
   -- Run the action.
-  action exporter
+  action OtlpHttpProtobufExporter{..}
 
 class
   ( Message (MethodInput serv meth)
