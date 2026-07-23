@@ -16,7 +16,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OpenTelemetryExporter (..), export)
+import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
@@ -65,7 +65,7 @@ instance Exception RejectedMetricsError where
 -- OpenTelemetry gRPC Exporter for Metrics
 
 exportResourceMetrics ::
-  OpenTelemetryExporter ->
+  OtlpExporter ->
   ProcessT IO (Tick OMS.ExportMetricsServiceRequest) (Tick ExportMetricsResult)
 exportResourceMetrics exporter = construct $ go False
  where

@@ -2,9 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Otelcol.Exporter.Core (
-  OpenTelemetryExporter (..),
-  validateOpenTelemetryCollectorOptions,
-  withOpenTelemetryExporter,
+  OtlpExporter (..),
+  parseOtlpExporterOptions,
+  withOtlpExporter,
   export,
 
   -- * Export via gRPC
@@ -12,22 +12,21 @@ module GHC.Eventlog.Live.Otelcol.Exporter.Core (
 
   -- * Export via HTTP/Protobuf
   CanExportViaHttpProtobuf (..),
-  HttpProtobufError (..),
+  HttpError (..),
 ) where
 
 import Control.Exception (Exception (..), throwIO)
-import Control.Monad (forM_)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.ByteString.Lazy qualified as BSL
 import Data.CaseInsensitive qualified as CI
-import Data.Functor (void)
+import Data.List qualified as L
 import Data.Maybe (fromMaybe)
 import Data.ProtoLens.Encoding qualified as Proto
 import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
-import GHC.Eventlog.Live.Otelcol.Options (HttpHeader (..), HttpProtobufOptions (..), OpenTelemetryCollectorOptions (..), OpenTelemetryCollectorProtocol (..))
+import GHC.Eventlog.Live.Otelcol.Options (OtlpExporterOptions (..), OtlpProtocol (..))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
@@ -38,87 +37,108 @@ import Network.HTTP.Client qualified as H
 import Network.HTTP.Client.TLS qualified as H
 import Network.HTTP.Types.Header qualified as HTTP
 import Network.HTTP.Types.Status qualified as HTTP
-import Text.Printf (printf)
+import Network.URL (URL (url_path))
+import Network.URL qualified as URL
 
 --------------------------------------------------------------------------------
 -- OTLP Exporter
 --------------------------------------------------------------------------------
 
-data OpenTelemetryExporter
-  = OpenTelemetryExporter'Grpc GrpcExporter
-  | OpenTelemetryExporter'HttpProtobuf HttpProtobufExporter
+data OtlpExporter
+  = OtlpExporterGrpc !OtlpGrpcExporter
+  | OtlpExporterHttpProtobuf !OtlpHttpProtobufExporter
 
 {- |
-Construct an t`OpenTelemetryExporter` from t`OpenTelemetryCollectorOptions`.
+Construct an t`OtlpExporter` from t`OtlpExporterOptions`.
 -}
-withOpenTelemetryExporter :: OpenTelemetryCollectorOptions -> (OpenTelemetryExporter -> IO a) -> IO a
-withOpenTelemetryExporter options action =
-  case toExporterOptions options of
-    Left err ->
-      ioError (userError err)
-    Right (ExporterOptions'Grpc server) ->
-      G.withConnection G.def server $ \conn ->
-        action (OpenTelemetryExporter'Grpc (GrpcExporter conn))
-    Right (ExporterOptions'HttpProtobuf httpProtobufOptions) -> do
-      manager <- H.newManager H.tlsManagerSettings
-      action (OpenTelemetryExporter'HttpProtobuf $ makeHttpProtobufExporter manager httpProtobufOptions)
+withOtlpExporter :: OtlpExporterOptions OtlpEndpoint -> (OtlpExporter -> IO a) -> IO a
+withOtlpExporter options action =
+  case options of
+    OtlpExporterOptions{otlpEndpoint = Left otlpEndpointGrpc, ..} -> do
+      let options' = OtlpExporterOptions{otlpEndpoint = otlpEndpointGrpc, ..}
+      withOtlpGrpcExporter options' $ action . OtlpExporterGrpc
+    OtlpExporterOptions{otlpEndpoint = Right otlpEndpointHttp, ..} -> do
+      let options' = OtlpExporterOptions{otlpEndpoint = otlpEndpointHttp, ..}
+      withOtlpHttpProtobufExporter options' $ action . OtlpExporterHttpProtobuf
 
 {- |
-Internal helper.
-
-This is the result of successfully interpreting t`OpenTelemetryCollectorOptions` as either gRPC or HTTP/Protobuf options.
+The options for an OTLP endpoint.
 -}
-data ExporterOptions
-  = ExporterOptions'Grpc G.Server
-  | ExporterOptions'HttpProtobuf HttpProtobufOptions
+type OtlpEndpoint = Either OtlpEndpointGrpc OtlpEndpointHttp
 
 {- |
-Check that the t`OpenTelemetryCollectorOptions` options are consistent.
+Parse the OTLP endpoint from a t`String` to an t`OtlpEndpoint`.
 -}
-validateOpenTelemetryCollectorOptions :: OpenTelemetryCollectorOptions -> Either String ()
-validateOpenTelemetryCollectorOptions = void . toExporterOptions
+parseOtlpExporterOptions :: OtlpExporterOptions String -> Either String (OtlpExporterOptions OtlpEndpoint)
+parseOtlpExporterOptions OtlpExporterOptions{..} = do
+  otlpEndpoint' <- parseOtlpEndpoint otlpProtocol otlpEndpoint
+  let !options' = OtlpExporterOptions{otlpEndpoint = otlpEndpoint', ..}
+  case otlpProtocol of
+    OtlpProtocolGrpc
+      | Just headers <- otlpHttpHeaders
+      , not (null headers) -> do
+          let showHeaders = L.intercalate "," . map (\(name, value) -> name <> "=" <> value)
+          Left $ "The grpc protocol does not support additional HTTP headers, found " <> showHeaders headers
+    OtlpProtocolHttpProtobuf
+      | Just _sslKeyLog <- otlpGrpcSslKeyLog ->
+          Left $ "The http/protobuf protocol does not support the SSL key log."
+    OtlpProtocolHttpProtobuf
+      | Just certificateStore <- otlpGrpcCertificateStore ->
+          Left $ "The http/protobuf protocol does not support the certificate store, found " <> certificateStore
+    _otherwise -> pure options'
 
 {- |
-Internal helper.
-
-Interpret t`OpenTelemetryCollectorOptions` as either gRPC or HTTP/Protobuf options.
+Parse an OTLP endpoint string as an t`OtlpEndpoint` depending on the t`OtlpProtocol`.
 -}
-toExporterOptions :: OpenTelemetryCollectorOptions -> Either String ExporterOptions
-toExporterOptions OpenTelemetryCollectorOptions{..} =
-  case openTelemetryCollectorProtocol of
-    OpenTelemetryCollectorProtocol'Grpc -> do
-      case otelcolHeaders of
-        [] -> Right ()
-        _ : _ -> Left "--otelcol-header is only supported with --otelcol-protocol=http/protobuf."
-      Right . ExporterOptions'Grpc $
-        makeGrpcServer
-          (G.Address otelcolHost (maybe 4317 fromIntegral maybeOtelcolPort) maybeOtelcolAuthority)
-          otelcolSsl
-          (makeGrpcServerValidation maybeOtelcolCertificateStore)
-          (fromMaybe G.SslKeyLogNone maybeOtelcolSslKeyLog)
-    OpenTelemetryCollectorProtocol'HttpProtobuf -> do
-      forM_ maybeOtelcolAuthority $ \_ ->
-        Left "--otelcol-authority is only supported with --otelcol-protocol=grpc."
-      forM_ maybeOtelcolCertificateStore $ \_ ->
-        Left "--otelcol-certificate-store is only supported with --otelcol-protocol=grpc."
-      forM_ maybeOtelcolSslKeyLog $ \_ ->
-        Left "--otelcol-ssl-key-log and --otelcol-ssl-key-log-from-env are only supported with --otelcol-protocol=grpc."
-      pure . ExporterOptions'HttpProtobuf $
-        HttpProtobufOptions
-          { httpProtobufScheme = if otelcolSsl then "https" else "http"
-          , httpProtobufHost = otelcolHost
-          , httpProtobufPort = fromMaybe 4318 maybeOtelcolPort
-          , httpProtobufHeaders = otelcolHeaders
-          }
+parseOtlpEndpoint :: OtlpProtocol -> String -> Either String OtlpEndpoint
+parseOtlpEndpoint = go True
  where
-  makeGrpcServer :: G.Address -> Bool -> G.ServerValidation -> G.SslKeyLog -> G.Server
-  makeGrpcServer address ssl serverValidation sslKeyLog
-    | ssl = G.ServerSecure serverValidation sslKeyLog address
-    | otherwise = G.ServerInsecure address
+  go :: Bool -> OtlpProtocol -> String -> Either String OtlpEndpoint
+  go retry otlpProtocol url =
+    case URL.importURL url of
+      Just URL.URL{url_type = URL.Absolute URL.Host{..}, ..} ->
+        case otlpProtocol of
+          OtlpProtocolGrpc
+            | not (null url_path) ->
+                Left $ "The grpc protocol does not support an URL path, found: " <> URL.encString False URL.ok_path url_path
+            | not (null url_params) ->
+                Left $ "The grpc protocol does not support URL parameters, found: " <> URL.exportParams url_params
+            | URL.HTTP secure <- protocol ->
+                Right . Left $
+                  OtlpEndpointGrpc
+                    { otlpGrpcHost = host
+                    , otlpGrpcPort = fromMaybe 4317 port
+                    , otlpGrpcSecure = secure
+                    }
+            | otherwise ->
+                Left $ "The grpc protocol does not support " <> exportProt protocol
+          OtlpProtocolHttpProtobuf
+            | URL.HTTP secure <- protocol ->
+                Right . Right $
+                  OtlpEndpointHttp
+                    { otlpHttpHost = host
+                    , otlpHttpPort = fromMaybe 4318 port
+                    , otlpHttpSecure = secure
+                    , otlpHttpPath = url_path
+                    , otlpHttpParams = url_params
+                    }
+            | otherwise ->
+                Left $ "The http/protobuf protocol does not support " <> exportProt protocol
+      Just URL.URL{url_type = URL.PathRelative{}}
+        | retry ->
+            go False otlpProtocol ("http://" <> url)
+      Just URL.URL{} ->
+        Left $ "Endpoint must be absolute URL, found " <> url
+      Nothing ->
+        Left $ "Could not parse url " <> url
 
-  makeGrpcServerValidation :: Maybe FilePath -> G.ServerValidation
-  makeGrpcServerValidation =
-    G.ValidateServer . maybe G.certStoreFromSystem G.certStoreFromPath
+  exportProt :: URL.Protocol -> String
+  exportProt prot = case prot of
+    URL.HTTP True -> "https"
+    URL.HTTP False -> "http"
+    URL.FTP True -> "ftps"
+    URL.FTP False -> "ftp"
+    URL.RawProt s -> s
 
 export ::
   forall serv meth.
@@ -126,22 +146,32 @@ export ::
   , CanExportViaHttpProtobuf serv meth
   ) =>
   -- | The HTTP/Protobuf exporter.
-  OpenTelemetryExporter ->
+  OtlpExporter ->
   -- | The request message.
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
 export = \case
-  OpenTelemetryExporter'Grpc grpcExporter ->
-    sendGrpc @serv @meth grpcExporter
-  OpenTelemetryExporter'HttpProtobuf httpProtobufExporter ->
-    sendHttpProtobuf @serv @meth httpProtobufExporter
+  OtlpExporterGrpc exporter -> exportGrpc @serv @meth exporter
+  OtlpExporterHttpProtobuf exporter -> exportHttpProtobuf @serv @meth exporter
 
 --------------------------------------------------------------------------------
 -- OTLP gRPC Exporter
 --------------------------------------------------------------------------------
 
-newtype GrpcExporter = GrpcExporter
+{- |
+An opaque OTLP gRPC exporter.
+-}
+newtype OtlpGrpcExporter = OtlpGrpcExporter
   { connection :: G.Connection
+  }
+
+{- |
+The options for an OTLP gRPC endpoint.
+-}
+data OtlpEndpointGrpc = OtlpEndpointGrpc
+  { otlpGrpcHost :: !String
+  , otlpGrpcPort :: !Integer
+  , otlpGrpcSecure :: !Bool
   }
 
 type CanExportViaGrpc serv meth =
@@ -150,69 +180,93 @@ type CanExportViaGrpc serv meth =
   , G.RequestMetadata (Protobuf serv meth) ~ G.NoMetadata
   )
 
-sendGrpc ::
+withOtlpGrpcExporter :: OtlpExporterOptions OtlpEndpointGrpc -> (OtlpGrpcExporter -> IO a) -> IO a
+withOtlpGrpcExporter OtlpExporterOptions{otlpEndpoint = OtlpEndpointGrpc{..}, ..} action =
+  G.withConnection G.def server $ \connection -> action OtlpGrpcExporter{..}
+ where
+  server :: G.Server
+  server
+    | otlpGrpcSecure = G.ServerSecure serverValidation sslKeyLog address
+    | otherwise = G.ServerInsecure address
+
+  address = G.Address otlpGrpcHost (fromIntegral otlpGrpcPort) Nothing
+  sslKeyLog = fromMaybe G.SslKeyLogNone otlpGrpcSslKeyLog
+  serverValidation = G.ValidateServer $ maybe G.certStoreFromSystem G.certStoreFromPath otlpGrpcCertificateStore
+
+exportGrpc ::
   forall serv meth.
   (CanExportViaGrpc serv meth) =>
-  GrpcExporter ->
+  OtlpGrpcExporter ->
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
-sendGrpc grpcExporter input =
+exportGrpc grpcExporter input =
   G.getProto <$> G.nonStreaming grpcExporter.connection (G.rpc @(G.Protobuf serv meth)) (G.Proto input)
 
 --------------------------------------------------------------------------------
 -- OTLP HTTP/Protobuf Exporter
 --------------------------------------------------------------------------------
 
-data HttpProtobufExporter = HttpProtobufExporter
+{- |
+The options for an OTLP HTTP/Protobuf endpoint.
+-}
+data OtlpEndpointHttp = OtlpEndpointHttp
+  { otlpHttpHost :: !String
+  , otlpHttpPort :: !Integer
+  , otlpHttpSecure :: !Bool
+  , otlpHttpPath :: !String
+  , otlpHttpParams :: ![(String, String)]
+  }
+  deriving (Show)
+
+data OtlpHttpProtobufExporter = OtlpHttpProtobufExporter
   { manager :: H.Manager
   , baseUrl :: String
   , headers :: HTTP.RequestHeaders
   }
 
-data HttpProtobufError
-  = HttpProtobufStatusError
+data HttpError
+  = HttpStatusError
       { statusCode :: Int
       , statusMessage :: ByteString
       , responseBody :: ByteString
       }
-  | HttpProtobufDecodeError
+  | HttpDecodeError
       { errorMessage :: String
       }
   deriving (Show)
 
-instance Exception HttpProtobufError where
-  displayException :: HttpProtobufError -> String
+instance Exception HttpError where
+  displayException :: HttpError -> String
   displayException = \case
-    HttpProtobufStatusError{..} ->
-      printf
-        "Error: OpenTelemetry Collector HTTP/Protobuf endpoint returned status %d %s with body: %s"
-        statusCode
-        (BSC.unpack statusMessage)
-        (BSC.unpack responseBody)
-    HttpProtobufDecodeError{..} ->
-      "Error: Could not decode OpenTelemetry Collector HTTP/Protobuf response: " <> errorMessage
-
-{- |
-Internal helper.
--}
-makeHttpProtobufExporter :: H.Manager -> HttpProtobufOptions -> HttpProtobufExporter
-makeHttpProtobufExporter manager HttpProtobufOptions{..} =
-  HttpProtobufExporter
-    { manager = manager
-    , baseUrl = httpProtobufScheme <> "://" <> httpProtobufHost <> ":" <> show httpProtobufPort
-    , headers = makeRequestHeaders httpProtobufHeaders
-    }
+    HttpStatusError{..} ->
+      "OpenTelemetry Collector HTTP/Protobuf endpoint returned status "
+        <> show statusCode
+        <> " "
+        <> BSC.unpack statusMessage
+        <> " with body: "
+        <> BSC.unpack responseBody
+    HttpDecodeError{..} ->
+      "Could not decode OpenTelemetry Collector HTTP/Protobuf response: "
+        <> errorMessage
 
 {- |
 Internal helper.
 
-Convert a list of t`HttpHeader` headers to `HTTP.RequestHeaders`.
+Run an action with an t`OtlpHttpProtobufExporter`.
 -}
-makeRequestHeaders :: [HttpHeader] -> HTTP.RequestHeaders
-makeRequestHeaders httpHeaders =
-  [ (CI.mk (BSC.pack httpHeaderName), BSC.pack httpHeaderValue)
-  | HttpHeader{..} <- httpHeaders
-  ]
+withOtlpHttpProtobufExporter :: OtlpExporterOptions OtlpEndpointHttp -> (OtlpHttpProtobufExporter -> IO a) -> IO a
+withOtlpHttpProtobufExporter OtlpExporterOptions{otlpEndpoint = OtlpEndpointHttp{..}, ..} action = do
+  -- Create an HTTP manager.
+  manager <- H.newManager H.tlsManagerSettings
+  -- Create the HTTP baseUrl.
+  let baseUrlType = URL.Absolute URL.Host{protocol = URL.HTTP otlpHttpSecure, host = otlpHttpHost, port = Just otlpHttpPort}
+  let baseUrl = URL.URL{url_type = baseUrlType, url_path = otlpHttpPath, url_params = otlpHttpParams}
+  -- Create the HTTP headers.
+  let headers = [(CI.mk (BSC.pack name), BSC.pack value) | (name, value) <- fromMaybe [] otlpHttpHeaders]
+  -- Create the HTTP/Protobuf exporter.
+  let exporter = OtlpHttpProtobufExporter{manager = manager, baseUrl = URL.exportURL baseUrl, headers = headers}
+  -- Run the action.
+  action exporter
 
 class
   ( Message (MethodInput serv meth)
@@ -225,15 +279,15 @@ class
 {- |
 Send a Protobuf message over an HTTP connection.
 -}
-sendHttpProtobuf ::
+exportHttpProtobuf ::
   forall serv meth.
   (CanExportViaHttpProtobuf serv meth) =>
   -- | The HTTP/Protobuf exporter.
-  HttpProtobufExporter ->
+  OtlpHttpProtobufExporter ->
   -- | The request message.
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
-sendHttpProtobuf HttpProtobufExporter{..} req = do
+exportHttpProtobuf OtlpHttpProtobufExporter{..} req = do
   baseRequest <- H.parseRequest (baseUrl <> apiPath @serv @meth)
   let request =
         baseRequest
@@ -253,7 +307,7 @@ sendHttpProtobuf HttpProtobufExporter{..} req = do
     then decodeResponseBody body
     else
       throwIO
-        HttpProtobufStatusError
+        HttpStatusError
           { statusCode = HTTP.statusCode status
           , statusMessage = HTTP.statusMessage status
           , responseBody = body
@@ -269,5 +323,5 @@ decodeResponseBody body
   | BS.null body = pure defMessage
   | otherwise =
       case Proto.decodeMessage body of
-        Left errorMessage -> throwIO HttpProtobufDecodeError{..}
+        Left errorMessage -> throwIO HttpDecodeError{..}
         Right msg -> pure msg
