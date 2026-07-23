@@ -55,7 +55,7 @@ echo 'Start eventlog-live-otelcol (for oddball)' && \
 		--eventlog-socket-port '$GHC_EVENTLOG_INET_PORT' \
 	    -hT \
 		--eventlog-flush-interval=1 \
-	    --otelcol-host=localhost \
+	    --otlp-endpoint=localhost \
 		--control \
 		--control-port 30719 \
 		--control-cors-ignore-failure
