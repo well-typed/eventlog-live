@@ -337,7 +337,7 @@ withEventlogLiveOtelcol eventlogLiveOtelcolOptions action = do
   -- Configure the otelcol socket.
   let OtlpServerInfo{..} = ?otlpServerInfo
   let otelcolArgs =
-        ["--otelcol-host=" <> host, "--otelcol-port=" <> show port]
+        ["--otlp-endpoint=" <> host <> ":" <> show port]
 
   -- Create the temporary configuration file, if needed.
   withTempConfigFile eventlogLiveOtelcolOptions.maybeConfigBody $ \configArgs -> do
