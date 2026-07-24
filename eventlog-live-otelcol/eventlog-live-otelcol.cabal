@@ -3,7 +3,10 @@ name: eventlog-live-otelcol
 version: 0.7.0.0
 synopsis: Stream eventlog data to the OpenTelemetry Collector.
 description:
-  This executable supports live streaming of eventlog data into the OpenTelemetry Collector.
+  This executable collects telemetry data from any Haskell application
+  and sends it over the OpenTelemetry protocol.
+
+  For more information, see [the README](https://github.com/well-typed/eventlog-live#readme).
 
 license: BSD-3-Clause
 license-file: LICENSE
