@@ -18,16 +18,20 @@ processors:
       description: The current heap size, calculated by the allocated number of blocks.
       aggregate: 1s
       export: 5s
+    # 2026-07-24:
+    # Prometheus does not appear to support sums with a delta aggregration temporality.
     capability_usage:
       name: ghc_eventlog_CapabilityUsageDuration
       description: The duration of each capability usage span.
       aggregate: 1s
-      export: 5s
+      export: false
+    # 2026-07-24:
+    # Prometheus does not appear to support sums with a delta aggregration temporality.
     heap_allocated:
       name: ghc_eventlog_HeapAllocated
       description: The size of a newly allocated chunk of heap.
       aggregate: 1s
-      export: 5s
+      export: false
     heap_live:
       name: ghc_eventlog_HeapLive
       description: The current heap size, calculated by the allocated number of megablocks.
