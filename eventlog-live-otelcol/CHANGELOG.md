@@ -1,5 +1,26 @@
 ### 0.7.0.0
 
+- Add support for OTLP over HTTP/Protobuf. To use HTTP/Protobuf, use:
+  - `--otlp-protocol=http/protobuf`
+  - `--otlp-endpoint=http://my-http-endpoint:my-http-port`
+
+  See `demo-http-protobuf` for a demo that uses `eventlog-live-otelcol` to
+  sends data directly to Prometheus over HTTP/Protobuf.
+
+- **BREAKING**: Rename `--otelcol` command-line options to `--otlp`, and
+  change the separate `host`/`port`/`ssl` options to `--otlp-endpoint`,
+  which accepts an URL similar to the OTLP environment variables.
+
+  Moreover, the `certificate-store` and `ssl-key-log`/`ssl-key-log-from-env`
+  options are now prefixed by `--otlp-grpc-`, e.g., `--otlp-grpc-ssl-key-log`.
+
+- **BREAKING**: Rename `profiles` processors to `call_stack_profile` and
+  `cost_centre_stack_profile`. These processors now respect the name given
+  in the configuration file, e.g., using the default configuration, these
+  profiles will be available in Pyroscope as...
+  - `ghc_eventlog_CallStackProfile:cpu:samples`
+  - `ghc_eventlog_CostCentreStackProfile:cpu:samples`
+
 - **BREAKING**: Change default semantics of the configuration file.
 
   Starting from version 0.7.0.0, if the key for any specific processor
