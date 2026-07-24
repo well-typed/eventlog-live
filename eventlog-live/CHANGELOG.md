@@ -1,3 +1,9 @@
+### 0.6.0.0
+
+- Add support for `ipedb` databases for IPE and cost-centre information.
+- **BREAKING**: Refactor profiles processors.
+- **BREAKING**: Use `InfoProv`, `CostCentre`, and `SrcLoc` types from `ipedb`.
+
 ### 0.5.0.0
 
 - Overhaul documentation for `GHC.Eventlog.Live.Machine.Core`.
