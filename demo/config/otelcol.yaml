@@ -9,8 +9,6 @@ receivers:
         endpoint: "0.0.0.0:4318"
 
 exporters:
-  debug:
-    verbosity: detailed
   otlp/tempo:
     endpoint: "tempo:24317"
     tls:
@@ -30,13 +28,13 @@ service:
   pipelines:
     logs:
       receivers: [otlp]
-      exporters: [debug, otlphttp/loki]
+      exporters: [otlphttp/loki]
     metrics:
       receivers: [otlp]
-      exporters: [debug, prometheus]
+      exporters: [prometheus]
     traces:
       receivers: [otlp]
-      exporters: [debug, otlp/tempo]
+      exporters: [otlp/tempo]
     profiles:
       receivers: [otlp]
-      exporters: [debug, otlp/pyroscope]
+      exporters: [otlp/pyroscope]
