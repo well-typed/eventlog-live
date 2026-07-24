@@ -16,6 +16,7 @@ module GHC.Eventlog.Live.Otelcol.Exporter.Core (
 ) where
 
 import Control.Exception (Exception (..), throwIO)
+import Control.Monad ((<=<))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
@@ -105,7 +106,7 @@ parseOtlpEndpoint = go True
             , null uriQuery
             , null uriFragment -> do
                 let !host = maybe "localhost" (.uriRegName) uriAuthority
-                let !port = fromMaybe 4317 (readMaybe @Word16 . drop 1 . (.uriPort) =<< uriAuthority)
+                let !port = fromMaybe 4317 $ uriPortNumber uriAuthority
                 let !secure = uriScheme == "https:"
                 pure $ Left OtlpGrpcEndpoint{..}
             | otherwise ->
@@ -115,15 +116,10 @@ parseOtlpEndpoint = go True
             , null uriQuery
             , null uriFragment -> do
                 let !host = maybe "localhost" (.uriRegName) uriAuthority
-                let !port = fromMaybe 4317 (readMaybe @Word16 . drop 1 . (.uriPort) =<< uriAuthority)
-                let !baseUrl =
-                      show
-                        URI.nullURI
-                          { URI.uriScheme = uriScheme
-                          , URI.uriAuthority = Just URI.URIAuth{uriUserInfo = "", uriRegName = host, uriPort = show port}
-                          , URI.uriPath = uriPath
-                          }
-                pure $ Right OtlpHttpEndpoint{..}
+                let !port = fromMaybe 4317 $ uriPortNumber uriAuthority
+                let !auth = URI.nullURIAuth{URI.uriRegName = host, URI.uriPort = ':' : show port}
+                let !baseURI = URI.nullURI{URI.uriScheme = uriScheme, URI.uriAuthority = Just auth, URI.uriPath = uriPath}
+                pure $ Right OtlpHttpEndpoint{baseUrl = show baseURI}
             | otherwise ->
                 Left $ "The HTTP/Protobuf protocol only supports HTTP and HTTPS and does not support an URI query or fragment, found: " <> url
       Nothing
@@ -132,6 +128,20 @@ parseOtlpEndpoint = go True
         | otherwise ->
             Left $ "Could not parse url " <> url
 
+{- |
+Internal helper.
+
+Extract a t`Word16` port number from a `URI.URIAuth`.
+-}
+uriPortNumber :: Maybe URI.URIAuth -> Maybe Word16
+uriPortNumber = readMaybe @Word16 <=< fmap (dropColon . (.uriPort))
+ where
+  dropColon :: String -> String
+  dropColon = \case (':' : str) -> str; str -> str
+
+{- |
+Export telemetry data to the t`OtlpExporter`.
+-}
 export ::
   forall serv meth.
   ( CanExportViaGrpc serv meth
