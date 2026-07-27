@@ -3,8 +3,10 @@ name: eventlog-live
 version: 0.8.0.0
 synopsis: Live processing of eventlog data.
 description:
-  This package provides [machines](https://hackage.haskell.org/package/machines) for processing live eventlog data.
-  It is primarily intended for use via the [eventlog-live-otelcol](https://hackage.haskell.org/package/eventlog-live-otelcol) package.
+  Stream eventlog telemetry for /any/ Haskell application to /any/ OpenTelemetry endpoint.
+
+  This package provides the executable [eventlog-live-otlp] which analyses the live
+  eventlog of any Haskell application and sends the resulting telemetry to any OTLP endpoint.
 
   [⚠️ Warning]:
       This package is experimental.
@@ -43,7 +45,7 @@ source-repository this
   subdir: eventlog-live
 
 -- This flag enables the control command server, which is an HTTP endpoint
--- that gets started by eventlog-live-otelcol. If +control is set, then
+-- that gets started by eventlog-live-otlp. If +control is set, then
 -- eventlog-socket SHOULD also be compiled with +control. If this flag is
 -- set at compile-time, the control server can be enabled at runtime.
 flag control
@@ -220,9 +222,9 @@ library
       time >=1.4 && <1.16,
       transformers-base >=0.4 && <0.5,
 
-executable eventlog-live-otelcol
+executable eventlog-live-otlp
   import: language
-  main-is: eventlog-live-otelcol.hs
+  main-is: eventlog-live-otlp.hs
   hs-source-dirs:
     app
 
