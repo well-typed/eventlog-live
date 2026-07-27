@@ -26,11 +26,11 @@ The Grafana instance comes with four preconfigured dashboards: Heap, Logs, Profi
 
 Navigate to the Heap dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Heap_.
 
-![A screenshot of the Grafana Heap dashboard for the oddball example program.](assets/oddball-otelcol-heap-2026-04-27.png)
+![A screenshot of the Grafana Heap dashboard for the oddball example program.](assets/oddball-otlp-heap-2026-04-27.png)
 
 This dashboard has four visualisations which are repeated for each service selected in the _Service Name_ option (see the option bar). To select a service, add its name to the list of services in the _Service Name_ option, e.g., in the above screenshot, only the `oddball` service is selected.
 
-- The _HeapProfSample_ visualisation shows a detailed heap profile for the service using the heap profile breakdown selected from command-line, by passing [`-h`](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#rts-options-heap-prof) to the RTS options of the instrumented program and to `eventlog-live-otelcol`. The demo uses `-hT`, i.e., a breakdown by heap closure type. The number of distinct closure types shown is limited by the _HeapProfSample Limit_ option (see the option bar). These metrics are derived from the [`HEAP_PROF_SAMPLE_STRING`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_PROF_SAMPLE_STRING) event.
+- The _HeapProfSample_ visualisation shows a detailed heap profile for the service using the heap profile breakdown selected from command-line, by passing [`-h`](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#rts-options-heap-prof) to the RTS options of the instrumented program and to `eventlog-live-otlp`. The demo uses `-hT`, i.e., a breakdown by heap closure type. The number of distinct closure types shown is limited by the _HeapProfSample Limit_ option (see the option bar). These metrics are derived from the [`HEAP_PROF_SAMPLE_STRING`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_PROF_SAMPLE_STRING) event.
 
 - The _HeapSize_ visualisation shows the current size of the heap. The _HeapSize_ and _BlocksSize_ metrics measure the current total size of the heap, based on the number of currently allocated megablocks or blocks, respectively. The _HeapLive_ metric measures the number of live bytes, based on the number of live blocks. These metrics are derived from the [`HEAP_SIZE`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_SIZE), [`BLOCKS_SIZE`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-BLOCKS_SIZE) and [`HEAP_LIVE`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_LIVE) events.
 
@@ -38,11 +38,11 @@ This dashboard has four visualisations which are repeated for each service selec
 
 - The _HeapAllocated_ visualisation shows the amount of memory allocated over time. This metric is derived from the [`HEAP_ALLOCATED`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-HEAP_ALLOCATED) event.
 
-The buttoms below the _HeapProfSample_ visualisation control heap profiling in the instrumented program. This requires that both the instrumented program and `eventlog-live-otelcol` are built with the `control` flag. The _Start_ and _Stop_ buttons control the heap profiling timer in the instrumented program. If this is disabled, no detailed heap profile samples are taken, and the _HeapProfSample_ visualisation will flatline. However, the other three visualisations will continue to update. The _Request Heap Census_ button can be used to request a single detailed heap profile sample.
+The buttoms below the _HeapProfSample_ visualisation control heap profiling in the instrumented program. This requires that both the instrumented program and `eventlog-live-otlp` are built with the `control` flag. The _Start_ and _Stop_ buttons control the heap profiling timer in the instrumented program. If this is disabled, no detailed heap profile samples are taken, and the _HeapProfSample_ visualisation will flatline. However, the other three visualisations will continue to update. The _Request Heap Census_ button can be used to request a single detailed heap profile sample.
 
 The _UserMarker_ switch and _Filter UserMarker_ option can be used to include user markers in the various visualisations. To enable user markers, flip the _UserMarker_ switch. To filter user markers, edit the regular expression in the _Filter UserMarker_ field. The oddball program emits a user marker every time it starts a large summation with the message "Summing N numbers". To show these markers, we flip the _UserMarker_ switch and type "Summing" in the _Filter UserMarker_ field.
 
-![The same screenshot of the Grafana Heap dashboard for the oddball example program, but with user markers enabled, which draws a series of vertical dotted red lines on the visualisations that correspond to the timing of the user marker events.](assets/oddball-otelcol-heap-markers-2026-04-27.png)
+![The same screenshot of the Grafana Heap dashboard for the oddball example program, but with user markers enabled, which draws a series of vertical dotted red lines on the visualisations that correspond to the timing of the user marker events.](assets/oddball-otlp-heap-markers-2026-04-27.png)
 
 To emit a user marker from your program, use [`traceMarker`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarker)/[`traceMarkerIO`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarkerIO).
 
@@ -50,21 +50,21 @@ To emit a user marker from your program, use [`traceMarker`](https://hackage-con
 
 Navigate to the Logs dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Logs_.
 
-![A screenshot of the Grafana Logs dashboard for the oddball example program.](assets/oddball-otelcol-logs-2026-04-27.png)
+![A screenshot of the Grafana Logs dashboard for the oddball example program.](assets/oddball-otlp-logs-2026-04-27.png)
 
-This dashboard has a single visualisation which is repeated for each service selected in the _Service Name_ option (see the option bar). For each user service there is a corresponding `eventlog-live-otelcol` service, e.g., for `oddball`, there is `eventlog-live-otelcol-for-oddball`.
+This dashboard has a single visualisation which is repeated for each service selected in the _Service Name_ option (see the option bar). For each user service there is a corresponding `eventlog-live-otlp` service, e.g., for `oddball`, there is `eventlog-live-otlp-for-oddball`.
 
 - The _Logs_ visualisation shows log messages.
 
   For the instrumented program, the logs visualisation shows all messages emitted by user message tracing ([`traceEvent`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceEvent)/[`traceEventIO`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceEventIO)) and user marker tracing ([`traceMarker`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarker)/[`traceMarkerIO`](https://hackage-content.haskell.org/package/base/docs/Debug-Trace.html#v:traceMarkerIO)). These logs are derived from the [`USER_MSG`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-USER_MSG) and [`USER_MARKER`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-USER_MARKER) events. These do not carry a severity, so they are all are assigned `TRACE` severity.
 
-  For the corresponding `eventlog-live-otelcol` service, the logs visualisation shows the internal logs for that `eventlog-live-otelcol` instance. Logs that would not be shown under the given `--verbosity` command-line option will not available.
+  For the corresponding `eventlog-live-otlp` service, the logs visualisation shows the internal logs for that `eventlog-live-otlp` instance. Logs that would not be shown under the given `--verbosity` command-line option will not available.
 
 ### The Profiles Dashboard
 
 Navigate to the Profiles dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Profiles_.
 
-![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for cost-centre profiles. The flamegraph is currently focused on the main symbol.](assets/jumpy-jump-otelcol-profile-cost-centre-main-2026-04-27.png)
+![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for cost-centre profiles. The flamegraph is currently focused on the main symbol.](assets/jumpy-jump-otlp-profile-cost-centre-main-2026-04-27.png)
 
 This dashboard has a single visualisation which is repeated for each service selected in the _Service Name_ option (see the option bar).
 
@@ -72,19 +72,19 @@ This dashboard has a single visualisation which is repeated for each service sel
 
 The `oddball` program used in the demo does not produce interesting profiles and profiles are disabled in the demo. The profiles shown in these screenshots are for the [`jumpy-jump`](examples/jumpy-jump/) program.
 
-Stack profiles may be produced using [cost-centre profiling](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html) or by [`ghc-stack-profiler`](https://hackage.haskell.org/package/ghc-stack-profiler). For examples, see [`examples/jumpy-jump-otelcol-with-cost-centre-profiler.sh`](examples/jumpy-jump-otelcol-with-cost-centre-profiler.sh) and [`examples/jumpy-jump-otelcol-with-ghc-stack-profiler.sh`](examples/jumpy-jump-otelcol-with-ghc-stack-profiler.sh), respectively.
+Stack profiles may be produced using [cost-centre profiling](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html) or by [`ghc-stack-profiler`](https://hackage.haskell.org/package/ghc-stack-profiler). For examples, see [`examples/jumpy-jump-otlp-with-cost-centre-profiler.sh`](examples/jumpy-jump-otlp-with-cost-centre-profiler.sh) and [`examples/jumpy-jump-otlp-with-ghc-stack-profiler.sh`](examples/jumpy-jump-otlp-with-ghc-stack-profiler.sh), respectively.
 
 Be wary that cost-centre profiles and the call-stack profiles produced by `ghc-stack-profiler` can differ quite a lot for the same program. Cost-centre profiling maintains and samples a virtual cost-centre stack, whereas `ghc-stack-profiler` samples the call stack.
 
 The following shows the _Stack Profile_ visualisation for the same cost-centre profile as above, but without focus on the `Main:main` symbol, which reveals the `IDLE:IDLE`, `PROFILING:OVERHEAD_of`, and `SYSTEM:SYSTEM` symbols.
 
-![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for cost-centre profiles.](assets/jumpy-jump-otelcol-profile-cost-centre-2026-04-27.png)
+![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for cost-centre profiles.](assets/jumpy-jump-otlp-profile-cost-centre-2026-04-27.png)
 
 The following shows the _Stack Profile_ visualisation for a call-stack profile produced by `ghc-stack-profiler`.
 
-![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for GHC call-stack profiles sampled by ghc-stack-profiler.](assets/jumpy-jump-otelcol-profile-ghc-stack-2026-04-27.png)
+![A screenshot of the Grafana Profiles dashboard for the jumpy-jump example program. The dashboard shows a flamegraph for GHC call-stack profiles sampled by ghc-stack-profiler.](assets/jumpy-jump-otlp-profile-ghc-stack-2026-04-27.png)
 
-The buttoms below the _Stack Profile_ visualisation control stack profiling in the instrumented program. This requires that both the instrumented program and `eventlog-live-otelcol` are built with the `control` flag. The _Start_ and _Stop_ buttons control the sampler in the instrumented program. You should use the buttons that correspond to the kind of profiling for which your program is instrumented.
+The buttoms below the _Stack Profile_ visualisation control stack profiling in the instrumented program. This requires that both the instrumented program and `eventlog-live-otlp` are built with the `control` flag. The _Start_ and _Stop_ buttons control the sampler in the instrumented program. You should use the buttons that correspond to the kind of profiling for which your program is instrumented.
 
 > [!WARNING]
 > The _Stack Profile_ visualisation does not yet differentiate between the two kinds of stack profile.
@@ -94,7 +94,7 @@ The buttoms below the _Stack Profile_ visualisation control stack profiling in t
 
 Navigate to the Threads dashboard under ☰ > _Dashboards_ > _Browse_ then _General_ > _Eventlog Threads_.
 
-![A screenshot of the Grafana Threads dashboard for the oddball example program.](assets/oddball-otelcol-threads-2026-04-27.png)
+![A screenshot of the Grafana Threads dashboard for the oddball example program.](assets/oddball-otlp-threads-2026-04-27.png)
 
 This dashboard has three visualisations which are repeated for each service selected in the _Service Name_ option (see the option bar).
 
@@ -104,46 +104,46 @@ This dashboard has three visualisations which are repeated for each service sele
 
 - The _Traces_ visualisation shows a table of capability and thread traces. If you click any of the trace IDs, you'll be taken to the trace exporer, where you can investigate the state of each thread over time. These traces are derived from the [`RUN_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-RUN_THREAD) and [`STOP_THREAD`](https://downloads.haskell.org/ghc/latest/docs/users_guide/eventlog-formats.html#event-type-STOP_THREAD) events. Traces are disabled in the demo, as their sheer volume tends to overwhelm the OpenTelemetry Collector.
 
-  ![A screenshot of the Grafana Trace Explorer for the oddball example program.](assets/oddball-otelcol-trace-explorer-2026-04-27.png)
+  ![A screenshot of the Grafana Trace Explorer for the oddball example program.](assets/oddball-otlp-trace-explorer-2026-04-27.png)
 
 > [!WARNING]
-> The trace explorer view depends on the _CapabilityUsage_ and _ThreadState_ traces, which are numerous and can easily overwhelm the OpenTelemetry Collector. If the `eventlog-live-otelcol` log shows a stream of `EnhanceYourCalm` errors, these traces are the most likely culprit, and you may benefit from disabling them in your configuration file.
+> The trace explorer view depends on the _CapabilityUsage_ and _ThreadState_ traces, which are numerous and can easily overwhelm the OpenTelemetry Collector. If the `eventlog-live-otlp` log shows a stream of `EnhanceYourCalm` errors, these traces are the most likely culprit, and you may benefit from disabling them in your configuration file.
 
 ### The Docker Compose Files
 
 The [Docker Compose](https://docs.docker.com/compose/) configuration `demo/docker-compose.yml` starts up a variety of containers.
 
 - `oddball`, which repeatedly generates and sums random quantities of random numbers.
-- `eventlog-live-otelcol`, which analyses the eventlog data from `oddball` and streams telemetry data to the OpenTelemetry Collector.
+- `eventlog-live-otlp`, which analyses the eventlog data from `oddball` and streams telemetry data to the OpenTelemetry Collector.
 - The _OpenTelemetry Collector_, which streams the telemetry data to the various databases.
 - _Loki_, which is a log processor and database.
 - _Prometheus_, which is a _metric_ processor and database.
 - _Tempo_, which is a _span_ processor and database.
 - _Grafana_, which visualises the telemetry data from the various databases.
 
-The configuration `demo/docker-compose-external.yml` allows you to reuse the services from the demo to monitor your own program. It starts up all of the above services, except for `oddball` and `eventlog-live-otelcol`. To use this file, run the following [Docker Compose](https://docs.docker.com/compose/) command from the root of the repository.
+The configuration `demo/docker-compose-external.yml` allows you to reuse the services from the demo to monitor your own program. It starts up all of the above services, except for `oddball` and `eventlog-live-otlp`. To use this file, run the following [Docker Compose](https://docs.docker.com/compose/) command from the root of the repository.
 
 ```sh
 docker compose -f demo/docker-compose-external.yml up --build
 ```
 
-Once all containers have started, you can run your own instrumented program together with your own local instance of `eventlog-live-otelcol`, and the telemetry data will be visualised in Grafana as above. The various example scripts will give you an idea of how to set this up. For instance, see [`examples/oddball/oddball-otelcol-with-hT.sh`](examples/oddball/oddball-otelcol-with-hT.sh).
+Once all containers have started, you can run your own instrumented program together with your own local instance of `eventlog-live-otlp`, and the telemetry data will be visualised in Grafana as above. The various example scripts will give you an idea of how to set this up. For instance, see [`examples/oddball/oddball-otlp-with-hT.sh`](examples/oddball/oddball-otlp-with-hT.sh).
 
 > [!INFO]
-> The `demo/docker-compose-external.yml` configuration _could_ be changed to include an instance of `eventlog-live-otelcol`. However, the instrumented program and `eventlog-live-otelcol` communicate the eventlog over a Unix domain socket and, unfortunately, exposing Unix domain sockets from the host OS to a container is not portable. The `eventlog-socket` library has recently added support for TCP/IPv4 sockets, which _could_ be used to solve this program. However, the eventlog socket is a very high bandwidth socket, so even when support for TCP/IPv4 is added to `eventlog-live-otelcol`, it is likely preferable to continue to use a Unix domain socket.
+> The `demo/docker-compose-external.yml` configuration _could_ be changed to include an instance of `eventlog-live-otlp`. However, the instrumented program and `eventlog-live-otlp` communicate the eventlog over a Unix domain socket and, unfortunately, exposing Unix domain sockets from the host OS to a container is not portable. The `eventlog-socket` library has recently added support for TCP/IPv4 sockets, which _could_ be used to solve this program. However, the eventlog socket is a very high bandwidth socket, so even when support for TCP/IPv4 is added to `eventlog-live-otlp`, it is likely preferable to continue to use a Unix domain socket.
 
-The `eventlog-live-otelcol` program is intended to analyse the eventlog and send telemetry data to an OpenTelemetry Collector. It supports OTLP over gRPC and HTTP/protobuf. The default is gRPC on port `4317`; pass `--otlp-protocol=http/protobuf` to use HTTP/protobuf on port `4318`.
+The `eventlog-live-otlp` program is intended to analyse the eventlog and send telemetry data to an OpenTelemetry Collector. It supports OTLP over gRPC and HTTP/protobuf. The default is gRPC on port `4317`; pass `--otlp-protocol=http/protobuf` to use HTTP/protobuf on port `4318`.
 
 ## Getting Started
 
 To use the code in this repository to profile your own application, follow these steps.
 
-### Install `eventlog-live-otelcol`
+### Install `eventlog-live-otlp`
 
 This is the primary executable for `eventlog-live`. It can be installed using Cabal:
 
 ```sh
-cabal install eventlog-live-otelcol
+cabal install eventlog-live-otlp
 ```
 
 ### Add `eventlog-socket` as a dependency
@@ -268,10 +268,10 @@ To use it, follow these steps:
     ./my-app +RTS -l -hT --eventlog-flush-interval=1
     ```
 
-4.  Start `eventlog-live-otelcol`:
+4.  Start `eventlog-live-otlp`:
 
     ```sh
-    eventlog-live-otelcol \
+    eventlog-live-otlp \
       --service-name=my-app \
       --eventlog-socket "$GHC_EVENTLOG_UNIX_PATH" \
       -hT \
@@ -284,18 +284,18 @@ To use it, follow these steps:
 
     To export using the OTLP HTTP/Protobuf protocol, pass `--otlp-protocol=http/protobuf`. Additional headers may be provided with `--otlp-http-headers` as, e.g., `--otlp-http-headers=api-key=key,other-config-value=value`.
 
-### Fine-tuning `eventlog-live-otelcol`
+### Fine-tuning `eventlog-live-otlp`
 
-The telemetry data produced by `eventlog-live-otelcol` can be configured in great detail via its configuration file in the YAML format. To print the [default configuration](eventlog-live-otelcol/data/default.yaml), as well as commentary explaining it, run the following command:
+The telemetry data produced by `eventlog-live-otlp` can be configured in great detail via its configuration file in the YAML format. To print the [default configuration](eventlog-live-otlp/data/default.yaml), as well as commentary explaining it, run the following command:
 
 ```sh
-eventlog-live-otelcol --print-defaults
+eventlog-live-otlp --print-defaults
 ```
 
-For validation and editor support, `eventlog-live-otelcol` ships with a JSON Schema for its configuration files. To print the [JSON Schema](eventlog-live-otelcol/data/config.schema.json), run the following command:
+For validation and editor support, `eventlog-live-otlp` ships with a JSON Schema for its configuration files. To print the [JSON Schema](eventlog-live-otlp/data/config.schema.json), run the following command:
 
 ```sh
-eventlog-live-otelcol --print-config-json-schema
+eventlog-live-otlp --print-config-json-schema
 ```
 
 If you use the RedHat YAML language server, you can instruct your editor to load this schema. See ["Associating a schema to a glob pattern via yaml.schemas"](https://github.com/redhat-developer/yaml-language-server?tab=readme-ov-file#associating-a-schema-to-a-glob-pattern-via-yamlschemas) in their README.
