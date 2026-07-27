@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # To build this image, run:
-# docker build --tag well-typed/eventlog-live-otelcol:0.1.0.0 --file ./demo/Dockerfile.eventlog-live-otelcol .
+# docker build --tag well-typed/eventlog-live-otlp:0.1.0.0 --file ./demo/Dockerfile.eventlog-live-otlp .
 
 # Use the Haskell image with GHC 9.10.1
 # See: https://hub.docker.com/_/haskell
@@ -10,14 +10,12 @@ FROM haskell:9.10-slim-bullseye AS build
 # Copy required packages to container
 WORKDIR "/eventlog-live"
 COPY --parents \
-  "./eventlog-live-otelcol/" \
   "./eventlog-live/" \
   "/eventlog-live/"
 
 # Create cabal.project file
 COPY <<EOF /eventlog-live/cabal.project
 packages: eventlog-live
-packages: eventlog-live-otelcol
 
 -- 2025-11-17:
 -- disable snappy support in grpc-spec
@@ -33,7 +31,7 @@ EOF
 # Install protoc
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y protobuf-compiler
 
-# Build eventlog-live-otelcol
+# Build eventlog-live-otlp
 RUN <<EOF
 cabal update
 mkdir "/eventlog-live/bin"
@@ -42,12 +40,12 @@ cabal install \
     --overwrite-policy=always \
     --install-method=copy \
     --installdir="/eventlog-live/bin" \
-    eventlog-live-otelcol
+    eventlog-live-otlp
 EOF
 
-# Copy eventlog-live-otelcol to output stage
+# Copy eventlog-live-otlp to output stage
 FROM debian:bullseye-slim AS output
-COPY --from=build "/eventlog-live/bin/eventlog-live-otelcol" "/bin/eventlog-live-otelcol"
+COPY --from=build "/eventlog-live/bin/eventlog-live-otlp" "/bin/eventlog-live-otlp"
 
 # Run command
-ENTRYPOINT ["/bin/eventlog-live-otelcol"]
+ENTRYPOINT ["/bin/eventlog-live-otlp"]
