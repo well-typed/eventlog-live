@@ -1,1 +1,9 @@
-{ callCabal2nix, lib, ... }: callCabal2nix "eventlog-live" (lib.cleanSource ../eventlog-live) { }
+{
+  withControl ? false,
+  callCabal2nixWithOptions,
+  lib,
+  ...
+}:
+callCabal2nixWithOptions "eventlog-live" (lib.cleanSource ../eventlog-live)
+  (lib.optionalString withControl "-fcontrol")
+  { }

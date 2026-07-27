@@ -6,6 +6,6 @@ let
   };
 in
 rec {
-  inherit (haskellPackages) oddball eventlog-live eventlog-live-otelcol;
-  eventlog-live-otelcol-control = eventlog-live-otelcol.override { withControl = true; };
+  inherit (haskellPackages) oddball eventlog-live;
+  eventlog-live-control = eventlog-live.override { withControl = true; };
 }

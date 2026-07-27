@@ -44,8 +44,7 @@
           inherit (import ./default.nix { inherit pkgs all-cabal-hashes; })
             oddball
             eventlog-live
-            eventlog-live-otelcol
-            eventlog-live-otelcol-control
+            eventlog-live-control
             ;
         };
 

@@ -2,7 +2,6 @@
 final: prev: with haskell.lib.compose; {
 
   eventlog-live = final.callPackage ./eventlog-live.nix { };
-  eventlog-live-otelcol = final.callPackage ./eventlog-live-otelcol.nix { };
   oddball = final.callPackage ./oddball.nix { };
 
   # Jailbreak proto-lens to allow it to build with newer dependencies

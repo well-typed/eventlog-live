@@ -1,7 +1,7 @@
 { pkgs, all-cabal-hashes, ... }:
 
 let
-  inherit (import ./default.nix { inherit pkgs all-cabal-hashes; }) oddball eventlog-live-otelcol;
+  inherit (import ./default.nix { inherit pkgs all-cabal-hashes; }) oddball eventlog-live;
 in
 {
   imports = [
@@ -93,7 +93,7 @@ in
       };
     };
 
-    eventlog-live-otelcol = {
+    eventlog-live-otlp = {
       description = "Eventlog Live OpenTelemetry Collector";
       wantedBy = [ "multi-user.target" ];
       after = [ "oddball.service" ];
@@ -101,7 +101,7 @@ in
         Type = "simple";
         User = "eventlog";
         Group = "eventlog";
-        ExecStart = "${eventlog-live-otelcol}/bin/eventlog-live-otelcol --service-name=oddball --eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock --otlp-endpoint=0.0.0.0:4317";
+        ExecStart = "${eventlog-live-otlp}/bin/eventlog-live-otlp --service-name=oddball --eventlog-socket=/run/ghc-eventlog-socket/ghc-eventlog.sock --otlp-endpoint=0.0.0.0:4317";
         Restart = "always";
         RestartSec = 5;
       };
