@@ -13,10 +13,10 @@ echo "Build oddball"
 cabal build oddball -v0
 ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
 
-# Build eventlog-live-otelcol
-echo "Build eventlog-live-otelcol"
-cabal build eventlog-live-otelcol -f+control -v0
-EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -f+control -v0 | head -n1)
+# Build eventlog-live-otlp
+echo "Build eventlog-live-otlp"
+cabal build eventlog-live-otlp -f+control -v0
+EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -f+control -v0 | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -26,9 +26,9 @@ trap 'rm -rf "$TMPDIR"' EXIT INT TERM HUP
 ODDBALL_FIFO="$TMPDIR/oddball.fifo"
 mkfifo "$ODDBALL_FIFO" || exit
 
-# Create the screen pipe for eventlog-live-otelcol
-EVENTLOG_LIVE_OTELCOL_FIFO=$TMPDIR/eventlog-live-otelcol.fifo
-mkfifo "$EVENTLOG_LIVE_OTELCOL_FIFO" || exit
+# Create the screen pipe for eventlog-live-otlp
+EVENTLOG_LIVE_OTLP_FIFO=$TMPDIR/eventlog-live-otlp.fifo
+mkfifo "$EVENTLOG_LIVE_OTLP_FIFO" || exit
 
 # Create the command to start oddball
 # shellcheck disable=SC2089
@@ -42,14 +42,14 @@ echo 'Start oddball' && \
 		-RTS
 "
 
-# Create the command to start eventlog-live-otelcol
+# Create the command to start eventlog-live-otlp
 # shellcheck disable=SC2089
-EVENTLOG_LIVE_OTELCOL_CMD="
-echo 'Start eventlog-live-otelcol (for oddball)' && \
-	${EVENTLOG_LIVE_OTELCOL_BIN} \
+EVENTLOG_LIVE_OTLP_CMD="
+echo 'Start eventlog-live-otlp (for oddball)' && \
+	${EVENTLOG_LIVE_OTLP_BIN} \
 		--verbosity=debug \
 		--stats \
-		--config='$DIR/oddball-otelcol-config.yaml' \
+		--config='$DIR/eventlog-live.yaml' \
 		--service-name='oddball' \
 	    --eventlog-socket-host '$GHC_EVENTLOG_INET_HOST' \
 		--eventlog-socket-port '$GHC_EVENTLOG_INET_PORT' \
@@ -73,9 +73,9 @@ screen -t 'oddball/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$ODDBAL
 focus down
 split -v
 focus right
-screen -t 'eventlog-live-otelcol/stderr' sh -c 'tty > "$EVENTLOG_LIVE_OTELCOL_FIFO"; read done < "$EVENTLOG_LIVE_OTELCOL_FIFO"'
+screen -t 'eventlog-live-otlp/stderr' sh -c 'tty > "$EVENTLOG_LIVE_OTLP_FIFO"; read done < "$EVENTLOG_LIVE_OTLP_FIFO"'
 focus left
-screen -t 'eventlog-live-otelcol/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_OTELCOL_FIFO"; eval "$EVENTLOG_LIVE_OTELCOL_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_OTELCOL_FOR_ODDBALL_FIFO"'
+screen -t 'eventlog-live-otlp/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_OTLP_FIFO"; eval "$EVENTLOG_LIVE_OTLP_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_OTLP_FOR_ODDBALL_FIFO"'
 EOF
 
 # Start screen
@@ -83,6 +83,6 @@ EOF
 export \
 	ODDBALL_FIFO \
 	ODDBALL_CMD \
-	EVENTLOG_LIVE_OTELCOL_FIFO \
-	EVENTLOG_LIVE_OTELCOL_CMD
+	EVENTLOG_LIVE_OTLP_FIFO \
+	EVENTLOG_LIVE_OTLP_CMD
 screen -mc "$SCREEN_CONF"
