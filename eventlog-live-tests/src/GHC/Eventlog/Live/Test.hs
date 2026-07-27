@@ -28,11 +28,11 @@ module GHC.Eventlog.Live.Test (
   -- * Running `ProgramTest`
   programTestFor,
 
-  -- * Running @eventlog-live-otelcol@
-  EventlogLiveOtelcolOptions (extraArgs, maybeConfigBody),
+  -- * Running @eventlog-live-otlp@
+  EventlogLiveOtlpOptions (extraArgs, maybeConfigBody),
   defaultOptions,
-  HasEventlogLiveOtelcolInfo,
-  withEventlogLiveOtelcol,
+  HasEventlogLiveOtlpInfo,
+  withEventlogLiveOtlp,
 
   -- * Running an OTLP server
   ResourceTelemetryData (..),
@@ -262,22 +262,22 @@ logging = traversing (\i -> liftIO (debugInfo (show i)) >> pure i)
 -- Running `ProgramTest`
 --------------------------------------------------------------------------------
 
-data EventlogLiveOtelcolOptions = EventlogLiveOtelcolOptions
+data EventlogLiveOtlpOptions = EventlogLiveOtlpOptions
   { extraArgs :: [String]
   , maybeConfigBody :: Maybe String
   }
 
-defaultOptions :: EventlogLiveOtelcolOptions
+defaultOptions :: EventlogLiveOtlpOptions
 defaultOptions =
-  EventlogLiveOtelcolOptions
+  EventlogLiveOtlpOptions
     { extraArgs = []
     , maybeConfigBody = Nothing
     }
 
 {- |
-Variant of `GEST.programTestFor` for @eventlog-live-otelcol@ tests.
+Variant of `GEST.programTestFor` for @eventlog-live-otlp@ tests.
 
-This variant hides the eventlog socket from the continuation and manages the @eventlog-live-otelcol@ instance and the OTLP server.
+This variant hides the eventlog socket from the continuation and manages the @eventlog-live-otlp@ instance and the OTLP server.
 -}
 programTestFor ::
   (HasLogger) =>
@@ -285,43 +285,43 @@ programTestFor ::
   TestName ->
   -- | The program to test against.
   Program ->
-  -- | The command-line arguments for @eventlog-live-otelcol@.
-  EventlogLiveOtelcolOptions ->
+  -- | The command-line arguments for @eventlog-live-otlp@.
+  EventlogLiveOtlpOptions ->
   -- | The test assertion.
-  ((HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtelcolInfo) => Assertion) ->
+  ((HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtlpInfo) => Assertion) ->
   EventlogSocketAddr ->
   ProgramTest
-programTestFor testName program eventlogLiveOtelcolOptions assertion =
+programTestFor testName program eventlogLiveOtlpOptions assertion =
   GEST.programTestFor testName program (const action)
  where
   action :: (HasTestInfo, HasProgramInfo) => Assertion
   action =
     withGrpcOtlpServer $
-      withEventlogLiveOtelcol eventlogLiveOtelcolOptions $
+      withEventlogLiveOtlp eventlogLiveOtlpOptions $
         assertion
 
 --------------------------------------------------------------------------------
--- Running @eventlog-live-otelcol@
+-- Running @eventlog-live-otlp@
 --------------------------------------------------------------------------------
 
 {- |
-An implicit constraint that requires an @eventlog-live-otelcol@ instance.
+An implicit constraint that requires an @eventlog-live-otlp@ instance.
 -}
-type HasEventlogLiveOtelcolInfo = (?eventlogLiveOtelcolInfo :: ProgramInfo)
+type HasEventlogLiveOtlpInfo = (?eventlogLiveOtlpInfo :: ProgramInfo)
 
 {- |
-Start an instance of @eventlog-live-otelcol@ with the given arguments.
+Start an instance of @eventlog-live-otlp@ with the given arguments.
 
 The eventlog socket is automatically configured based on the eventlog socket address in the `ProgramInfo`.
 
-The otelcol socket is automatically configured based on the port in the `OtlpServerInfo`.
+The otlp socket is automatically configured based on the port in the `OtlpServerInfo`.
 -}
-withEventlogLiveOtelcol ::
+withEventlogLiveOtlp ::
   (HasLogger, HasTestInfo, HasProgramInfo, HasOtlpServerInfo) =>
-  EventlogLiveOtelcolOptions ->
-  ((HasLogger, HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtelcolInfo) => IO ()) ->
+  EventlogLiveOtlpOptions ->
+  ((HasLogger, HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtlpInfo) => IO ()) ->
   IO ()
-withEventlogLiveOtelcol eventlogLiveOtelcolOptions action = do
+withEventlogLiveOtlp eventlogLiveOtlpOptions action = do
   let programInfo@ProgramInfo{..} = ?programInfo
 
   -- Configure the eventlog socket.
@@ -334,19 +334,19 @@ withEventlogLiveOtelcol eventlogLiveOtelcolOptions action = do
           EventlogSocketInetAddr{..} ->
             ["--eventlog-socket-host=" <> esaInetHost, "--eventlog-socket-port=" <> esaInetPort]
 
-  -- Configure the otelcol socket.
+  -- Configure the otlp socket.
   let OtlpServerInfo{..} = ?otlpServerInfo
-  let otelcolArgs =
+  let otlpArgs =
         ["--otlp-endpoint=" <> host <> ":" <> show port]
 
   -- Create the temporary configuration file, if needed.
-  withTempConfigFile eventlogLiveOtelcolOptions.maybeConfigBody $ \configArgs -> do
-    -- Configure the eventlog-live-otelcol program.
-    let args = eventlogLiveOtelcolOptions.extraArgs <> eventlogSocketArgs <> otelcolArgs <> configArgs
-    let eventlogLiveOtelcolProgram = (findProgram "eventlog-live-otelcol"){args = args}
-    withProgramResource (programResource eventlogLiveOtelcolProgram) $ do
+  withTempConfigFile eventlogLiveOtlpOptions.maybeConfigBody $ \configArgs -> do
+    -- Configure the eventlog-live-otlp program.
+    let args = eventlogLiveOtlpOptions.extraArgs <> eventlogSocketArgs <> otlpArgs <> configArgs
+    let eventlogLiveOtlpProgram = (findProgram "eventlog-live-otlp"){args = args}
+    withProgramResource (programResource eventlogLiveOtlpProgram) $ do
       -- NOTE: By the GHC gods, please let this have the correct semantics.
-      let ?eventlogLiveOtelcolInfo = ?programInfo
+      let ?eventlogLiveOtlpInfo = ?programInfo
       let ?programInfo = programInfo
       action
 
@@ -368,7 +368,7 @@ withTempConfigFile maybeConfigBody action =
 --------------------------------------------------------------------------------
 
 -- NOTE: This type is different from the type with the same name found in
---       eventlog-live-otelcol, as the latter still uses `OP.ProfileData`.
+--       eventlog-live-otlp, as the latter still uses `OP.ProfileData`.
 --       This should be changed, but requires the refactoring that moves the
 --       profiles machinery into eventlog-live.
 
@@ -411,7 +411,7 @@ withGrpcOtlpServer action = do
   -- Create logging scope for the OTLP server.
   let programPidIO = Just <$> getCurrentPid
   programPid <- programPidIO
-  let program = findProgram "otelcol"
+  let program = findProgram "otlp"
   let programInfo = ProgramInfo{..}
   let debugServerInfo msg = debug (ProgramOut programInfo msg)
 
@@ -493,7 +493,7 @@ withGrpcOtlpServer action = do
 liftProto :: (Monad m) => (a -> m b) -> G.Proto a -> m (G.Proto b)
 liftProto f pa = G.Proto <$> f (G.getProto pa)
 
--- TODO: These instances should be shared with eventlog-live-otelcol
+-- TODO: These instances should be shared with eventlog-live-otlp
 
 type instance G.RequestMetadata (G.Protobuf OLS.LogsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (G.Protobuf OLS.LogsService meth) = G.NoMetadata

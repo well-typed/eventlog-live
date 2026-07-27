@@ -108,4 +108,4 @@ test-suite eventlog-live-tests
     text >=1.2 && <2.2,
 
   build-tool-depends:
-    eventlog-live:eventlog-live-otelcol
+    eventlog-live:eventlog-live-otlp
