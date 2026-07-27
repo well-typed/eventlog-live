@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Common.Profiles
+Module      : GHC.Eventlog.Live.Otlp.Processor.Common.Profiles
 Description : Abstraction over ProfilesDictionary for the OTLP protocol.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (
+module GHC.Eventlog.Live.Otlp.Processor.Common.ProfilesDictionary (
   -- * Dictionary for deduplication logic of common values
   ProfilesDictionary,
   empty,
@@ -34,9 +34,9 @@ import Data.ProtoLens (Message (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Eventlog.Live.Data.Attribute (Attr)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (messageWith, toMaybeAnyValue)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable (SymbolIndex, SymbolTable)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable qualified as ST
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (messageWith, toMaybeAnyValue)
+import GHC.Eventlog.Live.Otlp.Processor.Common.SymbolTable (SymbolIndex, SymbolTable)
+import GHC.Eventlog.Live.Otlp.Processor.Common.SymbolTable qualified as ST
 import GHC.Generics (Generic)
 import Lens.Family2 (Lens', (.~), (^.))
 import Lens.Family2.Unchecked (lens)

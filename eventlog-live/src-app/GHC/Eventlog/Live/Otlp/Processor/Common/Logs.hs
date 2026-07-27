@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Common.Logs
+Module      : GHC.Eventlog.Live.Otlp.Processor.Common.Logs
 Description : Profile Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Common.Logs (
+module GHC.Eventlog.Live.Otlp.Processor.Common.Logs (
   ToLogRecord (..),
   toExportLogsServiceRequest,
   toResourceLogs,
@@ -23,7 +23,7 @@ import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity)
 import GHC.Eventlog.Live.Data.Severity qualified as DS
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
 import GHC.IsList (IsList (..))
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS

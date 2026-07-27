@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics
+Module      : GHC.Eventlog.Live.Otlp.Processor.Common.Metrics
 Description : Common utilities for metric processors.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (
+module GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (
   MetricProcessor (..),
   runMetricProcessor,
   MetricAggregators (..),
@@ -38,9 +38,9 @@ import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (ifNonEmpty, messageWith, runIf, toMaybeKeyValue)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, runIf, toMaybeKeyValue)
 import GHC.IsList (IsList (..))
 import GHC.Records (HasField (..))
 import GHC.TypeLits (Symbol)

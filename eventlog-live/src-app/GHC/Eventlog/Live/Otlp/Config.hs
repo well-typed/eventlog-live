@@ -3,12 +3,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Config
+Module      : GHC.Eventlog.Live.Otlp.Config
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Config (
+module GHC.Eventlog.Live.Otlp.Config (
   -- * Configuration type
   ServiceName (..),
   Config (..),
@@ -98,8 +98,8 @@ import Data.Text.Encoding qualified as TE
 import Data.YAML qualified as YAML
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Otelcol.Config.Default (defaultConfig, getDefault)
-import GHC.Eventlog.Live.Otelcol.Config.Types
+import GHC.Eventlog.Live.Otlp.Config.Default (defaultConfig, getDefault)
+import GHC.Eventlog.Live.Otlp.Config.Types
 import GHC.Records (HasField)
 import GHC.Stack.Types (HasCallStack)
 import System.Exit (exitFailure)

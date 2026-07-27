@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Heap
+Module      : GHC.Eventlog.Live.Otlp.Processor.Heap
 Description : Heap Event Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Heap (
+module GHC.Eventlog.Live.Otlp.Processor.Heap (
   processHeapEvents,
 )
 where
@@ -21,10 +21,10 @@ import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast, viaSum)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast, viaSum)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.InfoProv qualified as IP

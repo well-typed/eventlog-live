@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Logs
+Module      : GHC.Eventlog.Live.Otlp.Processor.Logs
 Description : Log Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Logs (
+module GHC.Eventlog.Live.Otlp.Processor.Logs (
   processLogEvents,
 )
 where
@@ -18,10 +18,10 @@ import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Logs (ToLogRecord (..))
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..))
 import GHC.RTS.Events (Event (..))
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 

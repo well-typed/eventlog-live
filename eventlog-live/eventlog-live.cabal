@@ -237,29 +237,29 @@ executable eventlog-live-otlp
     src-app
 
   other-modules:
-    GHC.Eventlog.Live.Otelcol
-    GHC.Eventlog.Live.Otelcol.Config
-    GHC.Eventlog.Live.Otelcol.Config.Default
-    GHC.Eventlog.Live.Otelcol.Config.Default.Raw
-    GHC.Eventlog.Live.Otelcol.Config.Types
-    GHC.Eventlog.Live.Otelcol.Control
-    GHC.Eventlog.Live.Otelcol.Exporter.Core
-    GHC.Eventlog.Live.Otelcol.Exporter.Logs
-    GHC.Eventlog.Live.Otelcol.Exporter.Metrics
-    GHC.Eventlog.Live.Otelcol.Exporter.Profiles
-    GHC.Eventlog.Live.Otelcol.Exporter.Traces
-    GHC.Eventlog.Live.Otelcol.Options
-    GHC.Eventlog.Live.Otelcol.Processor.Common.Core
-    GHC.Eventlog.Live.Otelcol.Processor.Common.Logs
-    GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics
-    GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary
-    GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable
-    GHC.Eventlog.Live.Otelcol.Processor.Common.Traces
-    GHC.Eventlog.Live.Otelcol.Processor.Heap
-    GHC.Eventlog.Live.Otelcol.Processor.Logs
-    GHC.Eventlog.Live.Otelcol.Processor.Profiles
-    GHC.Eventlog.Live.Otelcol.Processor.Threads
-    GHC.Eventlog.Live.Otelcol.Stats
+    GHC.Eventlog.Live.Otlp
+    GHC.Eventlog.Live.Otlp.Config
+    GHC.Eventlog.Live.Otlp.Config.Default
+    GHC.Eventlog.Live.Otlp.Config.Default.Raw
+    GHC.Eventlog.Live.Otlp.Config.Types
+    GHC.Eventlog.Live.Otlp.Control
+    GHC.Eventlog.Live.Otlp.Exporter.Core
+    GHC.Eventlog.Live.Otlp.Exporter.Logs
+    GHC.Eventlog.Live.Otlp.Exporter.Metrics
+    GHC.Eventlog.Live.Otlp.Exporter.Profiles
+    GHC.Eventlog.Live.Otlp.Exporter.Traces
+    GHC.Eventlog.Live.Otlp.Options
+    GHC.Eventlog.Live.Otlp.Processor.Common.Core
+    GHC.Eventlog.Live.Otlp.Processor.Common.Logs
+    GHC.Eventlog.Live.Otlp.Processor.Common.Metrics
+    GHC.Eventlog.Live.Otlp.Processor.Common.ProfilesDictionary
+    GHC.Eventlog.Live.Otlp.Processor.Common.SymbolTable
+    GHC.Eventlog.Live.Otlp.Processor.Common.Traces
+    GHC.Eventlog.Live.Otlp.Processor.Heap
+    GHC.Eventlog.Live.Otlp.Processor.Logs
+    GHC.Eventlog.Live.Otlp.Processor.Profiles
+    GHC.Eventlog.Live.Otlp.Processor.Threads
+    GHC.Eventlog.Live.Otlp.Stats
 
   hs-source-dirs:
     src-app-internal

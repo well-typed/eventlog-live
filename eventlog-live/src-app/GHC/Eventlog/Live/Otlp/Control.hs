@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module GHC.Eventlog.Live.Otelcol.Control (
+module GHC.Eventlog.Live.Otlp.Control (
   ControlOptions (..),
   ControlPort (..),
   ControlCors (..),
@@ -16,7 +16,7 @@ import Data.ByteString.Char8 qualified as BSC
 import Data.Char (isSpace)
 import Data.Maybe (isJust)
 import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Otelcol.Config (ServiceName)
+import GHC.Eventlog.Live.Otlp.Config (ServiceName)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
@@ -46,7 +46,7 @@ import Data.Text.Encoding qualified as TE
 import Data.Word (Word8)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)
-import GHC.Eventlog.Live.Otelcol.Config (ServiceName (..))
+import GHC.Eventlog.Live.Otlp.Config (ServiceName (..))
 import GHC.Eventlog.Socket.Control qualified as C
 import GHC.Generics (Generic)
 import Network.Socket (Socket)

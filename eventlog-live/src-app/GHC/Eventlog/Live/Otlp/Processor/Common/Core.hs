@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Common.Core
+Module      : GHC.Eventlog.Live.Otlp.Processor.Common.Core
 Description : Common utilities shared across telemetry data types.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Common.Core (
+module GHC.Eventlog.Live.Otlp.Processor.Common.Core (
   messageWith,
   (.~?),
   runIf,

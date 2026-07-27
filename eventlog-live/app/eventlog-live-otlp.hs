@@ -3,6 +3,6 @@
 
 module Main where
 
-import GHC.Eventlog.Live.Otelcol qualified (main)
+import GHC.Eventlog.Live.Otlp qualified (main)
 
-main = GHC.Eventlog.Live.Otelcol.main
+main = GHC.Eventlog.Live.Otlp.main
