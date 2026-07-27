@@ -3,7 +3,7 @@
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol.Config.Types
-Description : The implementation of @eventlog-live-otelcol@.
+Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
@@ -83,7 +83,7 @@ data FullConfig = FullConfig
   }
 
 {- |
-The configuration for @eventlog-live-otelcol@.
+The configuration for @eventlog-live-otlp@.
 -}
 newtype Config = Config
   { processors :: Maybe Processors

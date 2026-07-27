@@ -2,7 +2,7 @@
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol.Stats
-Description : The implementation of @eventlog-live-otelcol@.
+Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}

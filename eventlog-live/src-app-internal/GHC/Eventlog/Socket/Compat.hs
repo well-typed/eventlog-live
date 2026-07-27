@@ -3,7 +3,7 @@
 
 {- |
 Module      : GHC.Eventlog.Socket.Compat
-Description : The implementation of @eventlog-live-otelcol@.
+Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}

@@ -65,7 +65,7 @@ The transition from `GC` to `Idle` yields a GC span.
 
 The mutator span analysis reuses the thread state analysis and produces a mutator span for every thread state span whose thread state is `Running`.
 
-# Developer Notes For `eventlog-live-otelcol`
+# Developer Notes For `eventlog-live-otlp`
 
 ## Modifying The Configuration File Format
 
@@ -221,11 +221,11 @@ To check that your new processor configuration shows up, run the following comma
 ```sh
 # The `--print-defaults` flag should print the contents of
 # the default configuration file verbatim.
-cabal run eventlog-live-otelcol -- --print-defaults
+cabal run eventlog-live-otlp -- --print-defaults
 
 # The `--print-defaults-debug` flag should print the result
 # of calling `toYAML` on the `Default` instance for `Config`.
-cabal run eventlog-live-otelcol -- --print-defaults-debug
+cabal run eventlog-live-otlp -- --print-defaults-debug
 ```
 
 ### Update The JSON Schema
@@ -255,7 +255,7 @@ The path `properties.processors.properties.logs.properties` already existed. Lik
 
 ## Information Flow
 
-The following diagram documents the information flow in the eventlog processor run by the `eventlog-live-otelcol` executable.
+The following diagram documents the information flow in the eventlog processor run by the `eventlog-live-otlp` executable.
 
 > [!WARNING]
 > This diagram is out-of-date.

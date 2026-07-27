@@ -2,7 +2,7 @@
 
 {- |
 Module      : GHC.Eventlog.Live.Otelcol
-Description : The implementation of @eventlog-live-otelcol@.
+Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
@@ -69,7 +69,7 @@ import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import System.Exit (die)
 
 {- |
-The main function for @eventlog-live-otelcol@.
+The main function for @eventlog-live-otlp@.
 -}
 main :: IO ()
 main = do
@@ -408,9 +408,9 @@ getMyLogRecord = \case
 
 -- 2025-09-22:
 -- Once `cabal2nix` supports Cabal 3.12, this can once again use the value from:
--- `PackageInfo_eventlog_live_otelcol.name`.
+-- `PackageInfo_eventlog_live.name`.
 eventlogLiveName :: Text
-eventlogLiveName = "eventlog-live-otelcol"
+eventlogLiveName = "eventlog-live-otlp"
 
 eventlogLiveVersion :: Text
 eventlogLiveVersion = T.pack (showVersion EventlogLive.version)
