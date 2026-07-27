@@ -1,12 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Config.Default.Raw
+Module      : GHC.Eventlog.Live.Otlp.Config.Default.Raw
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Config.Default.Raw (
+module GHC.Eventlog.Live.Otlp.Config.Default.Raw (
   defaultConfigByteString,
   defaultConfigString,
   defaultConfigJSONSchemaByteString,

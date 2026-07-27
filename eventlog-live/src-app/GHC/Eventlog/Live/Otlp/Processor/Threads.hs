@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Threads
+Module      : GHC.Eventlog.Live.Otlp.Processor.Threads
 Description : Thread Event Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Threads (
+module GHC.Eventlog.Live.Otlp.Processor.Threads (
   processThreadEvents,
 )
 where
@@ -24,11 +24,11 @@ import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (MetricProcessor (..), asSum, runMetricProcessor, viaSum)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Traces (asSpan)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asSum, runMetricProcessor, viaSum)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
 import GHC.RTS.Events (Event (..))
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM

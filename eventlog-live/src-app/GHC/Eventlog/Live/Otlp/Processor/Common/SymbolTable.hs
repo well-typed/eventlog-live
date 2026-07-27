@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable
+Module      : GHC.Eventlog.Live.Otlp.Processor.Common.SymbolTable
 Description : Abstract symbol table datatype.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Common.SymbolTable (
+module GHC.Eventlog.Live.Otlp.Processor.Common.SymbolTable (
   SymbolIndex,
   SymbolTable,
   empty,

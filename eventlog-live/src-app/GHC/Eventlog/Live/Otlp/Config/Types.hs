@@ -2,12 +2,12 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Config.Types
+Module      : GHC.Eventlog.Live.Otlp.Config.Types
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Config.Types (
+module GHC.Eventlog.Live.Otlp.Config.Types (
   -- * Configuration type
   Config (..),
   FullConfig (..),

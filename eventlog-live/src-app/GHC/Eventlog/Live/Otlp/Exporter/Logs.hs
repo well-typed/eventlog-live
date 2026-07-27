@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module GHC.Eventlog.Live.Otelcol.Exporter.Logs (
+module GHC.Eventlog.Live.Otlp.Exporter.Logs (
   -- * Logs
   ExportLogsResult (..),
   RejectedLogsError (..),
@@ -16,7 +16,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)

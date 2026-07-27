@@ -1,4 +1,4 @@
-module GHC.Eventlog.Live.Otelcol.Options (
+module GHC.Eventlog.Live.Otlp.Options (
   Options (..),
   MyDebugOptions (..),
   ServiceName (..),
@@ -16,11 +16,11 @@ import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Options
-import GHC.Eventlog.Live.Otelcol.Config (ServiceName (..))
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
-import GHC.Eventlog.Live.Otelcol.Config.Types (Config)
-import GHC.Eventlog.Live.Otelcol.Control (ControlOptions, controlOptionsParser)
+import GHC.Eventlog.Live.Otlp.Config (ServiceName (..))
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
+import GHC.Eventlog.Live.Otlp.Config.Types (Config)
+import GHC.Eventlog.Live.Otlp.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
 import GHC.RTS.Events (HeapProfBreakdown (..))

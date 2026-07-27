@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol
+Module      : GHC.Eventlog.Live.Otlp
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol (
+module GHC.Eventlog.Live.Otlp (
   main,
 ) where
 
@@ -31,24 +31,24 @@ import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
-import GHC.Eventlog.Live.Otelcol.Control (ControlServerApi (..), startControlServer)
-import GHC.Eventlog.Live.Otelcol.Exporter.Core (OtlpExporter, parseOtlpExporterOptions, withOtlpExporter)
-import GHC.Eventlog.Live.Otelcol.Exporter.Logs (exportResourceLogs)
-import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (exportResourceMetrics)
-import GHC.Eventlog.Live.Otelcol.Exporter.Profiles (exportResourceProfiles)
-import GHC.Eventlog.Live.Otelcol.Exporter.Traces (exportResourceSpans)
-import GHC.Eventlog.Live.Otelcol.Options
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Metrics (toExportMetricsServiceRequest, toResourceMetrics, toScopeMetrics)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
-import GHC.Eventlog.Live.Otelcol.Processor.Heap (processHeapEvents)
-import GHC.Eventlog.Live.Otelcol.Processor.Logs (processLogEvents)
-import GHC.Eventlog.Live.Otelcol.Processor.Profiles (Sample, Stack, processProfileEvents, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
-import GHC.Eventlog.Live.Otelcol.Processor.Threads (processThreadEvents)
-import GHC.Eventlog.Live.Otelcol.Stats (Stat (..), eventCountTick, processStats)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otlp.Control (ControlServerApi (..), startControlServer)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (OtlpExporter, parseOtlpExporterOptions, withOtlpExporter)
+import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs)
+import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics)
+import GHC.Eventlog.Live.Otlp.Exporter.Profiles (exportResourceProfiles)
+import GHC.Eventlog.Live.Otlp.Exporter.Traces (exportResourceSpans)
+import GHC.Eventlog.Live.Otlp.Options
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (toExportMetricsServiceRequest, toResourceMetrics, toScopeMetrics)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
+import GHC.Eventlog.Live.Otlp.Processor.Heap (processHeapEvents)
+import GHC.Eventlog.Live.Otlp.Processor.Logs (processLogEvents)
+import GHC.Eventlog.Live.Otlp.Processor.Profiles (Sample, Stack, processProfileEvents, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
+import GHC.Eventlog.Live.Otlp.Processor.Threads (processThreadEvents)
+import GHC.Eventlog.Live.Otlp.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.RTS.Events (Event (..))

@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Processor.Profiles
+Module      : GHC.Eventlog.Live.Otlp.Processor.Profiles
 Description : Profile Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Processor.Profiles (
+module GHC.Eventlog.Live.Otlp.Processor.Profiles (
   -- * Profile processing
   Sample (..),
   Stack (..),
@@ -42,11 +42,11 @@ import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
-import GHC.Eventlog.Live.Otelcol.Config qualified as C
-import GHC.Eventlog.Live.Otelcol.Config.Types (FullConfig (..))
-import GHC.Eventlog.Live.Otelcol.Processor.Common.Core
-import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary (ProfilesDictionary, SymbolIndex)
-import GHC.Eventlog.Live.Otelcol.Processor.Common.ProfilesDictionary qualified as PD
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core
+import GHC.Eventlog.Live.Otlp.Processor.Common.ProfilesDictionary (ProfilesDictionary, SymbolIndex)
+import GHC.Eventlog.Live.Otlp.Processor.Common.ProfilesDictionary qualified as PD
 import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.Records (HasField)

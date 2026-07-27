@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otelcol.Stats
+Module      : GHC.Eventlog.Live.Otlp.Stats
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Otelcol.Stats (
+module GHC.Eventlog.Live.Otlp.Stats (
   EventCount,
   eventCountTick,
   Stat (..),
@@ -30,10 +30,10 @@ import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Otelcol.Exporter.Logs (ExportLogsResult (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Metrics (ExportMetricsResult (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Profiles (ExportProfileResult (..))
-import GHC.Eventlog.Live.Otelcol.Exporter.Traces (ExportTraceResult (..))
+import GHC.Eventlog.Live.Otlp.Exporter.Logs (ExportLogsResult (..))
+import GHC.Eventlog.Live.Otlp.Exporter.Metrics (ExportMetricsResult (..))
+import GHC.Eventlog.Live.Otlp.Exporter.Profiles (ExportProfileResult (..))
+import GHC.Eventlog.Live.Otlp.Exporter.Traces (ExportTraceResult (..))
 import GHC.Records (HasField (..))
 import StrictList qualified as Strict
 import System.Console.ANSI (hNowSupportsANSI)

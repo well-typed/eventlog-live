@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module GHC.Eventlog.Live.Otelcol.Exporter.Core (
+module GHC.Eventlog.Live.Otlp.Exporter.Core (
   OtlpExporter (..),
   parseOtlpExporterOptions,
   withOtlpExporter,
@@ -28,7 +28,7 @@ import Data.ProtoLens.Encoding qualified as Proto
 import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
 import Data.Word (Word16)
-import GHC.Eventlog.Live.Otelcol.Options (OtlpExporterOptions (..), OtlpProtocol (..))
+import GHC.Eventlog.Live.Otlp.Options (OtlpExporterOptions (..), OtlpProtocol (..))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
