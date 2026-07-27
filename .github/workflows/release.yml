@@ -33,6 +33,11 @@ jobs:
           ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
           cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
 
+      - name: 🛠️ Setup Protobuf Compiler
+        uses: ./.github/actions/setup-protoc
+        with:
+          protoc-version: ${{ steps.dev-dependencies.outputs.protoc }}
+
       - name: 📦 Build source distibution
         run: cabal sdist all
 
