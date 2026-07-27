@@ -57,7 +57,7 @@ import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
 import Lens.Family2 ((.~))
 import Options.Applicative qualified as O
-import Paths_eventlog_live_otelcol qualified as EventlogLive
+import Paths_eventlog_live qualified as EventlogLive
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL

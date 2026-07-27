@@ -1,3 +1,9 @@
+### 0.8.0.0
+
+The version 0.7.0.0 was skipped to avoid confusion with `eventlog-live-otelcol-0.7.0.0`.
+
+- Merge the executable `eventlog-live-otelcol` into this package.
+
 ### 0.6.0.0
 
 - Add support for `ipedb` databases for IPE and cost-centre information.
