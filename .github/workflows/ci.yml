@@ -96,8 +96,8 @@ jobs:
           - "macOS-latest"
         ghc-version:
           - "9.8.4"
-          - "9.10.2"
-          - "9.12.2"
+          - "9.10.3"
+          - "9.12.4"
         include:
           - cabal-flags: ""
           - os: "ubuntu-latest"
