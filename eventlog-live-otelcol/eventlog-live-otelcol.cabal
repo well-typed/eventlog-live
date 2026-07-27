@@ -4,9 +4,110 @@ version: 0.7.0.0
 synopsis: Stream eventlog data to the OpenTelemetry Collector.
 description:
   This executable collects telemetry data from any Haskell application
-  and sends it over the OpenTelemetry protocol.
+  and sends it over the OpenTelemetry protocol. The next release of this
+  executable will be as part of the
+  [@eventlog-live@ package](https://hackage.haskell.org/package/eventlog-live)
+  under the name @eventlog-live-otlp@.
 
   For more information, see [the README](https://github.com/well-typed/eventlog-live#readme).
+
+  > Usage: eventlog-live-otelcol (--eventlog-stdin | --eventlog-file FILE |
+  >                                --eventlog-socket SOCKET |
+  >                                --eventlog-socket-host HOST
+  >                                --eventlog-socket-port PORT)
+  >                              [--eventlog-socket-timeout SECONDS]
+  >                              [--eventlog-socket-exponent NUMBER]
+  >                              [--eventlog-flush-interval SECONDS]
+  >                              [--eventlog-log-file FILE] [-h Tcmdyrbi]
+  >                              [--service-name STRING] [--ipedb FILE]
+  >                              [--ccdb FILE]
+  >                              [-v|--verbosity fatal|error|warning|info|debug|trace]
+  >                              [-s|--stats] [--config FILE] [--otlp-protocol ARG]
+  >                              --otlp-endpoint ARG
+  >                              [--otlp-grpc-certificate-store FILE]
+  >                              [--otlp-grpc-ssl-key-log FILE |
+  >                                --otlp-grpc-ssl-key-log-from-env]
+  >                              [--otlp-http-headers ARG] [--print-defaults]
+  >                              [--print-config-json-schema]
+  >
+  > Available options:
+  >   --eventlog-stdin         Read the eventlog from stdin.
+  >   --eventlog-file FILE     Read the eventlog from a file.
+  >   --eventlog-socket SOCKET Read the eventlog from a Unix socket.
+  >   --eventlog-socket-host HOST
+  >                            Read the eventlog from a TCP/IP socket.
+  >   --eventlog-socket-port PORT
+  >                            Read the eventlog from a TCP/IP socket.
+  >   --eventlog-socket-timeout SECONDS
+  >                            Eventlog socket connection retry timeout in seconds.
+  >   --eventlog-socket-exponent NUMBER
+  >                            Eventlog socket connection retry timeout exponent.
+  >   --eventlog-flush-interval SECONDS
+  >                            Eventlog flush interval in seconds.
+  >                            Should match the option passed to the application.
+  >   --eventlog-log-file FILE Use file to log binary eventlog data.
+  >   -h Tcmdyrbi              Heap profile breakdown.
+  >                            Should match the option passed to the application.
+  >   --service-name STRING    The name of the profiled service.
+  >   --ipedb FILE             The path to an IPE database.
+  >   --ccdb FILE              The path a cost-centre database.
+  >   -v,--verbosity fatal|error|warning|info|debug|trace
+  >                            The severity threshold for logging.
+  >   -s,--stats               Display runtime statistics.
+  >   --config FILE            The path to a detailed configuration file.
+  >   --print-defaults         Print default configuration options.
+  >   --print-config-json-schema
+  >                            Print JSON Schema for configuration format.
+  >   --help                   Show this help text.
+  >   --version                Show version information
+  >
+  > OTLP Exporter Options
+  >   --otlp-protocol ARG      The OTLP transport protocol to be used for all telemetry data (gRPC, HTTP/Protobuf).
+  >                            Default value: gRPC
+  >   --otlp-endpoint ARG      The OTLP endpoint URL for all telemetry data, with an optionally-specified port number.
+  >                            Default value:
+  >                              gRPC: http://localhost:4317
+  >                              HTTP: http://localhost:4318
+  >                            Example:
+  >                              gRPC: https://my-api-endpoint:443
+  >                              HTTP: http://my-api-endpoint/
+  >   --otlp-grpc-certificate-store FILE
+  >                            Store for certificate validation.
+  >   --otlp-grpc-ssl-key-log FILE
+  >                            Use file to log SSL keys.
+  >   --otlp-grpc-ssl-key-log-from-env
+  >                            Use SSLKEYLOGFILE to log SSL keys.
+  >   --otlp-http-headers ARG  A list of headers to apply to all outgoing data.
+  >
+  > Control Server Options
+  >   --control                Unsupported. Requires build with -f+control.
+  >                            Start the control server.
+  >   --control-port           Unsupported. Requires build with -f+control.
+  >                            The port number for the control server.
+  >   --control-cors-allow-origin
+  >                            Unsupported. Requires build with -f+control.
+  >                            Set the allowed origins for the control server CORS policy.
+  >   --control-cors-max-age   Unsupported. Requires build with -f+control.
+  >                            Set the maximum age of a cached CORS preflight request for the control server CORS policy.
+  >   --control-cors-require-origin
+  >                            Unsupported. Requires build with -f+control.
+  >                            If enabled, the control server will not accept requests without an Origin header.
+  >   --control-cors-ignore-failure
+  >                            Unsupported. Requires build with -f+control.
+  >                            If enabled, the control server will accept malformed CORS preflight requests.
+  >
+  > Debug Options
+  >   --my-eventlog-socket-unix
+  >                            Unsupported. Requires build with -f+use-eventlog-socket.
+  >                            Open an eventlog socket for this program on the given Unix socket.
+  >   --my-ghc-debug-socket    Unsupported. Requires build with -f+use-ghc-debug-stub.
+  >                            Open the default ghc-debug socket for this program.
+  >   --my-ghc-debug-socket-unix
+  >                            Unsupported. Requires build with -f+use-ghc-debug-stub.
+  >                            Open a ghc-debug Unix domain socket with the given file path.
+  >   --my-ghc-debug-socket-tcp
+  >                            Unsupported. Requires build with -f+use-ghc-debug-stub.
+  >                            Open a ghc-debug TCP/IP socket with the given address as 'host:port'.
 
 license: BSD-3-Clause
 license-file: LICENSE
