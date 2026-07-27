@@ -13,10 +13,10 @@ echo "Build spectral-norm"
 cabal build spectral-norm --constraint=eventlog-socket+control -v0
 SPECTRAL_NORM_BIN=$(cabal list-bin exe:spectral-norm --constraint=eventlog-socket+control -v0 | head -n1)
 
-# Build eventlog-live-otelcol
-echo "Build eventlog-live-otelcol"
-cabal build eventlog-live-otelcol -v0
-EVENTLOG_LIVE_OTELCOL_BIN=$(cabal list-bin exe:eventlog-live-otelcol -v0 | head -n1)
+# Build eventlog-live-otlp
+echo "Build eventlog-live-otlp"
+cabal build eventlog-live-otlp -v0
+EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -v0 | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -26,9 +26,9 @@ trap 'rm -rf "$TMPDIR"' EXIT INT TERM HUP
 SPECTRAL_NORM_FIFO="$TMPDIR/spectral-norm.fifo"
 mkfifo "$SPECTRAL_NORM_FIFO" || exit
 
-# Create the screen pipe for eventlog-live-otelcol
-EVENTLOG_LIVE_OTELCOL_FIFO=$TMPDIR/eventlog-live-otelcol.fifo
-mkfifo "$EVENTLOG_LIVE_OTELCOL_FIFO" || exit
+# Create the screen pipe for eventlog-live-otlp
+EVENTLOG_LIVE_OTLP_FIFO=$TMPDIR/eventlog-live-otlp.fifo
+mkfifo "$EVENTLOG_LIVE_OTLP_FIFO" || exit
 
 # Create the command to start spectral-norm
 # shellcheck disable=SC2089
@@ -43,14 +43,14 @@ echo 'Start spectral-norm' && \
 		-RTS
 "
 
-# Create the command to start eventlog-live-otelcol
+# Create the command to start eventlog-live-otlp
 # shellcheck disable=SC2089
-EVENTLOG_LIVE_OTELCOL_CMD="
-echo 'Start eventlog-live-otelcol (for spectral-norm)' && \
-	${EVENTLOG_LIVE_OTELCOL_BIN} \
+EVENTLOG_LIVE_OTLP_CMD="
+echo 'Start eventlog-live-otlp (for spectral-norm)' && \
+	${EVENTLOG_LIVE_OTLP_BIN} \
 		--verbosity=debug \
 		--stats \
-		--config='$DIR/spectral-norm-otelcol-config.yaml' \
+		--config='$DIR/eventlog-live.yaml' \
 		--service-name='spectral-norm' \
 	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
 	    -hT \
@@ -70,9 +70,9 @@ screen -t 'spectral-norm/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$
 focus down
 split -v
 focus right
-screen -t 'eventlog-live-otelcol/stderr' sh -c 'tty > "$EVENTLOG_LIVE_OTELCOL_FIFO"; read done < "$EVENTLOG_LIVE_OTELCOL_FIFO"'
+screen -t 'eventlog-live-otlp/stderr' sh -c 'tty > "$EVENTLOG_LIVE_OTLP_FIFO"; read done < "$EVENTLOG_LIVE_OTLP_FIFO"'
 focus left
-screen -t 'eventlog-live-otelcol/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_OTELCOL_FIFO"; eval "$EVENTLOG_LIVE_OTELCOL_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_OTELCOL_FOR_SPECTRAL_NORM_FIFO"'
+screen -t 'eventlog-live-otlp/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_OTLP_FIFO"; eval "$EVENTLOG_LIVE_OTLP_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_OTLP_FOR_SPECTRAL_NORM_FIFO"'
 EOF
 
 # Start screen
@@ -80,6 +80,6 @@ EOF
 export \
 	SPECTRAL_NORM_FIFO \
 	SPECTRAL_NORM_CMD \
-	EVENTLOG_LIVE_OTELCOL_FIFO \
-	EVENTLOG_LIVE_OTELCOL_CMD
+	EVENTLOG_LIVE_OTLP_FIFO \
+	EVENTLOG_LIVE_OTLP_CMD
 screen -mc "$SCREEN_CONF"
