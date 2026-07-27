@@ -12,7 +12,7 @@ category: Test
 build-type: Simple
 extra-doc-files: CHANGELOG.md
 tested-with:
-  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.3 || ==9.12.4
 
 flag debug
   description: Enable debug logging
@@ -108,4 +108,4 @@ test-suite eventlog-live-tests
     text >=1.2 && <2.2,
 
   build-tool-depends:
-    eventlog-live-otelcol:eventlog-live-otelcol
+    eventlog-live:eventlog-live-otelcol
