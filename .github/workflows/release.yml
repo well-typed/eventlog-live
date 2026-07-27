@@ -38,10 +38,10 @@ jobs:
           protoc-version: ${{ steps.dev-dependencies.outputs.protoc }}
 
       - name: 📦 Build source distibution
-        run: cabal sdist all
+        run: cabal sdist eventlog-live
 
       - name: 📦 Build haddock documentation
-        run: cabal haddock all --haddock-for-hackage
+        run: cabal haddock eventlog-live --haddock-for-hackage
 
       - name: 🚀 Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
