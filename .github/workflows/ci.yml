@@ -504,6 +504,5 @@ jobs:
       - name: 🎗️ Lint with cabal2nix
         run: |
           nix-shell -p haskellPackages.cabal2nix --run '\
-            cabal2nix file://${{ github.workspace }}/eventlog-live && \
-            cabal2nix file://${{ github.workspace }}/eventlog-live-otelcol'
+            cabal2nix file://${{ github.workspace }}/eventlog-live'
         shell: bash
