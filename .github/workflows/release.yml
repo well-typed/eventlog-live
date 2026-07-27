@@ -1,0 +1,90 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "eventlog-live-v*.*.*.*"
+      - "eventlog-live-otelcol-v*.*.*.*"
+
+jobs:
+  ################################################################################
+  # Publish eventlog-live to GitHub Releases
+  ################################################################################
+  release-eventlog-live:
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/eventlog-live-v')
+    permissions:
+      contents: write
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v7
+
+      # The dev-dependencies file lists the versions of all system dependencies
+      # required for development. It is formatted in such a way that it is easy
+      # to use from GitHub Actions. This step outputs the versions to make them
+      # available to all following steps under "steps.dev-dependencies.outputs"
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
+          cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
+
+      - name: 📦 Build source distibution
+        run: cabal sdist all
+
+      - name: 📦 Build haddock documentation
+        run: cabal haddock all --haddock-for-hackage
+
+      - name: 🚀 Publish to GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            sdist/eventlog-live-*.tar.gz
+            eventlog-live-*-docs.tar.gz
+          working_directory: dist-newstyle
+          fail_on_unmatched_files: true
+
+  ################################################################################
+  # Publish eventlog-live to GitHub Releases
+  ################################################################################
+  release-eventlog-live-otelcol:
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/eventlog-live-otelcol-v')
+    permissions:
+      contents: write
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v7
+
+      # The dev-dependencies file lists the versions of all system dependencies
+      # required for development. It is formatted in such a way that it is easy
+      # to use from GitHub Actions. This step outputs the versions to make them
+      # available to all following steps under "steps.dev-dependencies.outputs"
+      - name: 🗄️ Read dev-dependencies
+        run: cat "./scripts/dev-dependencies.txt" >> "$GITHUB_OUTPUT"
+        id: dev-dependencies
+
+      - name: 🛠️ Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ steps.dev-dependencies.outputs.ghc }}
+          cabal-version: ${{ steps.dev-dependencies.outputs.cabal }}
+
+      - name: 📦 Build source distibution
+        run: cabal sdist all
+
+      - name: 📦 Build haddock documentation
+        run: cabal haddock all --haddock-for-hackage
+
+      - name: 🚀 Publish to GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            sdist/eventlog-live-otelcol-*.tar.gz
+            eventlog-live-otelcol-*-docs.tar.gz
+          working_directory: dist-newstyle
+          fail_on_unmatched_files: true
