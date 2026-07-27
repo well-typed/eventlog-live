@@ -29,7 +29,7 @@ import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Options.Applicative.Help.Pretty qualified as OP
-import Paths_eventlog_live_otelcol qualified as EventlogLive
+import Paths_eventlog_live qualified as EventlogLive
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 
