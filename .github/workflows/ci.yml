@@ -201,7 +201,6 @@ jobs:
       matrix:
         package:
           - "eventlog-live"
-          - "eventlog-live-otelcol"
           - "oddball"
 
   #############################################################################
