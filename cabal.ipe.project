@@ -7,6 +7,12 @@ package *
     -finfo-table-map
     -fdistinct-constructor-tables
 
--- 2026-06-26
+-- 2026-06-26:
 -- relax all package constraints
-allow-newer: *
+if impl(ghc >=10)
+  allow-newer: *
+
+-- 2026-07-28:
+-- require a version of hashable that is compatible with GHC 10
+if impl(ghc >=10)
+  constraints: hashable==1.4.7.0
