@@ -11,7 +11,7 @@ export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 if [ "$GHC" = "" ]; then
 	GHC="$(which ghc)"
 fi
-PROJECT_FILE="$DIR/../../cabal.project.ipe"
+PROJECT_FILE="$DIR/../../cabal.ipe.project"
 
 # Build oddball
 echo "Build oddball"
