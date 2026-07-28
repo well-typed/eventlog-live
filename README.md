@@ -1,12 +1,41 @@
-# `eventlog-live`
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/well-typed/eventlog-live/ci.yml?style=for-the-badge) ![Hackage Version](https://img.shields.io/hackage/v/eventlog-live?style=for-the-badge) ![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=for-the-badge) ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-yellow?style=for-the-badge)
 
-> [!WARNING]
-> This package is experimental.
-> It is versioned according to the [PVP](https://pvp.haskell.org).
-> However, breaking changes should be expected and no effort will be
-> made to avoid major version bumps until at least version 1.0.0.0.
+_Real-time monitoring for any Haskell application with little to no instrumentation!_
 
-This repository contains a collection of libraries and tools for the live profiling of Haskell applications instrumented with [`eventlog-socket`](https://github.com/well-typed/ghc-eventlog-socket).
+# Eventlog Live
+
+> ⚠️ **Warning:** This package is experimental. It is versioned according to the [PVP](https://pvp.haskell.org). Breaking changes should be expected and no effort will be made to avoid major version bumps until at least version 1.0.0.0.
+
+Eventlog Live analyses the [eventlog](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html#rts-eventlog) of any Haskell program and streams the resulting telemetry data to any observability platform that supports the OpenTelemetry protocol, such as [Grafana Cloud](https://grafana.com), [HoneyComb](https://www.honeycomb.io/), or [Prometheus](https://prometheus.io/docs/guides/opentelemetry/).
+
+The following shows the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-pipe.sh) running with _zero instrumentation_.
+
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe.gif)
+
+Eventlog Live is designed to be _lightweight_, running alongside your application using only in a few megabytes of memory, and _highly configurable_, so that you only send the telemetry data you are interested in. While Eventlog Live works with zero instrumentation, it has support for several Haskell profiling packages that can enable new features.
+
+- **Eventlog Socket – Sockets and Dynamic Control**
+
+  The [`eventlog-socket`](https://github.com/well-typed/eventlog-socket) package adds two features. First, it lets you to stream the eventlog over Unix domain and TCP/IP sockets. Secondly, it lets you control your program from the observability dashboard. The `eventlog-socket` instrumentation has builtin support that lets you toggle RTS features such as heap and stack profiling at runtime, but its control protocol has an easy-to-use plugin mechanism that lets you integrate other actions into your telemetry platform.
+
+  The following shows dynamic control of heap profiling from the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-hT.sh) instrumented with `eventlog-socket`. When the _Stop_ button is pressed, the heap profiling is stopped, and the heap profile flatlines. When the _Start_ button is pressed, heap profiling is restarted.
+
+  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control.gif)
+
+- **GHC Stack Profiler – Lightweight Call-Stack Profiles**
+
+  The [`ghc-stack-profiler`](https://github.com/well-typed/ghc-stack-profiler) package lets you sample your application's call-stack using a lightweight sampler that can be turned on and off at runtime using `eventlog-socket`'s control protocol.
+
+  The lightweight call-stack sampler has an approximate 5-10% overhead while running with a sampling interval of 10ms, whereas [GHC's built-in cost-centre profiling](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#time-and-allocation-profiling) has an approximate 50% overhead for the instrumentation alone, i.e., prior to any cost-centres and without sampling.
+
+  The following shows the Grafana Call-Stack Profiles dashboard for [`jumpy-jump`](examples/jumpy-jump/jumpy-jump-with-ghc-stack-profiler.sh) instrumented with `ghc-stack-profiler`.
+
+  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler.gif)
+
+## Getting Started
+
+
+...
 
 ## Demo
 
