@@ -29,7 +29,6 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.List qualified as L
 import Data.Machine (Process, ProcessT, await, construct, repeatedly, yield)
-import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
@@ -198,10 +197,17 @@ insertHeapProfSampleString ::
   m HeapProfSampleData
 insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData = do
   let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
-      insert heapProfSample' = do
-        when (isJust heapProfSample') $ do
-          let msg = "Duplicate HeapProfSampleString for " <> heapProfLabel <> " within the same garbage collection pass."
-          writeLog logger WARN $ msg
+      insert maybeHeapProfSample = do
+        -- When using -hT profiling, GHC appears to emit the same sample multiple times.
+        for_ maybeHeapProfSample $ \heapProfSample' ->
+          -- If the two samples are not the same, this assumption is wrong - warn.
+          when (heapProfSample'.value /= heapProfSample.value) $
+            writeLog logger WARN . T.pack $
+              printf
+                "Duplicate sample for %s within census (old: %d, new: %d)."
+                (T.unpack heapProfLabel)
+                heapProfSample'.value
+                heapProfSample.value
 
         pure (Just heapProfSample)
   heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSampleData.heapProfSampleMap
