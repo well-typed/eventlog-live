@@ -59,7 +59,7 @@ flag control
 flag use-concurrent-machines
   description: Use concurrent-machines in place of the vendored copy
   default: False
-  manual: False
+  manual: True
 
 -- 2026-04-02:
 -- This flag should enable switching the use of eventlog-socket on
