@@ -26,7 +26,7 @@ import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (AttrText), (~=))
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (MyTelemetryData, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -212,7 +212,7 @@ main = do
                 ]
                 ~> M.liftTick asParts
                 -- ...and export it.
-                ~> exportResourceTelemetryData fullConfig otlpExporter
+                ~> exportResourceTelemetryData logger fullConfig otlpExporter
             ]
             -- Process the statistics
             -- TODO: windowSize should be the maximum of all aggregation and export intervals
@@ -222,7 +222,7 @@ main = do
             ~> M.dropTick
 
     -- Open a connection to the OpenTelemetry Collector.
-    withOtlpExporter otlpExporterOptions' $ \otlpExporter -> do
+    withOtlpExporter logger otlpExporterOptions' $ \otlpExporter -> do
       DB.withNewSession def $ \session -> do
         let withCostCentreTable =
               case maybeCCDBPath of
@@ -270,10 +270,11 @@ Internal helper.
 Export resource telemetry data and yield statistics.
 -}
 exportResourceTelemetryData ::
+  Logger IO ->
   FullConfig ->
   OtlpExporter ->
   ProcessT IO (Tick ResourceTelemetryData) (Tick (DList Stat))
-exportResourceTelemetryData fullConfig otlpExporter =
+exportResourceTelemetryData logger fullConfig otlpExporter =
   M.fanoutTick
     [ -- Export logs.
       runIf (C.shouldExportLogs fullConfig) $
@@ -283,7 +284,7 @@ exportResourceTelemetryData fullConfig otlpExporter =
           --       making it impossible to not batch once per interval.
           ~> M.batchByTick
           ~> M.liftTick (mapping (toExportLogsServiceRequest . D.toList))
-          ~> exportResourceLogs otlpExporter
+          ~> exportResourceLogs logger otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportLogsResultStat))
     , -- Export metrics.
       runIf (C.shouldExportMetrics fullConfig) $
@@ -291,7 +292,7 @@ exportResourceTelemetryData fullConfig otlpExporter =
           -- NOTE: See note above.
           ~> M.batchByTick
           ~> M.liftTick (mapping (toExportMetricsServiceRequest . D.toList))
-          ~> exportResourceMetrics otlpExporter
+          ~> exportResourceMetrics logger otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportMetricsResultStat))
     , -- Export spans.
       runIf (C.shouldExportTraces fullConfig) $
@@ -299,12 +300,12 @@ exportResourceTelemetryData fullConfig otlpExporter =
           -- NOTE: See note above.
           ~> M.batchByTick
           ~> M.liftTick (mapping (toExportTracesServiceRequest . D.toList))
-          ~> exportResourceSpans otlpExporter
+          ~> exportResourceSpans logger otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
     , -- Export profiles.
       runIf (C.shouldExportProfiles fullConfig) $
         M.liftTick (mapping getResourceProfiles ~> asParts ~> mapping toExportProfileServiceRequest)
-          ~> exportResourceProfiles otlpExporter
+          ~> exportResourceProfiles logger otlpExporter
           ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
     ]
 
