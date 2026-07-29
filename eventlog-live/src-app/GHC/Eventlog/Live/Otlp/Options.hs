@@ -9,9 +9,8 @@ module GHC.Eventlog.Live.Otlp.Options (
 
 import Data.Char (toLower)
 import Data.Default (Default (..))
-import Data.Functor (void)
-import Data.List qualified as L
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
@@ -25,13 +24,12 @@ import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Network.GRPC.Common qualified as G
+import OpenTelemetry.Baggage (Baggage, decodeBaggageHeader)
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
 import Options.Applicative.Help.Pretty qualified as OP
 import Paths_eventlog_live qualified as EventlogLive
-import Text.ParserCombinators.ReadP (ReadP)
-import Text.ParserCombinators.ReadP qualified as P
 
 options :: O.ParserInfo Options
 options =
@@ -160,7 +158,7 @@ data OtlpExporterOptions a = OtlpExporterOptions
   , otlpEndpoint :: !a
   , otlpGrpcCertificateStore :: !(Maybe FilePath)
   , otlpGrpcSslKeyLog :: !(Maybe G.SslKeyLog)
-  , otlpHttpHeaders :: !(Maybe [(String, String)])
+  , otlpHttpHeaders :: !(Maybe Baggage)
   }
   deriving stock (Functor, Foldable, Traversable)
 
@@ -236,21 +234,15 @@ otlpGrpcSslKeyLogParser =
         )
     ]
 
-otlpHttpHeadersParser :: O.Parser [(String, String)]
+otlpHttpHeadersParser :: O.Parser Baggage
 otlpHttpHeadersParser =
-  O.option (O.maybeReader readHeaders) . mconcat $
+  O.option (O.eitherReader readHeaders) . mconcat $
     [ O.long "otlp-http-headers"
     , O.help "A list of headers to apply to all outgoing data."
     ]
 
-readHeaders :: String -> Maybe [(String, String)]
-readHeaders = runReadP pHeaders
- where
-  pHeaders :: ReadP [(String, String)]
-  pHeaders = P.many (pHeader <* (void (P.char ',') P.<++ P.eof))
-
-  pHeader :: ReadP (String, String)
-  pHeader = (,) <$> P.munch1 (/= '=') <* P.char '=' <*> P.munch1 (/= ',')
+readHeaders :: String -> Either String Baggage
+readHeaders = decodeBaggageHeader . TE.encodeUtf8 . T.pack
 
 --------------------------------------------------------------------------------
 -- Debug Options
@@ -266,15 +258,3 @@ myDebugOptionsParser =
     MyDebugOptions
       <$> maybeMyEventlogSocketParser
       <*> maybeMyGhcDebugSocketParser
-
---------------------------------------------------------------------------------
--- Internal helpers
---------------------------------------------------------------------------------
-
-{- |
-Internal helper.
-
-Run a ReadP parser.
--}
-runReadP :: ReadP a -> String -> Maybe a
-runReadP p = fmap fst . L.find (null . snd) . P.readP_to_S p
