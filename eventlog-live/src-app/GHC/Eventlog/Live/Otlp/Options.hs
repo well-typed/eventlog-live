@@ -250,7 +250,7 @@ readHeaders = runReadP pHeaders
   pHeaders = P.many (pHeader <* (void (P.char ',') P.<++ P.eof))
 
   pHeader :: ReadP (String, String)
-  pHeader = (,) <$> P.munch1 (/= '=') <*> P.munch1 (/= ',')
+  pHeader = (,) <$> P.munch1 (/= '=') <* P.char '=' <*> P.munch1 (/= ',')
 
 --------------------------------------------------------------------------------
 -- Debug Options
