@@ -27,7 +27,10 @@ import Data.Maybe (fromMaybe)
 import Data.ProtoLens.Encoding qualified as Proto
 import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
+import Data.Text qualified as T
 import Data.Word (Word16)
+import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Otlp.Options (OtlpExporterOptions (..), OtlpProtocol (..))
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -53,15 +56,19 @@ data OtlpExporter
 {- |
 Construct an t`OtlpExporter` from t`OtlpExporterOptions`.
 -}
-withOtlpExporter :: OtlpExporterOptions OtlpEndpoint -> (OtlpExporter -> IO a) -> IO a
-withOtlpExporter options action =
+withOtlpExporter ::
+  Logger IO ->
+  OtlpExporterOptions OtlpEndpoint ->
+  (OtlpExporter -> IO a) ->
+  IO a
+withOtlpExporter logger options action =
   case options of
     OtlpExporterOptions{otlpEndpoint = Left otlpGrpcEndpoint, ..} -> do
       let options' = OtlpExporterOptions{otlpEndpoint = otlpGrpcEndpoint, ..}
-      withOtlpGrpcExporter options' $ action . OtlpExporterGrpc
+      withOtlpGrpcExporter logger options' $ action . OtlpExporterGrpc
     OtlpExporterOptions{otlpEndpoint = Right otlpHttpEndpoint, ..} -> do
       let options' = OtlpExporterOptions{otlpEndpoint = otlpHttpEndpoint, ..}
-      withOtlpHttpProtobufExporter options' $ action . OtlpExporterHttpProtobuf
+      withOtlpHttpProtobufExporter logger options' $ action . OtlpExporterHttpProtobuf
 
 {- |
 The options for an OTLP endpoint.
@@ -147,14 +154,15 @@ export ::
   ( CanExportViaGrpc serv meth
   , CanExportViaHttpProtobuf serv meth
   ) =>
+  Logger IO ->
   -- | The HTTP/Protobuf exporter.
   OtlpExporter ->
   -- | The request message.
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
-export = \case
-  OtlpExporterGrpc exporter -> exportGrpc @serv @meth exporter
-  OtlpExporterHttpProtobuf exporter -> exportHttpProtobuf @serv @meth exporter
+export logger = \case
+  OtlpExporterGrpc exporter -> exportGrpc @serv @meth logger exporter
+  OtlpExporterHttpProtobuf exporter -> exportHttpProtobuf @serv @meth logger exporter
 
 --------------------------------------------------------------------------------
 -- OTLP gRPC Exporter
@@ -182,8 +190,12 @@ type CanExportViaGrpc serv meth =
   , G.RequestMetadata (Protobuf serv meth) ~ G.NoMetadata
   )
 
-withOtlpGrpcExporter :: OtlpExporterOptions OtlpGrpcEndpoint -> (OtlpGrpcExporter -> IO a) -> IO a
-withOtlpGrpcExporter OtlpExporterOptions{otlpEndpoint = OtlpGrpcEndpoint{..}, ..} action =
+withOtlpGrpcExporter ::
+  Logger IO ->
+  OtlpExporterOptions OtlpGrpcEndpoint ->
+  (OtlpGrpcExporter -> IO a) ->
+  IO a
+withOtlpGrpcExporter _logger OtlpExporterOptions{otlpEndpoint = OtlpGrpcEndpoint{..}, ..} action =
   G.withConnection G.def server $ \connection -> action OtlpGrpcExporter{..}
  where
   server :: G.Server
@@ -198,10 +210,11 @@ withOtlpGrpcExporter OtlpExporterOptions{otlpEndpoint = OtlpGrpcEndpoint{..}, ..
 exportGrpc ::
   forall serv meth.
   (CanExportViaGrpc serv meth) =>
+  Logger IO ->
   OtlpGrpcExporter ->
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
-exportGrpc grpcExporter input =
+exportGrpc _logger grpcExporter input =
   G.getProto <$> G.nonStreaming grpcExporter.connection (G.rpc @(G.Protobuf serv meth)) (G.Proto input)
 
 --------------------------------------------------------------------------------
@@ -252,11 +265,16 @@ Internal helper.
 
 Run an action with an t`OtlpHttpProtobufExporter`.
 -}
-withOtlpHttpProtobufExporter :: OtlpExporterOptions OtlpHttpEndpoint -> (OtlpHttpProtobufExporter -> IO a) -> IO a
-withOtlpHttpProtobufExporter OtlpExporterOptions{otlpEndpoint = OtlpHttpEndpoint{..}, ..} action = do
+withOtlpHttpProtobufExporter ::
+  Logger IO ->
+  OtlpExporterOptions OtlpHttpEndpoint ->
+  (OtlpHttpProtobufExporter -> IO a) ->
+  IO a
+withOtlpHttpProtobufExporter logger OtlpExporterOptions{otlpEndpoint = OtlpHttpEndpoint{..}, ..} action = do
   -- Create an HTTP manager.
   manager <- H.newManager H.tlsManagerSettings
   -- Create the HTTP headers.
+  writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - Headers: " <> show otlpHttpHeaders
   let headers = [(CI.mk (BSC.pack name), BSC.pack value) | (name, value) <- fromMaybe [] otlpHttpHeaders]
   -- Run the action.
   action OtlpHttpProtobufExporter{..}
@@ -275,12 +293,13 @@ Send a Protobuf message over an HTTP connection.
 exportHttpProtobuf ::
   forall serv meth.
   (CanExportViaHttpProtobuf serv meth) =>
+  Logger IO ->
   -- | The HTTP/Protobuf exporter.
   OtlpHttpProtobufExporter ->
   -- | The request message.
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
-exportHttpProtobuf OtlpHttpProtobufExporter{..} req = do
+exportHttpProtobuf logger OtlpHttpProtobufExporter{..} req = do
   baseRequest <- H.parseRequest (baseUrl <> apiPath @serv @meth)
   let request =
         baseRequest
@@ -293,7 +312,9 @@ exportHttpProtobuf OtlpHttpProtobufExporter{..} req = do
               ]
                 <> headers
           }
+  writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - HTTP Request:  " <> show request
   response <- H.httpLbs request manager
+  writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - HTTP Response:  " <> show response
   let status = H.responseStatus response
   let body = BSL.toStrict (H.responseBody response)
   if HTTP.statusIsSuccessful status

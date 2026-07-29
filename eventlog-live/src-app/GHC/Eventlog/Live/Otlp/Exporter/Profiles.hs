@@ -16,6 +16,7 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
@@ -59,9 +60,10 @@ instance Exception RejectedProfilesError where
 -- OpenTelemetry gRPC Exporter for Profiles
 
 exportResourceProfiles ::
+  Logger IO ->
   OtlpExporter ->
   ProcessT IO (Tick OPS.ExportProfilesServiceRequest) (Tick ExportProfileResult)
-exportResourceProfiles exporter =
+exportResourceProfiles logger exporter =
   construct $ go False
  where
   go exportedProfiles =
@@ -84,7 +86,7 @@ exportResourceProfiles exporter =
 
     doExport :: IO ExportProfileResult
     doExport = do
-      resp <- export @OPS.ProfilesService @"export" exporter exportProfilesServiceRequest
+      resp <- export @OPS.ProfilesService @"export" logger exporter exportProfilesServiceRequest
       if resp ^. OPS.partialSuccess . OPS.rejectedProfiles == 0
         then
           pure $ ExportProfileSuccess exportedProfiles
