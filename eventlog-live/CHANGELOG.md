@@ -3,6 +3,7 @@
 The version 0.7.0.0 was skipped to avoid confusion with `eventlog-live-otelcol-0.7.0.0`.
 
 - Merge the executable `eventlog-live-otelcol` into this package as `eventlog-live-otlp`.
+- Fix issue where `--otlp-http-headers` header values retained the `=`.
 
 ### 0.6.0.0
 
