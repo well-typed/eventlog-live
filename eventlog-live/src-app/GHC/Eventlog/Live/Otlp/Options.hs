@@ -56,7 +56,7 @@ data Options = Options
   , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
-  , otlpExporterOptions :: OtlpExporterOptions String
+  , otlpExporterOptions :: OtlpExporterOptions (Maybe String)
   , controlOptions :: ControlOptions
   , myDebugOptions :: MyDebugOptions
   }
@@ -162,12 +162,12 @@ data OtlpExporterOptions a = OtlpExporterOptions
   }
   deriving stock (Functor, Foldable, Traversable)
 
-otlpExporterOptionsParser :: O.Parser (OtlpExporterOptions String)
+otlpExporterOptionsParser :: O.Parser (OtlpExporterOptions (Maybe String))
 otlpExporterOptionsParser =
   OC.parserOptionGroup "OTLP Exporter Options" $
     OtlpExporterOptions
       <$> otlpProtocolParser
-      <*> otlpEndpointParser
+      <*> O.optional otlpEndpointParser
       <*> O.optional otlpGrpcCertificateStoreParser
       <*> O.optional otlpGrpcSslKeyLogParser
       <*> O.optional otlpHttpHeadersParser

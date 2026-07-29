@@ -81,7 +81,7 @@ type OtlpEndpoint = Either OtlpGrpcEndpoint OtlpHttpEndpoint
 {- |
 Parse the OTLP endpoint from a t`String` to an t`OtlpEndpoint`.
 -}
-parseOtlpExporterOptions :: OtlpExporterOptions String -> Either String (OtlpExporterOptions OtlpEndpoint)
+parseOtlpExporterOptions :: OtlpExporterOptions (Maybe String) -> Either String (OtlpExporterOptions OtlpEndpoint)
 parseOtlpExporterOptions OtlpExporterOptions{..} = do
   otlpEndpoint' <- parseOtlpEndpoint otlpProtocol otlpEndpoint
   let !options' = OtlpExporterOptions{otlpEndpoint = otlpEndpoint', ..}
@@ -102,11 +102,17 @@ parseOtlpExporterOptions OtlpExporterOptions{..} = do
 {- |
 Parse an OTLP endpoint string as an t`OtlpEndpoint` depending on the t`OtlpProtocol`.
 -}
-parseOtlpEndpoint :: OtlpProtocol -> String -> Either String OtlpEndpoint
+parseOtlpEndpoint :: OtlpProtocol -> Maybe String -> Either String OtlpEndpoint
 parseOtlpEndpoint = go True
  where
-  go :: Bool -> OtlpProtocol -> String -> Either String OtlpEndpoint
-  go retry otlpProtocol url =
+  go :: Bool -> OtlpProtocol -> Maybe String -> Either String OtlpEndpoint
+  go _retry otlpProtocol Nothing =
+    case otlpProtocol of
+      OtlpProtocolGrpc ->
+        pure $ Left OtlpGrpcEndpoint{host = "localhost", port = 4317, secure = False}
+      OtlpProtocolHttpProtobuf ->
+        pure $ Right OtlpHttpEndpoint{baseUrl = "http://localhost:4318"}
+  go retry otlpProtocol (Just url) =
     case URI.parseURI url of
       Just URI.URI{..} ->
         case otlpProtocol of
@@ -125,16 +131,14 @@ parseOtlpEndpoint = go True
             | uriScheme `elem` ["http:", "https:"]
             , null uriQuery
             , null uriFragment -> do
-                let !host = maybe "localhost" (.uriRegName) uriAuthority
-                let !port = fromMaybe 4317 $ uriPortNumber uriAuthority
-                let !auth = URI.nullURIAuth{URI.uriRegName = host, URI.uriPort = ':' : show port}
-                let !baseURI = URI.nullURI{URI.uriScheme = uriScheme, URI.uriAuthority = Just auth, URI.uriPath = uriPath}
+                let !uriAuth = (fromMaybe URI.nullURIAuth uriAuthority){URI.uriRegName = maybe "localhost" (.uriRegName) uriAuthority}
+                let !baseURI = URI.nullURI{URI.uriScheme = uriScheme, URI.uriAuthority = Just uriAuth, URI.uriPath = uriPath}
                 pure $ Right OtlpHttpEndpoint{baseUrl = show baseURI}
             | otherwise ->
                 Left $ "The HTTP/Protobuf protocol only supports HTTP and HTTPS and does not support an URI query or fragment, found: " <> url
       Nothing
         | retry ->
-            go False otlpProtocol $ "http://" <> url
+            go False otlpProtocol (Just $ "http://" <> url)
         | otherwise ->
             Left $ "Could not parse url " <> url
 
