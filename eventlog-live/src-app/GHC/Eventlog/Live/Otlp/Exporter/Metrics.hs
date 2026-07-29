@@ -15,6 +15,7 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
@@ -65,9 +66,10 @@ instance Exception RejectedMetricsError where
 -- OpenTelemetry gRPC Exporter for Metrics
 
 exportResourceMetrics ::
+  Logger IO ->
   OtlpExporter ->
   ProcessT IO (Tick OMS.ExportMetricsServiceRequest) (Tick ExportMetricsResult)
-exportResourceMetrics exporter = construct $ go False
+exportResourceMetrics logger exporter = construct $ go False
  where
   go exportedResourceMetrics =
     await >>= \case
@@ -89,7 +91,7 @@ exportResourceMetrics exporter = construct $ go False
 
     doExport :: IO ExportMetricsResult
     doExport = do
-      resp <- export @OMS.MetricsService @"export" exporter exportMetricsServiceRequest
+      resp <- export @OMS.MetricsService @"export" logger exporter exportMetricsServiceRequest
       if resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0
         then
           pure $ ExportMetricsSuccess exportedDataPoints

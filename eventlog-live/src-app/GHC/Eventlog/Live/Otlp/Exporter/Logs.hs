@@ -15,6 +15,7 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
@@ -65,9 +66,10 @@ instance Exception RejectedLogsError where
 -- OpenTelemetry gRPC Exporter for Logs
 
 exportResourceLogs ::
+  Logger IO ->
   OtlpExporter ->
   ProcessT IO (Tick OLS.ExportLogsServiceRequest) (Tick ExportLogsResult)
-exportResourceLogs exporter = construct $ go False
+exportResourceLogs logger exporter = construct $ go False
  where
   go exportedResourceLogs =
     await >>= \case
@@ -89,7 +91,7 @@ exportResourceLogs exporter = construct $ go False
 
     doExport :: IO ExportLogsResult
     doExport = do
-      resp <- export @OLS.LogsService @"export" exporter exportLogsServiceRequest
+      resp <- export @OLS.LogsService @"export" logger exporter exportLogsServiceRequest
       if resp ^. OLS.partialSuccess . OLS.rejectedLogRecords == 0
         then
           pure $ ExportLogsSuccess exportedLogRecords

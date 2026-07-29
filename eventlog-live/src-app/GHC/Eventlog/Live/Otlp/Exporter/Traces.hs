@@ -15,6 +15,7 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
 import Lens.Family2 ((^.))
@@ -61,9 +62,10 @@ instance Exception RejectedSpansError where
 -- OpenTelemetry gRPC Exporter for Traces
 
 exportResourceSpans ::
+  Logger IO ->
   OtlpExporter ->
   ProcessT IO (Tick OTS.ExportTraceServiceRequest) (Tick ExportTraceResult)
-exportResourceSpans exporter =
+exportResourceSpans logger exporter =
   construct $ go False
  where
   go exportedResourceSpans =
@@ -86,7 +88,7 @@ exportResourceSpans exporter =
 
     doGrpc :: IO ExportTraceResult
     doGrpc = do
-      resp <- export @OTS.TraceService @"export" exporter exportTraceServiceRequest
+      resp <- export @OTS.TraceService @"export" logger exporter exportTraceServiceRequest
       if resp ^. OTS.partialSuccess . OTS.rejectedSpans == 0
         then
           pure $ ExportTraceSuccess exportedSpans
