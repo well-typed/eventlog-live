@@ -4,6 +4,7 @@ The version 0.7.0.0 was skipped to avoid confusion with `eventlog-live-otelcol-0
 
 - Merge the executable `eventlog-live-otelcol` into this package as `eventlog-live-otlp`.
 - Fix issue where `--otlp-http-headers` header values retained the `=`.
+- Fix issue where `--otlp-http-headers` was not parsed as [baggage](https://www.w3.org/TR/baggage).
 
 ### 0.6.0.0
 

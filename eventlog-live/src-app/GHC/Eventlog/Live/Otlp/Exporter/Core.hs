@@ -22,16 +22,17 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.ByteString.Lazy qualified as BSL
 import Data.CaseInsensitive qualified as CI
-import Data.List qualified as L
 import Data.Maybe (fromMaybe)
 import Data.ProtoLens.Encoding qualified as Proto
 import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Word (Word16)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Otlp.Options (OtlpExporterOptions (..), OtlpProtocol (..))
+import GHC.IsList qualified as IsList
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
@@ -43,6 +44,8 @@ import Network.HTTP.Client.TLS qualified as H
 import Network.HTTP.Types.Header qualified as HTTP
 import Network.HTTP.Types.Status qualified as HTTP
 import Network.URI qualified as URI
+import OpenTelemetry.Baggage (encodeBaggageHeader)
+import OpenTelemetry.Baggage qualified as Baggage
 import Text.Read (readMaybe)
 
 --------------------------------------------------------------------------------
@@ -85,8 +88,8 @@ parseOtlpExporterOptions OtlpExporterOptions{..} = do
   case otlpProtocol of
     OtlpProtocolGrpc
       | Just headers <- otlpHttpHeaders
-      , not (null headers) -> do
-          let showHeaders = L.intercalate "," . map (\(name, value) -> name <> "=" <> value)
+      , headers /= Baggage.empty -> do
+          let showHeaders = T.unpack . TE.decodeUtf8 . encodeBaggageHeader
           Left $ "The grpc protocol does not support additional HTTP headers, found " <> showHeaders headers
     OtlpProtocolHttpProtobuf
       | Just _sslKeyLog <- otlpGrpcSslKeyLog ->
@@ -275,7 +278,11 @@ withOtlpHttpProtobufExporter logger OtlpExporterOptions{otlpEndpoint = OtlpHttpE
   manager <- H.newManager H.tlsManagerSettings
   -- Create the HTTP headers.
   writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - Headers: " <> show otlpHttpHeaders
-  let headers = [(CI.mk (BSC.pack name), BSC.pack value) | (name, value) <- fromMaybe [] otlpHttpHeaders]
+  let headers =
+        [ (CI.mk (Baggage.tokenValue token), TE.encodeUtf8 value)
+        | (token, Baggage.Element value _properties) <-
+            IsList.toList (maybe mempty Baggage.values otlpHttpHeaders)
+        ]
   -- Run the action.
   action OtlpHttpProtobufExporter{..}
 
