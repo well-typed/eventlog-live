@@ -61,6 +61,14 @@ flag use-concurrent-machines
   default: False
   manual: True
 
+-- 2026-07-29:
+-- This flag should enable switching between hs-opentelemetry-api and the
+-- vendored copy of the packages, as only a small subset is needed.
+flag use-hs-opentelemetry-api
+  description: Use hs-opentelemetry-api in place of the vendored copy
+  default: False
+  manual: True
+
 -- 2026-04-02:
 -- This flag should enable switching the use of eventlog-socket on
 -- and off, since it may cause issues with certain versions of GHC.
@@ -332,6 +340,18 @@ executable eventlog-live-otlp
     build-depends: ghc-debug-stub >=0.1 && <1
     cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
 
+  -- 2026-07-29:
+  -- This configures the build requirements for the vendored copy of
+  -- the hs-opentelemetry-api package version 1.0.0.0.
+  if flag(use-hs-opentelemetry-api)
+    build-depends: hs-opentelemetry-api >=1.0.0.0 && <1.1
+  else
+    hs-source-dirs: vendor/hs-opentelemetry-api-1.0.0.0/src
+    other-modules: OpenTelemetry.Baggage
+
+  -- 2025-11-06:
+  -- This configures the build requirements for using either template-haskell
+  -- or template-haskell-lift.
   if flag(use-template-haskell-lift)
     build-depends: template-haskell-lift >=0.1 && <0.2
     cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
