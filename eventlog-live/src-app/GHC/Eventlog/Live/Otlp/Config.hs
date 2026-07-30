@@ -10,7 +10,6 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Otlp.Config (
   -- * Configuration type
-  ServiceName (..),
   Config (..),
   readConfigFile,
   prettyConfig,
@@ -87,7 +86,6 @@ import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Lazy qualified as BSL
 import Data.Default (Default (..))
-import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid (Any (..))
@@ -103,12 +101,6 @@ import GHC.Eventlog.Live.Otlp.Config.Types
 import GHC.Records (HasField)
 import GHC.Stack.Types (HasCallStack)
 import System.Exit (exitFailure)
-
-{- |
-An OpenTelemetry service name.
--}
-newtype ServiceName = ServiceName {serviceName :: Text}
-  deriving newtype (Eq, Hashable)
 
 {- |
 Read a `Config` from a configuration file.

@@ -18,7 +18,7 @@ import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), OtlpExporter (..), export)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), Exporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
@@ -61,7 +61,7 @@ instance Exception RejectedProfilesError where
 
 exportResourceProfiles ::
   Logger IO ->
-  OtlpExporter ->
+  Exporter ->
   ProcessT IO (Tick OPS.ExportProfilesServiceRequest) (Tick ExportProfileResult)
 exportResourceProfiles logger exporter =
   construct $ go False

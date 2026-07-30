@@ -8,6 +8,7 @@ module GHC.Eventlog.Live.Otlp.Processor.Common.Core (
   messageWith,
   (.~?),
   runIf,
+  runWith,
   ifNonEmpty,
   toMaybeKeyValue,
   toMaybeAnyValue,
@@ -33,6 +34,10 @@ setter .~? maybeValue = maybe id (setter .~) maybeValue
 -- | Run a machine if a boolean is @True@, otherwise stop.
 runIf :: (Monad m) => Bool -> MachineT m k o -> MachineT m k o
 runIf b m = if b then m else stopped
+
+-- | Run a machine with the value from a @Maybe a@, otherwise stop.
+runWith :: (Monad m) => Maybe a -> (a -> MachineT m k o) -> MachineT m k o
+runWith ma mf = maybe stopped mf ma
 
 -- | Return the second argument if the first argument is non-empty.
 ifNonEmpty :: [a] -> b -> Maybe b

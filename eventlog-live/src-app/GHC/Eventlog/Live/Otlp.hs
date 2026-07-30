@@ -12,6 +12,7 @@ module GHC.Eventlog.Live.Otlp (
 
 import Control.Concurrent.STM.TChan (newTChanIO)
 import Control.Exception (bracket_)
+import Control.Monad.Trans.Except (runExceptT)
 import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
@@ -34,7 +35,8 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Control (ControlServerApi (..), startControlServer)
-import GHC.Eventlog.Live.Otlp.Exporter.Core (OtlpExporter, parseOtlpExporterOptions, withOtlpExporter)
+import GHC.Eventlog.Live.Otlp.Environment (PerSignal, ServiceName (..), Signal (..), forSignal, lookupExporterOptions, lookupLogLevel, lookupResourceAttributes)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (Exporter, withExporters)
 import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics)
 import GHC.Eventlog.Live.Otlp.Exporter.Profiles (exportResourceProfiles)
@@ -73,14 +75,24 @@ The main function for @eventlog-live-otlp@.
 -}
 main :: IO ()
 main = do
+  -- Parse the command-line options
   Options{..} <- O.execParser options
-  otlpExporterOptions' <- either die pure (parseOtlpExporterOptions otlpExporterOptions)
+
+  -- Lookup the OpenTelemetry log level
+  logLevel <-
+    either die pure =<< runExceptT lookupLogLevel
 
   -- Construct the logging action
   myTelemetryDataChan <- newTChanIO
-  let logger =
-        M.filterBySeverity severityThreshold $
-          M.stderrLogger <> M.chanLogger myTelemetryDataChan
+  let logger = M.filterBySeverity logLevel (M.stderrLogger <> M.chanLogger myTelemetryDataChan)
+
+  -- Lookup the OpenTelemetry Exporter Options
+  exporterOptions <-
+    either die pure =<< runExceptT (lookupExporterOptions logger)
+
+  -- Lookup the OpenTelemetry Resource Attributes
+  maybeResourceAttributes <-
+    either die pure =<< runExceptT (lookupResourceAttributes logger)
 
   -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
   let MyDebugOptions{..} = myDebugOptions
@@ -116,20 +128,18 @@ main = do
             , C.maximumExportBatches fullConfig
             ]
 
-    -- Resolve the service name (or use a default).
-    let serviceName :: ServiceName
-        serviceName = fromMaybe (ServiceName "undefined") maybeServiceName
+    -- Find the service name, if any:
+    let !serviceName =
+          fromMaybe (ServiceName "undefined") $
+            (.serviceName) =<< maybeResourceAttributes
 
     -- Create a resource to represent the monitored process.
     let eventlogResource :: OR.Resource
         eventlogResource =
-          messageWith
-            [ OM.attributes
-                .~ mapMaybe
-                  toMaybeKeyValue
-                  [ "service.name" ~= AttrText serviceName.serviceName
-                  ]
-            ]
+          let attributes =
+                mapMaybe (toMaybeKeyValue . uncurry (~=)) $
+                  maybe [] (.attributes) maybeResourceAttributes
+           in messageWith [OM.attributes .~ attributes]
 
     -- Create machine that indexes CostCentre data.
     let indexCostCentreEvents ::
@@ -198,7 +208,7 @@ main = do
             ~> M.liftTick (asResourceTelemetryData internalResource eventlogLiveScope)
 
     -- Create the full machine to process eventlog data.
-    let processAndExportTelemetry ccdb ipedb otlpExporter =
+    let processAndExportTelemetry ccdb ipedb exporters =
           M.fanoutTick
             [ -- Log a warning if no input has been received after 10 ticks.
               M.validateInput logger 10
@@ -212,7 +222,7 @@ main = do
                 ]
                 ~> M.liftTick asParts
                 -- ...and export it.
-                ~> exportResourceTelemetryData logger fullConfig otlpExporter
+                ~> exportResourceTelemetryData logger fullConfig exporters
             ]
             -- Process the statistics
             -- TODO: windowSize should be the maximum of all aggregation and export intervals
@@ -222,7 +232,7 @@ main = do
             ~> M.dropTick
 
     -- Open a connection to the OpenTelemetry Collector.
-    withOtlpExporter logger otlpExporterOptions' $ \otlpExporter -> do
+    withExporters logger exporterOptions $ \exporters -> do
       DB.withNewSession def $ \session -> do
         let withCostCentreTable =
               case maybeCCDBPath of
@@ -251,7 +261,7 @@ main = do
                     fullConfig.batchIntervalMs
                     Nothing
                     maybeEventlogLogFile
-                    (processAndExportTelemetry ccdb ipedb otlpExporter)
+                    (processAndExportTelemetry ccdb ipedb exporters)
 
 data TelemetryData
   = TelemetryData'Log OL.LogRecord
@@ -272,41 +282,45 @@ Export resource telemetry data and yield statistics.
 exportResourceTelemetryData ::
   Logger IO ->
   FullConfig ->
-  OtlpExporter ->
+  PerSignal (Maybe Exporter) ->
   ProcessT IO (Tick ResourceTelemetryData) (Tick (DList Stat))
-exportResourceTelemetryData logger fullConfig otlpExporter =
+exportResourceTelemetryData logger fullConfig exporters =
   M.fanoutTick
     [ -- Export logs.
       runIf (C.shouldExportLogs fullConfig) $
-        M.liftTick (mapping getResourceLogs ~> asParts ~> mapping D.singleton)
-          -- NOTE: This is required to combine different resource telemetry
-          --       streams. However, it has the "unfortunate" side-effect of
-          --       making it impossible to not batch once per interval.
-          ~> M.batchByTick
-          ~> M.liftTick (mapping (toExportLogsServiceRequest . D.toList))
-          ~> exportResourceLogs logger otlpExporter
-          ~> M.liftTick (mapping (D.singleton . ExportLogsResultStat))
+        runWith (exporters `forSignal` LOGS) $ \logsExporter ->
+          M.liftTick (mapping getResourceLogs ~> asParts ~> mapping D.singleton)
+            -- NOTE: This is required to combine different resource telemetry
+            --       streams. However, it has the "unfortunate" side-effect of
+            --       making it impossible to not batch once per interval.
+            ~> M.batchByTick
+            ~> M.liftTick (mapping (toExportLogsServiceRequest . D.toList))
+            ~> exportResourceLogs logger logsExporter
+            ~> M.liftTick (mapping (D.singleton . ExportLogsResultStat))
     , -- Export metrics.
       runIf (C.shouldExportMetrics fullConfig) $
-        M.liftTick (mapping getResourceMetrics ~> asParts ~> mapping D.singleton)
-          -- NOTE: See note above.
-          ~> M.batchByTick
-          ~> M.liftTick (mapping (toExportMetricsServiceRequest . D.toList))
-          ~> exportResourceMetrics logger otlpExporter
-          ~> M.liftTick (mapping (D.singleton . ExportMetricsResultStat))
+        runWith (exporters `forSignal` METRICS) $ \metricsExporter ->
+          M.liftTick (mapping getResourceMetrics ~> asParts ~> mapping D.singleton)
+            -- NOTE: See note above.
+            ~> M.batchByTick
+            ~> M.liftTick (mapping (toExportMetricsServiceRequest . D.toList))
+            ~> exportResourceMetrics logger metricsExporter
+            ~> M.liftTick (mapping (D.singleton . ExportMetricsResultStat))
     , -- Export spans.
       runIf (C.shouldExportTraces fullConfig) $
-        M.liftTick (mapping getResourceSpans ~> asParts ~> mapping D.singleton)
-          -- NOTE: See note above.
-          ~> M.batchByTick
-          ~> M.liftTick (mapping (toExportTracesServiceRequest . D.toList))
-          ~> exportResourceSpans logger otlpExporter
-          ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
+        runWith (exporters `forSignal` TRACES) $ \tracesExporter ->
+          M.liftTick (mapping getResourceSpans ~> asParts ~> mapping D.singleton)
+            -- NOTE: See note above.
+            ~> M.batchByTick
+            ~> M.liftTick (mapping (toExportTracesServiceRequest . D.toList))
+            ~> exportResourceSpans logger tracesExporter
+            ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
     , -- Export profiles.
       runIf (C.shouldExportProfiles fullConfig) $
-        M.liftTick (mapping getResourceProfiles ~> asParts ~> mapping toExportProfileServiceRequest)
-          ~> exportResourceProfiles logger otlpExporter
-          ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
+        runWith (exporters `forSignal` PROFILES) $ \profilesExporter ->
+          M.liftTick (mapping getResourceProfiles ~> asParts ~> mapping toExportProfileServiceRequest)
+            ~> exportResourceProfiles logger profilesExporter
+            ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
     ]
 
 getResourceLogs :: ResourceTelemetryData -> Maybe OL.ResourceLogs

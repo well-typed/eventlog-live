@@ -1,21 +1,14 @@
 module GHC.Eventlog.Live.Otlp.Options (
   Options (..),
   MyDebugOptions (..),
-  ServiceName (..),
-  OtlpExporterOptions (..),
-  OtlpProtocol (..),
   options,
 ) where
 
-import Data.Char (toLower)
 import Data.Default (Default (..))
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Options
-import GHC.Eventlog.Live.Otlp.Config (ServiceName (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
 import GHC.Eventlog.Live.Otlp.Config.Types (Config)
@@ -23,12 +16,9 @@ import GHC.Eventlog.Live.Otlp.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
 import GHC.RTS.Events (HeapProfBreakdown (..))
-import Network.GRPC.Common qualified as G
-import OpenTelemetry.Baggage (Baggage, decodeBaggageHeader)
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
-import Options.Applicative.Help.Pretty qualified as OP
 import Paths_eventlog_live qualified as EventlogLive
 
 options :: O.ParserInfo Options
@@ -50,13 +40,10 @@ data Options = Options
   , eventlogFlushIntervalS :: Double
   , maybeEventlogLogFile :: Maybe FilePath
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
-  , maybeServiceName :: Maybe ServiceName
   , maybeIpeDBPath :: Maybe FilePath
   , maybeCCDBPath :: Maybe FilePath
-  , severityThreshold :: Severity
   , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
-  , otlpExporterOptions :: OtlpExporterOptions (Maybe String)
   , controlOptions :: ControlOptions
   , myDebugOptions :: MyDebugOptions
   }
@@ -70,13 +57,10 @@ optionsParser =
     <*> eventlogFlushIntervalSParser
     <*> O.optional eventlogLogFileParser
     <*> O.optional heapProfBreakdownParser
-    <*> O.optional serviceNameParser
     <*> O.optional ipeDBPathParser
     <*> O.optional ccDBPathParser
-    <*> verbosityParser
     <*> statsParser
     <*> O.optional configFileParser
-    <*> otlpExporterOptionsParser
     <*> controlOptionsParser
     <*> myDebugOptionsParser
 
@@ -117,18 +101,6 @@ debugDefaultsPrinter =
     T.unpack . C.prettyConfig $ (def :: Config)
 
 --------------------------------------------------------------------------------
--- Service Name
-
-serviceNameParser :: O.Parser ServiceName
-serviceNameParser =
-  ServiceName
-    <$> O.strOption
-      ( O.long "service-name"
-          <> O.metavar "STRING"
-          <> O.help "The name of the profiled service."
-      )
-
---------------------------------------------------------------------------------
 -- InfoProv Tables
 
 ipeDBPathParser :: O.Parser FilePath
@@ -149,100 +121,6 @@ ccDBPathParser =
         <> O.metavar "FILE"
         <> O.help "The path a cost-centre database."
     )
-
---------------------------------------------------------------------------------
--- OpenTelemetry Collector configuration
-
-data OtlpExporterOptions a = OtlpExporterOptions
-  { otlpProtocol :: !OtlpProtocol
-  , otlpEndpoint :: !a
-  , otlpGrpcCertificateStore :: !(Maybe FilePath)
-  , otlpGrpcSslKeyLog :: !(Maybe G.SslKeyLog)
-  , otlpHttpHeaders :: !(Maybe Baggage)
-  }
-  deriving stock (Functor, Foldable, Traversable)
-
-otlpExporterOptionsParser :: O.Parser (OtlpExporterOptions (Maybe String))
-otlpExporterOptionsParser =
-  OC.parserOptionGroup "OTLP Exporter Options" $
-    OtlpExporterOptions
-      <$> otlpProtocolParser
-      <*> O.optional otlpEndpointParser
-      <*> O.optional otlpGrpcCertificateStoreParser
-      <*> O.optional otlpGrpcSslKeyLogParser
-      <*> O.optional otlpHttpHeadersParser
-
-data OtlpProtocol
-  = OtlpProtocolGrpc
-  | OtlpProtocolHttpProtobuf
-  deriving (Show)
-
-otlpProtocolParser :: O.Parser OtlpProtocol
-otlpProtocolParser =
-  O.option (O.maybeReader readOtlpProtocol) . mconcat $
-    [ O.long "otlp-protocol"
-    , O.helpDoc . Just . OP.vcat . fmap OP.pretty $
-        [ "The OTLP transport protocol to be used for all telemetry data (gRPC, HTTP/Protobuf)."
-        , "Default value: gRPC"
-        ]
-    , O.value OtlpProtocolGrpc
-    ]
- where
-  readOtlpProtocol :: String -> Maybe OtlpProtocol
-  readOtlpProtocol protocol =
-    case map toLower protocol of
-      "grpc" -> Just OtlpProtocolGrpc
-      "http/protobuf" -> Just OtlpProtocolHttpProtobuf
-      _ -> Nothing
-
-otlpEndpointParser :: O.Parser String
-otlpEndpointParser =
-  O.strOption . mconcat $
-    [ O.long "otlp-endpoint"
-    , O.helpDoc . Just . OP.vcat . fmap OP.pretty $
-        [ "The OTLP endpoint URL for all telemetry data, with an optionally-specified port number."
-        , "Default value:"
-        , "  gRPC: http://localhost:4317"
-        , "  HTTP: http://localhost:4318"
-        , "Example:"
-        , "  gRPC: https://my-api-endpoint:443"
-        , "  HTTP: http://my-api-endpoint/"
-        ]
-    ]
-
-otlpGrpcCertificateStoreParser :: O.Parser FilePath
-otlpGrpcCertificateStoreParser =
-  O.strOption
-    ( O.long "otlp-grpc-certificate-store"
-        <> O.metavar "FILE"
-        <> O.help "Store for certificate validation."
-    )
-
-otlpGrpcSslKeyLogParser :: O.Parser G.SslKeyLog
-otlpGrpcSslKeyLogParser =
-  O.asum
-    [ G.SslKeyLogPath
-        <$> O.strOption
-          ( O.long "otlp-grpc-ssl-key-log"
-              <> O.metavar "FILE"
-              <> O.help "Use file to log SSL keys."
-          )
-    , O.flag'
-        G.SslKeyLogFromEnv
-        ( O.long "otlp-grpc-ssl-key-log-from-env"
-            <> O.help "Use SSLKEYLOGFILE to log SSL keys."
-        )
-    ]
-
-otlpHttpHeadersParser :: O.Parser Baggage
-otlpHttpHeadersParser =
-  O.option (O.eitherReader readHeaders) . mconcat $
-    [ O.long "otlp-http-headers"
-    , O.help "A list of headers to apply to all outgoing data."
-    ]
-
-readHeaders :: String -> Either String Baggage
-readHeaders = decodeBaggageHeader . TE.encodeUtf8 . T.pack
 
 --------------------------------------------------------------------------------
 -- Debug Options

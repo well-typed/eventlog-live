@@ -251,6 +251,7 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.Otlp.Config.Default.Raw
     GHC.Eventlog.Live.Otlp.Config.Types
     GHC.Eventlog.Live.Otlp.Control
+    GHC.Eventlog.Live.Otlp.Environment
     GHC.Eventlog.Live.Otlp.Exporter.Core
     GHC.Eventlog.Live.Otlp.Exporter.Logs
     GHC.Eventlog.Live.Otlp.Exporter.Metrics

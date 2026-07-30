@@ -2,9 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Otlp.Exporter.Core (
-  OtlpExporter (..),
-  parseOtlpExporterOptions,
-  withOtlpExporter,
+  Exporter (..),
+  withExporter,
+  withExporters,
   export,
 
   -- * Export via gRPC
@@ -16,7 +16,6 @@ module GHC.Eventlog.Live.Otlp.Exporter.Core (
 ) where
 
 import Control.Exception (Exception (..), throwIO)
-import Control.Monad ((<=<))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
@@ -28,10 +27,9 @@ import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Word (Word16)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Otlp.Options (OtlpExporterOptions (..), OtlpProtocol (..))
+import GHC.Eventlog.Live.Otlp.Environment (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), defaultPortFor)
 import GHC.IsList qualified as IsList
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -43,115 +41,62 @@ import Network.HTTP.Client qualified as H
 import Network.HTTP.Client.TLS qualified as H
 import Network.HTTP.Types.Header qualified as HTTP
 import Network.HTTP.Types.Status qualified as HTTP
-import Network.URI qualified as URI
-import OpenTelemetry.Baggage (encodeBaggageHeader)
 import OpenTelemetry.Baggage qualified as Baggage
-import Text.Read (readMaybe)
 
 --------------------------------------------------------------------------------
 -- OTLP Exporter
 --------------------------------------------------------------------------------
 
-data OtlpExporter
-  = OtlpExporterGrpc !OtlpGrpcExporter
-  | OtlpExporterHttpProtobuf !OtlpHttpProtobufExporter
+data Exporter
+  = Exporter'OtlpGrpc !OtlpGrpcExporter
+  | Exporter'OtlpHttpProtobuf !OtlpHttpProtobufExporter
 
 {- |
-Construct an t`OtlpExporter` from t`OtlpExporterOptions`.
+Construct one shared t`OtlpExporter` or one t`OtlpExporter` per signal.
 -}
-withOtlpExporter ::
+withExporters ::
   Logger IO ->
-  OtlpExporterOptions OtlpEndpoint ->
-  (OtlpExporter -> IO a) ->
+  PerSignal (Maybe ExporterOptions) ->
+  (PerSignal (Maybe Exporter) -> IO a) ->
   IO a
-withOtlpExporter logger options action =
-  case options of
-    OtlpExporterOptions{otlpEndpoint = Left otlpGrpcEndpoint, ..} -> do
-      let options' = OtlpExporterOptions{otlpEndpoint = otlpGrpcEndpoint, ..}
-      withOtlpGrpcExporter logger options' $ action . OtlpExporterGrpc
-    OtlpExporterOptions{otlpEndpoint = Right otlpHttpEndpoint, ..} -> do
-      let options' = OtlpExporterOptions{otlpEndpoint = otlpHttpEndpoint, ..}
-      withOtlpHttpProtobufExporter logger options' $ action . OtlpExporterHttpProtobuf
+withExporters logger (Shared maybeOptions) action =
+  withMaybeExporter logger maybeOptions $ action . Shared
+withExporters logger PerSignal{..} action =
+  withMaybeExporter logger forTRACES $ \exporterForTRACES ->
+    withMaybeExporter logger forMETRICS $ \exporterForMETRICS ->
+      withMaybeExporter logger forLOGS $ \exporterForLOGS ->
+        withMaybeExporter logger forPROFILES $ \exporterForPROFILES ->
+          action $ PerSignal exporterForTRACES exporterForMETRICS exporterForLOGS exporterForPROFILES
 
 {- |
-The options for an OTLP endpoint.
+Construct a @Maybe t`Exporter`@ from @Maybe t`OtlpExporterOptions`@.
 -}
-type OtlpEndpoint = Either OtlpGrpcEndpoint OtlpHttpEndpoint
+withMaybeExporter ::
+  Logger IO ->
+  Maybe ExporterOptions ->
+  (Maybe Exporter -> IO a) ->
+  IO a
+withMaybeExporter logger maybeOptions action =
+  case maybeOptions of
+    Nothing ->
+      action Nothing
+    Just options ->
+      withExporter logger options $ action . Just
 
 {- |
-Parse the OTLP endpoint from a t`String` to an t`OtlpEndpoint`.
+Construct an t`Exporter` from t`ExporterOptions`.
 -}
-parseOtlpExporterOptions :: OtlpExporterOptions (Maybe String) -> Either String (OtlpExporterOptions OtlpEndpoint)
-parseOtlpExporterOptions OtlpExporterOptions{..} = do
-  otlpEndpoint' <- parseOtlpEndpoint otlpProtocol otlpEndpoint
-  let !options' = OtlpExporterOptions{otlpEndpoint = otlpEndpoint', ..}
-  case otlpProtocol of
-    OtlpProtocolGrpc
-      | Just headers <- otlpHttpHeaders
-      , headers /= Baggage.empty -> do
-          let showHeaders = T.unpack . TE.decodeUtf8 . encodeBaggageHeader
-          Left $ "The grpc protocol does not support additional HTTP headers, found " <> showHeaders headers
-    OtlpProtocolHttpProtobuf
-      | Just _sslKeyLog <- otlpGrpcSslKeyLog ->
-          Left $ "The http/protobuf protocol does not support the SSL key log."
-    OtlpProtocolHttpProtobuf
-      | Just certificateStore <- otlpGrpcCertificateStore ->
-          Left $ "The http/protobuf protocol does not support the certificate store, found " <> certificateStore
-    _otherwise -> pure options'
-
-{- |
-Parse an OTLP endpoint string as an t`OtlpEndpoint` depending on the t`OtlpProtocol`.
--}
-parseOtlpEndpoint :: OtlpProtocol -> Maybe String -> Either String OtlpEndpoint
-parseOtlpEndpoint = go True
- where
-  go :: Bool -> OtlpProtocol -> Maybe String -> Either String OtlpEndpoint
-  go _retry otlpProtocol Nothing =
-    case otlpProtocol of
-      OtlpProtocolGrpc ->
-        pure $ Left OtlpGrpcEndpoint{host = "localhost", port = 4317, secure = False}
-      OtlpProtocolHttpProtobuf ->
-        pure $ Right OtlpHttpEndpoint{baseUrl = "http://localhost:4318"}
-  go retry otlpProtocol (Just url) =
-    case URI.parseURI url of
-      Just URI.URI{..} ->
-        case otlpProtocol of
-          OtlpProtocolGrpc
-            | uriScheme `elem` ["http:", "https:"]
-            , null uriPath
-            , null uriQuery
-            , null uriFragment -> do
-                let !host = maybe "localhost" (.uriRegName) uriAuthority
-                let !port = fromMaybe 4317 $ uriPortNumber uriAuthority
-                let !secure = uriScheme == "https:"
-                pure $ Left OtlpGrpcEndpoint{..}
-            | otherwise ->
-                Left $ "The gRPC protocol only supports HTTP and HTTPS and does not support an URI path, query, or fragment, found: " <> url
-          OtlpProtocolHttpProtobuf
-            | uriScheme `elem` ["http:", "https:"]
-            , null uriQuery
-            , null uriFragment -> do
-                let !uriAuth = (fromMaybe URI.nullURIAuth uriAuthority){URI.uriRegName = maybe "localhost" (.uriRegName) uriAuthority}
-                let !baseURI = URI.nullURI{URI.uriScheme = uriScheme, URI.uriAuthority = Just uriAuth, URI.uriPath = uriPath}
-                pure $ Right OtlpHttpEndpoint{baseUrl = show baseURI}
-            | otherwise ->
-                Left $ "The HTTP/Protobuf protocol only supports HTTP and HTTPS and does not support an URI query or fragment, found: " <> url
-      Nothing
-        | retry ->
-            go False otlpProtocol (Just $ "http://" <> url)
-        | otherwise ->
-            Left $ "Could not parse url " <> url
-
-{- |
-Internal helper.
-
-Extract a t`Word16` port number from a `URI.URIAuth`.
--}
-uriPortNumber :: Maybe URI.URIAuth -> Maybe Word16
-uriPortNumber = readMaybe @Word16 <=< fmap (dropColon . (.uriPort))
- where
-  dropColon :: String -> String
-  dropColon = \case (':' : str) -> str; str -> str
+withExporter ::
+  Logger IO ->
+  ExporterOptions ->
+  (Exporter -> IO a) ->
+  IO a
+withExporter logger (ExporterOptions'Otlp options) action =
+  case options.protocol of
+    Grpc ->
+      withOtlpGrpcExporter logger options $ action . Exporter'OtlpGrpc
+    HttpProtobuf ->
+      withOtlpHttpProtobufExporter logger options $ action . Exporter'OtlpHttpProtobuf
 
 {- |
 Export telemetry data to the t`OtlpExporter`.
@@ -163,13 +108,15 @@ export ::
   ) =>
   Logger IO ->
   -- | The HTTP/Protobuf exporter.
-  OtlpExporter ->
+  Exporter ->
   -- | The request message.
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
 export logger = \case
-  OtlpExporterGrpc exporter -> exportGrpc @serv @meth logger exporter
-  OtlpExporterHttpProtobuf exporter -> exportHttpProtobuf @serv @meth logger exporter
+  Exporter'OtlpGrpc exporter ->
+    exportGrpc @serv @meth logger exporter
+  Exporter'OtlpHttpProtobuf exporter ->
+    exportHttpProtobuf @serv @meth logger exporter
 
 --------------------------------------------------------------------------------
 -- OTLP gRPC Exporter
@@ -182,15 +129,6 @@ newtype OtlpGrpcExporter = OtlpGrpcExporter
   { connection :: G.Connection
   }
 
-{- |
-The options for an OTLP gRPC endpoint.
--}
-data OtlpGrpcEndpoint = OtlpGrpcEndpoint
-  { host :: !String
-  , port :: !Word16
-  , secure :: !Bool
-  }
-
 type CanExportViaGrpc serv meth =
   ( G.SupportsClientRpc (Protobuf serv meth)
   , G.SupportsStreamingType (Protobuf serv meth) 'NonStreaming
@@ -199,20 +137,22 @@ type CanExportViaGrpc serv meth =
 
 withOtlpGrpcExporter ::
   Logger IO ->
-  OtlpExporterOptions OtlpGrpcEndpoint ->
+  OtlpExporterOptions ->
   (OtlpGrpcExporter -> IO a) ->
   IO a
-withOtlpGrpcExporter _logger OtlpExporterOptions{otlpEndpoint = OtlpGrpcEndpoint{..}, ..} action =
+withOtlpGrpcExporter logger options action = do
+  writeLog logger DEBUG . T.pack $
+    "OTLP gRPC Exporter - Endpoint: " <> show options.endpoint
   G.withConnection G.def server $ \connection -> action OtlpGrpcExporter{..}
  where
   server :: G.Server
   server
-    | secure = G.ServerSecure serverValidation sslKeyLog address
+    | options.endpoint.secure = G.ServerSecure serverValidation G.SslKeyLogNone address
     | otherwise = G.ServerInsecure address
-
-  address = G.Address host (fromIntegral port) Nothing
-  sslKeyLog = fromMaybe G.SslKeyLogNone otlpGrpcSslKeyLog
-  serverValidation = G.ValidateServer $ maybe G.certStoreFromSystem G.certStoreFromPath otlpGrpcCertificateStore
+   where
+    port = fromIntegral $ fromMaybe (defaultPortFor options.protocol) options.endpoint.port
+    address = G.Address options.endpoint.host port Nothing
+    serverValidation = G.ValidateServer $ maybe G.certStoreFromSystem G.certStoreFromPath options.maybeCertificate
 
 exportGrpc ::
   forall serv meth.
@@ -257,14 +197,14 @@ instance Exception HttpError where
   displayException :: HttpError -> String
   displayException = \case
     HttpStatusError{..} ->
-      "OpenTelemetry Collector HTTP/Protobuf endpoint returned status "
+      "OTLP HTTP/Protobuf Exporter - HTTP Response: "
         <> show statusCode
         <> " "
         <> BSC.unpack statusMessage
         <> " with body: "
         <> BSC.unpack responseBody
     HttpDecodeError{..} ->
-      "Could not decode OpenTelemetry Collector HTTP/Protobuf response: "
+      "OTLP HTTP/Protobuf Exporter - Malformed HTTP Response: "
         <> errorMessage
 
 {- |
@@ -274,21 +214,24 @@ Run an action with an t`OtlpHttpProtobufExporter`.
 -}
 withOtlpHttpProtobufExporter ::
   Logger IO ->
-  OtlpExporterOptions OtlpHttpEndpoint ->
+  OtlpExporterOptions ->
   (OtlpHttpProtobufExporter -> IO a) ->
   IO a
-withOtlpHttpProtobufExporter logger OtlpExporterOptions{otlpEndpoint = OtlpHttpEndpoint{..}, ..} action = do
+withOtlpHttpProtobufExporter logger options action = do
+  writeLog logger DEBUG . T.pack $
+    "OTLP HTTP/Protobuf Exporter - Endpoint: " <> show options.endpoint
   -- Create an HTTP manager.
   manager <- H.newManager H.tlsManagerSettings
   -- Create the HTTP headers.
-  writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - Headers: " <> show otlpHttpHeaders
+  writeLog logger TRACE . T.pack $
+    "OTLP HTTP/Protobuf Exporter - Headers: " <> show options.maybeHeaders
   let headers =
         [ (CI.mk (Baggage.tokenValue token), TE.encodeUtf8 value)
         | (token, Baggage.Element value _properties) <-
-            IsList.toList (maybe mempty Baggage.values otlpHttpHeaders)
+            IsList.toList (maybe mempty Baggage.values options.maybeHeaders)
         ]
   -- Run the action.
-  action OtlpHttpProtobufExporter{..}
+  action OtlpHttpProtobufExporter{baseUrl = show options.endpoint, ..}
 
 class
   ( Message (MethodInput serv meth)
