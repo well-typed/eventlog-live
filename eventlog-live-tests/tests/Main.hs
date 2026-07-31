@@ -55,7 +55,8 @@ test_oddball_HasHeapProfSample =
           }
       options =
         defaultOptions
-          { extraArgs = ["--service-name=oddball", "-hT", "--eventlog-flush-interval=1"]
+          { extraArgs = ["-hT", "--eventlog-flush-interval=1"]
+          , extraEnv = [("OTEL_SERVICE_NAME", "oddball")]
           , maybeConfigBody =
               Just
                 "processors:\n\
@@ -84,7 +85,8 @@ test_oddball_HasUserMarker'Summing =
           }
       options =
         defaultOptions
-          { extraArgs = ["--service-name=oddball", "--eventlog-flush-interval=1"]
+          { extraArgs = ["--eventlog-flush-interval=1"]
+          , extraEnv = [("OTEL_SERVICE_NAME", "oddball")]
           , maybeConfigBody =
               Just
                 "processors:\n\
@@ -112,7 +114,8 @@ test_jumpyJump_HasCostCentreProfile =
           }
       options =
         defaultOptions
-          { extraArgs = ["--service-name=jumpy-jump", "--eventlog-flush-interval=1"]
+          { extraArgs = ["--eventlog-flush-interval=1"]
+          , extraEnv = [("OTEL_SERVICE_NAME", "jumpy-jump")]
           , maybeConfigBody =
               Just
                 "processors:\n\
@@ -139,7 +142,8 @@ test_jumpyJump_HasGhcStackProfilerProfile =
           }
       options =
         defaultOptions
-          { extraArgs = ["--service-name=jumpy-jump", "--eventlog-flush-interval=1"]
+          { extraArgs = ["--eventlog-flush-interval=1"]
+          , extraEnv = [("OTEL_SERVICE_NAME", "jumpy-jump")]
           , maybeConfigBody =
               Just
                 "processors:\n\

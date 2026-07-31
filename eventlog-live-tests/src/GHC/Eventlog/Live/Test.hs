@@ -29,7 +29,7 @@ module GHC.Eventlog.Live.Test (
   programTestFor,
 
   -- * Running @eventlog-live-otlp@
-  EventlogLiveOtlpOptions (extraArgs, maybeConfigBody),
+  EventlogLiveOtlpOptions (extraArgs, extraEnv, maybeConfigBody),
   defaultOptions,
   HasEventlogLiveOtlpInfo,
   withEventlogLiveOtlp,
@@ -264,6 +264,7 @@ logging = traversing (\i -> liftIO (debugInfo (show i)) >> pure i)
 
 data EventlogLiveOtlpOptions = EventlogLiveOtlpOptions
   { extraArgs :: [String]
+  , extraEnv :: [(String, String)]
   , maybeConfigBody :: Maybe String
   }
 
@@ -271,6 +272,7 @@ defaultOptions :: EventlogLiveOtlpOptions
 defaultOptions =
   EventlogLiveOtlpOptions
     { extraArgs = []
+    , extraEnv = []
     , maybeConfigBody = Nothing
     }
 
@@ -336,14 +338,17 @@ withEventlogLiveOtlp eventlogLiveOtlpOptions action = do
 
   -- Configure the otlp socket.
   let OtlpServerInfo{..} = ?otlpServerInfo
-  let otlpArgs =
-        ["--otlp-endpoint=" <> host <> ":" <> show port]
+  let otlpEnv =
+        [ ("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+        , ("OTEL_EXPORTER_OTLP_ENDPOINT", "http://" <> host <> ":" <> show port)
+        ]
 
   -- Create the temporary configuration file, if needed.
   withTempConfigFile eventlogLiveOtlpOptions.maybeConfigBody $ \configArgs -> do
     -- Configure the eventlog-live-otlp program.
-    let args = eventlogLiveOtlpOptions.extraArgs <> eventlogSocketArgs <> otlpArgs <> configArgs
-    let eventlogLiveOtlpProgram = (findProgram "eventlog-live-otlp"){args = args}
+    let args = eventlogLiveOtlpOptions.extraArgs <> eventlogSocketArgs <> configArgs
+    let env = eventlogLiveOtlpOptions.extraEnv <> otlpEnv
+    let eventlogLiveOtlpProgram = (findProgram "eventlog-live-otlp"){args = args, env = env}
     withProgramResource (programResource eventlogLiveOtlpProgram) $ do
       -- NOTE: By the GHC gods, please let this have the correct semantics.
       let ?eventlogLiveOtlpInfo = ?programInfo
