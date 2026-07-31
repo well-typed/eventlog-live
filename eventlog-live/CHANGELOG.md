@@ -3,9 +3,47 @@
 The version 0.7.0.0 was skipped to avoid confusion with `eventlog-live-otelcol-0.7.0.0`.
 
 - Merge the executable `eventlog-live-otelcol` into this package as `eventlog-live-otlp`.
-- Fix issue where `--otlp-http-headers` header values retained the `=`.
-- Fix issue where `--otlp-http-headers` was not parsed as [baggage](https://www.w3.org/TR/baggage).
-- Fix issue where `--otlp-endpoint` used 4317 as the default port for http/protobuf if no default port was specified.
+
+- Add support for OpenTelemetry Environment Variable Configuration:
+
+  The following SDK configuration options are supported:
+  https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration
+  - `OTEL_RESOURCE_ATTRIBUTES`
+  - `OTEL_SERVICE_NAME`
+  - `OTEL_LOG_LEVEL`
+  - `OTEL_TRACES_EXPORTER`, `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`, and `OTEL_PROFILES_EXPORTER`
+
+  The following OTLP exporter configuration options are supported:
+  https://opentelemetry.io/docs/specs/otel/protocol/exporter/
+  - `OTEL_EXPORTER_OTLP_ENDPOINT`
+  - `OTEL_EXPORTER_OTLP_INSECURE`
+  - `OTEL_EXPORTER_OTLP_CERTIFICATE` (only by `grpc` protocol)
+  - `OTEL_EXPORTER_OTLP_CLIENT_KEY` (parsed but ignored)
+  - `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` (parsed but ignored)
+  - `OTEL_EXPORTER_OTLP_HEADERS` (only by `http/protobuf` protocol)
+  - `OTEL_EXPORTER_OTLP_TIMEOUT` (parsed but ignored, support to be added in next version)
+  - `OTEL_EXPORTER_OTLP_PROTOCOL` (only `grpc` and `http/protobuf` protocols are supported)
+
+  All special-specific variants of the above environment variables are supported, e.g., `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, and `OTEL_EXPORTER_OTLP_PROFILES_ENDPOINT` are all parsed and used.
+
+  The command-line arguments that controlled these options have been removed:
+
+  ```
+  --service-name                   -> OTEL_SERVICE_NAME
+  --verbosity                      -> OTEL_LOG_LEVEL
+  --otlp-protocol                  -> OTEL_EXPORTER_OTLP_PROTOCOL
+  --otlp-endpoint                  -> OTEL_EXPORTER_OTLP_ENDPOINT
+  --otlp-grpc-certificate-store    -> OTEL_EXPORTER_OTLP_CERTIFICATE
+  --otlp-http-headers              -> OTEL_EXPORTER_OTLP_HEADERS
+  ```
+
+- The `--otlp-grpc-ssl-key-log` and `--otlp-grpc-ssl-key-log-from-env` options were removed.
+
+  Support for setting a gRPC SSL keylog was removed. If you relied on this, please open an issue.
+
+- Support was added for _signal-specific exporters_, e.g., if you supply different values for `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` then traces and metrics are exported to different endpoints.
+
+  You can use signal-specific exporter selection to disable certain signals altogether, e.g., `OTEL_TRACES_EXPORTER=none` causes no traces to be exported.
 
 ### 0.6.0.0
 
