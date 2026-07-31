@@ -7,6 +7,11 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
 
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="jumpy-jump"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+
 # Find GHC version to build jumpy-jump
 if [ "$GHC" = "" ]; then
 	GHC="$(which ghc)"
@@ -52,13 +57,10 @@ echo 'Start jumpy-jump' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for jumpy-jump)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='jumpy-jump' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
-	    --otlp-endpoint=localhost \
 		--control \
 		--control-port 30719 \
 		--control-cors-ignore-failure

@@ -6,6 +6,11 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 # Find project file
 PROJECT_FILE="$DIR/../../cabal.profiling.project"
 
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="jumpy-jump"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+
 # Build jumpy-jump
 echo "Build jumpy-jump"
 cabal build jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --enable-profiling -v0
@@ -51,13 +56,10 @@ echo 'Start jumpy-jump' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for jumpy-jump)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='jumpy-jump' \
 	    --eventlog-file='${JUMPY_JUMP_EVENTLOG_FIFO}' \
-	    -hT \
-	    --otlp-endpoint=localhost
+	    -hT
 "
 
 # Create the screen conf file
