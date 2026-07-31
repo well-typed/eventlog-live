@@ -3,9 +3,14 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
-# Set the eventlog socket
-export GHC_EVENTLOG_WAIT="true"
+# Eventlog Socket Configuration
 export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="oddball"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Find GHC version to build oddball
 if [ "$GHC" = "" ]; then
@@ -52,14 +57,11 @@ echo 'Start oddball' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=trace \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='oddball' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hi \
 		--eventlog-flush-interval=1 \
-	    --otlp-endpoint=localhost \
 		--control \
 		--control-port 30719 \
 		--control-cors-ignore-failure
