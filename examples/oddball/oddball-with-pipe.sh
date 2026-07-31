@@ -3,6 +3,11 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="oddball"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+
 # Build oddball
 echo "Build oddball"
 cabal build oddball -v0
@@ -47,14 +52,11 @@ echo 'Start oddball' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='oddball' \
 		--eventlog-file='${ODDBALL_EVENTLOG_FIFO}' \
 	    -hT \
 		--eventlog-flush-interval=1 \
-	    --otlp-endpoint=localhost \
 "
 
 # Create the screen conf file

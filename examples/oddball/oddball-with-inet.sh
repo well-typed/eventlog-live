@@ -8,6 +8,11 @@ export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_INET_HOST="localhost"
 export GHC_EVENTLOG_INET_PORT="4040"
 
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="oddball"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+
 # Build oddball
 echo "Build oddball"
 cabal build oddball -v0
@@ -47,15 +52,12 @@ echo 'Start oddball' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='oddball' \
 	    --eventlog-socket-host '$GHC_EVENTLOG_INET_HOST' \
 		--eventlog-socket-port '$GHC_EVENTLOG_INET_PORT' \
 	    -hT \
 		--eventlog-flush-interval=1 \
-	    --otlp-endpoint=localhost \
 		--control \
 		--control-port 30719 \
 		--control-cors-ignore-failure
