@@ -4,18 +4,23 @@
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/oddball__ghc_eventlog.sock"
-export MY_GHC_EVENTLOG_SOCKET="/tmp/eventlog_live_otlp__ghc_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
+export MY_GHC_EVENTLOG_UNIX_PATH="/tmp/eventlog_live_otlp__ghc_eventlog.sock"
+
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build oddball
 echo "Build oddball"
-cabal build oddball -v0 -f+use-ghc-debug-stub
+cabal build oddball -v0
 ODDBALL_BIN=$(cabal list-bin exe:oddball -v0 | head -n1)
 
 # Build eventlog-live-otlp
 echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -v0 -f+use-ghc-debug-stub
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -v0 | head -n1)
+cabal build eventlog-live-otlp -v0 -f+use-ghc-debug-stub -f+use-eventlog-socket
+EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -f+use-ghc-debug-stub -f+use-eventlog-socket -v0 | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -37,6 +42,7 @@ mkfifo "$EVENTLOG_LIVE_OTLP_FOR_ITSELF_FIFO" || exit
 # shellcheck disable=SC2089
 ODDBALL_CMD="
 echo 'Start oddball' && \
+	OTEL_SERVICE_NAME='oddball' \
 	${ODDBALL_BIN} \
 		+RTS \
 		-l \
@@ -49,32 +55,28 @@ echo 'Start oddball' && \
 # shellcheck disable=SC2089
 EVENTLOG_LIVE_OTLP_FOR_ODDBALL_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
+	OTEL_SERVICE_NAME='eventlog-live-otlp-for-oddball' \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
-		--service-name='oddball' \
 		--config='$DIR/config/eventlog-live.yaml' \
 		--eventlog-flush-interval=1 \
-	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
-		--enable-my-eventlog-socket-unix '$MY_GHC_EVENTLOG_SOCKET' \
+	    --eventlog-socket='${GHC_EVENTLOG_UNIX_PATH}' \
+		--my-eventlog-socket-unix='${MY_GHC_EVENTLOG_UNIX_PATH}' \
 	    -hT \
-	    --otlp-endpoint=localhost \
 		+RTS -l -hT --eventlog-flush-interval=1 -RTS
 "
 
 # Create the command to start eventlog-live-otlp (for itself)
 # shellcheck disable=SC2089
 EVENTLOG_LIVE_OTLP_FOR_ITSELF_CMD="
-echo 'Start eventlog-live-otlp (for itself)'
-${EVENTLOG_LIVE_OTLP_BIN} \
-	--verbosity=debug \
+echo 'Start eventlog-live-otlp (for itself)' && \
+	OTEL_SERVICE_NAME='eventlog-live-otlp-for-eventlog-live-otlp' \
+	${EVENTLOG_LIVE_OTLP_BIN} \
 	--stats \
-	--service-name='eventlog-live-otlp' \
 	--config='$DIR/config/eventlog-live-for-eventlog-live.yaml' \
 	--eventlog-flush-interval=1 \
-    --eventlog-socket '$MY_GHC_EVENTLOG_SOCKET' \
-    -hT \
-    --otlp-endpoint=localhost
+    --eventlog-socket='${MY_GHC_EVENTLOG_UNIX_PATH}' \
+    -hT
 "
 
 # Create the screen conf file
