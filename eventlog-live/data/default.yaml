@@ -91,12 +91,12 @@ processors:
       name: ghc_eventlog_CapabilityUsageDuration
       description: The duration of each capability usage span.
       aggregate: 1s
-      export: 30s
+      export: false # The current format of this metric breaks various OTLP receivers
     heap_allocated:
       name: ghc_eventlog_HeapAllocated
       description: The size of a newly allocated chunk of heap.
       aggregate: 1s
-      export: 30s
+      export: false # The current format of this metric breaks various OTLP receivers
     heap_live:
       name: ghc_eventlog_HeapLive
       description: The current heap size, calculated by the allocated number of megablocks.
@@ -131,11 +131,11 @@ processors:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
       description: A trace of capability usage (either mutator thread or garbage collection).
-      export: false
+      export: false # These spans easily overwhelm most OTLP receivers
     thread_state:
       name: ghc_eventlog_ThreadState
       description: A trace of thread state changes (either running or stopped).
-      export: false
+      export: false # These spans easily overwhelm most OTLP receivers
   profiles:
     call_stack_profile:
       name: ghc_eventlog_CallStackProfile
