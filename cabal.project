@@ -13,5 +13,5 @@ packages: examples/spectral-norm
 source-repository-package
     type: git
     location: https://github.com/well-typed/eventlog-socket.git
-    tag: a1354880f39f343d1c88c3cbe3e00cb74862f2c1
+    tag: 57ca65170bf6d264a284a047f3cb350d498fc256
     subdir: eventlog-socket-tests
