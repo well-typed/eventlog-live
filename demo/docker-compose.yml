@@ -1,55 +1,4 @@
 services:
-  oddball:
-    # container_name: oddball
-    build:
-      context: ".."
-      dockerfile: "./demo/Dockerfile.oddball"
-    volumes:
-      - "oddball:/run/oddball"
-    environment:
-      GHC_EVENTLOG_UNIX_PATH: "/run/oddball/ghc_eventlog.sock"
-      LANG: C.UTF-8
-    command:
-      - "+RTS"
-      - "-l"
-      - "-hT"
-      - "--eventlog-flush-interval=1"
-      - "-RTS"
-
-  eventlog-live-otlp:
-    # container_name: eventlog-live-otlp
-    build:
-      context: ".."
-      dockerfile: "./demo/Dockerfile.eventlog-live-otlp"
-    depends_on:
-      oddball:
-        condition: "service_started"
-      otelcol:
-        condition: "service_started"
-    ports:
-      - "30719:30719"
-    healthcheck:
-      test: "curl -f http://localhost:30719/health"
-      interval: 1m
-      timeout: 10s
-      retries: 5
-    volumes:
-      - "oddball:/run/oddball"
-      - "./config/eventlog-live-otlp.yaml:/etc/eventlog-live-otlp/config.yaml"
-    environment:
-      LANG: C.UTF-8
-    command:
-      - "--verbosity=debug"
-      - "--config=/etc/eventlog-live-otlp/config.yaml"
-      - "--service-name=oddball"
-      - "--eventlog-socket=/run/oddball/ghc_eventlog.sock"
-      - "-hT"
-      - "--eventlog-flush-interval=1"
-      - "--otlp-endpoint=otelcol"
-      - "--control"
-      - "--control-port=30719"
-      - "--control-cors-ignore-failure"
-
   grafana:
     # container_name: grafana
     image: grafana/grafana:latest
@@ -80,12 +29,15 @@ services:
   otelcol:
     # container_name: otelcol
     image: otel/opentelemetry-collector-contrib:0.140.1
+
     depends_on:
       loki:
         condition: "service_started"
       prometheus:
         condition: "service_started"
       tempo:
+        condition: "service_started"
+      pyroscope:
         condition: "service_started"
     command:
       - "--config=/etc/otelcol/config.yaml"
@@ -110,7 +62,8 @@ services:
   pyroscope:
     # container_name: pyroscope
     image: grafana/pyroscope:1.16.0
-    command: ["-config.file=/etc/pyroscope.yaml"]
+    command:
+      - "-config.file=/etc/pyroscope.yaml"
     volumes:
       - "./config/pyroscope.yaml:/etc/pyroscope.yaml"
     ports:
@@ -125,9 +78,6 @@ services:
     volumes:
       - "./config/tempo.yaml:/etc/tempo.yaml"
     ports:
-      - "3200:3200" # Tempo
       - "24317:24317" # OTLP gRPC receiver
       - "24318:24318" # OTLP HTTP receiver
-
-volumes:
-  oddball:
+      - "3200:3200" # Tempo
