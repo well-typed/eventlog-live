@@ -3,6 +3,11 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="ghc"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+
 # Get the GHC_DIR argument.
 GHC_DIR="$1"
 if [ ! -d "${GHC_DIR}" ]; then
@@ -116,13 +121,10 @@ GHC_CMD="cd \"${CABAL_SYNTAX_DIR}\" && ${GHC_CMD} -fforce-recomp +RTS -l -hT --e
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='ghc' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
-	    -hT \
-	    --otlp-endpoint=localhost
+	    -hT
 "
 
 # Create the screen conf file
