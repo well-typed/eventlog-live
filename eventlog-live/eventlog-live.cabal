@@ -1,21 +1,8 @@
 cabal-version: 3.0
 name: eventlog-live
 version: 0.8.0.0
-synopsis: Live processing of eventlog data.
-description:
-  Stream eventlog telemetry for /any/ Haskell application to /any/ OpenTelemetry endpoint.
-
-  This package provides the executable [eventlog-live-otlp] which analyses the live
-  eventlog of any Haskell application and sends the resulting telemetry to any OTLP endpoint.
-
-  [⚠️ Warning]:
-      This package is experimental.
-      It is versioned according to the [PVP](https://pvp.haskell.org).
-      However, breaking changes should be expected and no effort will be
-      made to avoid major version bumps until at least version @1.0.0.0@.
-
-  For more information, see [the README](https://github.com/well-typed/eventlog-live#readme).
-
+synopsis: Real-time monitoring for any Haskell application with little to no instrumentation
+description: Real-time monitoring for any Haskell application with little to no instrumentation!
 license: BSD-3-Clause
 license-file: LICENSE
 author: Wen Kokke
@@ -25,6 +12,7 @@ build-type: Simple
 category: Debug, Monitoring, System
 extra-doc-files:
   CHANGELOG.md
+  README.md
 
 extra-source-files:
   data/config.schema.json
