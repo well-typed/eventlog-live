@@ -118,44 +118,6 @@ jobs:
             cabal-flags: "-f+use-template-haskell-lift"
 
   #############################################################################
-  # Build dockerfiles
-  #############################################################################
-
-  build-dockerfiles:
-    name: "Build dockerfiles"
-    runs-on: "ubuntu-latest"
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v7
-        with:
-          submodules: true
-
-      - name: 🛠️ Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: 🏗️ Build
-        uses: docker/build-push-action@v7
-        with:
-          file: demo/Dockerfile.${{ matrix.dockerfile }}
-          push: false
-          tags: |
-            well-typed/${{
-              startsWith(matrix.dockerfile, 'eventlog-live-')
-                && matrix.dockerfile
-                || format('eventlog-live-examples-{0}', matrix.dockerfile)
-            }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-    strategy:
-      fail-fast: false
-      matrix:
-        dockerfile:
-          - "eventlog-live-otlp"
-          - "jumpy-jump"
-          - "oddball"
-
-  #############################################################################
   # Build Nix Packages
   #############################################################################
 
