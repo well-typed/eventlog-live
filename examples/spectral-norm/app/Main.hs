@@ -21,16 +21,7 @@ import Data.Foldable (for_, traverse_)
 import Data.Maybe
 import Foreign
 import Foreign.Marshal.Array
-import GHC.Base (
-  Double (..),
-  Int (..),
-  int2Double#,
-  quotInt,
-  uncheckedIShiftRA#,
-  (*#),
-  (+#),
-  (/##),
- )
+import GHC.Base (Double (..), Int (..), int2Double#, quotInt, uncheckedIShiftRA#, (*#), (+#), (/##))
 import GHC.Conc
 import GHC.Eventlog.Socket
 import System.Environment
@@ -40,7 +31,7 @@ type Reals = Ptr Double
 
 main :: IO ()
 main = do
-  traverse_ startWait =<< lookupEnv "GHC_EVENTLOG_SOCKET"
+  startFromEnv
   ns <- getArgs
   for_ (map read ns) $ \n ->
     allocaArray n $ \u -> allocaArray n $ \v -> do

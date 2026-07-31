@@ -6,7 +6,13 @@
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
 # Set the eventlog socket
-export GHC_EVENTLOG_SOCKET="/tmp/spectral_norm_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+export GHC_EVENTLOG_UNIX_PATH="/tmp/spectral_norm_eventlog.sock"
+
+# Configure OpenTelemetry exporter
+export OTEL_LOG_LEVEL="debug"
+export OTEL_SERVICE_NAME="spectral-norm"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build spectral-norm
 echo "Build spectral-norm"
@@ -48,13 +54,10 @@ echo 'Start spectral-norm' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for spectral-norm)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--verbosity=debug \
 		--stats \
 		--config='$DIR/eventlog-live.yaml' \
-		--service-name='spectral-norm' \
-	    --eventlog-socket '$GHC_EVENTLOG_SOCKET' \
+	    --eventlog-socket='$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
-	    --otlp-endpoint=localhost \
 		+RTS -l -hT --eventlog-flush-interval=1 -RTS
 "
 

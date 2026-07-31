@@ -67,3 +67,12 @@ processors:
       name: ghc_eventlog_ThreadState
       description: A trace of thread state changes (either running or stopped).
       export: 5s
+  profiles:
+    call_stack_profile:
+      name: ghc_eventlog_CallStackProfile
+      description: A thread RTS callstack sample
+      export: 5s
+    cost_centre_stack_profile:
+      name: ghc_eventlog_CostCentreStackProfile
+      description: A cost centre callstack sample.
+      export: 5s
