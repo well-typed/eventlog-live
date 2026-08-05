@@ -287,6 +287,10 @@ The value @0@ should be interpreted as "no timeout".
 newtype Timeout = Timeout {milliseconds :: Word}
   deriving (Eq, Show)
 
+instance HasField "microseconds" Timeout Word where
+  getField :: Timeout -> Word
+  getField timeout = 1_000 * timeout.milliseconds
+
 instance Default Timeout where
   def :: Timeout
   def = Timeout 10_000
