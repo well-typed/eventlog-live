@@ -284,7 +284,7 @@ OTLP timeout.
 The value is specified in milliseconds.
 The value @0@ should be interpreted as "no timeout".
 -}
-newtype Timeout = Timeout {timeoutMillis :: Word}
+newtype Timeout = Timeout {milliseconds :: Word}
   deriving (Eq, Show)
 
 instance Default Timeout where
@@ -526,8 +526,8 @@ Parse a timeout.
 -}
 readTimeout :: (Monad m) => Logger m -> String -> String -> ExceptT String m Timeout
 readTimeout logger optionName timeout
-  | Just timeoutMillis <- readMaybe @Word timeout =
-      pure (Timeout timeoutMillis)
+  | Just milliseconds <- readMaybe @Word timeout =
+      pure (Timeout milliseconds)
   | otherwise = do
       lift . writeLog logger WARN . T.pack $
         "Environment variable " <> optionName <> " specifies malformed timeout '" <> timeout <> "'."
