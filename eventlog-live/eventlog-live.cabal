@@ -17,6 +17,9 @@ extra-doc-files:
 extra-source-files:
   data/config.schema.json
   data/default.yaml
+  data/help.footer.txt
+  data/help.header.txt
+  data/help.progDesc.txt
 
 tested-with:
   ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.3 || ==9.12.4
@@ -246,6 +249,7 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.Otlp.Exporter.Profiles
     GHC.Eventlog.Live.Otlp.Exporter.Traces
     GHC.Eventlog.Live.Otlp.Options
+    GHC.Eventlog.Live.Otlp.Options.Raw
     GHC.Eventlog.Live.Otlp.Processor.Common.Core
     GHC.Eventlog.Live.Otlp.Processor.Common.Logs
     GHC.Eventlog.Live.Otlp.Processor.Common.Metrics
