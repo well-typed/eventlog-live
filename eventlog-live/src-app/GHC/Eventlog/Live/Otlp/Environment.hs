@@ -2,25 +2,30 @@
 {-# LANGUAGE QuasiQuotes #-}
 
 module GHC.Eventlog.Live.Otlp.Environment (
-  -- * OpenTelemetry Exporter Options
+  -- * OpenTelemetry SDK Options
+  Severity (..),
   lookupLogLevel,
   ServiceName (..),
   ResourceAttributes (..),
   lookupResourceAttributes,
 
-  -- ** OpenTelemetry Exporter Options
+  -- * OpenTelemetry Exporter Options
+  ExporterOptions (..),
+  lookupExporterOptions,
+
+  -- ** OpenTelemetry Signals and Per-Signal Options
   PerSignal (..),
   Signal (..),
   forSignal,
-  ExporterOptions (..),
-  lookupExporterOptions,
+
+  -- ** OpenTelemetry OTLP Exporter Options
+  OtlpExporterOptions (..),
   Protocol (..),
   Endpoint (..),
-  defaultEndpointFor,
-  defaultPortFor,
   Compression (..),
   Timeout (..),
-  OtlpExporterOptions (..),
+  defaultEndpointFor,
+  defaultPortFor,
 ) where
 
 import Control.Monad (join, unless)
@@ -50,119 +55,11 @@ import Text.Printf (printf)
 import Text.Read (readMaybe)
 
 --------------------------------------------------------------------------------
--- OpenTelemetry Signals
---------------------------------------------------------------------------------
-
-{- |
-The signals supported by OTLP.
--}
-data Signal
-  = TRACES
-  | METRICS
-  | LOGS
-  | PROFILES
-  deriving (Show, Enum, Bounded)
-
-{- |
-A collection of values for per signal.
--}
-data PerSignal a
-  = Shared !a
-  | PerSignal
-      { forTRACES :: !a
-      , forMETRICS :: !a
-      , forLOGS :: !a
-      , forPROFILES :: !a
-      }
-  deriving stock (Functor, Foldable, Traversable)
-
-{- |
-Get the element for a specific signal.
--}
-forSignal :: PerSignal a -> Signal -> a
-forSignal = \case
-  Shared a -> const a
-  PerSignal{..} -> \case
-    TRACES -> forTRACES
-    METRICS -> forMETRICS
-    LOGS -> forLOGS
-    PROFILES -> forPROFILES
-
---------------------------------------------------------------------------------
 -- OpenTelemetry SDK Options
 --------------------------------------------------------------------------------
 
-{- |
-Supported exporters.
--}
-data ExporterType = Otlp
-  deriving (Eq, Show)
-
-{- |
-Lookup the OpenTelemetry exporter type for a signal from the environment.
-
-See: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-selection
--}
-lookupExporterType ::
-  Logger IO ->
-  Signal ->
-  ExceptT String IO (Maybe ExporterType)
-lookupExporterType logger signal = do
-  let otelExporter = "OTEL_" <> show signal <> "_EXPORTER"
-  lift (lookupEnv otelExporter) >>= \case
-    Nothing ->
-      pure (Just Otlp)
-    Just otelExporterType ->
-      readExporterType logger otelExporter otelExporterType
-
-{- |
-Exporter options for each exporter type.
--}
-newtype ExporterOptions = ExporterOptions'Otlp OtlpExporterOptions
-  deriving (Eq, Show)
-
-{- |
-Lookup the OpenTelemetry OTLP Exporter options from the environment.
-
-See: https://opentelemetry.io/docs/specs/otel/protocol/exporter
--}
-lookupExporterOptions ::
-  Logger IO ->
-  ExceptT String IO (PerSignal (Maybe ExporterOptions))
-lookupExporterOptions logger = do
-  !tracesExporterType <- lookupExporterType logger TRACES
-  !tracesExporterOptions <-
-    for tracesExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just TRACES)
-
-  !metricsExporterType <- lookupExporterType logger METRICS
-  !metricsExporterOptions <-
-    for metricsExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just METRICS)
-
-  !logsExporterType <- lookupExporterType logger LOGS
-  !logsExporterOptions <-
-    for logsExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just LOGS)
-
-  !profilesExporterType <- lookupExporterType logger PROFILES
-  !profilesExporterOptions <-
-    for profilesExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just PROFILES)
-
-  let exporterOptions =
-        [tracesExporterOptions, metricsExporterOptions, logsExporterOptions, profilesExporterOptions]
-  pure $
-    if allSame exporterOptions
-      then
-        Shared tracesExporterOptions
-      else
-        PerSignal
-          { forTRACES = tracesExporterOptions
-          , forMETRICS = metricsExporterOptions
-          , forLOGS = logsExporterOptions
-          , forPROFILES = profilesExporterOptions
-          }
+--------------------------------------------------------------------------------
+-- OpenTelemetry Log Level
 
 {- |
 Lookup the OpenTelemetry Log Level from the environment.
@@ -175,6 +72,9 @@ lookupLogLevel = do
   fmap (fromMaybe INFO)
     <$> traverse (readSeverity otelLogLevel)
     =<< lift (lookupEnv otelLogLevel)
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry Resource Attributes
 
 {- |
 OpenTelemetry Service Name.
@@ -247,6 +147,81 @@ singletonBaggage token value = Baggage.insert token (Baggage.element value) Bagg
 --------------------------------------------------------------------------------
 -- OpenTelemetry Exporter Options
 --------------------------------------------------------------------------------
+
+{- |
+Supported exporters.
+-}
+data ExporterType = Otlp
+  deriving (Eq, Show)
+
+{- |
+Lookup the OpenTelemetry Exporter Type for a signal from the environment.
+
+See: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-selection
+-}
+lookupExporterType ::
+  Logger IO ->
+  Signal ->
+  ExceptT String IO (Maybe ExporterType)
+lookupExporterType logger signal = do
+  let otelExporter = "OTEL_" <> show signal <> "_EXPORTER"
+  lift (lookupEnv otelExporter) >>= \case
+    Nothing ->
+      pure (Just Otlp)
+    Just otelExporterType ->
+      readExporterType logger otelExporter otelExporterType
+
+{- |
+Exporter options for each exporter type.
+-}
+newtype ExporterOptions = ExporterOptions'Otlp OtlpExporterOptions
+  deriving (Eq, Show)
+
+{- |
+Lookup the OpenTelemetry Exporter options from the environment.
+
+See: https://opentelemetry.io/docs/specs/otel/protocol/exporter
+-}
+lookupExporterOptions ::
+  Logger IO ->
+  ExceptT String IO (PerSignal (Maybe ExporterOptions))
+lookupExporterOptions logger = do
+  !tracesExporterType <- lookupExporterType logger TRACES
+  !tracesExporterOptions <-
+    for tracesExporterType $ \Otlp ->
+      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just TRACES)
+
+  !metricsExporterType <- lookupExporterType logger METRICS
+  !metricsExporterOptions <-
+    for metricsExporterType $ \Otlp ->
+      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just METRICS)
+
+  !logsExporterType <- lookupExporterType logger LOGS
+  !logsExporterOptions <-
+    for logsExporterType $ \Otlp ->
+      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just LOGS)
+
+  !profilesExporterType <- lookupExporterType logger PROFILES
+  !profilesExporterOptions <-
+    for profilesExporterType $ \Otlp ->
+      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just PROFILES)
+
+  let exporterOptions =
+        [tracesExporterOptions, metricsExporterOptions, logsExporterOptions, profilesExporterOptions]
+  pure $
+    if allSame exporterOptions
+      then
+        Shared tracesExporterOptions
+      else
+        PerSignal
+          { forTRACES = tracesExporterOptions
+          , forMETRICS = metricsExporterOptions
+          , forLOGS = logsExporterOptions
+          , forPROFILES = profilesExporterOptions
+          }
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry OTLP Exporter Options
 
 {- |
 OTLP protocol.
@@ -596,3 +571,41 @@ Check if all elements are the same.
 allSame :: (Eq a) => [a] -> Bool
 allSame [] = True
 allSame (x : xs) = all (== x) xs
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry Signals and Options per Signal
+
+{- |
+The signals supported by OTLP.
+-}
+data Signal
+  = TRACES
+  | METRICS
+  | LOGS
+  | PROFILES
+  deriving (Show, Enum, Bounded)
+
+{- |
+A collection of values for per signal.
+-}
+data PerSignal a
+  = Shared !a
+  | PerSignal
+      { forTRACES :: !a
+      , forMETRICS :: !a
+      , forLOGS :: !a
+      , forPROFILES :: !a
+      }
+  deriving stock (Functor, Foldable, Traversable)
+
+{- |
+Get the element for a specific signal.
+-}
+forSignal :: PerSignal a -> Signal -> a
+forSignal = \case
+  Shared a -> const a
+  PerSignal{..} -> \case
+    TRACES -> forTRACES
+    METRICS -> forMETRICS
+    LOGS -> forLOGS
+    PROFILES -> forPROFILES
