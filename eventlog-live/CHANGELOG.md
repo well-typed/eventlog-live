@@ -5,6 +5,9 @@
   - `OTEL_EXPORTER_OTLP_CLIENT_KEY` (not parsed, as mTLS is unsupported)
   - `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` (not parsed, as mTLS is unsupported)
 
+- Add support for HTTP proxy environment variables (`http_proxy` and `https_proxy`)
+  when using HTTP/Protobuf exporter.
+
 ### 0.8.0.0
 
 The version 0.7.0.0 was skipped to avoid confusion with `eventlog-live-otelcol-0.7.0.0`.
