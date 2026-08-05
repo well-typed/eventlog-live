@@ -29,7 +29,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Otlp.Environment (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), defaultPortFor)
+import GHC.Eventlog.Live.Otlp.Environment qualified as E (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), Timeout (..), defaultPortFor)
 import GHC.IsList qualified as IsList
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
@@ -56,24 +56,24 @@ Construct one shared t`OtlpExporter` or one t`OtlpExporter` per signal.
 -}
 withExporters ::
   Logger IO ->
-  PerSignal (Maybe ExporterOptions) ->
-  (PerSignal (Maybe Exporter) -> IO a) ->
+  E.PerSignal (Maybe E.ExporterOptions) ->
+  (E.PerSignal (Maybe Exporter) -> IO a) ->
   IO a
-withExporters logger (Shared maybeOptions) action =
-  withMaybeExporter logger maybeOptions $ action . Shared
-withExporters logger PerSignal{..} action =
+withExporters logger (E.Shared maybeOptions) action =
+  withMaybeExporter logger maybeOptions $ action . E.Shared
+withExporters logger E.PerSignal{..} action =
   withMaybeExporter logger forTRACES $ \exporterForTRACES ->
     withMaybeExporter logger forMETRICS $ \exporterForMETRICS ->
       withMaybeExporter logger forLOGS $ \exporterForLOGS ->
         withMaybeExporter logger forPROFILES $ \exporterForPROFILES ->
-          action $ PerSignal exporterForTRACES exporterForMETRICS exporterForLOGS exporterForPROFILES
+          action $ E.PerSignal exporterForTRACES exporterForMETRICS exporterForLOGS exporterForPROFILES
 
 {- |
 Construct a @Maybe t`Exporter`@ from @Maybe t`OtlpExporterOptions`@.
 -}
 withMaybeExporter ::
   Logger IO ->
-  Maybe ExporterOptions ->
+  Maybe E.ExporterOptions ->
   (Maybe Exporter -> IO a) ->
   IO a
 withMaybeExporter logger maybeOptions action =
@@ -88,14 +88,14 @@ Construct an t`Exporter` from t`ExporterOptions`.
 -}
 withExporter ::
   Logger IO ->
-  ExporterOptions ->
+  E.ExporterOptions ->
   (Exporter -> IO a) ->
   IO a
-withExporter logger (ExporterOptions'Otlp options) action =
+withExporter logger (E.ExporterOptions'Otlp options) action =
   case options.protocol of
-    Grpc ->
+    E.Grpc ->
       withOtlpGrpcExporter logger options $ action . Exporter'OtlpGrpc
-    HttpProtobuf ->
+    E.HttpProtobuf ->
       withOtlpHttpProtobufExporter logger options $ action . Exporter'OtlpHttpProtobuf
 
 {- |
@@ -125,8 +125,9 @@ export logger = \case
 {- |
 An opaque OTLP gRPC exporter.
 -}
-newtype OtlpGrpcExporter = OtlpGrpcExporter
-  { connection :: G.Connection
+data OtlpGrpcExporter = OtlpGrpcExporter
+  { connection :: !G.Connection
+  , maybeTimeout :: !(Maybe G.Timeout)
   }
 
 type CanExportViaGrpc serv meth =
@@ -137,20 +138,24 @@ type CanExportViaGrpc serv meth =
 
 withOtlpGrpcExporter ::
   Logger IO ->
-  OtlpExporterOptions ->
+  E.OtlpExporterOptions ->
   (OtlpGrpcExporter -> IO a) ->
   IO a
 withOtlpGrpcExporter logger options action = do
   writeLog logger DEBUG . T.pack $
     "OTLP gRPC Exporter - Endpoint: " <> show options.endpoint
-  G.withConnection G.def server $ \connection -> action OtlpGrpcExporter{..}
+  let !maybeTimeout
+        | options.timeout.timeoutMillis == 0 = Nothing
+        | otherwise = Just $ G.Timeout G.Millisecond (G.TimeoutValue options.timeout.timeoutMillis)
+  G.withConnection G.def server $ \connection ->
+    action OtlpGrpcExporter{..}
  where
   server :: G.Server
   server
     | options.endpoint.secure = G.ServerSecure serverValidation G.SslKeyLogNone address
     | otherwise = G.ServerInsecure address
    where
-    port = fromIntegral $ fromMaybe (defaultPortFor options.protocol) options.endpoint.port
+    port = fromIntegral $ fromMaybe (E.defaultPortFor options.protocol) options.endpoint.port
     address = G.Address options.endpoint.host port Nothing
     serverValidation = G.ValidateServer $ maybe G.certStoreFromSystem G.certStoreFromPath options.maybeCertificate
 
@@ -162,7 +167,9 @@ exportGrpc ::
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
 exportGrpc _logger grpcExporter input =
-  G.getProto <$> G.nonStreaming grpcExporter.connection (G.rpc @(G.Protobuf serv meth)) (G.Proto input)
+  let callParams :: G.CallParams (G.Protobuf serv meth)
+      callParams = G.def{G.callTimeout = grpcExporter.maybeTimeout}
+   in G.getProto <$> G.nonStreaming grpcExporter.connection (G.rpcWith callParams) (G.Proto input)
 
 --------------------------------------------------------------------------------
 -- OTLP HTTP/Protobuf Exporter
@@ -214,7 +221,7 @@ Run an action with an t`OtlpHttpProtobufExporter`.
 -}
 withOtlpHttpProtobufExporter ::
   Logger IO ->
-  OtlpExporterOptions ->
+  E.OtlpExporterOptions ->
   (OtlpHttpProtobufExporter -> IO a) ->
   IO a
 withOtlpHttpProtobufExporter logger options action = do
