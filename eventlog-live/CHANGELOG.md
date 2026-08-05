@@ -1,7 +1,9 @@
-### 0.8.1.0
+### 0.9.0.0
 
 - Add support for the following OTLP exporter configuration options:
   - `OTEL_EXPORTER_OTLP_TIMEOUT` (full support with both `grpc` and `http/protobuf`)
+  - `OTEL_EXPORTER_OTLP_CLIENT_KEY` (not parsed, as mTLS is unsupported)
+  - `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` (not parsed, as mTLS is unsupported)
 
 ### 0.8.0.0
 
