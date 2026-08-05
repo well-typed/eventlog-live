@@ -227,7 +227,7 @@ withOtlpHttpProtobufExporter ::
 withOtlpHttpProtobufExporter logger options action = do
   writeLog logger DEBUG . T.pack $
     "OTLP HTTP/Protobuf Exporter - Endpoint: " <> show options.endpoint
-  -- Create an HTTP manager.
+  -- Create HTTP manager settings.
   let responseTimeout
         | options.timeout.microseconds == 0 =
             H.responseTimeoutNone
@@ -236,8 +236,11 @@ withOtlpHttpProtobufExporter logger options action = do
         | otherwise =
             -- NOTE: Oh no, this truncates the response timeout to 292,271 years!
             H.responseTimeoutMicro maxBound
-  let managerSettings = H.tlsManagerSettings{H.managerResponseTimeout = responseTimeout}
-  manager <- H.newManager managerSettings
+  -- Create an HTTP manager.
+  --
+  -- NOTE: newTlsManagerWith respects proxy environment variables
+  manager <-
+    H.newTlsManagerWith H.tlsManagerSettings{H.managerResponseTimeout = responseTimeout}
   -- Create the HTTP headers.
   writeLog logger TRACE . T.pack $
     "OTLP HTTP/Protobuf Exporter - Headers: " <> show options.maybeHeaders
