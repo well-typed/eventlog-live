@@ -608,7 +608,7 @@ shouldStart controlOptions =
 
 controlOptionsParser :: O.Parser ControlOptions
 controlOptionsParser =
-  OC.parserOptionGroup "Control Server Options" $
+  OC.parserOptionGroup "Control options:" $
     ControlOptions
       <$> controlEnabledParser
       <*> controlPortParser

@@ -132,7 +132,7 @@ data MyDebugOptions = MyDebugOptions
 
 myDebugOptionsParser :: O.Parser MyDebugOptions
 myDebugOptionsParser =
-  OC.parserOptionGroup "Debug Options" $
+  OC.parserOptionGroup "Debug options:" $
     MyDebugOptions
       <$> maybeMyEventlogSocketParser
       <*> maybeMyGhcDebugSocketParser
