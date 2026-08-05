@@ -35,7 +35,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Control (ControlServerApi (..), startControlServer)
-import GHC.Eventlog.Live.Otlp.Environment (PerSignal, ServiceName (..), Signal (..), forSignal, lookupExporterOptions, lookupLogLevel, lookupResourceAttributes)
+import GHC.Eventlog.Live.Otlp.Environment (OpenTelemetrySdkOptions (..), PerSignal, ServiceName (..), Signal (..), forSignal, lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.Otlp.Exporter.Core (Exporter, withExporters)
 import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics)
@@ -78,21 +78,18 @@ main = do
   -- Parse the command-line options
   Options{..} <- O.execParser options
 
-  -- Lookup the OpenTelemetry log level
-  logLevel <-
-    either die pure =<< runExceptT lookupLogLevel
-
-  -- Construct the logging action
+  -- Construct a channel for internal telemetry
   myTelemetryDataChan <- newTChanIO
-  let logger = M.filterBySeverity logLevel (M.stderrLogger <> M.chanLogger myTelemetryDataChan)
 
-  -- Lookup the OpenTelemetry Exporter Options
-  exporterOptions <-
-    either die pure =<< runExceptT (lookupExporterOptions logger)
+  -- Construct a logger
+  logLevel <- either die pure =<< runExceptT lookupLogLevel
+  let logger =
+        M.filterBySeverity logLevel $
+          M.stderrLogger <> M.chanLogger myTelemetryDataChan
 
-  -- Lookup the OpenTelemetry Resource Attributes
-  maybeResourceAttributes <-
-    either die pure =<< runExceptT (lookupResourceAttributes logger)
+  -- Lookup the OpenTelemetry SDK options
+  OpenTelemetrySdkOptions{..} <-
+    either die pure =<< runExceptT (lookupOpenTelemetrySdkOptions logger)
 
   -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
   let MyDebugOptions{..} = myDebugOptions

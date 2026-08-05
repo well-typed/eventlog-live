@@ -3,15 +3,15 @@
 
 module GHC.Eventlog.Live.Otlp.Environment (
   -- * OpenTelemetry SDK Options
+  OpenTelemetrySdkOptions (..),
+  lookupOpenTelemetrySdkOptions,
   Severity (..),
   lookupLogLevel,
   ServiceName (..),
   ResourceAttributes (..),
-  lookupResourceAttributes,
 
   -- * OpenTelemetry Exporter Options
   ExporterOptions (..),
-  lookupExporterOptions,
 
   -- ** OpenTelemetry Signals and Per-Signal Options
   PerSignal (..),
@@ -57,6 +57,28 @@ import Text.Read (readMaybe)
 --------------------------------------------------------------------------------
 -- OpenTelemetry SDK Options
 --------------------------------------------------------------------------------
+
+{- |
+The OpenTelemetry SDK configuration options.
+
+Read these values from the environment using `lookupOpenTelemetrySdkOptions`.
+This function writes to a `Logger` when it encounters configuration errors.
+Hence, it does not read @OTEL_LOG_LEVEL@, which is needed to construct a logger.
+
+See: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables
+-}
+data OpenTelemetrySdkOptions = OpenTelemetrySdkOptions
+  { maybeResourceAttributes :: !(Maybe ResourceAttributes)
+  , exporterOptions :: !(PerSignal (Maybe ExporterOptions))
+  }
+
+lookupOpenTelemetrySdkOptions ::
+  Logger IO ->
+  ExceptT String IO OpenTelemetrySdkOptions
+lookupOpenTelemetrySdkOptions logger = do
+  maybeResourceAttributes <- lookupResourceAttributes logger
+  exporterOptions <- lookupExporterOptions logger
+  pure OpenTelemetrySdkOptions{..}
 
 --------------------------------------------------------------------------------
 -- OpenTelemetry Log Level
@@ -115,8 +137,6 @@ instance HasField "attributes" ResourceAttributes [(Text, Text)] where
 Lookup the OpenTelemetry Resource Attributes from the environment.
 
 This function reads both @OTEL_RESOURCE_ATTRIBUTES@ and @OTEL_SERVICE_NAME@.
-
-See: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration
 -}
 lookupResourceAttributes ::
   Logger IO ->
