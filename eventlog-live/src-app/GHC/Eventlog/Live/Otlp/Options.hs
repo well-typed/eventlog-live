@@ -4,7 +4,6 @@ module GHC.Eventlog.Live.Otlp.Options (
   options,
 ) where
 
-import Data.Bifunctor (Bifunctor (..))
 import Data.Char (isSpace)
 import Data.Default (Default (..))
 import Data.List qualified as L
@@ -62,15 +61,39 @@ helpDoc doc
 {- |
 Internal helper.
 
+Internal accumulated state for `helpDocLine`.
+-}
+data LineAcc
+  = Space {count :: !Int, chunk :: !(OHC.Chunk OHP.Doc)}
+  | Token {token :: !String, chunk :: !(OHC.Chunk OHP.Doc)}
+
+{- |
+Internal helper.
+
 Render a line as an `OHP.Doc`.
 -}
 helpDocLine :: String -> OHC.Chunk OHP.Doc
-helpDocLine line = indentedChunk
+helpDocLine =
+  asDoc True . foldl' trans empty . reverse
  where
-  (nestingLevel, chunk) =
-    bimap length OHC.paragraph (span isSpace line)
-  indentedChunk =
-    if nestingLevel >= 1 then OHP.indent nestingLevel <$> chunk else chunk
+  empty :: LineAcc
+  empty = Space 0 mempty
+
+  trans :: LineAcc -> Char -> LineAcc
+  trans la@Space{..} c
+    | isSpace c = Space{count = count + 1, ..}
+    | count >= 2 = Token{token = [c], chunk = asDoc False la}
+    | otherwise = Token{token = [c], ..}
+  trans la@Token{..} c
+    | isSpace c = Space{count = 1, chunk = asDoc False la}
+    | otherwise = Token{token = c : token, ..}
+
+  asDoc :: Bool -> LineAcc -> OHC.Chunk OHP.Doc
+  asDoc isFinal = \case
+    Space{..} ->
+      OHP.indent (if isFinal then count else count - 1) <$> chunk
+    Token{..} ->
+      OHC.stringChunk token OHC.<</>> chunk
 
 data Options = Options
   { eventlogSourceOptions :: EventlogSourceOptions
