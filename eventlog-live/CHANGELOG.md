@@ -1,3 +1,8 @@
+### 0.8.1.0
+
+- Add support for the following OTLP exporter configuration options:
+  - `OTEL_EXPORTER_OTLP_TIMEOUT` (full support with both `grpc` and `http/protobuf`)
+
 ### 0.8.0.0
 
 The version 0.7.0.0 was skipped to avoid confusion with `eventlog-live-otelcol-0.7.0.0`.
