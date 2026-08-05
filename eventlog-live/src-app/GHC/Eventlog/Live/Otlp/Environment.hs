@@ -302,8 +302,6 @@ data OtlpExporterOptions = OtlpExporterOptions
   { protocol :: !Protocol
   , endpoint :: !Endpoint
   , maybeCertificate :: !(Maybe String)
-  , maybeClientKey :: !(Maybe String)
-  , maybeClientCertificate :: !(Maybe String)
   , maybeHeaders :: !(Maybe Baggage)
   , maybeCompression :: !(Maybe Compression)
   , timeout :: !Timeout
@@ -328,8 +326,6 @@ lookupOtlpExporterOptions logger signal = do
   maybeEndpoint <- lookupOtlpExporterOption logger signal ENDPOINT (readEndpoint maybeInsecure)
   let !endpoint = fromMaybe (defaultEndpointFor protocol) maybeEndpoint
   maybeCertificate <- lookupOtlpExporterOption logger signal CERTIFICATE readString
-  maybeClientKey <- lookupOtlpExporterOption logger signal CLIENT_KEY readString
-  maybeClientCertificate <- lookupOtlpExporterOption logger signal CLIENT_CERTIFICATE readString
   maybeHeaders <- lookupOtlpExporterOption logger signal HEADERS readBaggage
   maybeCompression <- join <$> lookupOtlpExporterOption logger signal COMPRESSION readCompression
   maybeTimeout <- lookupOtlpExporterOption logger signal TIMEOUT readTimeout
