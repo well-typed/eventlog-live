@@ -4,7 +4,10 @@ module GHC.Eventlog.Live.Otlp.Options (
   options,
 ) where
 
+import Data.Bifunctor (Bifunctor (..))
+import Data.Char (isSpace)
 import Data.Default (Default (..))
+import Data.List qualified as L
 import Data.Text qualified as T
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
@@ -13,12 +16,15 @@ import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
 import GHC.Eventlog.Live.Otlp.Config.Types (Config)
 import GHC.Eventlog.Live.Otlp.Control (ControlOptions, controlOptionsParser)
+import GHC.Eventlog.Live.Otlp.Options.Raw (footerString, headerString, progDescString)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
 import GHC.RTS.Events (HeapProfBreakdown (..))
 import Options.Applicative qualified as O
 import Options.Applicative.Compat qualified as OC
 import Options.Applicative.Extra qualified as OE
+import Options.Applicative.Help.Chunk qualified as OHC
+import Options.Applicative.Help.Pretty qualified as OHP
 import Paths_eventlog_live qualified as EventlogLive
 
 options :: O.ParserInfo Options
@@ -31,7 +37,40 @@ options =
         O.<**> OE.helperWith (O.long "help" <> O.help "Show this help text.")
         O.<**> OC.simpleVersioner (showVersion EventlogLive.version)
     )
-    O.idm
+    ( O.headerDoc (helpDoc headerString)
+        <> O.progDescDoc (helpDoc progDescString)
+        <> O.footerDoc (helpDoc footerString)
+    )
+
+{- |
+Internal helper.
+
+Render a text as an `OHP.Doc`.
+-}
+helpDoc :: String -> Maybe OHP.Doc
+helpDoc doc
+  | OHC.isEmpty (OHC.vcatChunks docChunks) = Nothing
+  | otherwise = OHC.unChunk $ vcatChunks docChunks
+ where
+  docChunks :: [OHC.Chunk OHP.Doc]
+  docChunks = helpDocLine <$> lines doc
+
+  -- NOTE: Variant of vcatChunks that uses hardline
+  vcatChunks :: [OHC.Chunk OHP.Doc] -> OHC.Chunk OHP.Doc
+  vcatChunks = mconcat . L.intersperse (OHC.Chunk $ Just OHP.hardline)
+
+{- |
+Internal helper.
+
+Render a line as an `OHP.Doc`.
+-}
+helpDocLine :: String -> OHC.Chunk OHP.Doc
+helpDocLine line = indentedChunk
+ where
+  (nestingLevel, chunk) =
+    bimap length OHC.paragraph (span isSpace line)
+  indentedChunk =
+    if nestingLevel >= 1 then OHP.indent nestingLevel <$> chunk else chunk
 
 data Options = Options
   { eventlogSourceOptions :: EventlogSourceOptions
