@@ -145,8 +145,8 @@ withOtlpGrpcExporter logger options action = do
   writeLog logger DEBUG . T.pack $
     "OTLP gRPC Exporter - Endpoint: " <> show options.endpoint
   let !maybeTimeout
-        | options.timeout.timeoutMillis == 0 = Nothing
-        | otherwise = Just $ G.Timeout G.Millisecond (G.TimeoutValue options.timeout.timeoutMillis)
+        | options.timeout.milliseconds == 0 = Nothing
+        | otherwise = Just $ G.Timeout G.Millisecond (G.TimeoutValue options.timeout.milliseconds)
   G.withConnection G.def server $ \connection ->
     action OtlpGrpcExporter{..}
  where
