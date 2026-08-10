@@ -5,8 +5,16 @@
   - `OTEL_EXPORTER_OTLP_CLIENT_KEY` (not parsed, as mTLS is unsupported)
   - `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` (not parsed, as mTLS is unsupported)
 
+- Add support for `console` exporter (e.g., via `OTEL_METRICS_EXPORTER=console`).
+
 - Add support for HTTP proxy environment variables (`http_proxy` and `https_proxy`)
   when using HTTP/Protobuf exporter.
+
+- Fix bug where `OTEL_EXPORTER_OTLP_INSECURE` applied to `http/protobuf` exporters.
+
+- Fix bug where `OTEL_EXPORTER_OTLP_ENDPOINT` accepted URLs without scheme for `http/protobuf` exporters.
+
+- Add documentation for OpenTelemetry environment variables to command-line `--help`.
 
 ### 0.8.0.0
 
