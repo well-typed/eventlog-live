@@ -40,8 +40,9 @@ import GHC.Eventlog.Live.Data.Attribute qualified as A
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Metric (KnownMetricType, Metric (..), SomeMetric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
+import GHC.IsList qualified as IsList
 import GHC.RTS.Events (Timestamp)
-import GHC.Stack (callStack, popCallStack, prettyCallStack, withFrozenCallStack)
+import GHC.Stack (CallStack, callStack, popCallStack, prettyCallStack)
 import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
@@ -62,17 +63,17 @@ Use a `Logger` to log a message with a severity.
 -}
 writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity body =
-  withFrozenCallStack $ do
-    logger
-      <& MyTelemetryData'LogRecord
-        { logRecord =
-            LogRecord
-              { body
-              , maybeSeverity = Just severity
-              , maybeTimeUnixNano = Nothing
-              , attrs = ["call-stack" ~= prettyCallStack (popCallStack callStack)]
-              }
-        }
+  let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
+   in logger
+        <& MyTelemetryData'LogRecord
+          { logRecord =
+              LogRecord
+                { body
+                , maybeSeverity = Just severity
+                , maybeTimeUnixNano = Nothing
+                , attrs = ["call-stack" ~= (prettyCallStack <$> maybeCallStack)]
+                }
+          }
 
 {- |
 Use a `Logger` to log an exception.
@@ -248,3 +249,19 @@ getTimeUnixNano = toNanos <$> getTime Realtime
   --       What's that like?
   toNanos :: TimeSpec -> Timestamp
   toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec
+
+{- |
+Internal helper.
+
+Return the first argument only if the predicate holds.
+-}
+onlyIf :: a -> (a -> Bool) -> Maybe a
+onlyIf a p = if p a then Just a else Nothing
+
+{- |
+Internal helper.
+
+Test if a `CallStack` is empty.
+-}
+isEmptyCallStack :: CallStack -> Bool
+isEmptyCallStack = null . IsList.toList
