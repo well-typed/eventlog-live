@@ -15,7 +15,7 @@ OpenTelemetry Exporter selection:
   OTEL_PROFILES_EXPORTER          Profiles exporter to be used.
   OTEL_TRACES_EXPORTER            Trace exporter to be used.
 
-  Each option supports the values "none" and "otlp" and defaults to "otlp".
+  Each option supports the values "console", "none" and "otlp" and defaults to "otlp".
 
   https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-selection
 

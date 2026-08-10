@@ -17,7 +17,7 @@ import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), Exporter (..), export)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
@@ -100,11 +100,22 @@ exportResourceSpans logger exporter =
     handleSomeException :: SomeException -> IO ExportTraceResult
     handleSomeException someException = pure $ ExportTraceError 0 exportedSpans someException
 
+--------------------------------------------------------------------------------
+-- CanExportToConsole
+
+instance CanExportToConsole OTS.TraceService "export"
+
+--------------------------------------------------------------------------------
+-- CanExportToOltpViaGrpc
+
 type instance G.RequestMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OTS.TraceService meth) = G.NoMetadata
 
-instance CanExportViaHttpProtobuf OTS.TraceService "export" where
+--------------------------------------------------------------------------------
+-- CanExportToOltpViaHttpProtobuf
+
+instance CanExportToOltpViaHttpProtobuf OTS.TraceService "export" where
   apiPath :: String
   apiPath = "/v1/traces"
 

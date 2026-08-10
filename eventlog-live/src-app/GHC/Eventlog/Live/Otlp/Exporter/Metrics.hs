@@ -17,7 +17,7 @@ import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), Exporter (..), export)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
@@ -103,11 +103,22 @@ exportResourceMetrics logger exporter = construct $ go False
     handleSomeException :: SomeException -> IO ExportMetricsResult
     handleSomeException someException = pure $ ExportMetricsError 0 exportedDataPoints someException
 
+--------------------------------------------------------------------------------
+-- CanExportToConsole
+
+instance CanExportToConsole OMS.MetricsService "export"
+
+--------------------------------------------------------------------------------
+-- CanExportToOltpViaGrpc
+
 type instance G.RequestMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OMS.MetricsService meth) = G.NoMetadata
 
-instance CanExportViaHttpProtobuf OMS.MetricsService "export" where
+--------------------------------------------------------------------------------
+-- CanExportToOltpViaHttpProtobuf
+
+instance CanExportToOltpViaHttpProtobuf OMS.MetricsService "export" where
   apiPath :: String
   apiPath = "/v1/metrics"
 
