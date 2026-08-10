@@ -74,7 +74,7 @@ Render a line as an `OHP.Doc`.
 -}
 helpDocLine :: String -> OHC.Chunk OHP.Doc
 helpDocLine =
-  asDoc True . foldl' trans empty . reverse
+  asDoc True . L.foldl' trans empty . reverse
  where
   empty :: LineAcc
   empty = Space 0 mempty
