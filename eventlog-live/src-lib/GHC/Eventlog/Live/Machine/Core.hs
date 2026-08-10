@@ -35,6 +35,9 @@ module GHC.Eventlog.Live.Machine.Core (
   sortByTick,
   sortByTicks,
 
+  -- * Aggregation Temporality
+  deltaToCumulative,
+
   -- * Delimiting
   delimit,
   betweenEach,
@@ -49,6 +52,7 @@ module GHC.Eventlog.Live.Machine.Core (
 import Control.Monad (when)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.State.Strict (get, put, runState)
 import Data.DList qualified as D
 import Data.Foldable (Foldable (..), for_)
 import Data.Function (on)
@@ -58,13 +62,16 @@ import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
 import Data.Kind (Constraint)
 import Data.List qualified as L
-import Data.Machine (Is (..), MachineT (..), Moore (..), PlanT, Process, ProcessT, SourceT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
+import Data.Machine (Is (..), MachineT (..), Moore (..), Plan, PlanT, Process, ProcessT, SourceT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
 import Data.Machine.Concurrent qualified as CC
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Text qualified as T
+import Data.Traversable (for)
 import Data.Void (Void)
+import Data.Word (Word64)
+import GHC.Eventlog.Live.Data.Metric (Metric)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import Text.Printf (printf)
@@ -651,6 +658,26 @@ sortByTicks key ticks =
     ~> batchByTicks ticks
     ~> mapping (fmap D.toList)
     ~> liftTick (sortByBatch key ~> asParts)
+
+-------------------------------------------------------------------------------
+-- Aggregation
+-------------------------------------------------------------------------------
+
+deltaToCumulative :: forall f a. (Traversable f, Num a) => Process (f a) (f a)
+deltaToCumulative = construct $ go 0
+ where
+  go :: a -> Plan (Is (f a)) (f a) ()
+  go acc =
+    await >>= \fa -> do
+      -- Add the cumulative sum to the value in the item.
+      let (!fa', !acc') = flip runState acc . for fa $ \a -> do
+            a' <- (a +) <$> get; put a'; pure a'
+      -- Yield the updated item.
+      yield fa'
+      -- Continue with the new cumulative sum.
+      go acc'
+{-# SPECIALIZE deltaToCumulative :: Process (Metric Double) (Metric Double) #-}
+{-# SPECIALIZE deltaToCumulative :: Process (Metric Word64) (Metric Word64) #-}
 
 -------------------------------------------------------------------------------
 -- Filtering semaphores
