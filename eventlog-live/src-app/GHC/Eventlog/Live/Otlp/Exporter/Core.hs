@@ -19,6 +19,7 @@ module GHC.Eventlog.Live.Otlp.Exporter.Core (
   HttpError (..),
 ) where
 
+import Codec.Compression.GZip qualified as GZip
 import Control.Exception (Exception (..), throwIO)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -234,6 +235,7 @@ data OtlpHttpProtobufExporter = OtlpHttpProtobufExporter
   { manager :: H.Manager
   , baseUrl :: String
   , headers :: HTTP.RequestHeaders
+  , maybeCompression :: Maybe Compression
   }
 
 data HttpError
@@ -297,7 +299,12 @@ withOtlpHttpProtobufExporter logger options action = do
             IsList.toList (maybe mempty Baggage.values options.maybeHeaders)
         ]
   -- Run the action.
-  action OtlpHttpProtobufExporter{baseUrl = show options.endpoint, ..}
+  action
+    OtlpHttpProtobufExporter
+      { baseUrl = show options.endpoint
+      , maybeCompression = options.maybeCompression
+      , ..
+      }
 
 class
   ( Message (MethodInput serv meth)
@@ -321,16 +328,19 @@ exportHttpProtobuf ::
   IO (MethodOutput serv meth)
 exportHttpProtobuf logger OtlpHttpProtobufExporter{..} req = do
   baseRequest <- H.parseRequest (baseUrl <> apiPath @serv @meth)
+  let (compressionHeaders, compress) = httpCompression maybeCompression
+  let !requestBody = H.RequestBodyBS (compress (Proto.encodeMessage req))
   let request =
         baseRequest
           { H.method = "POST"
-          , H.requestBody = H.RequestBodyBS (Proto.encodeMessage req)
+          , H.requestBody = requestBody
           , H.checkResponse = \_ _ -> pure ()
           , H.requestHeaders =
               [ (HTTP.hContentType, "application/x-protobuf")
               , (HTTP.hAccept, "application/x-protobuf")
               ]
-                <> headers
+                <> headers -- user-provided
+                <> compressionHeaders
           }
   writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - HTTP Request:  " <> show request
   response <- H.httpLbs request manager
@@ -359,3 +369,13 @@ decodeResponseBody body
       case Proto.decodeMessage body of
         Left errorMessage -> throwIO HttpDecodeError{..}
         Right msg -> pure msg
+
+{- |
+Internal helper.
+
+Determine HTTP compression headers and algorithms.
+-}
+httpCompression :: Maybe Compression -> ([HTTP.Header], ByteString -> ByteString)
+httpCompression = \case
+  Nothing -> ([], id)
+  Just GZip -> ([(HTTP.hContentEncoding, "gzip")], BSL.toStrict . GZip.compress . BSL.fromStrict)
