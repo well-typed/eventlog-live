@@ -35,11 +35,13 @@ import Data.Text.Encoding qualified as TE
 import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Otlp.Environment (Compression (..))
 import GHC.Eventlog.Live.Otlp.Environment qualified as E (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), Timeout (..), defaultPortFor)
 import GHC.IsList qualified as IsList
 import Network.GRPC.Client qualified as G
 import Network.GRPC.Client.StreamType.IO qualified as G
 import Network.GRPC.Common qualified as G
+import Network.GRPC.Common.Compression qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf, StreamingType (..))
 import Network.GRPC.Common.Protobuf qualified as G
 import Network.GRPC.Common.StreamType qualified as G
@@ -161,9 +163,8 @@ class CanExportToConsole serv meth where
 {- |
 An opaque OTLP gRPC exporter.
 -}
-data OtlpGrpcExporter = OtlpGrpcExporter
-  { connection :: !G.Connection
-  , maybeTimeout :: !(Maybe G.Timeout)
+newtype OtlpGrpcExporter = OtlpGrpcExporter
+  { connection :: G.Connection
   }
 
 type CanExportToOltpViaGrpc serv meth =
@@ -180,10 +181,20 @@ withOtlpGrpcExporter ::
 withOtlpGrpcExporter logger options action = do
   writeLog logger DEBUG . T.pack $
     "OTLP gRPC Exporter - Endpoint: " <> show options.endpoint
-  let !maybeTimeout
-        | options.timeout.milliseconds == 0 = Nothing
-        | otherwise = Just $ G.Timeout G.Millisecond (G.TimeoutValue options.timeout.milliseconds)
-  G.withConnection G.def server $ \connection ->
+  let !connParams =
+        G.def
+          { -- The compression negotiation strategy:
+            G.connCompression =
+              case options.maybeCompression of
+                Nothing -> G.none
+                Just GZip -> G.only G.gzip
+          , -- The default timeout:
+            G.connDefaultTimeout =
+              if options.timeout.milliseconds == 0
+                then Nothing
+                else Just (G.Timeout G.Millisecond (G.TimeoutValue options.timeout.milliseconds))
+          }
+  G.withConnection connParams server $ \connection ->
     action OtlpGrpcExporter{..}
  where
   server :: G.Server
@@ -204,7 +215,7 @@ exportGrpc ::
   IO (MethodOutput serv meth)
 exportGrpc _logger grpcExporter input =
   let callParams :: G.CallParams (G.Protobuf serv meth)
-      callParams = G.def{G.callTimeout = grpcExporter.maybeTimeout}
+      callParams = G.def
    in G.getProto <$> G.nonStreaming grpcExporter.connection (G.rpcWith callParams) (G.Proto input)
 
 --------------------------------------------------------------------------------
