@@ -39,7 +39,7 @@ data Metric a = Metric
   , attrs :: Attrs
   -- ^ A set of attributes.
   }
-  deriving (Functor, Show)
+  deriving (Functor, Foldable, Traversable, Show)
 
 instance GroupBy (Metric a) where
   type Key (Metric a) = Attrs
