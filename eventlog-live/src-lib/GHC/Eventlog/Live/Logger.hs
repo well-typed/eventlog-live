@@ -41,7 +41,7 @@ import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Metric (KnownMetricType, Metric (..), SomeMetric (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
 import GHC.RTS.Events (Timestamp)
-import GHC.Stack (callStack, prettyCallStack, withFrozenCallStack)
+import GHC.Stack (callStack, popCallStack, prettyCallStack, withFrozenCallStack)
 import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
@@ -62,7 +62,7 @@ Use a `Logger` to log a message with a severity.
 -}
 writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity body =
-  withFrozenCallStack $
+  withFrozenCallStack $ do
     logger
       <& MyTelemetryData'LogRecord
         { logRecord =
@@ -70,7 +70,7 @@ writeLog logger severity body =
               { body
               , maybeSeverity = Just severity
               , maybeTimeUnixNano = Nothing
-              , attrs = ["call-stack" ~= prettyCallStack callStack]
+              , attrs = ["call-stack" ~= prettyCallStack (popCallStack callStack)]
               }
         }
 
