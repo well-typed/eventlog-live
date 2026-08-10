@@ -343,7 +343,7 @@ lookupOtlpExporterOptions logger signal = do
   -- The INSECURE option should be used to infer http/https, but whenever
   -- http/https is specified in the endpoint, this should take precedence.
   maybeInsecure <- lookupOtlpExporterOption logger signal INSECURE readBoolean
-  maybeEndpoint <- lookupOtlpExporterOption logger signal ENDPOINT (readEndpoint maybeInsecure)
+  maybeEndpoint <- lookupOtlpExporterOption logger signal ENDPOINT (readEndpoint protocol maybeInsecure)
   let !endpoint = fromMaybe (defaultEndpointFor protocol) maybeEndpoint
   maybeCertificate <- lookupOtlpExporterOption logger signal CERTIFICATE readString
   maybeHeaders <- lookupOtlpExporterOption logger signal HEADERS readBaggage
@@ -470,8 +470,15 @@ Parse an endpoint.
 @`readEndpoint` maybeInsecure@ uses the value of @maybeInsecure@, to determine
 whether or not to infer the URI scheme as http or https, if unspecified.
 -}
-readEndpoint :: (Monad m) => Maybe Bool -> Logger m -> String -> String -> ExceptT String m Endpoint
-readEndpoint maybeInsecure logger optionName = go True
+readEndpoint ::
+  (Monad m) =>
+  Protocol ->
+  Maybe Bool ->
+  Logger m ->
+  String ->
+  String ->
+  ExceptT String m Endpoint
+readEndpoint protocol maybeInsecure logger optionName = go True
  where
   go retry endpoint = do
     let maybeURI = URI.parseAbsoluteURI endpoint
@@ -480,7 +487,10 @@ readEndpoint maybeInsecure logger optionName = go True
         "Environment variable " <> optionName <> " specifies URI: " <> showURI uri
     case maybeURI of
       Nothing
-        | retry -> do
+        -- If the endpoint was specified without a scheme, then we retry with a
+        -- scheme that is either based on the value of the insecure setting or
+        -- the default insecure http scheme, but this applies *only* to gRPC.
+        | protocol == Grpc && retry -> do
             if maybeInsecure == Just False
               then go False ("https://" <> endpoint)
               else go False ("http://" <> endpoint)
