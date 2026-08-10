@@ -307,6 +307,7 @@ executable eventlog-live-otlp
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
+    zlib >=0.2 && <0.8,
 
   if flag(control)
     build-depends:
