@@ -2,6 +2,7 @@
 
 - Add support for the following OTLP exporter configuration options:
   - `OTEL_EXPORTER_OTLP_TIMEOUT` (full support with both `grpc` and `http/protobuf`)
+  - `OTEL_EXPORTER_OTLP_COMPRESSION` (full support with both `grpc` and `http/protobuf`)
   - `OTEL_EXPORTER_OTLP_CLIENT_KEY` (not parsed, as mTLS is unsupported)
   - `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` (not parsed, as mTLS is unsupported)
 
@@ -13,6 +14,8 @@
 - Fix bug where `OTEL_EXPORTER_OTLP_INSECURE` applied to `http/protobuf` exporters.
 
 - Fix bug where `OTEL_EXPORTER_OTLP_ENDPOINT` accepted URLs without scheme for `http/protobuf` exporters.
+
+- Fix bug where `writeLog` shows in the backtraces for error messages.
 
 - Add documentation for OpenTelemetry environment variables to command-line `--help`.
 
