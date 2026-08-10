@@ -73,13 +73,13 @@ processThreadEvents verbosity fullConfig =
               [ runMetricProcessor
                   MetricProcessor
                     { metricProcessorProxy = Proxy @"capabilityUsage"
-                    , dataProcessor = M.processCapabilityUsageMetrics
+                    , dataProcessor = M.processCapabilityUsageMetrics ~> M.deltaToCumulative
                     , aggregators = viaSum
                     , postProcessor = echo
                     , unit = "ns"
                     , asMetric'Data =
                         asSum
-                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
                           , OM.isMonotonic .~ True
                           ]
                     }

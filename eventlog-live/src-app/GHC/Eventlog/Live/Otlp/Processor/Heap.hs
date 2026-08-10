@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
+import Data.Word (Word64)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
@@ -61,13 +62,16 @@ processHeapAllocated =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapAllocated"
-      , dataProcessor = M.processHeapAllocatedData
+      , dataProcessor =
+          M.processHeapAllocatedData
+            ~> mapping (fmap $ realToFrac @Word64 @Double) -- Convert to Double to avoid overflow.
+            ~> M.deltaToCumulative
       , aggregators = viaSum
       , postProcessor = echo
       , unit = "By"
       , asMetric'Data =
           asSum
-            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
             , OM.isMonotonic .~ True
             ]
       }
