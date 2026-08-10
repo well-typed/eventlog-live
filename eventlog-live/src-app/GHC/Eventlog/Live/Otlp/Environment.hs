@@ -171,7 +171,7 @@ singletonBaggage token value = Baggage.insert token (Baggage.element value) Bagg
 {- |
 Supported exporters.
 -}
-data ExporterType = Otlp
+data ExporterType = Console | Otlp
   deriving (Eq, Show)
 
 {- |
@@ -194,7 +194,9 @@ lookupExporterType logger signal = do
 {- |
 Exporter options for each exporter type.
 -}
-newtype ExporterOptions = ExporterOptions'Otlp OtlpExporterOptions
+data ExporterOptions
+  = ExporterOptions'Console
+  | ExporterOptions'Otlp OtlpExporterOptions
   deriving (Eq, Show)
 
 {- |
@@ -208,23 +210,35 @@ lookupExporterOptions ::
 lookupExporterOptions logger = do
   !tracesExporterType <- lookupExporterType logger TRACES
   !tracesExporterOptions <-
-    for tracesExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just TRACES)
+    for tracesExporterType $ \case
+      Console ->
+        pure ExporterOptions'Console
+      Otlp ->
+        ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just TRACES)
 
   !metricsExporterType <- lookupExporterType logger METRICS
   !metricsExporterOptions <-
-    for metricsExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just METRICS)
+    for metricsExporterType $ \case
+      Console ->
+        pure ExporterOptions'Console
+      Otlp ->
+        ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just METRICS)
 
   !logsExporterType <- lookupExporterType logger LOGS
   !logsExporterOptions <-
-    for logsExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just LOGS)
+    for logsExporterType $ \case
+      Console ->
+        pure ExporterOptions'Console
+      Otlp ->
+        ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just LOGS)
 
   !profilesExporterType <- lookupExporterType logger PROFILES
   !profilesExporterOptions <-
-    for profilesExporterType $ \Otlp ->
-      ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just PROFILES)
+    for profilesExporterType $ \case
+      Console ->
+        pure ExporterOptions'Console
+      Otlp ->
+        ExporterOptions'Otlp <$> lookupOtlpExporterOptions logger (Just PROFILES)
 
   let exporterOptions =
         [tracesExporterOptions, metricsExporterOptions, logsExporterOptions, profilesExporterOptions]
@@ -584,7 +598,8 @@ readExporterType :: (Monad m) => Logger m -> String -> String -> ExceptT String 
 readExporterType _logger optionName exporterType
   | CI.mk exporterType == "none" = pure Nothing
   | CI.mk exporterType == "otlp" = pure (Just Otlp)
-  | CI.mk exporterType `elem` ["zipkin", "prometheus", "console", "logging"] =
+  | CI.mk exporterType == "console" = pure (Just Console)
+  | CI.mk exporterType `elem` ["zipkin", "prometheus", "logging"] =
       throwE $
         "Environment variable " <> optionName <> " specifies unsupported exporter '" <> exporterType <> "'."
   | otherwise =

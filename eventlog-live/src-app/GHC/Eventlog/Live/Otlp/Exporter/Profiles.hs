@@ -18,7 +18,7 @@ import Data.Text (Text)
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportViaHttpProtobuf (..), Exporter (..), export)
+import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
 import Lens.Family2 ((^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
@@ -98,13 +98,28 @@ exportResourceProfiles logger exporter =
     handleSomeException :: SomeException -> IO ExportProfileResult
     handleSomeException someException = pure $ ExportProfileError 0 exportedProfiles someException
 
+--------------------------------------------------------------------------------
+-- CanExportToConsole
+
+instance CanExportToConsole OPS.ProfilesService "export"
+
+--------------------------------------------------------------------------------
+-- CanExportToOltpViaGrpc
+
 type instance G.RequestMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
 type instance G.ResponseTrailingMetadata (Protobuf OPS.ProfilesService meth) = G.NoMetadata
 
-instance CanExportViaHttpProtobuf OPS.ProfilesService "export" where
+--------------------------------------------------------------------------------
+-- CanExportToOltpViaHttpProtobuf
+
+instance CanExportToOltpViaHttpProtobuf OPS.ProfilesService "export" where
   apiPath :: String
   apiPath = "/v1development/profiles"
+
+--------------------------------------------------------------------------------
+-- Internal Helpers
+--------------------------------------------------------------------------------
 
 {- |
 Internal helper.

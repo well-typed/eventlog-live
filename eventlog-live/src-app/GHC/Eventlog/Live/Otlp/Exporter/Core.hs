@@ -2,16 +2,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module GHC.Eventlog.Live.Otlp.Exporter.Core (
+  -- * Exporter
   Exporter (..),
   withExporter,
   withExporters,
   export,
 
-  -- * Export via gRPC
-  CanExportViaGrpc,
+  -- ** Export via gRPC
+  CanExportToConsole,
 
-  -- * Export via HTTP/Protobuf
-  CanExportViaHttpProtobuf (..),
+  -- ** Export via gRPC
+  CanExportToOltpViaGrpc,
+
+  -- ** Export via HTTP/Protobuf
+  CanExportToOltpViaHttpProtobuf (..),
   HttpError (..),
 ) where
 
@@ -25,8 +29,10 @@ import Data.Maybe (fromMaybe)
 import Data.ProtoLens.Encoding qualified as Proto
 import Data.ProtoLens.Message (Message (defMessage))
 import Data.ProtoLens.Service.Types (HasMethodImpl (..))
+import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Otlp.Environment qualified as E (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), Timeout (..), defaultPortFor)
@@ -48,7 +54,8 @@ import OpenTelemetry.Baggage qualified as Baggage
 --------------------------------------------------------------------------------
 
 data Exporter
-  = Exporter'OtlpGrpc !OtlpGrpcExporter
+  = Exporter'Console
+  | Exporter'OtlpGrpc !OtlpGrpcExporter
   | Exporter'OtlpHttpProtobuf !OtlpHttpProtobufExporter
 
 {- |
@@ -91,20 +98,25 @@ withExporter ::
   E.ExporterOptions ->
   (Exporter -> IO a) ->
   IO a
-withExporter logger (E.ExporterOptions'Otlp options) action =
-  case options.protocol of
-    E.Grpc ->
-      withOtlpGrpcExporter logger options $ action . Exporter'OtlpGrpc
-    E.HttpProtobuf ->
-      withOtlpHttpProtobufExporter logger options $ action . Exporter'OtlpHttpProtobuf
+withExporter logger options action =
+  case options of
+    E.ExporterOptions'Console ->
+      action Exporter'Console
+    E.ExporterOptions'Otlp otlpExporterOptions ->
+      case otlpExporterOptions.protocol of
+        E.Grpc ->
+          withOtlpGrpcExporter logger otlpExporterOptions $ action . Exporter'OtlpGrpc
+        E.HttpProtobuf ->
+          withOtlpHttpProtobufExporter logger otlpExporterOptions $ action . Exporter'OtlpHttpProtobuf
 
 {- |
 Export telemetry data to the t`OtlpExporter`.
 -}
 export ::
   forall serv meth.
-  ( CanExportViaGrpc serv meth
-  , CanExportViaHttpProtobuf serv meth
+  ( CanExportToConsole serv meth
+  , CanExportToOltpViaGrpc serv meth
+  , CanExportToOltpViaHttpProtobuf serv meth
   ) =>
   Logger IO ->
   -- | The HTTP/Protobuf exporter.
@@ -113,10 +125,34 @@ export ::
   MethodInput serv meth ->
   IO (MethodOutput serv meth)
 export logger = \case
+  Exporter'Console -> \req -> do
+    TIO.putStrLn (displayExportRequest @serv @meth req)
+    pure (makeExportResponse @serv @meth req)
   Exporter'OtlpGrpc exporter ->
     exportGrpc @serv @meth logger exporter
   Exporter'OtlpHttpProtobuf exporter ->
     exportHttpProtobuf @serv @meth logger exporter
+
+--------------------------------------------------------------------------------
+-- Console Exporter
+--------------------------------------------------------------------------------
+
+class CanExportToConsole serv meth where
+  {- |
+  Display an export request message.
+  -}
+  displayExportRequest :: MethodInput serv meth -> Text
+  default displayExportRequest :: (Show (MethodInput serv meth)) => MethodInput serv meth -> Text
+  displayExportRequest = T.pack . show
+  {-# INLINE displayExportRequest #-}
+
+  {- |
+  Construct an export response.
+  -}
+  makeExportResponse :: MethodInput serv meth -> MethodOutput serv meth
+  default makeExportResponse :: (Message (MethodOutput serv meth)) => MethodInput serv meth -> MethodOutput serv meth
+  makeExportResponse = const defMessage
+  {-# INLINE makeExportResponse #-}
 
 --------------------------------------------------------------------------------
 -- OTLP gRPC Exporter
@@ -130,7 +166,7 @@ data OtlpGrpcExporter = OtlpGrpcExporter
   , maybeTimeout :: !(Maybe G.Timeout)
   }
 
-type CanExportViaGrpc serv meth =
+type CanExportToOltpViaGrpc serv meth =
   ( G.SupportsClientRpc (Protobuf serv meth)
   , G.SupportsStreamingType (Protobuf serv meth) 'NonStreaming
   , G.RequestMetadata (Protobuf serv meth) ~ G.NoMetadata
@@ -161,7 +197,7 @@ withOtlpGrpcExporter logger options action = do
 
 exportGrpc ::
   forall serv meth.
-  (CanExportViaGrpc serv meth) =>
+  (CanExportToOltpViaGrpc serv meth) =>
   Logger IO ->
   OtlpGrpcExporter ->
   MethodInput serv meth ->
@@ -256,7 +292,7 @@ class
   ( Message (MethodInput serv meth)
   , Message (MethodOutput serv meth)
   ) =>
-  CanExportViaHttpProtobuf serv meth
+  CanExportToOltpViaHttpProtobuf serv meth
   where
   apiPath :: String
 
@@ -265,7 +301,7 @@ Send a Protobuf message over an HTTP connection.
 -}
 exportHttpProtobuf ::
   forall serv meth.
-  (CanExportViaHttpProtobuf serv meth) =>
+  (CanExportToOltpViaHttpProtobuf serv meth) =>
   Logger IO ->
   -- | The HTTP/Protobuf exporter.
   OtlpHttpProtobufExporter ->
