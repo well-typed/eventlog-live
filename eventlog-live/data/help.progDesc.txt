@@ -1,0 +1,27 @@
+Use eventlog-live-otlp to export eventlog telemetry to an OTLP endpoint.
+
+The following sends your application's eventlog over a named pipe and exports the resulting telemetry to an OTLP gRPC endpoint at "localhost:4317".
+
+  # Configure OpenTelemetry exporter
+  export OTEL_SERVICE_NAME="your-application"
+  export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+  export OTEL_EXPORTER_OTLP_ENDPOINT="localhost:4317"
+
+  # Create a pipe for the eventlog
+  mkfifo "/tmp/your-application.eventlog"
+
+  # Start your application
+  your-application                                   \
+    +RTS                                             \
+      -l                                             \
+      -ol"/tmp/your-application.eventlog"            \
+      -hT                                            \
+      --eventlog-flush-interval=1
+
+  # Start eventlog-live-otlp
+  eventlog-live-otlp                                 \
+    --eventlog-file="/tmp/your-application.eventlog" \
+    -hT                                              \
+    --eventlog-flush-interval=1
+
+For instructions and more in-depth examples, see the README.
