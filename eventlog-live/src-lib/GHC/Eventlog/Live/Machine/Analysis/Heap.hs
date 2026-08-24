@@ -56,6 +56,8 @@ import Text.Read (readMaybe)
 
 {- |
 This machine processes `E.HeapAllocated` events into metrics.
+
+This metric is the total bytes allocated over the whole run by the heap capability set.
 -}
 processHeapAllocatedData :: Process (WithStartTime Event) (Metric Word64)
 processHeapAllocatedData =
@@ -75,6 +77,8 @@ processHeapAllocatedData =
 
 {- |
 This machine processes `E.HeapSize` events into metrics.
+
+This metric is the current bytes allocated from the OS to use for the heap.
 -}
 processHeapSizeData :: Process (WithStartTime Event) (Metric Word64)
 processHeapSizeData = repeatedly go
@@ -114,6 +118,8 @@ processBlocksSizeData =
 
 {- |
 This machine processes `E.HeapLive` events into metrics.
+
+This metric is the current amount of live/reachable data in the heap.
 -}
 processHeapLiveData :: Process (WithStartTime Event) (Metric Word64)
 processHeapLiveData =
