@@ -67,7 +67,7 @@ processHeapAllocated =
       , unit = "By"
       , asMetric'Data =
           asSum
-            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
             , OM.isMonotonic .~ True
             ]
       }
