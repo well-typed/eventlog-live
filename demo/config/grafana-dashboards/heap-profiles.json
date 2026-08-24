@@ -4,20 +4,20 @@
   "metadata": {
     "name": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
     "namespace": "default",
-    "uid": "8d5a5c56-de28-48d3-8be9-a5a200111e2d",
-    "resourceVersion": "1784291505929996",
+    "uid": "dbb5b971-40b4-4c67-92e5-105242ba8272",
+    "resourceVersion": "1787585297537000",
     "generation": 1,
-    "creationTimestamp": "2026-07-17T12:31:45Z",
+    "creationTimestamp": "2026-08-24T15:28:17Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "1935882724188160"
+      "grafana.app/deprecatedInternalID": "2240247154458624"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "Dashboards",
-      "grafana.app/sourceChecksum": "0b0e1b22aaef997c49c0638b4fad8f76",
+      "grafana.app/sourceChecksum": "a573fdcfea7ee0e16f6f0527eb75fb48",
       "grafana.app/sourcePath": "/var/lib/grafana/dashboards/heap-profiles.json",
-      "grafana.app/sourceTimestamp": "1784291387000",
+      "grafana.app/sourceTimestamp": "1784813083000",
       "grafana.app/folder": ""
     }
   },
@@ -549,10 +549,10 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "sum by(exported_job) (delta(ghc_eventlog_HeapAllocated_bytes_total{exported_job=\"$service_name\"}[$__interval]))",
+                        "expr": "delta(ghc_eventlog_HeapAllocated_bytes_total{exported_job=\"$service_name\"}[$__interval])",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
-                        "legendFormat": "HeapAllocated",
+                        "legendFormat": "Capability {{evCap}}",
                         "range": true,
                         "useBackend": false
                       },
@@ -587,7 +587,7 @@
                     "axisPlacement": "auto",
                     "barAlignment": 0,
                     "barWidthFactor": 0.6,
-                    "drawStyle": "line",
+                    "drawStyle": "bars",
                     "fillOpacity": 0,
                     "gradientMode": "none",
                     "hideFrom": {
