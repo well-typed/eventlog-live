@@ -15,6 +15,8 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   processHeapLiveData,
   MemReturnData (..),
   processMemReturnData,
+  GcStatsData (..),
+  processGcStatsData,
   HeapProfSampleData,
   heapProfSamples,
   processHeapProfSampleData,
@@ -162,6 +164,42 @@ processMemReturnData =
               metric i MemReturnData{..} $
                 [ "evCap" ~= i.value.evCap
                 , "heapCapset" ~= heapCapset
+                ]
+        | otherwise -> pure ()
+
+-------------------------------------------------------------------------------
+-- GcStats
+
+data GcStatsData = GcStatsData
+  { copied :: !Word64
+  -- ^ Number of bytes copied.
+  , slop :: !Word64
+  {- ^ Amount of slop in bytes.
+
+  Slop is unused memory between objects in the heap.
+  -}
+  , fragmentation :: !Word64
+  {- ^ Amount of fragmentation in bytes.
+
+  The difference between total mblock size and total block size.
+  If all mblocks are full of blocks, this number is 0.
+  -}
+  }
+
+{- |
+This machine processes `E.GCStatsGHC` events into metrics.
+-}
+processGcStatsData :: Process (WithStartTime Event) (Metric GcStatsData)
+processGcStatsData =
+  repeatedly $
+    await >>= \case
+      i
+        | E.GCStatsGHC{..} <- i.value.evSpec -> do
+            yield $
+              metric i GcStatsData{copied, slop, fragmentation = frag} $
+                [ "evCap" ~= i.value.evCap
+                , "heapCapset" ~= heapCapset
+                , "gen" ~= gen
                 ]
         | otherwise -> pure ()
 
