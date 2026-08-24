@@ -1,3 +1,9 @@
+### 0.9.0.1
+
+- Fix bug where `HeapAllocated` metric was erroneously treated as a delta
+  metric and aggregated by summation. From this version onwards, it is treated
+  as a cumulative metric and aggregated by taking the most recent measurement.
+
 ### 0.9.0.0
 
 - Add support for the following OTLP exporter configuration options:
