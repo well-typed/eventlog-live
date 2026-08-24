@@ -24,7 +24,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast, viaSum)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.InfoProv qualified as IP
@@ -62,7 +62,7 @@ processHeapAllocated =
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapAllocated"
       , dataProcessor = M.processHeapAllocatedData
-      , aggregators = viaSum
+      , aggregators = viaLast
       , postProcessor = echo
       , unit = "By"
       , asMetric'Data =
