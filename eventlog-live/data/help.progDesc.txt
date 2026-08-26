@@ -4,6 +4,7 @@ The following sends your application's eventlog over a named pipe and exports th
 
   # Configure OpenTelemetry exporter
   export OTEL_SERVICE_NAME="your-application"
+  export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
   export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
   export OTEL_EXPORTER_OTLP_ENDPOINT="localhost:4317"
 
