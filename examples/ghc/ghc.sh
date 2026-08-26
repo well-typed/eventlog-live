@@ -6,6 +6,7 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="ghc"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Get the GHC_DIR argument.
