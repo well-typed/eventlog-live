@@ -43,6 +43,9 @@ module GHC.Eventlog.Live.Otlp.Config (
   MemCurrentMetric (..),
   MemNeededMetric (..),
   MemReturnedMetric (..),
+  GcCopiedMetric (..),
+  GcSlopMetric (..),
+  GcFragmentationMetric (..),
   HeapProfSampleMetric (..),
   CapabilityUsageMetric (..),
 
@@ -226,6 +229,18 @@ instance Default MemNeededMetric where
 instance Default MemReturnedMetric where
   def :: MemReturnedMetric
   def = $(getDefault @'["processors", "metrics", "memReturned"] defaultConfig)
+
+instance Default GcCopiedMetric where
+  def :: GcCopiedMetric
+  def = $(getDefault @'["processors", "metrics", "gcCopied"] defaultConfig)
+
+instance Default GcSlopMetric where
+  def :: GcSlopMetric
+  def = $(getDefault @'["processors", "metrics", "gcSlop"] defaultConfig)
+
+instance Default GcFragmentationMetric where
+  def :: GcFragmentationMetric
+  def = $(getDefault @'["processors", "metrics", "gcFragmentation"] defaultConfig)
 
 instance Default HeapProfSampleMetric where
   def :: HeapProfSampleMetric
