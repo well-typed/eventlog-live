@@ -10,6 +10,8 @@ export GHC_EVENTLOG_WAIT="true"
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="oddball"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build oddball
