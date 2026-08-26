@@ -35,6 +35,20 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
   ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-07-31.gif)
 
+## Table of Contents
+
+- [Demos](#demos)
+- [Getting Started](#getting-started)
+  - [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version)
+  - [Eventlog Live with Eventlog Socket](#eventlog-live-with-eventlog-socket)
+  - [Eventlog Live with Cost-Centre Stack Profiling](#eventlog-live-with-cost-centre-stack-profiling)
+  - [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table)
+  - [Eventlog Live with GHC Stack Profiler](#eventlog-live-with-ghc-stack-profiler)
+- [Fine-Tuning Eventlog Live](#fine-tuning-eventlog-live)
+  - [Configuration Files](#configuration-files)
+  - [Restricted Event Classes](#restricted-event-classes)
+  - [Info Table and Cost-Centre Databases](#info-table-and-cost-centre-databases)
+
 ## Demos
 
 The [`demo`](demo/) directory contains a [Docker Compose](https://docs.docker.com/compose/) configuration that runs Grafana and all required data sources and opens an OTLP gRPC receiver on port 4317. This configuration is used in [Getting Started](#getting-started) and by the various scripts under the [`examples`](examples/) directory.
@@ -403,7 +417,6 @@ eventlog-live-otlp                              \
   --control-cors-ignore-failure
 
 # See: examples/jumpy-jump/jumpy-jump-with-cost-centre-profiler.sh
-#      examples/jumpy-jump/jumpy-jump-with-cost-centre-profiler-with-pipe.sh
 ```
 
 If you run these commands, you should start seeing profiles show up on your dashboard.
