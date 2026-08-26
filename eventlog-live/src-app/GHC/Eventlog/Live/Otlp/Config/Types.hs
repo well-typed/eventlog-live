@@ -35,6 +35,9 @@ module GHC.Eventlog.Live.Otlp.Config.Types (
   MemNeededMetric (..),
   MemReturnedMetric (..),
   HeapProfSampleMetric (..),
+  GcCopiedMetric (..),
+  GcSlopMetric (..),
+  GcFragmentationMetric (..),
   CapabilityUsageMetric (..),
 
   -- *** Trace processor configuration types
@@ -191,6 +194,9 @@ data Metrics = Metrics
   , memCurrent :: Maybe MemCurrentMetric
   , memNeeded :: Maybe MemNeededMetric
   , memReturned :: Maybe MemReturnedMetric
+  , gcCopied :: Maybe GcCopiedMetric
+  , gcSlop :: Maybe GcSlopMetric
+  , gcFragmentation :: Maybe GcFragmentationMetric
   , heapProfSample :: Maybe HeapProfSampleMetric
   , capabilityUsage :: Maybe CapabilityUsageMetric
   }
@@ -200,17 +206,20 @@ instance FromYAML Metrics where
   parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Metrics
   parseYAML =
     -- NOTE: This should be kept in sync with the list of metrics.
-    YAML.withMap "Metrics" $ \m ->
-      Metrics
-        <$> m .:? "heap_allocated"
-        <*> m .:? "blocks_size"
-        <*> m .:? "heap_size"
-        <*> m .:? "heap_live"
-        <*> m .:? "mem_current"
-        <*> m .:? "mem_needed"
-        <*> m .:? "mem_returned"
-        <*> m .:? "heap_prof_sample"
-        <*> m .:? "capability_usage"
+    YAML.withMap "Metrics" $ \m -> do
+      heapAllocated <- m .:? "heap_allocated"
+      blocksSize <- m .:? "blocks_size"
+      heapSize <- m .:? "heap_size"
+      heapLive <- m .:? "heap_live"
+      memCurrent <- m .:? "mem_current"
+      memNeeded <- m .:? "mem_needed"
+      memReturned <- m .:? "mem_returned"
+      gcCopied <- m .:? "gc_copied"
+      gcSlop <- m .:? "gc_slop"
+      gcFragmentation <- m .:? "gc_fragmentation"
+      heapProfSample <- m .:? "heap_prof_sample"
+      capabilityUsage <- m .:? "capability_usage"
+      pure Metrics{..}
 
 instance ToYAML Metrics where
   toYAML :: Metrics -> YAML.Node ()
@@ -224,6 +233,9 @@ instance ToYAML Metrics where
       , "mem_current" .= metrics.memCurrent
       , "mem_needed" .= metrics.memNeeded
       , "mem_returned" .= metrics.memReturned
+      , "gc_copied" .= metrics.gcCopied
+      , "gc_slop" .= metrics.gcSlop
+      , "gc_fragmentation" .= metrics.gcFragmentation
       , "heap_prof_sample" .= metrics.heapProfSample
       , "capability_usage" .= metrics.capabilityUsage
       ]
@@ -519,6 +531,63 @@ instance FromYAML HeapProfSampleMetric where
 
 instance ToYAML HeapProfSampleMetric where
   toYAML :: HeapProfSampleMetric -> YAML.Node ()
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the @copied@ field for `GHC.Eventlog.Live.Machine.Analysis.Heap.processGcStats`.
+-}
+data GcCopiedMetric = GcCopiedMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML GcCopiedMetric where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser GcCopiedMetric
+  parseYAML = genericParseYAMLMetricProcessorConfig "GcCopiedMetric" GcCopiedMetric
+
+instance ToYAML GcCopiedMetric where
+  toYAML :: GcCopiedMetric -> YAML.Node ()
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the @copied@ field for `GHC.Eventlog.Live.Machine.Analysis.Heap.processGcStats`.
+-}
+data GcSlopMetric = GcSlopMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML GcSlopMetric where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser GcSlopMetric
+  parseYAML = genericParseYAMLMetricProcessorConfig "GcSlopMetric" GcSlopMetric
+
+instance ToYAML GcSlopMetric where
+  toYAML :: GcSlopMetric -> YAML.Node ()
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the @copied@ field for `GHC.Eventlog.Live.Machine.Analysis.Heap.processGcStats`.
+-}
+data GcFragmentationMetric = GcFragmentationMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML GcFragmentationMetric where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser GcFragmentationMetric
+  parseYAML = genericParseYAMLMetricProcessorConfig "GcFragmentationMetric" GcFragmentationMetric
+
+instance ToYAML GcFragmentationMetric where
+  toYAML :: GcFragmentationMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
