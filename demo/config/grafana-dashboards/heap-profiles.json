@@ -4,20 +4,22 @@
   "metadata": {
     "name": "a1d17d5b-a204-49b7-83a5-8d56afc7424b",
     "namespace": "default",
-    "uid": "dbb5b971-40b4-4c67-92e5-105242ba8272",
-    "resourceVersion": "1787585297537000",
-    "generation": 1,
-    "creationTimestamp": "2026-08-24T15:28:17Z",
+    "uid": "31ea9a0a-ab26-499d-9248-519ee29a801c",
+    "resourceVersion": "1787759355289019",
+    "generation": 2,
+    "creationTimestamp": "2026-08-26T15:41:42Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "2240247154458624"
+      "grafana.app/deprecatedInternalID": "2968400597393408"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "Dashboards",
-      "grafana.app/sourceChecksum": "a573fdcfea7ee0e16f6f0527eb75fb48",
+      "grafana.app/sourceChecksum": "11d469bb30a7a16e4a3b8bd03815d0d7",
       "grafana.app/sourcePath": "/var/lib/grafana/dashboards/heap-profiles.json",
-      "grafana.app/sourceTimestamp": "1784813083000",
+      "grafana.app/sourceTimestamp": "1787759350000",
+      "grafana.app/updatedBy": "access-policy:service",
+      "grafana.app/updatedTimestamp": "2026-08-26T15:49:15Z",
       "grafana.app/folder": ""
     }
   },
@@ -92,10 +94,10 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "avg(ghc_eventlog_HeapSize_bytes{exported_job=\"$service_name\"})",
+                        "expr": "avg(ghc_eventlog_HeapSize_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"})",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
-                        "legendFormat": "HeapSize",
+                        "legendFormat": "Allocated from OS",
                         "range": true,
                         "useBackend": false
                       },
@@ -117,11 +119,11 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "avg(ghc_eventlog_BlocksSize_bytes{exported_job=\"$service_name\"})",
+                        "expr": "avg(ghc_eventlog_BlocksSize_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"})",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "instant": false,
-                        "legendFormat": "BlocksSize",
+                        "legendFormat": "Allocated",
                         "range": true,
                         "useBackend": false
                       },
@@ -143,11 +145,11 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "avg(ghc_eventlog_HeapLive_bytes{exported_job=\"$service_name\"})",
+                        "expr": "avg(ghc_eventlog_HeapLive_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"})",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "instant": false,
-                        "legendFormat": "HeapLive",
+                        "legendFormat": "Live",
                         "range": true,
                         "useBackend": false
                       },
@@ -164,7 +166,7 @@
           "description": "",
           "id": 1,
           "links": [],
-          "title": "Heap Size for ${service_name}",
+          "title": "Heap Size",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -172,7 +174,8 @@
               "fieldConfig": {
                 "defaults": {
                   "color": {
-                    "mode": "palette-classic"
+                    "mode": "palette-classic",
+                    "seriesBy": "max"
                   },
                   "custom": {
                     "axisBorderShow": false,
@@ -181,9 +184,9 @@
                     "axisLabel": "",
                     "axisPlacement": "auto",
                     "barAlignment": 0,
-                    "barWidthFactor": 0.6,
-                    "drawStyle": "line",
-                    "fillOpacity": 0,
+                    "barWidthFactor": 0.9,
+                    "drawStyle": "bars",
+                    "fillOpacity": 68,
                     "gradientMode": "none",
                     "hideFrom": {
                       "legend": false,
@@ -192,12 +195,15 @@
                     },
                     "insertNulls": 3600000,
                     "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
                     "lineWidth": 1,
-                    "pointSize": 5,
+                    "pointSize": 1,
                     "scaleDistribution": {
                       "type": "linear"
                     },
-                    "showPoints": "auto",
+                    "showPoints": "always",
                     "showValues": false,
                     "spanNulls": false,
                     "stacking": {
@@ -529,6 +535,369 @@
           }
         }
       },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "PBFA97CFB590B2093"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "builder",
+                        "expr": "ghc_eventlog_GcCopied_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}",
+                        "legendFormat": "Generation {{gen}}",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 12,
+          "links": [],
+          "title": "Heap Copied per GC by Generation",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic",
+                    "seriesBy": "max"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.9,
+                    "drawStyle": "bars",
+                    "fillOpacity": 68,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 1,
+                    "pointSize": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "always",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "PBFA97CFB590B2093"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "builder",
+                        "expr": "ghc_eventlog_GcSlop_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}",
+                        "legendFormat": "Generation {{gen}}",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 13,
+          "links": [],
+          "title": "Heap Slop by Generation",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic",
+                    "seriesBy": "max"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.9,
+                    "drawStyle": "bars",
+                    "fillOpacity": 68,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 1,
+                    "pointSize": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "always",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "PBFA97CFB590B2093"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "builder",
+                        "expr": "ghc_eventlog_GcFragmentation_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}",
+                        "legendFormat": "Generation {{gen}}",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 14,
+          "links": [],
+          "title": "Heap Fragmentation by Generation",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic",
+                    "seriesBy": "max"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.9,
+                    "drawStyle": "bars",
+                    "fillOpacity": 68,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 1,
+                    "pointSize": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "always",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "normal"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.0"
+          }
+        }
+      },
       "panel-2": {
         "kind": "Panel",
         "spec": {
@@ -549,7 +918,7 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "delta(ghc_eventlog_HeapAllocated_bytes_total{exported_job=\"$service_name\"}[$__interval])",
+                        "expr": "delta(ghc_eventlog_HeapAllocated_bytes_total{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}[$__interval])",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "legendFormat": "Capability {{evCap}}",
@@ -569,7 +938,7 @@
           "description": "",
           "id": 2,
           "links": [],
-          "title": "Heap Allocation for ${service_name}",
+          "title": "Heap Allocation by Capability",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -577,7 +946,8 @@
               "fieldConfig": {
                 "defaults": {
                   "color": {
-                    "mode": "palette-classic"
+                    "mode": "palette-classic",
+                    "seriesBy": "last"
                   },
                   "custom": {
                     "axisBorderShow": false,
@@ -586,9 +956,9 @@
                     "axisLabel": "",
                     "axisPlacement": "auto",
                     "barAlignment": 0,
-                    "barWidthFactor": 0.6,
+                    "barWidthFactor": 0.9,
                     "drawStyle": "bars",
-                    "fillOpacity": 0,
+                    "fillOpacity": 68,
                     "gradientMode": "none",
                     "hideFrom": {
                       "legend": false,
@@ -597,8 +967,11 @@
                     },
                     "insertNulls": false,
                     "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
                     "lineWidth": 1,
-                    "pointSize": 5,
+                    "pointSize": 4,
                     "scaleDistribution": {
                       "type": "linear"
                     },
@@ -607,7 +980,7 @@
                     "spanNulls": false,
                     "stacking": {
                       "group": "A",
-                      "mode": "none"
+                      "mode": "normal"
                     },
                     "thresholdsStyle": {
                       "mode": "off"
@@ -670,7 +1043,7 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "avg(ghc_eventlog_MemCurrent{exported_job=\"$service_name\"})",
+                        "expr": "avg(ghc_eventlog_MemCurrent{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"})",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "legendFormat": "Current",
@@ -695,7 +1068,7 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "avg(ghc_eventlog_MemNeeded{exported_job=\"$service_name\"})",
+                        "expr": "avg(ghc_eventlog_MemNeeded{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"})",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "instant": false,
@@ -721,7 +1094,7 @@
                       "spec": {
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "avg(ghc_eventlog_MemReturned{exported_job=\"$service_name\"})",
+                        "expr": "avg(ghc_eventlog_MemReturned{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"})",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "instant": false,
@@ -742,7 +1115,7 @@
           "description": "",
           "id": 3,
           "links": [],
-          "title": "Memory Management for ${service_name}",
+          "title": "Memory Management",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -845,7 +1218,7 @@
                         "disableTextWrap": false,
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}\nand\ntopk(\n  ${heap_prof_sample_limit},\n  sum_over_time(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}[${__range}] @ ${__to:date:seconds})\n))\nor\nsum by(exported_job) ((ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}\nunless\ntopk(\n  ${heap_prof_sample_limit},\n  sum_over_time(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}[${__range}] @ ${__to:date:seconds})\n)))",
+                        "expr": "(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",exported_instance=\"${service_instance_id}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}\nand\ntopk(\n  ${heap_prof_sample_limit},\n  sum_over_time(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",exported_instance=\"${service_instance_id}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}[${__range}] @ ${__to:date:seconds})\n))\nor\nsum by(exported_job) ((ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",exported_instance=\"${service_instance_id}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}\nunless\ntopk(\n  ${heap_prof_sample_limit},\n  sum_over_time(ghc_eventlog_HeapProfSample_bytes{exported_job=\"${service_name}\",exported_instance=\"${service_instance_id}\",heapProfBreakdown=\"${heap_prof_breakdown}\"}[${__range}] @ ${__to:date:seconds})\n)))",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
                         "instant": false,
@@ -887,7 +1260,7 @@
           "description": "",
           "id": 4,
           "links": [],
-          "title": "Heap Profile for ${service_name}",
+          "title": "Heap Profile",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -980,72 +1353,182 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "GridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "GridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-4"
+                        "collapse": true,
+                        "fillScreen": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  },
+                                  "height": 27,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  },
+                                  "height": 9,
+                                  "width": 6,
+                                  "x": 12,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  },
+                                  "height": 9,
+                                  "width": 6,
+                                  "x": 18,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-12"
+                                  },
+                                  "height": 9,
+                                  "width": 6,
+                                  "x": 12,
+                                  "y": 9
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-14"
+                                  },
+                                  "height": 9,
+                                  "width": 6,
+                                  "x": 18,
+                                  "y": 9
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-13"
+                                  },
+                                  "height": 9,
+                                  "width": 6,
+                                  "x": 12,
+                                  "y": 18
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  },
+                                  "height": 9,
+                                  "width": 6,
+                                  "x": 18,
+                                  "y": 18
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
+                                  },
+                                  "height": 1,
+                                  "width": 12,
+                                  "x": 0,
+                                  "y": 27
+                                }
+                              }
+                            ]
+                          }
                         },
-                        "height": 27,
-                        "width": 12,
-                        "x": 0,
-                        "y": 0
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-1"
+                        "repeat": {
+                          "mode": "variable",
+                          "value": "service_instance_id"
                         },
-                        "height": 9,
-                        "width": 12,
-                        "x": 12,
-                        "y": 0
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-3"
-                        },
-                        "height": 9,
-                        "width": 12,
-                        "x": 12,
-                        "y": 9
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-2"
-                        },
-                        "height": 10,
-                        "width": 12,
-                        "x": 12,
-                        "y": 18
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-11"
-                        },
-                        "height": 1,
-                        "width": 12,
-                        "x": 0,
-                        "y": 27
+                        "title": "${service_instance_id}",
+                        "variables": [
+                          {
+                            "kind": "TextVariable",
+                            "spec": {
+                              "current": {
+                                "text": "10",
+                                "value": "10"
+                              },
+                              "description": "The Heap Profile visualisation shows the largest samples up to this limit and summarises all other samples as Other.",
+                              "hide": "dontHide",
+                              "label": "Heap Profile Sample Limit",
+                              "name": "heap_prof_sample_limit",
+                              "query": "10",
+                              "skipUrlSync": false
+                            }
+                          },
+                          {
+                            "kind": "QueryVariable",
+                            "spec": {
+                              "allowCustomValue": true,
+                              "current": {
+                                "text": "-hT",
+                                "value": "-hT"
+                              },
+                              "definition": "label_values(ghc_eventlog_HeapProfSample_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"},heapProfBreakdown)",
+                              "hide": "dontHide",
+                              "includeAll": false,
+                              "label": "Heap Profile Breakdown",
+                              "multi": false,
+                              "name": "heap_prof_breakdown",
+                              "options": [],
+                              "query": {
+                                "datasource": {
+                                  "name": "PBFA97CFB590B2093"
+                                },
+                                "group": "prometheus",
+                                "kind": "DataQuery",
+                                "spec": {
+                                  "qryType": 1,
+                                  "query": "label_values(ghc_eventlog_HeapProfSample_bytes{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"},heapProfBreakdown)",
+                                  "refId": "PrometheusVariableQueryEditor-VariableQuery"
+                                },
+                                "version": "v0"
+                              },
+                              "refresh": "onDashboardLoad",
+                              "regex": "",
+                              "regexApplyTo": "value",
+                              "skipUrlSync": false,
+                              "sort": "disabled"
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
@@ -1058,34 +1541,25 @@
               "title": "${service_name}",
               "variables": [
                 {
-                  "kind": "TextVariable",
-                  "spec": {
-                    "current": {
-                      "text": "10",
-                      "value": "10"
-                    },
-                    "description": "The Heap Profile visualisation shows the largest samples up to this limit and summarises all other samples as Other.",
-                    "hide": "dontHide",
-                    "label": "Heap Profile Sample Limit",
-                    "name": "heap_prof_sample_limit",
-                    "query": "10",
-                    "skipUrlSync": false
-                  }
-                },
-                {
                   "kind": "QueryVariable",
                   "spec": {
                     "allowCustomValue": true,
                     "current": {
-                      "text": "-hT",
-                      "value": "-hT"
+                      "text": [
+                        "58D65F5F-3C56-4FEC-ADF1-9207E5132E6F",
+                        "BE778BBC-27EC-499E-806C-B3D1AF1E849E"
+                      ],
+                      "value": [
+                        "58D65F5F-3C56-4FEC-ADF1-9207E5132E6F",
+                        "BE778BBC-27EC-499E-806C-B3D1AF1E849E"
+                      ]
                     },
-                    "definition": "label_values(ghc_eventlog_HeapProfSample_bytes{exported_job=\"$service_name\"},heapProfBreakdown)",
+                    "definition": "label_values(ghc_eventlog_HeapSize_bytes{exported_job=\"$service_name\"},exported_instance)",
                     "hide": "dontHide",
                     "includeAll": false,
-                    "label": "Heap Profile Breakdown",
-                    "multi": false,
-                    "name": "heap_prof_breakdown",
+                    "label": "Service Instance ID",
+                    "multi": true,
+                    "name": "service_instance_id",
                     "options": [],
                     "query": {
                       "datasource": {
@@ -1095,7 +1569,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "qryType": 1,
-                        "query": "label_values(ghc_eventlog_HeapProfSample_bytes{exported_job=\"$service_name\"},heapProfBreakdown)",
+                        "query": "label_values(ghc_eventlog_HeapSize_bytes{exported_job=\"$service_name\"},exported_instance)",
                         "refId": "PrometheusVariableQueryEditor-VariableQuery"
                       },
                       "version": "v0"
