@@ -10,6 +10,7 @@ export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="jumpy-jump"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Find project file

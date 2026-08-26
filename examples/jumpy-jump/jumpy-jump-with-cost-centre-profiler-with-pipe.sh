@@ -9,6 +9,7 @@ PROJECT_FILE="$DIR/../../cabal.profiling.project"
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="jumpy-jump"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build jumpy-jump
