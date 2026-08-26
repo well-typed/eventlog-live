@@ -16,7 +16,7 @@ import Data.DList (DList)
 import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Analysis.Heap (MemReturnData (..))
+import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStatsData (..), MemReturnData (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -50,6 +50,7 @@ processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
     , processHeapSize fullConfig
     , processHeapLive fullConfig
     , processMemReturn fullConfig
+    , processGcStats fullConfig
     , processHeapProfSample verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
     ]
 
@@ -166,6 +167,56 @@ shouldComputeMemReturn fullConfig =
   C.processorEnabled (.metrics) (.memCurrent) fullConfig
     || C.processorEnabled (.metrics) (.memNeeded) fullConfig
     || C.processorEnabled (.metrics) (.memReturned) fullConfig
+
+--------------------------------------------------------------------------------
+-- GcStats
+
+processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+processGcStats fullConfig =
+  runIf (shouldComputeGcStats fullConfig) $
+    M.liftTick M.processGcStatsData
+      ~> M.fanoutTick
+        [ runMetricProcessor
+            MetricProcessor
+              { metricProcessorProxy = Proxy @"gcCopied"
+              , dataProcessor = mapping (fmap (.copied))
+              , aggregators = viaLast
+              , postProcessor = echo
+              , unit = "By"
+              , asMetric'Data = asGauge
+              }
+            fullConfig
+        , runMetricProcessor
+            MetricProcessor
+              { metricProcessorProxy = Proxy @"gcSlop"
+              , dataProcessor = mapping (fmap (.slop))
+              , aggregators = viaLast
+              , postProcessor = echo
+              , unit = "By"
+              , asMetric'Data = asGauge
+              }
+            fullConfig
+        , runMetricProcessor
+            MetricProcessor
+              { metricProcessorProxy = Proxy @"gcFragmentation"
+              , dataProcessor = mapping (fmap (.fragmentation))
+              , aggregators = viaLast
+              , postProcessor = echo
+              , unit = "By"
+              , asMetric'Data = asGauge
+              }
+            fullConfig
+        ]
+
+{- |
+Internal helper.
+Determine whether the MemReturn data should be computed.
+-}
+shouldComputeGcStats :: FullConfig -> Bool
+shouldComputeGcStats fullConfig =
+  C.processorEnabled (.metrics) (.gcCopied) fullConfig
+    || C.processorEnabled (.metrics) (.gcSlop) fullConfig
+    || C.processorEnabled (.metrics) (.gcFragmentation) fullConfig
 
 --------------------------------------------------------------------------------
 -- HeapProfSample
