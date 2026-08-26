@@ -58,6 +58,21 @@ processors:
       description: The number of megablocks currently being returned to the OS.
       aggregate: 1s
       export: 5s
+    gc_copied:
+      name: ghc_eventlog_GcCopied
+      description: The number of bytes copied in one garbage collection pass.
+      aggregate: 1s
+      export: 5s
+    gc_slop:
+      name: ghc_eventlog_GcSlop
+      description: The number of slop bytes found in one garbage collection pass.
+      aggregate: 1s
+      export: 5s
+    gc_fragmentation:
+      name: ghc_eventlog_GcFragmentation
+      description: The number of bytes of fragmentation found in one garbage collection pass.
+      aggregate: 1s
+      export: 5s
   traces:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
