@@ -125,6 +125,7 @@ To start monitoring your application, pipe its eventlog to Eventlog Live:
 # OpenTelemetry Configuration
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="your-application"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Create a pipe for the eventlog
@@ -176,6 +177,7 @@ Let's briefly discuss what this script does:
   The Eventlog Live exporter is configured using the [OpenTelemetry environment variables](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables).
   - `OTEL_LOG_LEVEL` sets Eventlog Live's log level.
   - `OTEL_SERVICE_NAME` sets the service name under which your application's telemetry shows up on your dashboard.
+  - `OTEL_RESOURCE_ATTRIBUTES` sets other resource attributes. In this case, it's used to set `service.instance.id` to a unique UUID that identifies the specific instance of your application.
   - `OTEL_EXPORTER_OTLP_PROTOCOL` selects the exporter's protocol. The default is `http/protobuf`, but the docker setup uses gRPC. If the protocol is gRPC, the default endpoint is `http://localhost:4317`, which is what our docker setup uses.
 
 - **The Eventlog.**
@@ -309,6 +311,7 @@ export GHC_EVENTLOG_WAIT="true"
 # OpenTelemetry Configuration
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="your-application"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Start your application
@@ -398,6 +401,7 @@ export GHC_EVENTLOG_WAIT="true"
 # OpenTelemetry Configuration
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="your-application"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Start your application
@@ -491,6 +495,7 @@ export GHC_EVENTLOG_WAIT="true"
 # OpenTelemetry Configuration
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="your-application"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Start your application
@@ -573,6 +578,7 @@ export GHC_EVENTLOG_WAIT="true"
 # OpenTelemetry Configuration
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="your-application"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Start your application
