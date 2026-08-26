@@ -12,6 +12,7 @@ export GHC_EVENTLOG_UNIX_PATH="/tmp/spectral_norm_eventlog.sock"
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="spectral-norm"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build spectral-norm
