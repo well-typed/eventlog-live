@@ -87,11 +87,6 @@ processors:
       description: The current heap size, calculated by the allocated number of blocks.
       aggregate: 1s
       export: 30s
-    capability_usage:
-      name: ghc_eventlog_CapabilityUsageDuration
-      description: The duration of each capability usage span.
-      aggregate: 1s
-      export: false # The current format of this metric breaks various OTLP receivers
     heap_allocated:
       name: ghc_eventlog_HeapAllocated
       description: The size of a newly allocated chunk of heap.
@@ -100,11 +95,6 @@ processors:
     heap_live:
       name: ghc_eventlog_HeapLive
       description: The current heap size, calculated by the allocated number of megablocks.
-      aggregate: 1s
-      export: 30s
-    heap_prof_sample:
-      name: ghc_eventlog_HeapProfSample
-      description: A heap profile sample.
       aggregate: 1s
       export: 30s
     heap_size:
@@ -127,6 +117,31 @@ processors:
       description: The number of megablocks currently being returned to the OS.
       aggregate: 1s
       export: 30s
+    gc_copied:
+      name: ghc_eventlog_GcCopied
+      description: The number of bytes copied in one garbage collection pass.
+      aggregate: 1s
+      export: 30s
+    gc_slop:
+      name: ghc_eventlog_GcSlop
+      description: The number of slop bytes found in one garbage collection pass.
+      aggregate: 1s
+      export: 30s
+    gc_fragmentation:
+      name: ghc_eventlog_GcFragmentation
+      description: The number of bytes of fragmentation found in one garbage collection pass.
+      aggregate: 1s
+      export: 30s
+    heap_prof_sample:
+      name: ghc_eventlog_HeapProfSample
+      description: A heap profile sample.
+      aggregate: 1s
+      export: 30s
+    capability_usage:
+      name: ghc_eventlog_CapabilityUsageDuration
+      description: The duration of each capability usage span.
+      aggregate: 1s
+      export: false # The current format of this metric breaks various OTLP receivers
   traces:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
