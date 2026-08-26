@@ -1,0 +1,42 @@
+cabal-version: 2.4
+name: hogger
+version: 0.1.0.0
+synopsis:
+  Example with an fragmented heap.
+
+description:
+  Example with an fragmented heap.
+  See: https://well-typed.com/blog/2020/08/memory-fragmentation/
+
+author: David Eichmann
+maintainer: wen@well-typed.com
+copyright: (c) 2023 Well-Typed
+license: BSD-3-Clause
+license-file: LICENSE
+category: Debug, Monitoring, System, Network
+tested-with:
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
+
+executable hogger
+  main-is: Main.hs
+  hs-source-dirs: app
+  default-language: Haskell2010
+  default-extensions:
+    BangPatterns
+    TypeApplications
+
+  ghc-options:
+    -Wall
+    -threaded
+    -rtsopts
+    -finfo-table-map
+    -fdistinct-constructor-tables
+
+  build-depends:
+    base >=4.14 && <5,
+    bytestring >=0.11 && <0.13,
+    deepseq >=1.2 && <1.6,
+    eventlog-socket >=0.1.2 && <0.2,
+
+  if impl(ghc <9.4)
+    ghc-options: -eventlog
