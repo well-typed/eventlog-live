@@ -2,8 +2,9 @@ import: cabal.project.config
 
 packages: eventlog-live
 packages: eventlog-live-tests
-packages: examples/oddball
 packages: examples/jumpy-jump
+packages: examples/hogger
+packages: examples/oddball
 packages: examples/parfib
 packages: examples/spectral-norm
 
