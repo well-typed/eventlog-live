@@ -28,7 +28,10 @@
             "heap_size": { "$ref": "#/definitions/metric" },
             "mem_current": { "$ref": "#/definitions/metric" },
             "mem_needed": { "$ref": "#/definitions/metric" },
-            "mem_returned": { "$ref": "#/definitions/metric" }
+            "mem_returned": { "$ref": "#/definitions/metric" },
+            "gc_copied": { "$ref": "#/definitions/metric" },
+            "gc_slop": { "$ref": "#/definitions/metric" },
+            "gc_fragmentation": { "$ref": "#/definitions/metric" }
           },
           "additionalProperties": false
         },
