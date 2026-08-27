@@ -4,22 +4,20 @@
   "metadata": {
     "name": "adkxq5r",
     "namespace": "default",
-    "uid": "64b81035-1030-4cc6-9e25-c3b9310e16be",
-    "resourceVersion": "1784290526068000",
-    "generation": 4,
-    "creationTimestamp": "2026-07-17T11:39:34Z",
+    "uid": "c1e9db2e-cf74-487c-98ef-737f0345d3c0",
+    "resourceVersion": "1787758902828991",
+    "generation": 1,
+    "creationTimestamp": "2026-08-26T15:41:42Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "1922750350004224"
+      "grafana.app/deprecatedInternalID": "2968400492535808"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "Dashboards",
-      "grafana.app/sourceChecksum": "4f0aaba746ddc8fdd8565303612c9c47",
+      "grafana.app/sourceChecksum": "6416ca0ed8e210da37f9b94bcdb6178f",
       "grafana.app/sourcePath": "/var/lib/grafana/dashboards/call-stack-profiles.json",
-      "grafana.app/sourceTimestamp": "1784290520000",
-      "grafana.app/updatedBy": "access-policy:service",
-      "grafana.app/updatedTimestamp": "2026-07-17T12:15:26Z",
+      "grafana.app/sourceTimestamp": "1784813083000",
       "grafana.app/folder": ""
     }
   },
@@ -65,7 +63,7 @@
                         "heatmapType": "individual",
                         "includeExemplars": false,
                         "includeHeatmap": false,
-                        "labelSelector": "{\"service_name\"=\"${service_name}\"}",
+                        "labelSelector": "{\"service_name\"=\"${service_name}\",\"service_instance_id\"=\"${service_instance_id}\"}",
                         "profileIdSelector": [],
                         "profileTypeId": "ghc_eventlog_CallStackProfile:cpu:samples::",
                         "queryType": "profile",
@@ -342,43 +340,62 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "GridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "GridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-1"
+                        "collapse": true,
+                        "fillScreen": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  },
+                                  "height": 26,
+                                  "repeat": {
+                                    "direction": "v",
+                                    "mode": "variable",
+                                    "value": "service_name"
+                                  },
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  },
+                                  "height": 1,
+                                  "repeat": {
+                                    "direction": "v",
+                                    "mode": "variable",
+                                    "value": "service_name"
+                                  },
+                                  "width": 24,
+                                  "x": 0,
+                                  "y": 26
+                                }
+                              }
+                            ]
+                          }
                         },
-                        "height": 26,
                         "repeat": {
-                          "direction": "v",
                           "mode": "variable",
-                          "value": "service_name"
+                          "value": "service_instance_id"
                         },
-                        "width": 24,
-                        "x": 0,
-                        "y": 0
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-2"
-                        },
-                        "height": 1,
-                        "repeat": {
-                          "direction": "v",
-                          "mode": "variable",
-                          "value": "service_name"
-                        },
-                        "width": 24,
-                        "x": 0,
-                        "y": 26
+                        "title": "${service_instance_id}"
                       }
                     }
                   ]
@@ -388,7 +405,44 @@
                 "mode": "variable",
                 "value": "service_name"
               },
-              "title": "${service_name}"
+              "title": "${service_name}",
+              "variables": [
+                {
+                  "kind": "QueryVariable",
+                  "spec": {
+                    "allowCustomValue": true,
+                    "current": {
+                      "text": ["3F20E707-8E8F-4B79-BE2C-A5F0FC64E69A"],
+                      "value": ["3F20E707-8E8F-4B79-BE2C-A5F0FC64E69A"]
+                    },
+                    "definition": "",
+                    "hide": "dontHide",
+                    "includeAll": false,
+                    "label": "Service Instance ID",
+                    "multi": true,
+                    "name": "service_instance_id",
+                    "options": [],
+                    "query": {
+                      "datasource": {
+                        "name": "P02E4190217B50628"
+                      },
+                      "group": "grafana-pyroscope-datasource",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "labelName": "service_instance_id",
+                        "profileTypeId": "ghc_eventlog_CallStackProfile:cpu:samples::",
+                        "type": "labelValue"
+                      },
+                      "version": "v0"
+                    },
+                    "refresh": "onDashboardLoad",
+                    "regex": "",
+                    "regexApplyTo": "value",
+                    "skipUrlSync": false,
+                    "sort": "disabled"
+                  }
+                }
+              ]
             }
           }
         ]
