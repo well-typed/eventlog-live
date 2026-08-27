@@ -4,20 +4,20 @@
   "metadata": {
     "name": "ad5ltk7",
     "namespace": "default",
-    "uid": "079e1fdc-1834-4305-a906-86d7134d4988",
-    "resourceVersion": "1784287389324000",
+    "uid": "ec8289e1-4a5b-49e5-b46f-628c47bcb5d3",
+    "resourceVersion": "1787758902854016",
     "generation": 1,
-    "creationTimestamp": "2026-07-17T11:23:09Z",
+    "creationTimestamp": "2026-08-26T15:41:42Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "1918616425672704"
+      "grafana.app/deprecatedInternalID": "2968400630947840"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "Dashboards",
-      "grafana.app/sourceChecksum": "8dfdec5d4648842cbe18a7c874bea509",
-      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/eventlog-logs.json",
-      "grafana.app/sourceTimestamp": "1779466941000",
+      "grafana.app/sourceChecksum": "1b82a62c13065944f43207bd59896425",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/logs.json",
+      "grafana.app/sourceTimestamp": "1784813083000",
       "grafana.app/folder": ""
     }
   },
@@ -66,7 +66,7 @@
                       "spec": {
                         "direction": "backward",
                         "editorMode": "builder",
-                        "expr": "{service_name=\"$service_name\"}",
+                        "expr": "{service_name=\"$service_name\", service_instance_id=\"$service_instance_id\"}",
                         "maxLines": 30,
                         "queryType": "range"
                       },
@@ -121,30 +121,86 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
-                  "fillScreen": true,
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-3"
-                        }
+                        "collapse": false,
+                        "fillScreen": true,
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "standard",
+                            "fillScreen": true,
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 3,
+                            "rowHeightMode": "tall"
+                          }
+                        },
+                        "repeat": {
+                          "mode": "variable",
+                          "value": "service_instance_id"
+                        },
+                        "title": "${service_instance_id}"
                       }
                     }
-                  ],
-                  "maxColumnCount": 3,
-                  "rowHeightMode": "tall"
+                  ]
                 }
               },
               "repeat": {
                 "mode": "variable",
                 "value": "service_name"
               },
-              "title": "${service_name}"
+              "title": "${service_name}",
+              "variables": [
+                {
+                  "kind": "QueryVariable",
+                  "spec": {
+                    "allowCustomValue": true,
+                    "current": {
+                      "text": ["C858C63D-92A0-41B0-9740-97964480CE81"],
+                      "value": ["C858C63D-92A0-41B0-9740-97964480CE81"]
+                    },
+                    "definition": "",
+                    "hide": "dontHide",
+                    "includeAll": false,
+                    "multi": true,
+                    "name": "service_instance_id",
+                    "options": [],
+                    "query": {
+                      "datasource": {
+                        "name": "P8E80F9AEF21F6940"
+                      },
+                      "group": "loki",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "label": "service_instance_id",
+                        "refId": "LokiVariableQueryEditor-VariableQuery",
+                        "stream": "",
+                        "type": 1
+                      },
+                      "version": "v0"
+                    },
+                    "refresh": "onDashboardLoad",
+                    "regex": "",
+                    "regexApplyTo": "value",
+                    "skipUrlSync": false,
+                    "sort": "disabled"
+                  }
+                }
+              ]
             }
           }
         ]
