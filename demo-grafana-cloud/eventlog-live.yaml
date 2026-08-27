@@ -1,5 +1,78 @@
+# Configuration for the eventlog processors, organised by the type of telemetry
+# data they produce. Every processor shares certain properties. Let's look at
+# the default configuration for the `blocks_size` metrics processor:
+#
+#     blocks_size:
+#       name: ghc_eventlog_BlocksSize
+#       description: The current heap size, calculated by the allocated number of blocks.
+#       aggregate: 1s
+#       export: 60s
+#
+# - The `name` property is added to each piece of telemetry data,
+#   and determines the name under which the data becomes available in your
+#   data source, such as Prometheus.
+#
+#   The data produced by our example `blocks_size` processor will be available
+#   in Prometheus as `ghc_eventlog_BlocksSize`.
+#
+# - The `description` property is added to each piece of telemetry data,
+#   and may be used to describe it. In most cases, this can be safely set
+#   to `null` to save bandwidth.
+#
+#   The data produced by our example `blocks_size` processor will be given the
+#   above description.
+#
+# - The `export` property determines whether or not the telemetry data is
+#   exported to the OpenTelemetry Collector and, if so, with what frequency.
+#
+#   There are three ways to configure the `export` property:
+#
+#   - A duration in seconds, given as "Ns". For instance, if `export` is "30s"
+#     then the processor exports a batch of telemetry data every 30 seconds.
+#
+#   - A duration in batches, given as "Nx". The length of one batch interval
+#     is determined by the `--eventlog-flush-interval=SECONDS` flag, as passed
+#     to the RTS of the monitored process and to this program. For instance,
+#     if `export` is "2x" and the eventlog flush interval is 30 seconds, then
+#     the processor exports a batch of telemetery data every minute.
+#
+#   - A boolean flag, i.e., `true` or `false`. If `export` is `false`, then the
+#     processor will not export data and, if its output is not needed by some
+#     other processor, it will not run either. If `export` is `true`, then the
+#     processor exports telemetry data as if configured with "1x" (see above).
+#
+#   The example `blocks_size` processor exports a batch of telemetry data every
+#   60 seconds.
+#
+# - The `aggregate` property determines whether or not the telemetry data is
+#   aggregated over time, and, if so, over what interval. Only metrics support
+#   aggregation.
+#
+#   The aggregation interval uses the same format as the export interval (see
+#   above). For instance, if `aggregate` is 5s, the processor aggregates data
+#   over 5 second intervals.
+#
+#   Aggregation follows the OpenTelemetry specification. Sums are aggregated by
+#   summation. Gauges are aggregated by taking the most recent data point.
+#   The `heap_allocated` and `capability_usage` metrics are aggregated as sums.
+#   All other metrics are aggregated as gauges.
+#
+#   The data produced by our example `blocks_size` processor aggregates data
+#   over 1 second intervals and only keeps the last metric in each interval.
+#
+# If the key for any specific processor is present in the file, even if it sets
+# none of the properties, the processor is _enabled_, and any missing keys will
+# default to the values in this file. Otherwise, the processor is _disabled_.
 processors:
   logs:
+    internal_log_message:
+      name: eventlog_live_InternalLogMessage
+      description: An internal eventlog-live log message.
+      export: 5s
+    thread_label:
+      name: ghc_eventlog_ThreadLabel
+      description: A thread label.
+      export: 5s
     user_marker:
       name: ghc_eventlog_UserMarker
       description: A user marker.
@@ -12,6 +85,31 @@ processors:
     blocks_size:
       name: ghc_eventlog_BlocksSize
       description: The current heap size, calculated by the allocated number of blocks.
+      aggregate: 1s
+      export: 5s
+    capability_usage:
+      name: ghc_eventlog_CapabilityUsageDuration
+      description: The duration of each capability usage span.
+      aggregate: 1s
+      export: 5s
+    gc_copied:
+      name: ghc_eventlog_GcCopied
+      description: The number of bytes copied in one garbage collection pass.
+      aggregate: 1s
+      export: 5s
+    gc_fragmentation:
+      name: ghc_eventlog_GcFragmentation
+      description: The number of bytes of fragmentation found in one garbage collection pass.
+      aggregate: 1s
+      export: 5s
+    gc_slop:
+      name: ghc_eventlog_GcSlop
+      description: The number of slop bytes found in one garbage collection pass.
+      aggregate: 1s
+      export: 5s
+    heap_allocated:
+      name: ghc_eventlog_HeapAllocated
+      description: The size of a newly allocated chunk of heap.
       aggregate: 1s
       export: 5s
     heap_live:
@@ -44,8 +142,27 @@ processors:
       description: The number of megablocks currently being returned to the OS.
       aggregate: 1s
       export: 5s
+    productivity:
+      name: ghc_eventlog_Productivity
+      description: The ratio between GC and mutator usage.
+      aggregate: 1s
+      export: 5s
   profiles:
+    call_stack_profile:
+      name: ghc_eventlog_CallStackProfile
+      description: A GHC call-stack profile.
+      export: 5s
     cost_centre_stack_profile:
       name: ghc_eventlog_CostCentreStackProfile
       description: A GHC cost-centre stack profile.
       export: 5s
+  traces:
+    capability_usage:
+      name: ghc_eventlog_CapabilityUsage
+      description: A trace of capability usage (either mutator thread or garbage collection).
+      export: false # These spans easily overwhelm most OTLP receivers
+    thread_state:
+      name: ghc_eventlog_ThreadState
+      description: A trace of thread state changes (either running or stopped).
+      export: false # These spans easily overwhelm most OTLP receivers
+
