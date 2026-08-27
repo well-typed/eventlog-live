@@ -39,6 +39,7 @@ module GHC.Eventlog.Live.Otlp.Config.Types (
   GcSlopMetric (..),
   GcFragmentationMetric (..),
   CapabilityUsageMetric (..),
+  ProductivityMetric (..),
 
   -- *** Trace processor configuration types
   Traces (..),
@@ -199,6 +200,7 @@ data Metrics = Metrics
   , gcFragmentation :: Maybe GcFragmentationMetric
   , heapProfSample :: Maybe HeapProfSampleMetric
   , capabilityUsage :: Maybe CapabilityUsageMetric
+  , productivity :: Maybe ProductivityMetric
   }
   deriving (Lift, Show)
 
@@ -219,6 +221,7 @@ instance FromYAML Metrics where
       gcFragmentation <- m .:? "gc_fragmentation"
       heapProfSample <- m .:? "heap_prof_sample"
       capabilityUsage <- m .:? "capability_usage"
+      productivity <- m .:? "productivity"
       pure Metrics{..}
 
 instance ToYAML Metrics where
@@ -238,6 +241,7 @@ instance ToYAML Metrics where
       , "gc_fragmentation" .= metrics.gcFragmentation
       , "heap_prof_sample" .= metrics.heapProfSample
       , "capability_usage" .= metrics.capabilityUsage
+      , "productivity" .= metrics.productivity
       ]
 
 {- |
@@ -607,6 +611,25 @@ instance FromYAML CapabilityUsageMetric where
 
 instance ToYAML CapabilityUsageMetric where
   toYAML :: CapabilityUsageMetric -> YAML.Node ()
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processProductivityData`.
+-}
+data ProductivityMetric = ProductivityMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML ProductivityMetric where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ProductivityMetric
+  parseYAML = genericParseYAMLMetricProcessorConfig "ProductivityMetric" ProductivityMetric
+
+instance ToYAML ProductivityMetric where
+  toYAML :: ProductivityMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 -------------------------------------------------------------------------------
