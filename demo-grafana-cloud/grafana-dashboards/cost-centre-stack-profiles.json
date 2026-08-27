@@ -3,8 +3,8 @@
   "kind": "Dashboard",
   "metadata": {
     "name": "ad7v28q",
-    "generation": 3,
-    "creationTimestamp": "2026-07-30T14:40:16Z",
+    "generation": 2,
+    "creationTimestamp": "2026-08-27T14:15:15Z",
     "labels": {},
     "annotations": {}
   },
@@ -50,11 +50,11 @@
                       "group": "grafana-pyroscope-datasource",
                       "version": "v0",
                       "spec": {
-                        "groupBy": [],
+                        "groupBy": ["service_name"],
                         "heatmapType": "individual",
                         "includeExemplars": false,
                         "includeHeatmap": false,
-                        "labelSelector": "{service_name=\"$service_name\"}",
+                        "labelSelector": "{\"service_name\"=\"${service_name}\",\"service_instance_id\"=\"${service_instance_id}\"}",
                         "profileIdSelector": [],
                         "profileTypeId": "ghc_eventlog_CostCentreStackProfile:cpu:samples::",
                         "queryType": "profile",
@@ -77,11 +77,251 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "flamegraph",
-            "version": "13.2.0-30402795349",
+            "version": "13.3.0-32700873380",
             "spec": {
               "options": {},
               "fieldConfig": {
                 "defaults": {},
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "loki",
+                      "version": "v0",
+                      "spec": {
+                        "direction": "backward",
+                        "editorMode": "builder",
+                        "expr": "",
+                        "queryType": "range"
+                      },
+                      "labels": {
+                        "grafana.app/export-label": "loki-1",
+                        "grafana.app/export-datasource-name": "grafanacloud-largecat589-logs"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "canvas",
+            "version": "13.3.0-32700873380",
+            "spec": {
+              "options": {
+                "inlineEditing": true,
+                "panZoom": false,
+                "root": {
+                  "background": {
+                    "color": {
+                      "fixed": "transparent"
+                    }
+                  },
+                  "border": {
+                    "color": {
+                      "fixed": "dark-green"
+                    },
+                    "width": 0
+                  },
+                  "constraint": {
+                    "horizontal": "left",
+                    "vertical": "top"
+                  },
+                  "elements": [
+                    {
+                      "background": {
+                        "color": {
+                          "fixed": "transparent"
+                        }
+                      },
+                      "border": {
+                        "color": {
+                          "fixed": "dark-green"
+                        }
+                      },
+                      "config": {
+                        "align": "center",
+                        "api": {
+                          "contentType": "application/x-www-form-urlencoded",
+                          "data": "service-name=${service_name}",
+                          "endpoint": "http://localhost:30719/control/eventlog-socket/stop-profiling",
+                          "headerParams": [],
+                          "method": "POST",
+                          "queryParams": [],
+                          "successMessage": "Requested Cost-Centre Stack Profiling Stop"
+                        },
+                        "color": {
+                          "fixed": "#F0F4FD"
+                        },
+                        "size": 14,
+                        "style": {
+                          "variant": "destructive"
+                        },
+                        "text": {
+                          "fixed": "Stop",
+                          "mode": "fixed"
+                        }
+                      },
+                      "constraint": {
+                        "horizontal": "left",
+                        "vertical": "top"
+                      },
+                      "name": "StopCostCentreStackProfiling",
+                      "placement": {
+                        "height": 28,
+                        "left": 200,
+                        "rotation": 0,
+                        "top": 1,
+                        "width": 90
+                      },
+                      "type": "button"
+                    },
+                    {
+                      "background": {
+                        "color": {
+                          "fixed": "transparent"
+                        }
+                      },
+                      "border": {
+                        "color": {
+                          "fixed": "dark-green"
+                        }
+                      },
+                      "config": {
+                        "align": "center",
+                        "api": {
+                          "contentType": "application/x-www-form-urlencoded",
+                          "data": "service-name=${service_name}",
+                          "endpoint": "http://localhost:30719/control/eventlog-socket/start-profiling",
+                          "headerParams": [],
+                          "method": "POST",
+                          "queryParams": [],
+                          "successMessage": "Requested Cost-Centre Stack Profiling Start"
+                        },
+                        "color": {
+                          "fixed": "#F0F4FD"
+                        },
+                        "size": 14,
+                        "style": {
+                          "variant": "destructive"
+                        },
+                        "text": {
+                          "fixed": "Start",
+                          "mode": "fixed"
+                        }
+                      },
+                      "constraint": {
+                        "horizontal": "left",
+                        "vertical": "top"
+                      },
+                      "name": "StartCostCentreStackProfiling",
+                      "placement": {
+                        "height": 28,
+                        "left": 100,
+                        "rotation": 0,
+                        "top": 1,
+                        "width": 90
+                      },
+                      "type": "button"
+                    },
+                    {
+                      "background": {
+                        "color": {
+                          "fixed": "transparent"
+                        }
+                      },
+                      "border": {
+                        "color": {
+                          "fixed": "dark-green"
+                        }
+                      },
+                      "config": {
+                        "align": "right",
+                        "color": {
+                          "fixed": "rgb(204, 204, 220)"
+                        },
+                        "size": 14,
+                        "text": {
+                          "fixed": "Controls",
+                          "mode": "fixed"
+                        },
+                        "valign": "middle"
+                      },
+                      "constraint": {
+                        "horizontal": "left",
+                        "vertical": "top"
+                      },
+                      "links": [],
+                      "name": "Label",
+                      "placement": {
+                        "height": 30,
+                        "left": 0,
+                        "rotation": 0,
+                        "top": 0,
+                        "width": 90
+                      },
+                      "type": "text"
+                    }
+                  ],
+                  "name": "Element 1784282579975",
+                  "placement": {
+                    "height": 100,
+                    "left": 0,
+                    "rotation": 0,
+                    "top": 0,
+                    "width": 100
+                  },
+                  "type": "frame"
+                },
+                "showAdvancedTypes": true,
+                "tooltip": {
+                  "disableForOneClick": false,
+                  "mode": "single"
+                },
+                "zoomToContent": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                },
                 "overrides": []
               }
             }
@@ -98,23 +338,61 @@
             "spec": {
               "title": "${service_name}",
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "maxColumnCount": 3,
-                  "columnWidthMode": "wide",
-                  "rowHeightMode": "tall",
-                  "fillScreen": true,
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-1"
-                        },
+                        "title": "${service_instance_id}",
+                        "collapse": false,
+                        "fillScreen": true,
                         "repeat": {
                           "mode": "variable",
-                          "value": "service_name"
+                          "value": "service_instance_id"
+                        },
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 24,
+                                  "height": 26,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  },
+                                  "repeat": {
+                                    "mode": "variable",
+                                    "value": "service_name",
+                                    "direction": "v"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 26,
+                                  "width": 24,
+                                  "height": 1,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  },
+                                  "repeat": {
+                                    "mode": "variable",
+                                    "value": "service_name",
+                                    "direction": "v"
+                                  }
+                                }
+                              }
+                            ]
+                          }
                         }
                       }
                     }
@@ -124,7 +402,46 @@
               "repeat": {
                 "mode": "variable",
                 "value": "service_name"
-              }
+              },
+              "variables": [
+                {
+                  "kind": "QueryVariable",
+                  "spec": {
+                    "name": "service_instance_id",
+                    "current": {
+                      "text": "",
+                      "value": ""
+                    },
+                    "label": "Service Instance ID",
+                    "hide": "dontHide",
+                    "refresh": "onDashboardLoad",
+                    "skipUrlSync": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "grafana-pyroscope-datasource",
+                      "version": "v0",
+                      "spec": {
+                        "labelName": "service_instance_id",
+                        "profileTypeId": "ghc_eventlog_CostCentreStackProfile:cpu:samples::",
+                        "type": "labelValue"
+                      },
+                      "labels": {
+                        "grafana.app/export-label": "grafana-pyroscope-datasource-1",
+                        "grafana.app/export-datasource-name": "grafanacloud-largecat589-profiles"
+                      }
+                    },
+                    "regex": "",
+                    "regexApplyTo": "value",
+                    "sort": "disabled",
+                    "definition": "",
+                    "options": [],
+                    "multi": true,
+                    "includeAll": true,
+                    "allValue": "All",
+                    "allowCustomValue": true
+                  }
+                }
+              ]
             }
           }
         ]
@@ -188,7 +505,8 @@
           "definition": "",
           "options": [],
           "multi": true,
-          "includeAll": false,
+          "includeAll": true,
+          "allValue": "All",
           "allowCustomValue": true
         }
       }
