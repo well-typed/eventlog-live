@@ -27,7 +27,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asSum, runMetricProcessor, viaSum)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asSum, runMetricProcessor, viaLast)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
 import GHC.RTS.Events (Event (..))
 import Lens.Family2 ((.~))
@@ -73,13 +73,13 @@ processThreadEvents verbosity fullConfig =
               [ runMetricProcessor
                   MetricProcessor
                     { metricProcessorProxy = Proxy @"capabilityUsage"
-                    , dataProcessor = M.processCapabilityUsageMetrics
-                    , aggregators = viaSum
+                    , dataProcessor = M.processCapabilityUsageDurationData
+                    , aggregators = viaLast
                     , postProcessor = echo
                     , unit = "ns"
                     , asMetric'Data =
                         asSum
-                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_DELTA
+                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
                           , OM.isMonotonic .~ True
                           ]
                     }
@@ -127,10 +127,7 @@ Internal helper.
 Determine whether or not any thread events should be processed at all.
 -}
 shouldProcessThreadEvents :: FullConfig -> Bool
-shouldProcessThreadEvents fullConfig =
-  C.processorEnabled (.metrics) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.traces) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.traces) (.threadState) fullConfig
+shouldProcessThreadEvents = shouldComputeThreadStateSpan
 
 {- |
 Internal helper.
@@ -138,8 +135,9 @@ Determine whether or not the capability usage spans should be computed.
 -}
 shouldComputeCapabilityUsageSpan :: FullConfig -> Bool
 shouldComputeCapabilityUsageSpan fullConfig =
-  C.processorEnabled (.traces) (.capabilityUsage) fullConfig
-    || C.processorEnabled (.metrics) (.capabilityUsage) fullConfig
+  C.processorEnabled (.metrics) (.capabilityUsage) fullConfig
+    || C.processorEnabled (.metrics) (.productivity) fullConfig
+    || C.processorEnabled (.traces) (.capabilityUsage) fullConfig
 
 {- |
 Internal helper.
