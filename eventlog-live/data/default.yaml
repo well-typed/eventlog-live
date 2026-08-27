@@ -141,7 +141,7 @@ processors:
       name: ghc_eventlog_CapabilityUsageDuration
       description: The duration of each capability usage span.
       aggregate: 1s
-      export: false # The current format of this metric breaks various OTLP receivers
+      export: 30s
   traces:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
