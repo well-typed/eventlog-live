@@ -142,6 +142,11 @@ processors:
       description: The duration of each capability usage span.
       aggregate: 1s
       export: 30s
+    productivity:
+      name: ghc_eventlog_Productivity
+      description: The ratio between GC and mutator usage.
+      aggregate: 1s
+      export: 30s
   traces:
     capability_usage:
       name: ghc_eventlog_CapabilityUsage
