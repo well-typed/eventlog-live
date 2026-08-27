@@ -12,7 +12,10 @@ module GHC.Eventlog.Live.Machine.Analysis.Capability (
   -- * Capability Usage
 
   -- ** Capability Usage Metrics
-  processCapabilityUsageMetrics,
+  processCapabilityUsageDurationData,
+  CapabilityUsageDurationDelta (..),
+  processCapabilityUsageDuration'Delta,
+  processCapabilityUsageDuration'DeltaToCumulative,
 
   -- ** Capability Usage Spans
   CapabilityUsageSpan,
@@ -39,19 +42,21 @@ import Control.Monad (when)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Char (isSpace)
 import Data.Foldable (for_)
+import Data.Hashable (Hashable)
 import Data.Machine (Is (..), PlanT, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Data.Attribute (AttrValue, IsAttrValue (..), (~=))
-import GHC.Eventlog.Live.Data.Metric (Metric (..))
+import GHC.Eventlog.Live.Data.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
+import GHC.Eventlog.Live.Data.Metric (Metric (..), toMetric)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
-import GHC.Eventlog.Live.Machine.Core (liftRouter)
+import GHC.Eventlog.Live.Machine.Core (deltaToCumulative, liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
+import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, Timestamp)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
@@ -61,26 +66,81 @@ import Text.Printf (printf)
 -- Capability Usage Metrics
 
 {- |
+The capability usage duration delta metric.
+-}
+data CapabilityUsageDurationDelta
+  = CapabilityUsageDurationDelta
+  { value :: !Timestamp
+  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  , cap :: !Int
+  , usage :: !(Maybe CapabilityUser)
+  {- ^
+  If the capability is actively used, this value is `Just` a `CapabilityUser`.
+  If the capability is idle, this value is `Nothing`.
+  -}
+  }
+
+instance HasField "attrs" CapabilityUsageDurationDelta Attrs where
+  getField :: CapabilityUsageDurationDelta -> Attrs
+  getField CapabilityUsageDurationDelta{..} =
+    [ "cap" ~= cap
+    , "category" ~= maybe "Idle" showCapabilityUserCategory usage
+    , "user" ~= usage
+    ]
+
+{- |
+This machine processes t`CapabilityUsageSpan` data and produces metrics
+that contain the elapsed time for each category (idle, GC, mutator).
+-}
+processCapabilityUsageDurationData ::
+  forall m.
+  (Monad m) =>
+  ProcessT m (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
+processCapabilityUsageDurationData =
+  processCapabilityUsageDuration'Delta
+    ~> processCapabilityUsageDuration'DeltaToCumulative
+
+{- |
+This machine processes t`CapabilityUsageDurationDelta` data and produces
+cumulative metrics for each category.
+-}
+processCapabilityUsageDuration'DeltaToCumulative ::
+  forall m.
+  (Monad m) =>
+  ProcessT m CapabilityUsageDurationDelta (Metric Timestamp)
+processCapabilityUsageDuration'DeltaToCumulative =
+  liftRouter measure spawn
+ where
+  measure :: CapabilityUsageDurationDelta -> Maybe (Maybe CapabilityUser)
+  -- The outer Maybe determines whether or not this input is selected. (Hence, constant `Just`.)
+  -- The inner Maybe represents idle versus active usage.
+  measure = Just . (.usage)
+
+  spawn :: Maybe CapabilityUser -> ProcessT m CapabilityUsageDurationDelta (Metric Timestamp)
+  spawn _usage = mapping toMetric ~> deltaToCumulative
+
+{- |
 This machine processes t`CapabilityUsageSpan` spans and produces metrics that
 contain the duration and category of each such span and each idle period in
 between.
 -}
-processCapabilityUsageMetrics ::
+processCapabilityUsageDuration'Delta ::
   forall m.
   (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
-processCapabilityUsageMetrics =
+  ProcessT m (WithStartTime CapabilityUsageSpan) CapabilityUsageDurationDelta
+processCapabilityUsageDuration'Delta =
   liftRouter measure spawn
  where
   measure :: WithStartTime CapabilityUsageSpan -> Maybe Int
   measure = Just . (.value.cap)
 
-  spawn :: Int -> ProcessT m (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
+  spawn :: Int -> ProcessT m (WithStartTime CapabilityUsageSpan) CapabilityUsageDurationDelta
   spawn cap = construct $ go Nothing
    where
     go ::
       Maybe CapabilityUsageSpan ->
-      PlanT (Is (WithStartTime CapabilityUsageSpan)) (Metric Timestamp) m Void
+      PlanT (Is (WithStartTime CapabilityUsageSpan)) CapabilityUsageDurationDelta m Void
     go mi =
       await >>= \j -> do
         -- If there is a previous span, and...
@@ -89,20 +149,21 @@ processCapabilityUsageMetrics =
           when (i.endTimeUnixNano < j.value.startTimeUnixNano) $
             -- ...yield an idle duration metric.
             yield
-              Metric
+              CapabilityUsageDurationDelta
                 { value = j.value.startTimeUnixNano - i.endTimeUnixNano
                 , maybeTimeUnixNano = Just i.endTimeUnixNano
                 , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-                , attrs = ["cap" ~= cap, "category" ~= ("Idle" :: Text)]
+                , cap = cap
+                , usage = Nothing -- Idle
                 }
         -- Yield a duration metric for the current span.
-        let user = capabilityUser j.value
         yield
-          Metric
+          CapabilityUsageDurationDelta
             { value = duration j.value
             , maybeTimeUnixNano = Just j.value.startTimeUnixNano
             , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-            , attrs = ["cap" ~= cap, "category" ~= showCapabilityUserCategory user, "user" ~= user]
+            , cap = cap
+            , usage = Just $! capabilityUser j.value
             }
         go (Just j.value)
 
@@ -113,6 +174,9 @@ which is either a mutator thread or garbage collection.
 data CapabilityUser
   = GC
   | Mutator {thread :: !ThreadId}
+  deriving stock (Eq, Generic)
+
+instance Hashable CapabilityUser
 
 instance Show CapabilityUser where
   show :: CapabilityUser -> String
