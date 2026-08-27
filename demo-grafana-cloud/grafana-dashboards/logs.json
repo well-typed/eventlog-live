@@ -4,7 +4,7 @@
   "metadata": {
     "name": "ad5ltk7",
     "generation": 2,
-    "creationTimestamp": "2026-07-29T15:20:05Z",
+    "creationTimestamp": "2026-08-27T14:16:31Z",
     "labels": {},
     "annotations": {}
   },
@@ -17,10 +17,7 @@
             "kind": "DataQuery",
             "group": "grafana",
             "version": "v0",
-            "spec": {},
-            "labels": {
-              "grafana.app/export-label": "grafana-1"
-            }
+            "spec": {}
           },
           "enable": true,
           "hide": true,
@@ -54,8 +51,8 @@
                       "spec": {
                         "direction": "backward",
                         "editorMode": "builder",
-                        "expr": "{service_name=\"$service_name\"}",
-                        "legendFormat": "",
+                        "expr": "{service_name=\"$service_name\", service_instance_id=\"$service_instance_id\"}",
+                        "maxLines": 30,
                         "queryType": "range"
                       },
                       "labels": {
@@ -75,7 +72,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "logs",
-            "version": "13.2.0-29988805803",
+            "version": "13.3.0-32700873380",
             "spec": {
               "options": {
                 "dedupStrategy": "none",
@@ -111,19 +108,38 @@
             "spec": {
               "title": "${service_name}",
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "maxColumnCount": 3,
-                  "columnWidthMode": "standard",
-                  "rowHeightMode": "tall",
-                  "fillScreen": true,
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-3"
+                        "title": "${service_instance_id}",
+                        "collapse": false,
+                        "fillScreen": true,
+                        "repeat": {
+                          "mode": "variable",
+                          "value": "service_instance_id"
+                        },
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "maxColumnCount": 3,
+                            "columnWidthMode": "standard",
+                            "rowHeightMode": "tall",
+                            "fillScreen": true,
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              }
+                            ]
+                          }
                         }
                       }
                     }
@@ -133,7 +149,46 @@
               "repeat": {
                 "mode": "variable",
                 "value": "service_name"
-              }
+              },
+              "variables": [
+                {
+                  "kind": "QueryVariable",
+                  "spec": {
+                    "name": "service_instance_id",
+                    "current": {
+                      "text": "",
+                      "value": ""
+                    },
+                    "hide": "dontHide",
+                    "refresh": "onDashboardLoad",
+                    "skipUrlSync": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "loki",
+                      "version": "v0",
+                      "spec": {
+                        "label": "service_instance_id",
+                        "refId": "LokiVariableQueryEditor-VariableQuery",
+                        "stream": "",
+                        "type": 1
+                      },
+                      "labels": {
+                        "grafana.app/export-label": "loki-1",
+                        "grafana.app/export-datasource-name": "grafanacloud-largecat589-logs"
+                      }
+                    },
+                    "regex": "",
+                    "regexApplyTo": "value",
+                    "sort": "disabled",
+                    "definition": "",
+                    "options": [],
+                    "multi": true,
+                    "includeAll": true,
+                    "allValue": "All",
+                    "allowCustomValue": true
+                  }
+                }
+              ]
             }
           }
         ]
@@ -186,10 +241,6 @@
               "refId": "LokiVariableQueryEditor-VariableQuery",
               "stream": "",
               "type": 1
-            },
-            "labels": {
-              "grafana.app/export-label": "loki-1",
-              "grafana.app/export-datasource-name": "grafanacloud-largecat589-logs"
             }
           },
           "regex": "",
@@ -198,7 +249,8 @@
           "definition": "",
           "options": [],
           "multi": true,
-          "includeAll": false,
+          "includeAll": true,
+          "allValue": "All",
           "allowCustomValue": true
         }
       }
