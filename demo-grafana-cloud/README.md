@@ -113,3 +113,27 @@ If everything was done correctly...
 - The Cost-Centre Stack Profiles dashboard should look like this:
 
   ![A screenshot of the Grafana Cost-Centre Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-grafana-cloud-cost-centre-stack-profiles-2026-06-30.png)
+
+## Using dashboards from the `demo` directory
+
+The process of using a dashboard from the `demo/` directory with Grafana Cloud is a bit involved, because those dashboards are not exported for sharing:
+
+1.  Import the dashboard into Grafana Cloud.
+
+    The dashboard won't work in this state, as it does not use the correct data sources.
+
+2.  Export the dashboard from Grafana Cloud with the toggle "Share dashboard with another instance" enabled.
+
+    This creates a JSON export that is ready for its data sources to be remapped on import.
+
+3.  Delete the dashboard from Grafana Cloud.
+
+4.  Import the JSON export created in step (2) into Grafana Cloud.
+
+    Grafana Cloud will ask which data sources to use. Pick the appropriate ones:
+    - `grafanacloud-<region>-logs` for logs;
+    - `grafanacloud-<region>-prom` for metrics;
+    - `grafanacloud-<region>-profiles` for profiles; and
+    - `grafanacloud-<region>-traces` for traces.
+
+5.  If the dashboard used metrics, it may use the labels `exported_job` and `exported_instance` in variables and visualisations to refer to the service name and instance ID. These must be changed to `service_name` and `service_instance_id`, respectively.
