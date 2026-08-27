@@ -91,7 +91,7 @@ processors:
       name: ghc_eventlog_HeapAllocated
       description: The size of a newly allocated chunk of heap.
       aggregate: 1s
-      export: false # The current format of this metric breaks various OTLP receivers
+      export: 30s
     heap_live:
       name: ghc_eventlog_HeapLive
       description: The current heap size, calculated by the allocated number of megablocks.
