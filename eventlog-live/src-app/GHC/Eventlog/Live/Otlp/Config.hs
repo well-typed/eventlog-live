@@ -48,6 +48,7 @@ module GHC.Eventlog.Live.Otlp.Config (
   GcFragmentationMetric (..),
   HeapProfSampleMetric (..),
   CapabilityUsageMetric (..),
+  ProductivityMetric (..),
 
   -- *** Trace processor configuration types
   Traces (..),
@@ -249,6 +250,10 @@ instance Default HeapProfSampleMetric where
 instance Default CapabilityUsageMetric where
   def :: CapabilityUsageMetric
   def = $(getDefault @'["processors", "metrics", "capabilityUsage"] defaultConfig)
+
+instance Default ProductivityMetric where
+  def :: ProductivityMetric
+  def = $(getDefault @'["processors", "metrics", "productivity"] defaultConfig)
 
 -- NOTE: This should be kept in sync with the list of traces.
 --       Specifically, there should be a `Default` instance for every trace.
