@@ -591,7 +591,7 @@ instance ToYAML GcFragmentationMetric where
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageMetrics`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageDurationData`.
 -}
 data CapabilityUsageMetric = CapabilityUsageMetric
   { name :: Maybe Text
