@@ -5,9 +5,14 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Metric (
+  -- * Metric superclass
+  IsMetric,
+  toMetric,
+
+  -- * Generic metric type
   Metric (..),
 
-  -- * Existential wrapper
+  -- ** Existential wrapper
   SomeMetric (..),
   SMetricType (..),
   KnownMetricType (..),
@@ -21,6 +26,34 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.RTS.Events (Timestamp)
+import GHC.Records (HasField)
+
+--------------------------------------------------------------------------------
+-- Superclass for metric types
+--------------------------------------------------------------------------------
+
+{- |
+A metric is any type that has the fields of the generic metric type.
+-}
+type IsMetric ma a =
+  ( HasField "value" ma a
+  , HasField "maybeTimeUnixNano" ma (Maybe Timestamp)
+  , HasField "maybeStartTimeUnixNano" ma (Maybe Timestamp)
+  , HasField "attrs" ma Attrs
+  )
+
+toMetric :: (IsMetric ma a) => ma -> Metric a
+toMetric ma =
+  Metric
+    { value = ma.value
+    , maybeTimeUnixNano = ma.maybeTimeUnixNano
+    , maybeStartTimeUnixNano = ma.maybeStartTimeUnixNano
+    , attrs = ma.attrs
+    }
+
+--------------------------------------------------------------------------------
+-- Generic Metric type
+--------------------------------------------------------------------------------
 
 {- |
 Metrics combine a measurement with a timestamp representing the time of the
