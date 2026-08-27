@@ -31,7 +31,8 @@
             "mem_returned": { "$ref": "#/definitions/metric" },
             "gc_copied": { "$ref": "#/definitions/metric" },
             "gc_slop": { "$ref": "#/definitions/metric" },
-            "gc_fragmentation": { "$ref": "#/definitions/metric" }
+            "gc_fragmentation": { "$ref": "#/definitions/metric" },
+            "productivity": { "$ref": "#/definitions/metric" }
           },
           "additionalProperties": false
         },
