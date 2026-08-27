@@ -4,6 +4,9 @@
   metric and aggregated by summation. From this version onwards, it is treated
   as a cumulative metric and aggregated by taking the most recent measurement.
 
+- Added workaround where `CapabilityUsage` metric is exported as a cumulative
+  metric, as deltas are not supported by most collectors (Alloy, Prometheus).
+
 ### 0.9.0.0
 
 - Add support for the following OTLP exporter configuration options:
