@@ -11,9 +11,13 @@ Portability : portable
 module GHC.Eventlog.Live.Machine.Analysis.Capability (
   -- * Capability Usage
 
+  -- ** Productivity Metrics
+  Productivity (..),
+  processProductivity,
+
   -- ** Capability Usage Metrics
   processCapabilityUsageDurationData,
-  CapabilityUsageDurationDelta (..),
+  CapabilityUsageDuration (..),
   processCapabilityUsageDuration'Delta,
   processCapabilityUsageDuration'DeltaToCumulative,
 
@@ -38,6 +42,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Capability (
   processMutatorSpans',
 ) where
 
+import Control.Exception (assert)
 import Control.Monad (when)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Char (isSpace)
@@ -45,11 +50,11 @@ import Data.Foldable (for_)
 import Data.Hashable (Hashable)
 import Data.Machine (Is (..), PlanT, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
+import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
-import GHC.Eventlog.Live.Data.Metric (Metric (..), toMetric)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
@@ -63,14 +68,111 @@ import GHC.Records (HasField (..))
 import Text.Printf (printf)
 
 -------------------------------------------------------------------------------
--- Capability Usage Metrics
+-- Productivity Metrics
 
 {- |
-The capability usage duration delta metric.
+The productivity measure.
+
+This holds the cumulative elapsed time for both GC and mutator threads.
 -}
-data CapabilityUsageDurationDelta
-  = CapabilityUsageDurationDelta
-  { value :: !Timestamp
+data Productivity = Productivity
+  { gc :: !Timestamp
+  , mutator :: !Timestamp
+  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  , cap :: Int
+  }
+
+instance HasField "value" Productivity Double where
+  getField :: Productivity -> Double
+  getField Productivity{..} =
+    realToFrac mutator / realToFrac (mutator + gc)
+
+instance HasField "attrs" Productivity Attrs where
+  getField :: Productivity -> Attrs
+  getField Productivity{..} =
+    ["cap" ~= cap]
+
+instance Semigroup Productivity where
+  (<>) :: Productivity -> Productivity -> Productivity
+  x <> y =
+    Productivity
+      { gc = max x.gc y.gc
+      , mutator = max x.mutator y.mutator
+      , maybeTimeUnixNano = getMax <$> (Max <$> x.maybeTimeUnixNano) <> (Max <$> y.maybeTimeUnixNano)
+      , maybeStartTimeUnixNano = getMax <$> (Max <$> x.maybeStartTimeUnixNano) <> (Max <$> y.maybeStartTimeUnixNano)
+      , cap = assert (x.cap == y.cap) x.cap
+      }
+
+{- |
+Convert a t`CapabilityUsageDuration` to a partial t`Productivity` that only
+represents the category corresponding to this t`CapabilityUsageDuration`'s
+usage category (GC or mutator).
+-}
+toProductivity :: CapabilityUsageDuration Timestamp -> Maybe Productivity
+toProductivity CapabilityUsageDuration{..} = do
+  usage >>= \case
+    GC -> pure Productivity{gc = value, mutator = 0, ..}
+    Mutator{} -> pure Productivity{gc = 0, mutator = value, ..}
+
+{- |
+This machine processes t`CapabilityUsageDuration` with the cumulative elapsed
+time for each category and produces metrics that contain productivity.
+-}
+processProductivity ::
+  forall m.
+  (Monad m) =>
+  ProcessT m (CapabilityUsageDuration Timestamp) Productivity
+processProductivity =
+  liftRouter measure spawn
+ where
+  -- This measure splits the input by capability.
+  measure :: CapabilityUsageDuration Timestamp -> Maybe Int
+  measure cud = Just cud.cap
+
+  spawn :: Int -> ProcessT m (CapabilityUsageDuration Timestamp) Productivity
+  spawn _cap = construct $ go Nothing
+   where
+    go ::
+      Maybe Productivity ->
+      PlanT (Is (CapabilityUsageDuration Timestamp)) Productivity m Void
+    go maybeProductivity =
+      await >>= \case
+        cud
+          -- If this usage duration yields a productivity update,
+          -- yield an updated productivity.
+          | productivityUpdate@Just{} <- toProductivity cud -> do
+              let maybeProductivity' = maybeProductivity <> productivityUpdate
+              for_ maybeProductivity' yield
+              go maybeProductivity'
+          -- Otherwise, ignore it.
+          | otherwise ->
+              go maybeProductivity
+
+-------------------------------------------------------------------------------
+-- Capability Usage Duration - Cumulative
+
+{- |
+This machine processes t`CapabilityUsageSpan` data and produces metrics
+that contain the cumulative elapsed time for each category (idle, GC, mutator).
+-}
+processCapabilityUsageDurationData ::
+  forall m.
+  (Monad m) =>
+  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
+processCapabilityUsageDurationData =
+  processCapabilityUsageDuration'Delta
+    ~> processCapabilityUsageDuration'DeltaToCumulative
+
+-------------------------------------------------------------------------------
+-- Capability Usage Duration
+
+{- |
+The delta capability usage duration.
+-}
+data CapabilityUsageDuration a
+  = CapabilityUsageDuration
+  { value :: !a
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
   , cap :: !Int
@@ -80,45 +182,35 @@ data CapabilityUsageDurationDelta
   If the capability is idle, this value is `Nothing`.
   -}
   }
+  deriving (Functor, Foldable, Traversable)
 
-instance HasField "attrs" CapabilityUsageDurationDelta Attrs where
-  getField :: CapabilityUsageDurationDelta -> Attrs
-  getField CapabilityUsageDurationDelta{..} =
+instance HasField "attrs" (CapabilityUsageDuration a) Attrs where
+  getField :: CapabilityUsageDuration a -> Attrs
+  getField CapabilityUsageDuration{..} =
     [ "cap" ~= cap
     , "category" ~= maybe "Idle" showCapabilityUserCategory usage
     , "user" ~= usage
     ]
 
 {- |
-This machine processes t`CapabilityUsageSpan` data and produces metrics
-that contain the elapsed time for each category (idle, GC, mutator).
--}
-processCapabilityUsageDurationData ::
-  forall m.
-  (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) (Metric Timestamp)
-processCapabilityUsageDurationData =
-  processCapabilityUsageDuration'Delta
-    ~> processCapabilityUsageDuration'DeltaToCumulative
-
-{- |
-This machine processes t`CapabilityUsageDurationDelta` data and produces
-cumulative metrics for each category.
+This machine processes t`CapabilityUsageDuration` with the delta of elapsed
+time for each category and produces metrics that contain the cumulative elapsed
+time for each category (idle, GC, mutator).
 -}
 processCapabilityUsageDuration'DeltaToCumulative ::
   forall m.
   (Monad m) =>
-  ProcessT m CapabilityUsageDurationDelta (Metric Timestamp)
+  ProcessT m (CapabilityUsageDuration Timestamp) (CapabilityUsageDuration Timestamp)
 processCapabilityUsageDuration'DeltaToCumulative =
-  liftRouter measure spawn
+  liftRouter measure (const deltaToCumulative)
  where
-  measure :: CapabilityUsageDurationDelta -> Maybe (Maybe CapabilityUser)
-  -- The outer Maybe determines whether or not this input is selected. (Hence, constant `Just`.)
-  -- The inner Maybe represents idle versus active usage.
-  measure = Just . (.usage)
-
-  spawn :: Maybe CapabilityUser -> ProcessT m CapabilityUsageDurationDelta (Metric Timestamp)
-  spawn _usage = mapping toMetric ~> deltaToCumulative
+  -- This measure splits the input by capability _and_ usage category:
+  --
+  -- 1. The `Int` represents the capability.
+  -- 2. The `Maybe CapabilityUser` represents the usage category.
+  --
+  measure :: CapabilityUsageDuration Timestamp -> Maybe (Int, Maybe CapabilityUser)
+  measure cud = Just (cud.cap, cud.usage)
 
 {- |
 This machine processes t`CapabilityUsageSpan` spans and produces metrics that
@@ -128,19 +220,19 @@ between.
 processCapabilityUsageDuration'Delta ::
   forall m.
   (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) CapabilityUsageDurationDelta
+  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
 processCapabilityUsageDuration'Delta =
   liftRouter measure spawn
  where
   measure :: WithStartTime CapabilityUsageSpan -> Maybe Int
   measure = Just . (.value.cap)
 
-  spawn :: Int -> ProcessT m (WithStartTime CapabilityUsageSpan) CapabilityUsageDurationDelta
+  spawn :: Int -> ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
   spawn cap = construct $ go Nothing
    where
     go ::
       Maybe CapabilityUsageSpan ->
-      PlanT (Is (WithStartTime CapabilityUsageSpan)) CapabilityUsageDurationDelta m Void
+      PlanT (Is (WithStartTime CapabilityUsageSpan)) (CapabilityUsageDuration Timestamp) m Void
     go mi =
       await >>= \j -> do
         -- If there is a previous span, and...
@@ -149,7 +241,7 @@ processCapabilityUsageDuration'Delta =
           when (i.endTimeUnixNano < j.value.startTimeUnixNano) $
             -- ...yield an idle duration metric.
             yield
-              CapabilityUsageDurationDelta
+              CapabilityUsageDuration
                 { value = j.value.startTimeUnixNano - i.endTimeUnixNano
                 , maybeTimeUnixNano = Just i.endTimeUnixNano
                 , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
@@ -158,7 +250,7 @@ processCapabilityUsageDuration'Delta =
                 }
         -- Yield a duration metric for the current span.
         yield
-          CapabilityUsageDurationDelta
+          CapabilityUsageDuration
             { value = duration j.value
             , maybeTimeUnixNano = Just j.value.startTimeUnixNano
             , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
