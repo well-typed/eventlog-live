@@ -17,6 +17,7 @@ import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, echo, mapping, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
+import GHC.Eventlog.Live.Data.Metric qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
@@ -27,7 +28,7 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asSum, runMetricProcessor, viaLast)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
 import GHC.RTS.Events (Event (..))
 import Lens.Family2 ((.~))
@@ -70,20 +71,33 @@ processThreadEvents verbosity fullConfig =
                 ~> asParts
             )
             ~> M.fanoutTick
-              [ runMetricProcessor
-                  MetricProcessor
-                    { metricProcessorProxy = Proxy @"capabilityUsage"
-                    , dataProcessor = M.processCapabilityUsageDurationData
-                    , aggregators = viaLast
-                    , postProcessor = echo
-                    , unit = "ns"
-                    , asMetric'Data =
-                        asSum
-                          [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
-                          , OM.isMonotonic .~ True
-                          ]
-                    }
-                  fullConfig
+              [ M.liftTick M.processCapabilityUsageDurationData
+                  ~> M.fanoutTick
+                    [ runMetricProcessor
+                        MetricProcessor
+                          { metricProcessorProxy = Proxy @"capabilityUsage"
+                          , dataProcessor = mapping M.toMetric
+                          , aggregators = viaLast
+                          , postProcessor = echo
+                          , unit = "ns"
+                          , asMetric'Data =
+                              asSum
+                                [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
+                                , OM.isMonotonic .~ True
+                                ]
+                          }
+                        fullConfig
+                    , runMetricProcessor
+                        MetricProcessor
+                          { metricProcessorProxy = Proxy @"productivity"
+                          , dataProcessor = M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)
+                          , aggregators = viaLast
+                          , postProcessor = echo
+                          , unit = "%"
+                          , asMetric'Data = asGauge
+                          }
+                        fullConfig
+                    ]
                   ~> mapping (fmap (fmap Left))
               , runIf (C.processorEnabled (.traces) (.capabilityUsage) fullConfig) $
                   M.liftTick
