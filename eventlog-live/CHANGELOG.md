@@ -1,5 +1,8 @@
 ### 0.9.0.1
 
+- Add support for cumulative `Productivity` metric computed by Eventlog Live,
+  rather than from `CapabilityUsage` in Grafana.
+
 - Fix bug where `HeapAllocated` metric was erroneously treated as a delta
   metric and aggregated by summation. From this version onwards, it is treated
   as a cumulative metric and aggregated by taking the most recent measurement.
