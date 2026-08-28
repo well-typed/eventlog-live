@@ -4,20 +4,22 @@
   "metadata": {
     "name": "aa8c5f9f-b641-493d-bbe2-31e1b4ea71ed",
     "namespace": "default",
-    "uid": "98ff22ff-6777-4684-a169-81c629ffb259",
-    "resourceVersion": "1784288076117982",
-    "generation": 1,
-    "creationTimestamp": "2026-07-17T11:34:36Z",
+    "uid": "98de87c5-edda-4de3-ab6f-17743927f68c",
+    "resourceVersion": "1787922793522015",
+    "generation": 4,
+    "creationTimestamp": "2026-08-28T12:36:46Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "1921497053278208"
+      "grafana.app/deprecatedInternalID": "3646636284289024"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "Dashboards",
-      "grafana.app/sourceChecksum": "5dd377b088d3e86e437507b618ecf1f8",
-      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/eventlog-threads.json",
-      "grafana.app/sourceTimestamp": "1779466941000",
+      "grafana.app/sourceChecksum": "2950f20cad402dee0f5930ea0fe55960",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/threads.json",
+      "grafana.app/sourceTimestamp": "1787922788000",
+      "grafana.app/updatedBy": "access-policy:service",
+      "grafana.app/updatedTimestamp": "2026-08-28T13:12:13Z",
       "grafana.app/folder": ""
     }
   },
@@ -67,7 +69,7 @@
                         "alias": "$tag_category",
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total[$__interval]))",
+                        "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}[$__interval]))",
                         "fullMetaSearch": false,
                         "groupBy": [
                           {
@@ -122,7 +124,7 @@
           "description": "",
           "id": 5,
           "links": [],
-          "title": "Productivity",
+          "title": "Capability Usage",
           "vizConfig": {
             "group": "timeseries",
             "kind": "VizConfig",
@@ -203,7 +205,7 @@
           }
         }
       },
-      "panel-6": {
+      "panel-7": {
         "kind": "Panel",
         "spec": {
           "data": {
@@ -221,276 +223,14 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "alias": "$tag_category",
-                        "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{exported_job=\"$service_name\", category!=\"Idle\"}[$__interval]))",
-                        "fullMetaSearch": false,
-                        "groupBy": [
-                          {
-                            "params": ["50ms"],
-                            "type": "time"
-                          },
-                          {
-                            "params": ["category::tag"],
-                            "type": "tag"
-                          },
-                          {
-                            "params": ["0"],
-                            "type": "fill"
-                          }
-                        ],
-                        "includeNullMetadata": true,
-                        "legendFormat": "__auto",
-                        "measurement": "CapabilityUsage",
-                        "orderByTime": "ASC",
-                        "policy": "default",
-                        "range": true,
-                        "resultFormat": "time_series",
-                        "select": [
-                          [
-                            {
-                              "params": ["CapabilityUsage"],
-                              "type": "field"
-                            },
-                            {
-                              "params": [],
-                              "type": "sum"
-                            },
-                            {
-                              "params": [20],
-                              "type": "moving_average"
-                            }
-                          ]
-                        ],
-                        "tags": [
-                          {
-                            "key": "category::tag",
-                            "operator": "!=",
-                            "value": "Idle"
-                          }
-                        ],
-                        "useBackend": false
+                        "expr": "ghc_eventlog_Productivity_percent{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}",
+                        "legendFormat": "Capability {{cap}}",
+                        "range": true
                       },
                       "version": "v0"
                     },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": [
-                {
-                  "group": "concatenate",
-                  "kind": "Transformation",
-                  "spec": {
-                    "options": {
-                      "frameNameLabel": "frame",
-                      "frameNameMode": "field"
-                    }
-                  }
-                },
-                {
-                  "group": "organize",
-                  "kind": "Transformation",
-                  "spec": {
-                    "options": {
-                      "excludeByName": {
-                        "IDLE · Time": true,
-                        "MUTATOR · Time": true
-                      },
-                      "includeByName": {},
-                      "indexByName": {},
-                      "renameByName": {
-                        "GC · Time": "Time"
-                      }
-                    }
-                  }
-                },
-                {
-                  "group": "calculateField",
-                  "kind": "Transformation",
-                  "spec": {
-                    "options": {
-                      "alias": "Total",
-                      "binary": {
-                        "left": {
-                          "matcher": {
-                            "id": "byName",
-                            "options": "MUTATOR"
-                          }
-                        },
-                        "operator": "/",
-                        "right": {
-                          "matcher": {
-                            "id": "byName",
-                            "options": "IDLE"
-                          }
-                        }
-                      },
-                      "mode": "reduceRow",
-                      "reduce": {
-                        "include": [],
-                        "reducer": "sum"
-                      },
-                      "window": {
-                        "reducer": "mean",
-                        "windowAlignment": "trailing",
-                        "windowSize": 0.1,
-                        "windowSizeMode": "percentage"
-                      }
-                    }
-                  }
-                },
-                {
-                  "group": "calculateField",
-                  "kind": "Transformation",
-                  "spec": {
-                    "options": {
-                      "alias": "Productivity",
-                      "binary": {
-                        "left": {
-                          "matcher": {
-                            "id": "byName",
-                            "options": "Mutator"
-                          }
-                        },
-                        "operator": "/",
-                        "right": {
-                          "matcher": {
-                            "id": "byName",
-                            "options": "Total"
-                          }
-                        }
-                      },
-                      "mode": "binary",
-                      "reduce": {
-                        "reducer": "sum"
-                      },
-                      "replaceFields": true
-                    }
-                  }
-                }
-              ]
-            }
-          },
-          "description": "",
-          "id": 6,
-          "links": [],
-          "title": "Productivity",
-          "vizConfig": {
-            "group": "gauge",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "thresholds"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  },
-                  "unit": "percentunit"
-                },
-                "overrides": []
-              },
-              "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
-                "minVizHeight": 75,
-                "minVizWidth": 75,
-                "orientation": "auto",
-                "reduceOptions": {
-                  "calcs": ["lastNotNull"],
-                  "fields": "",
-                  "values": false
-                },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
-                "showThresholdLabels": false,
-                "showThresholdMarkers": true,
-                "sizing": "auto",
-                "sparkline": false,
-                "textMode": "auto"
-              }
-            },
-            "version": "13.1.0"
-          }
-        }
-      },
-      "panel-8": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "P214B5B846CF3925F"
-                      },
-                      "group": "tempo",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "filters": [
-                          {
-                            "id": "5e0c753b",
-                            "operator": "=",
-                            "scope": "span"
-                          },
-                          {
-                            "id": "service-name",
-                            "isCustomValue": false,
-                            "operator": "=",
-                            "scope": "resource",
-                            "tag": "service.name",
-                            "value": ["$service_name"],
-                            "valueType": "string"
-                          },
-                          {
-                            "id": "span-name",
-                            "isCustomValue": false,
-                            "operator": "=",
-                            "scope": "span",
-                            "tag": "name",
-                            "value": [
-                              "ghc_eventlog_ThreadState Running",
-                              "ghc_eventlog_ThreadState Blocked"
-                            ],
-                            "valueType": "string"
-                          }
-                        ],
-                        "limit": 20,
-                        "metricsQueryType": "range",
-                        "queryType": "traceqlSearch",
-                        "serviceMapUseNativeHistograms": false,
-                        "spss": 3,
-                        "tableType": "traces"
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
+                    "refId": "Productivity by Capability"
                   }
                 }
               ],
@@ -499,27 +239,55 @@
             }
           },
           "description": "",
-          "id": 8,
+          "id": 7,
           "links": [],
-          "title": "Traces",
+          "title": "Productivity by Capability",
           "vizConfig": {
-            "group": "table",
+            "group": "timeseries",
             "kind": "VizConfig",
             "spec": {
               "fieldConfig": {
                 "defaults": {
                   "color": {
-                    "mode": "thresholds"
+                    "mode": "palette-classic",
+                    "seriesBy": "last"
                   },
                   "custom": {
-                    "align": "auto",
-                    "cellOptions": {
-                      "type": "auto"
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "bars",
+                    "fillOpacity": 0,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
                     },
-                    "footer": {
-                      "reducers": []
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
                     },
-                    "inspect": false
+                    "lineWidth": 1,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
                   },
                   "thresholds": {
                     "mode": "absolute",
@@ -533,13 +301,29 @@
                         "value": 80
                       }
                     ]
-                  }
+                  },
+                  "unit": "percent"
                 },
                 "overrides": []
               },
               "options": {
-                "cellHeight": "sm",
-                "showHeader": true
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
               }
             },
             "version": "13.1.0"
@@ -555,46 +339,47 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "GridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "GridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-6"
+                        "collapse": false,
+                        "fillScreen": true,
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "rowHeightMode": "standard"
+                          }
                         },
-                        "height": 8,
-                        "width": 4,
-                        "x": 0,
-                        "y": 0
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-5"
+                        "repeat": {
+                          "mode": "variable",
+                          "value": "service_instance_id"
                         },
-                        "height": 8,
-                        "width": 20,
-                        "x": 4,
-                        "y": 0
-                      }
-                    },
-                    {
-                      "kind": "GridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-8"
-                        },
-                        "height": 7,
-                        "width": 24,
-                        "x": 0,
-                        "y": 8
+                        "title": "${service_instance_id}"
                       }
                     }
                   ]
@@ -604,7 +389,44 @@
                 "mode": "variable",
                 "value": "service_name"
               },
-              "title": "${service_name}"
+              "title": "${service_name}",
+              "variables": [
+                {
+                  "kind": "QueryVariable",
+                  "spec": {
+                    "allowCustomValue": true,
+                    "current": {
+                      "text": ["4969300A-89E3-49A5-A37C-50E003C99DB8"],
+                      "value": ["4969300A-89E3-49A5-A37C-50E003C99DB8"]
+                    },
+                    "definition": "label_values(ghc_eventlog_Productivity_percent{exported_job=\"$service_name\"},exported_instance)",
+                    "hide": "dontHide",
+                    "includeAll": false,
+                    "label": "Service Instance ID",
+                    "multi": true,
+                    "name": "service_instance_id",
+                    "options": [],
+                    "query": {
+                      "datasource": {
+                        "name": "PBFA97CFB590B2093"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "qryType": 1,
+                        "query": "label_values(ghc_eventlog_Productivity_percent{exported_job=\"$service_name\"},exported_instance)",
+                        "refId": "PrometheusVariableQueryEditor-VariableQuery"
+                      },
+                      "version": "v0"
+                    },
+                    "refresh": "onDashboardLoad",
+                    "regex": "",
+                    "regexApplyTo": "value",
+                    "skipUrlSync": false,
+                    "sort": "disabled"
+                  }
+                }
+              ]
             }
           }
         ]
@@ -644,7 +466,7 @@
             "text": "oddball",
             "value": "oddball"
           },
-          "definition": "",
+          "definition": "label_values(ghc_eventlog_Productivity_percent,exported_job)",
           "description": "The service name used for the visualisations on this dashboard.",
           "hide": "dontHide",
           "includeAll": false,
@@ -654,14 +476,14 @@
           "options": [],
           "query": {
             "datasource": {
-              "name": "P214B5B846CF3925F"
+              "name": "PBFA97CFB590B2093"
             },
-            "group": "tempo",
+            "group": "prometheus",
             "kind": "DataQuery",
             "spec": {
-              "label": "service.name",
-              "refId": "TempoDatasourceVariableQueryEditor-VariableQuery",
-              "type": 1
+              "qryType": 1,
+              "query": "label_values(ghc_eventlog_Productivity_percent,exported_job)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
             },
             "version": "v0"
           },
