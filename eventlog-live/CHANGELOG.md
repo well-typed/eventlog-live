@@ -1,4 +1,4 @@
-### 0.9.0.1
+### 0.9.1.0
 
 - Add support for cumulative `Productivity` metric computed by Eventlog Live,
   rather than from `CapabilityUsage` in Grafana.
