@@ -2,6 +2,7 @@ import: cabal.project.config
 
 packages: eventlog-live
 packages: eventlog-live-tests
+packages: eventlog-live-viewer/test-server
 packages: examples/jumpy-jump
 packages: examples/hogger
 packages: examples/oddball

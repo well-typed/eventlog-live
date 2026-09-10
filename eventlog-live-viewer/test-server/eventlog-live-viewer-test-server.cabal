@@ -1,0 +1,42 @@
+cabal-version: 3.0
+name: eventlog-live-viewer-test-server
+version: 0.1.0.0
+synopsis: A test server for eventlog-live-viewer
+description: A test server for eventlog-live-viewer.
+license: BSD-3-Clause
+license-file: LICENSE
+author: Wen Kokke
+maintainer: wen@well-typed.com
+copyright: (c) 2026 Well-Typed
+category: Testing
+build-type: Simple
+extra-doc-files: CHANGELOG.md
+
+common language
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wprepositive-qualified-module
+    -Wredundant-constraints
+    -Wunticked-promoted-constructors
+    -Wunused-packages
+
+  default-extensions:
+    DeriveGeneric
+    ImportQualifiedPost
+    NumericUnderscores
+    RecordWildCards
+
+  default-language: Haskell2010
+
+executable eventlog-live-viewer-test-server
+  import: language
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends:
+    aeson,
+    base,
+    clock,
+    random,
+    websockets,
