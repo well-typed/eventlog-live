@@ -40,9 +40,27 @@ import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
-import GHC.Stack.Profiler.Core.Eventlog qualified as GSP
-import GHC.Stack.Profiler.Core.SymbolTable qualified as GSP
-import GHC.Stack.Profiler.Core.ThreadSample qualified as GSP
+import GHC.Stack.Profiler.Core.Eventlog qualified as GSPE (
+  BinaryCallStackMessage,
+  BinaryEventlogMessage (..),
+  IpeId (..),
+ )
+import GHC.Stack.Profiler.Core.SymbolTable qualified as GSPS (
+  IntMapTable,
+  emptyIntMapTable,
+  insertSourceLocationMessage,
+  insertTextMessage,
+  mkIntMapSymbolTableReader,
+ )
+import GHC.Stack.Profiler.Core.ThreadSample qualified as GSPT (
+  CallStackMessage (..),
+  SourceLocation (..),
+  StackItem (..),
+  SymbolTableReader,
+  catCallStackMessage,
+  deserializeEventlogMessage,
+  hydrateEventlogCallStackMessage,
+ )
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre (CostCentre (..), CostCentreId (..))
 import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
@@ -85,9 +103,9 @@ The internal state for `processGhcStackProfilerData`.
 -}
 data GhcStackProfilerState = GhcStackProfilerState
   { warnOnDeserializeError :: !Bool
-  , callStackChunksRev :: ![GSP.BinaryCallStackMessage]
+  , callStackChunksRev :: ![GSPE.BinaryCallStackMessage]
   , maybeTimeUnixNano :: !(Maybe Timestamp)
-  , symbolTable :: !GSP.IntMapTable
+  , symbolTable :: !GSPS.IntMapTable
   }
 
 {- |
@@ -101,7 +119,7 @@ emptyGhcStackProfilerState =
     { warnOnDeserializeError = True
     , callStackChunksRev = []
     , maybeTimeUnixNano = Nothing
-    , symbolTable = GSP.emptyIntMapTable
+    , symbolTable = GSPS.emptyIntMapTable
     }
 
 {- |
@@ -122,7 +140,7 @@ processGhcStackProfilerData logger infoProvTable =
     await >>= \i -> do
       case i.value.evSpec of
         E.UserBinaryMessage{..} -> do
-          case GSP.deserializeEventlogMessage (BSL.fromStrict payload) of
+          case GSPT.deserializeEventlogMessage (BSL.fromStrict payload) of
             Left errMsg
               | st.warnOnDeserializeError -> do
                   lift . writeLog logger WARN . T.unlines $
@@ -133,8 +151,8 @@ processGhcStackProfilerData logger infoProvTable =
                   go st{warnOnDeserializeError = False}
               | otherwise -> go st
             -- If we receive the final call-stack chunk, decode and yield the call-stack, the restart...
-            Right (GSP.CallStackFinal callStackChunk) -> do
-              let symbolTableReader = GSP.mkIntMapSymbolTableReader st.symbolTable
+            Right (GSPE.CallStackFinal callStackChunk) -> do
+              let symbolTableReader = GSPS.mkIntMapSymbolTableReader st.symbolTable
               let callStackChunks = NE.reverse (callStackChunk :| st.callStackChunksRev)
               let !maybeTimeUnixNano = st.maybeTimeUnixNano <|> tryGetTimeUnixNano i
               callStack <- lift $ decodeCallStack maybeTimeUnixNano symbolTableReader callStackChunks
@@ -145,19 +163,19 @@ processGhcStackProfilerData logger infoProvTable =
                   , maybeTimeUnixNano = Nothing
                   }
             -- If we receive a call-stack chunk, add it to the list of chunks and continue...
-            Right (GSP.CallStackChunk callStackChunk) ->
+            Right (GSPE.CallStackChunk callStackChunk) ->
               go
                 st
                   { callStackChunksRev = callStackChunk : st.callStackChunksRev
                   , maybeTimeUnixNano = st.maybeTimeUnixNano <|> tryGetTimeUnixNano i
                   }
             -- If we receive a string definition, update the symbol table and continue...
-            Right (GSP.StringDef string) -> do
-              let !symbolTable' = GSP.insertTextMessage string st.symbolTable
+            Right (GSPE.StringDef string) -> do
+              let !symbolTable' = GSPS.insertTextMessage string st.symbolTable
               go st{symbolTable = symbolTable'}
             -- If we receive a source location definition, update the symbol table and continue...
-            Right (GSP.SourceLocationDef sourceLocation) ->
-              case GSP.insertSourceLocationMessage sourceLocation st.symbolTable of
+            Right (GSPE.SourceLocationDef sourceLocation) ->
+              case GSPS.insertSourceLocationMessage sourceLocation st.symbolTable of
                 Left errMsg -> do
                   lift . writeLog logger WARN . T.unlines $
                     [ "Could not decode source location from ghc-stack-profiler message:"
@@ -170,38 +188,38 @@ processGhcStackProfilerData logger infoProvTable =
 
   decodeCallStack ::
     Maybe Timestamp ->
-    GSP.SymbolTableReader ->
-    NonEmpty GSP.BinaryCallStackMessage ->
+    GSPT.SymbolTableReader ->
+    NonEmpty GSPE.BinaryCallStackMessage ->
     m CallStack
   decodeCallStack maybeTimeUnixNano symbolTableReader callStackChunks = do
     -- Concatenate the chunks into a full binary call-stack message.
-    let !gspBinaryCallStack = GSP.catCallStackMessage callStackChunks
+    let !gspBinaryCallStack = GSPT.catCallStackMessage callStackChunks
 
     -- Decode the binary call-stack and log any decoding errors.
     let !(gspCallStackMessage, decodeErrors) =
-          GSP.hydrateEventlogCallStackMessage symbolTableReader gspBinaryCallStack
-    let !gspCallStack = GSP.callStack gspCallStackMessage
+          GSPT.hydrateEventlogCallStackMessage symbolTableReader gspBinaryCallStack
+    let !gspCallStack = GSPT.callStack gspCallStackMessage
     unless (null decodeErrors) $
       writeLog logger WARN . T.unlines $
         ["Encountered errors while decoding binary call-stack from ghc-stack-profiler message:"]
           <> [T.pack (displayException decodeError) | decodeError <- decodeErrors]
 
     -- Extract the IPE IDs and look them up in a single batched database query.
-    let getMaybeInfoProvId :: GSP.StackItem -> Maybe InfoProvId
-        getMaybeInfoProvId = \case GSP.IpeId iid -> Just (toInfoProvId iid); _otherwise -> Nothing
+    let getMaybeInfoProvId :: GSPT.StackItem -> Maybe InfoProvId
+        getMaybeInfoProvId = \case GSPT.IpeId iid -> Just (toInfoProvId iid); _otherwise -> Nothing
     let infoProvIds = V.fromList . mapMaybe getMaybeInfoProvId $ gspCallStack
     maybeInfoProvs <- liftIO $ lookups infoProvTable infoProvIds
 
     -- Convert each `GSP.StackItem` to a `CallStackFrame`.
-    let toCallStackFrame :: [Maybe InfoProv] -> GSP.StackItem -> m ([Maybe InfoProv], Maybe CallStackFrame)
-        toCallStackFrame (maybeInfoProv : acc) (GSP.IpeId iid) = do
+    let toCallStackFrame :: [Maybe InfoProv] -> GSPT.StackItem -> m ([Maybe InfoProv], Maybe CallStackFrame)
+        toCallStackFrame (maybeInfoProv : acc) (GSPT.IpeId iid) = do
           when (isNothing maybeInfoProv) $
             writeLog logger WARN $
               "Could not resolve IPE ID " <> T.pack (show (toInfoProvId iid))
           pure (acc, Just $! CallStackFrame (toInfoProvId iid) maybeInfoProv)
-        toCallStackFrame acc (GSP.UserAnnotation msg maybeSourceLocation) =
+        toCallStackFrame acc (GSPT.UserAnnotation msg maybeSourceLocation) =
           pure (acc, Just $! CallStackMessage (T.pack msg) (toSrcLoc maybeSourceLocation))
-        toCallStackFrame [] (GSP.IpeId _iid) = do
+        toCallStackFrame [] (GSPT.IpeId _iid) = do
           writeLog logger ERROR $
             "Did not receive enough IPEs to annotate each call-stack item. Please report this as a bug."
           pure ([], Nothing)
@@ -209,8 +227,8 @@ processGhcStackProfilerData logger infoProvTable =
       V.fromList . catMaybes . snd
         <$> mapAccumM toCallStackFrame (V.toList maybeInfoProvs) gspCallStack
 
-    let !capNo = fromCapabilityId . GSP.callCapabilityId $ gspCallStackMessage
-    let !threadId = ThreadId . GSP.callThreadId $ gspCallStackMessage
+    let !capNo = fromCapabilityId . GSPT.callCapabilityId $ gspCallStackMessage
+    let !threadId = ThreadId . GSPT.callThreadId $ gspCallStackMessage
     pure CallStack{..}
 
 {- |
@@ -218,19 +236,19 @@ Internal helper.
 
 Convert a @ghc-stack-profiler@ `GSP.IpeID` to an `InfoProvId`.
 -}
-toInfoProvId :: GSP.IpeId -> InfoProvId
-toInfoProvId (GSP.MkIpeId x) = InfoProvId x
+toInfoProvId :: GSPE.IpeId -> InfoProvId
+toInfoProvId (GSPE.MkIpeId x) = InfoProvId x
 
 {- |
 Internal helper.
 
 Convert a `GSP.SourceLocation` to a `SrcLoc`.
 -}
-toSrcLoc :: Maybe GSP.SourceLocation -> SrcLoc
+toSrcLoc :: Maybe GSPT.SourceLocation -> SrcLoc
 toSrcLoc = \case
   Nothing ->
     UnhelpfulSrcLoc
-  Just GSP.MkSourceLocation{fileName, column, line} ->
+  Just GSPT.MkSourceLocation{fileName, column, line} ->
     SrcLoc (Text.unpack fileName) (Just $! Range'Point column line)
 
 --------------------------------------------------------------------------------
