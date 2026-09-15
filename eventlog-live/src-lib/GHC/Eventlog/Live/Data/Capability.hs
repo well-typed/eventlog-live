@@ -13,7 +13,7 @@ module GHC.Eventlog.Live.Data.Capability (
 import Data.Word (Word16)
 import GHC.Eventlog.Live.Data.Attribute (IsAttrValue)
 import GHC.RTS.Events (Event (..))
-import GHC.Stack.Profiler.Core.Eventlog (CapabilityId (..))
+import GHC.Stack.Profiler.Core (CapabilityId (..))
 
 {- |
 A capability number.
