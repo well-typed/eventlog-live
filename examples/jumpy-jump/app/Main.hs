@@ -14,22 +14,19 @@ import System.Random (newStdGen, randomRIO, randomRs)
 import Text.Printf (printf)
 
 #ifdef JUMPY_JUMP_USE_GHC_STACK_PROFILER
-import GHC.Stack.Profiler (ProfilerSamplingInterval (..), withRootStackProfiler, withStackProfiler)
+import qualified GHC.Stack.Profiler (withProfiler)
 #endif
 
-withGhcStackProfiler :: IO () -> IO ()
+withProfiler :: IO () -> IO ()
 #ifdef JUMPY_JUMP_USE_GHC_STACK_PROFILER
-withGhcStackProfiler action =
-  withRootStackProfiler True $ \manager ->
-    withStackProfiler manager (SampleIntervalMs 100) $
-      action
+withProfiler action = GHC.Stack.Profiler.withProfiler (const action)
 #else
-withGhcStackProfiler action = action
+withProfiler action = action
 #endif
 
 main :: IO ()
 main =
-  withGhcStackProfiler $ do
+  withProfiler $ do
     startFromEnv
     forever $ do
       jumpyJump0
