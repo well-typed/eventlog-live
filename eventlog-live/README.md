@@ -532,45 +532,56 @@ Let's briefly discuss what the new parts of this script do:
 
 ### Eventlog Live with GHC Stack Profiler
 
-[GHC Stack Profiler](https://github.com/well-typed/ghc-stack-profiler) is a lightweight profiler that samples the runtime call-stack and writes these to the eventlog. It only has an 5-10% overhead while running. When compiled with the `+control` feature flag, it supports Eventlog Socket's command protocol, which lets you enable/disable samples at runtime.
+[GHC Stack Profiler](https://github.com/well-typed/ghc-stack-profiler) is a light-weight profiler that samples the runtime call-stack and writes these to the eventlog. The instrumentation alone has zero overhead and, when it's running, it has [about 2-8% overhead](https://github.com/well-typed/ghc-stack-profiler/#benchmarks). When compiled with the `+control` feature flag, it supports Eventlog Socket's command protocol, which lets you enable/disable samples at runtime.
 
 To instrument your application with GHC Stack Profiler, you need to make three changes:
 
-1. Add `ghc-stack-profiler` to the `build-depends` for your application:
+1.  Add `ghc-stack-profiler` to the `build-depends` for your application:
 
-   ```diff
-   executable your-application
-     ...
+    ```diff
+      executable your-application
+        ...
 
-     build-depends:
-       ...
-   +   , ghc-stack-profiler >=0.4 && <0.5
-   ```
+        build-depends:
+          ...
+    +     , ghc-stack-profiler ==0.5.0.0
+    ```
 
-2. Instrument your main function:
+    > ⚠️ **Warning:** If you're using `ghc-stack-profiler-speedscope`, `eventlog-live-otlp`, or any other program that processes the eventlog produced by `ghc-stack-profiler`, it is important that both are built with the same version of `ghc-stack-profiler-core`.
 
-   ```diff
-     module Main where
-     ...
+2.  Instrument your main function:
 
-   + import qualified GHC.Stack.Profiler as GSP
+    ```diff
+      module Main where
+      ...
 
-     main :: IO ()
-     main = do
-   +   GSP.withRootStackProfiler True $ \manager ->
-   +     GSP.withStackProfiler manager (GSP.SampleIntervalMs 100) $
-           ...
-   ```
+    + import GHC.Stack.Profiler (withProfilerFromEnv)
 
-   The current version of GHC Stack Profiler requires you to set the sampling interval at compile-time.
+      main :: IO ()
+      main =
+    +   withProfilerFromEnv $
+          ...
+    ```
 
-3. Build your application and its dependencies with info table maps.
+    > ℹ️ **Tip:**
+    > If you prefer not to configure your program from the environment, the [GHC.Stack.Profiler](https://hackage.haskell.org/package/ghc-stack-profiler/docs/GHC-Stack-Profiler.html) exposes a variety of function that instrument your program.
 
-   For detailed instructions, see [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table).
+    > ℹ️ **Tip:**
+    > You can use the [`annotateStackIO`](https://hackage-content.haskell.org/package/ghc-stack-annotations/docs/GHC-Stack-Annotation.html#v:annotateStackIO) functions from [`ghc-stack-annotations`](https://hackage-content.haskell.org/package/ghc-stack-annotations) to push annotation frames onto the call-stack at runtime.
+    > These annotation frames are visible in call-stack profiles captured by GHC Stack Profiler.
+    > See [Better Haskell stack traces via user annotations](https://www.well-typed.com/blog/2025/09/better-haskell-stack-traces/).
+
+3.  Build your application and its dependencies with info table maps.
+
+    For detailed instructions, see [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table).
 
 To start monitoring your application, run your application and Evenlog Live. The following script builds on the example from [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table), but using GHC Stack Profiler is independent from Eventlog Socket and while it needs info table maps, it does not require _running_ an Info Table Profile (`-hi`).
 
 ```sh
+# GHC Stack Profiler Configuration
+export GHC_STACK_PROFILER="ON" # or any other non-empty value
+export GHC_STACK_PROFILER_SAMPLE_INTERVAL="10" # milliseconds
+
 # Eventlog Socket Configuration
 export GHC_EVENTLOG_UNIX_PATH="/tmp/eventlog.sock"
 export GHC_EVENTLOG_WAIT="true"
