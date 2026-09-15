@@ -6,10 +6,12 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Thread (
   ThreadId (..),
+  fromThreadId,
 ) where
 
 import Data.Word (Word64)
 import GHC.Eventlog.Live.Data.Attribute (IsAttrValue)
+import GHC.Stack.Profiler.Core qualified as GSP
 
 {- |
 A thread ID.
@@ -26,3 +28,9 @@ newtype ThreadId = ThreadId
   }
   deriving stock (Show, Eq, Ord)
   deriving newtype (IsAttrValue)
+
+{- |
+Get the thread ID from a @ghc-stack-profiler@ `ThreadId`.
+-}
+fromThreadId :: GSP.ThreadId -> ThreadId
+fromThreadId (GSP.MkThreadId value) = ThreadId value

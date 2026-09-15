@@ -35,14 +35,12 @@ import Data.Vector qualified as V
 import GHC.Eventlog.Live.Data.Attribute (Attrs, HasAttrs (..), (~=))
 import GHC.Eventlog.Live.Data.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Data.Thread (ThreadId (..))
+import GHC.Eventlog.Live.Data.Thread (ThreadId (..), fromThreadId)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
-import GHC.Stack.Profiler.Core.Eventlog qualified as GSP
-import GHC.Stack.Profiler.Core.SymbolTable qualified as GSP
-import GHC.Stack.Profiler.Core.ThreadSample qualified as GSP
+import GHC.Stack.Profiler.Core qualified as GSP
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre (CostCentre (..), CostCentreId (..))
 import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
@@ -85,7 +83,7 @@ The internal state for `processGhcStackProfilerData`.
 -}
 data GhcStackProfilerState = GhcStackProfilerState
   { warnOnDeserializeError :: !Bool
-  , callStackChunksRev :: ![GSP.BinaryCallStackMessage]
+  , callStackChunksRev :: ![GSP.CallStackChunk]
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   , symbolTable :: !GSP.IntMapTable
   }
@@ -132,6 +130,9 @@ processGhcStackProfilerData logger infoProvTable =
                     ]
                   go st{warnOnDeserializeError = False}
               | otherwise -> go st
+            -- If we receive a protocol version, do nothing.
+            Right (GSP.ProtocolVersion _protocolVersion) -> do
+              go st
             -- If we receive the final call-stack chunk, decode and yield the call-stack, the restart...
             Right (GSP.CallStackFinal callStackChunk) -> do
               let symbolTableReader = GSP.mkIntMapSymbolTableReader st.symbolTable
@@ -171,11 +172,11 @@ processGhcStackProfilerData logger infoProvTable =
   decodeCallStack ::
     Maybe Timestamp ->
     GSP.SymbolTableReader ->
-    NonEmpty GSP.BinaryCallStackMessage ->
+    NonEmpty GSP.CallStackChunk ->
     m CallStack
   decodeCallStack maybeTimeUnixNano symbolTableReader callStackChunks = do
     -- Concatenate the chunks into a full binary call-stack message.
-    let !gspBinaryCallStack = GSP.catCallStackMessage callStackChunks
+    let !gspBinaryCallStack = GSP.joinCallStackChunks callStackChunks
 
     -- Decode the binary call-stack and log any decoding errors.
     let !(gspCallStackMessage, decodeErrors) =
@@ -210,7 +211,7 @@ processGhcStackProfilerData logger infoProvTable =
         <$> mapAccumM toCallStackFrame (V.toList maybeInfoProvs) gspCallStack
 
     let !capNo = fromCapabilityId . GSP.callCapabilityId $ gspCallStackMessage
-    let !threadId = ThreadId . GSP.callThreadId $ gspCallStackMessage
+    let !threadId = fromThreadId . GSP.callThreadId $ gspCallStackMessage
     pure CallStack{..}
 
 {- |
