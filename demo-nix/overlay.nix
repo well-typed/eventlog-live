@@ -16,13 +16,11 @@ final: prev: with haskell.lib.compose; {
     enableCabalFlag "serialblockio" pkg;
   data-elevator = prev.callHackage "data-elevator" "0.2" { };
   grapesy = dontCheck prev.grapesy;
-  ghc-stack-profiler-core = prev.callHackage "ghc-stack-profiler-core" "0.3.0.0" { };
-  ghc-stack-profiler = prev.callHackage "ghc-stack-profiler" "0.3.0.0" { };
+  ghc-stack-profiler-core = dontCheck (prev.callHackage "ghc-stack-profiler-core" "0.5.0.0" { });
+  ghc-stack-profiler = prev.callHackage "ghc-stack-profiler" "0.5.0.0" { };
   hs-opentelemetry-otlp = prev.callHackage "hs-opentelemetry-otlp" "0.2.0.0" { };
   http2 = prev.callHackage "http2" "5.3.9" { };
   http2-tls = prev.callHackage "http2-tls" "0.4.5" { };
-  # io-classes = prev.callHackage "io-classes" "1.9.0.0" { };
-  # io-sim = prev.callHackage "io-sim" "1.9.1.0" { };
   ipedb =
     let
       pkg = prev.callHackage "ipedb" "0.2.0.1" { };
