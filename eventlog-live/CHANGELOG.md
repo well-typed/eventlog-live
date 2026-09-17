@@ -1,3 +1,7 @@
+### 0.10.0.0
+
+- Add support for `ghc-stack-profiler-0.5.0.0` and drop support for previous versions.
+
 ### 0.9.1.0
 
 - Add support for cumulative `Productivity` metric computed by Eventlog Live,
