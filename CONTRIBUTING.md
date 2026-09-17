@@ -7,7 +7,7 @@
     - The Haddock documentation builds without warnings and renders without errors.
     - The tests pass on CI.
 
-2.  Create a Git tag of the form `eventlog-live-${VERSION}`, e.g., `eventlog-live-v0.8.0.0`:
+2.  Create a Git tag of the form `eventlog-live-${VERSION}`, e.g., `eventlog-live-v0.10.0.0`:
 
     ```sh
     git tag eventlog-live-${VERSION}
