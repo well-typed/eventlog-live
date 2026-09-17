@@ -566,11 +566,6 @@ To instrument your application with GHC Stack Profiler, you need to make three c
     > ℹ️ **Tip:**
     > If you prefer not to configure your program from the environment, the [GHC.Stack.Profiler](https://hackage.haskell.org/package/ghc-stack-profiler/docs/GHC-Stack-Profiler.html) exposes a variety of function that instrument your program.
 
-    > ℹ️ **Tip:**
-    > You can use the [`annotateStackIO`](https://hackage-content.haskell.org/package/ghc-stack-annotations/docs/GHC-Stack-Annotation.html#v:annotateStackIO) functions from [`ghc-stack-annotations`](https://hackage-content.haskell.org/package/ghc-stack-annotations) to push annotation frames onto the call-stack at runtime.
-    > These annotation frames are visible in call-stack profiles captured by GHC Stack Profiler.
-    > See [Better Haskell stack traces via user annotations](https://www.well-typed.com/blog/2025/09/better-haskell-stack-traces/).
-
 3.  Build your application and its dependencies with info table maps.
 
     For detailed instructions, see [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table).
@@ -625,13 +620,13 @@ If you run these commands, you should start seeing profiles show up on your dash
 If your application is instrumented with Eventlog Socket, the Start and Stop buttons should enable/disable call-stack profiling.
 
 > ℹ️ **Tip:**
-> You can use the [`annotateStackIO`](https://hackage-content.haskell.org/package/ghc-experimental-9.1401.0/docs/GHC-Stack-Annotation-Experimental.html#v:annotateStackIO) functions from `ghc-experimental` to push annotation frames onto the call-stack at runtime.
+> You can use the [`annotateStackIO`](https://hackage-content.haskell.org/package/ghc-stack-annotations/docs/GHC-Stack-Annotation.html#v:annotateStackIO) functions from [`ghc-stack-annotations`](https://hackage-content.haskell.org/package/ghc-stack-annotations) to push annotation frames onto the call-stack at runtime.
 > These annotation frames are visible in call-stack profiles captured by GHC Stack Profiler.
 > See [Better Haskell stack traces via user annotations](https://www.well-typed.com/blog/2025/09/better-haskell-stack-traces/).
 
 > ⚠️ **Warning:**
-> Due to a bug in GHC, copying the call-stack may cause a segfault at runtime in applications built with GHC 9.14 and older.
-> If you use GHC Stack Profiler in production, you should build your application with GHC 10 or later.
+> Due to a bug in GHC, copying the call-stack may cause a segfault at runtime in applications built with GHC 9.14.1 and older.
+> If you use GHC Stack Profiler in production, you should build your application with GHC 9.14.2 or newer.
 
 ## Fine-Tuning Eventlog Live
 
