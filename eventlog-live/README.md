@@ -13,7 +13,7 @@ Eventlog Live analyses the [eventlog](https://ghc.gitlab.haskell.org/ghc/doc/use
 
 The following shows the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-pipe.sh) running with _zero instrumentation_.
 
-![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe-2026-07-31.gif)
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe-2026-09-21.gif)
 
 Eventlog Live is designed to be _lightweight_, running alongside your application using only in a few megabytes of memory, and _highly configurable_, so that you only send the telemetry data you are interested in. While Eventlog Live works with zero instrumentation, it has support for several Haskell profiling packages that can enable new features.
 
@@ -23,7 +23,7 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
   The following shows dynamic control of heap profiling from the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-hT.sh) instrumented with `eventlog-socket`. When the _Stop_ button is pressed, the heap profiling is stopped, and the heap profile flatlines. When the _Start_ button is pressed, heap profiling is restarted.
 
-  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control-2026-07-31.gif)
+  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control-2026-09-21.gif)
 
 - **GHC Stack Profiler – Lightweight Call-Stack Profiles**
 
@@ -33,7 +33,7 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
   The following shows the Grafana Call-Stack Profiles dashboard for [`jumpy-jump`](examples/jumpy-jump/jumpy-jump-with-ghc-stack-profiler.sh) instrumented with `ghc-stack-profiler`.
 
-  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-07-31.gif)
+  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif)
 
 ## Table of Contents
 
@@ -158,13 +158,13 @@ If you run these commands, you should start seeing telemetry show up on your das
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe-2026-07-31.gif)
+  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe-2026-09-21.gif)
 
 - Select '☰ > Dashboards > Logs'
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen capture of the Grafana Logs dashboard for the oddball example program.](assets/oddball-with-pipe-logs-2026-07-31.png)
+  ![A screen capture of the Grafana Logs dashboard for the oddball example program.](assets/oddball-with-pipe-logs-2026-09-21.gif)
 
   This dashboard will include a separate tab that shows the logs for `eventlog-live-otlp`:
 
@@ -336,7 +336,7 @@ eventlog-live-otlp                              \
 
 If you run these commands, you should be greeted by a dashboard that looks something like this:
 
-![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control-2026-07-31.gif)
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control-2026-09-21.gif)
 
 The Start and Stop buttons can now be used to enable/disable Heap Profiling and the Census button can now be used to request a single heap census.
 
@@ -431,7 +431,7 @@ If you run these commands, you should start seeing profiles show up on your dash
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen capture of the Grafana Cost-Centre Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-cost-centre-profiler-2026-07-31.png)
+  ![A screen capture of the Grafana Cost-Centre Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-cost-centre-profiler-2026-09-21.gif)
 
 If your application is instrumented with Eventlog Socket, the Start and Stop buttons should enable/disable cost-centre stack profiling.
 
@@ -520,7 +520,7 @@ eventlog-live-otlp                              \
 
 If you run these commands, you should be greeted by a dashboard that looks something like this:
 
-![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program using Heap Profiling by Info Table.](assets/oddball-with-hi-2026-07-31.gif)
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program using Heap Profiling by Info Table.](assets/oddball-with-hi-2026-09-21.gif)
 
 Notably, your Heap Profile should show Info Table information. If you ran Heap Profiles with different breakdowns, you can select the appropriate breakdown in the Heap Profile Breakdown dropdown menu.
 
@@ -615,7 +615,7 @@ If you run these commands, you should start seeing profiles show up on your dash
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-07-31.gif)
+  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif)
 
 If your application is instrumented with Eventlog Socket, the Start and Stop buttons should enable/disable call-stack profiling.
 
