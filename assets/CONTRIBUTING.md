@@ -12,7 +12,7 @@ ffmpeg \
     -vf "\
         setpts=0.2*PTS, \
         fps=fps=1, \
-        crop=2483:1382:0:54, \
+        crop=2560:1382:0:54, \
         scale=1280:-1:flags=lanczos, \
         split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
     -loop 0 \
