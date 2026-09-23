@@ -1,0 +1,22 @@
+cabal-version: 3.0
+name: eventlog-live-auto
+version: 0.1.0.0
+license: BSD-3-Clause
+license-file: LICENSE
+author: Wen Kokke
+maintainer: wen@well-typed.com
+copyright: (c) 2021-2026 Well-Typed
+category: System
+build-type: Simple
+extra-doc-files: CHANGELOG.md
+
+library
+  if os(osx)
+    c-sources: cbits/eventlog_live/auto.mm
+    ld-options: -ObjC
+
+  if os(linux)
+    c-sources: cbits/eventlog_live/auto.c
+    ld-options: -Wl,-u,eventlog_live_auto
+
+  default-language: Haskell2010

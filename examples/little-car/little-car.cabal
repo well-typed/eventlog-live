@@ -1,0 +1,26 @@
+cabal-version: 2.4
+name: little-car
+version: 0.1.0.0
+synopsis: Example that links against eventlog-live-auto
+description: Example that links against @eventlog-live-auto@.
+maintainer: wen@well-typed.com
+license-file: LICENSE
+category: Debug, Monitoring, System, Network
+tested-with:
+  ghc ==9.2.8 || ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.2
+
+executable little-car
+  main-is: Main.hs
+  hs-source-dirs: app
+  default-language: Haskell2010
+  ghc-options:
+    -threaded
+    -rtsopts
+    -finfo-table-map
+
+  build-depends:
+    base >=4.14 && <5,
+    eventlog-live-auto,
+
+  if impl(ghc <9.4)
+    ghc-options: -eventlog
