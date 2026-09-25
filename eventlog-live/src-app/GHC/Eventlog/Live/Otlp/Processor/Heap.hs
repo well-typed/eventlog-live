@@ -16,7 +16,7 @@ import Data.DList (DList)
 import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStatsData (..), MemReturnData (..))
+import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -62,7 +62,7 @@ processHeapAllocated =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapAllocated"
-      , dataProcessor = M.processHeapAllocatedData
+      , dataProcessor = M.processHeapAllocated
       , aggregators = viaLast
       , postProcessor = echo
       , unit = "By"
@@ -81,7 +81,7 @@ processHeapSize =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapSize"
-      , dataProcessor = M.processHeapSizeData
+      , dataProcessor = M.processHeapSize
       , aggregators = viaLast
       , postProcessor = echo
       , unit = "By"
@@ -96,7 +96,7 @@ processBlocksSize =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"blocksSize"
-      , dataProcessor = M.processBlocksSizeData
+      , dataProcessor = M.processBlocksSize
       , aggregators = viaLast
       , postProcessor = echo
       , unit = "By"
@@ -111,7 +111,7 @@ processHeapLive =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapLive"
-      , dataProcessor = M.processHeapLiveData
+      , dataProcessor = M.processHeapLive
       , aggregators = viaLast
       , postProcessor = echo
       , unit = "By"
@@ -124,7 +124,7 @@ processHeapLive =
 processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
 processMemReturn fullConfig =
   runIf (shouldComputeMemReturn fullConfig) $
-    M.liftTick M.processMemReturnData
+    M.liftTick M.processMemReturn
       ~> M.fanoutTick
         [ runMetricProcessor
             MetricProcessor
@@ -174,7 +174,7 @@ shouldComputeMemReturn fullConfig =
 processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
 processGcStats fullConfig =
   runIf (shouldComputeGcStats fullConfig) $
-    M.liftTick M.processGcStatsData
+    M.liftTick M.processGcStats
       ~> M.fanoutTick
         [ runMetricProcessor
             MetricProcessor
@@ -232,7 +232,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   runMetricProcessor
     MetricProcessor
       { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown
+      , dataProcessor = M.processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown
       , aggregators = viaLast
       , postProcessor = mapping M.heapProfSamples ~> asParts
       , unit = "By"

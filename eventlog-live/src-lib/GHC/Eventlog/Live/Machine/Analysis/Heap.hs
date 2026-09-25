@@ -9,17 +9,17 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.Analysis.Heap (
   -- * Heap Usage
-  processHeapAllocatedData,
-  processHeapSizeData,
-  processBlocksSizeData,
-  processHeapLiveData,
-  MemReturnData (..),
-  processMemReturnData,
-  GcStatsData (..),
-  processGcStatsData,
-  HeapProfSampleData,
+  processHeapAllocated,
+  processHeapSize,
+  processBlocksSize,
+  processHeapLive,
+  MemReturn (..),
+  processMemReturn,
+  GcStats (..),
+  processGcStats,
+  HeapProfSample,
   heapProfSamples,
-  processHeapProfSampleData,
+  processHeapProfSample,
 ) where
 
 import Control.Monad (unless, when)
@@ -62,8 +62,8 @@ This machine processes `E.HeapAllocated` events into metrics.
 
 This metric is the total bytes allocated over the whole run by the heap capability set.
 -}
-processHeapAllocatedData :: Process (WithStartTime Event) (Metric Word64)
-processHeapAllocatedData =
+processHeapAllocated :: Process (WithStartTime Event) (Metric Word64)
+processHeapAllocated =
   repeatedly $
     await >>= \case
       i
@@ -79,8 +79,8 @@ This machine processes `E.HeapSize` events into metrics.
 
 This metric is the current bytes allocated from the OS to use for the heap.
 -}
-processHeapSizeData :: Process (WithStartTime Event) (Metric Word64)
-processHeapSizeData = repeatedly go
+processHeapSize :: Process (WithStartTime Event) (Metric Word64)
+processHeapSize = repeatedly go
  where
   go =
     await >>= \case
@@ -95,8 +95,8 @@ processHeapSizeData = repeatedly go
 {- |
 This machine processes `E.BlocksSize` events into metrics.
 -}
-processBlocksSizeData :: Process (WithStartTime Event) (Metric Word64)
-processBlocksSizeData =
+processBlocksSize :: Process (WithStartTime Event) (Metric Word64)
+processBlocksSize =
   repeatedly $
     await >>= \case
       i
@@ -112,8 +112,8 @@ This machine processes `E.HeapLive` events into metrics.
 
 This metric is the current amount of live/reachable data in the heap.
 -}
-processHeapLiveData :: Process (WithStartTime Event) (Metric Word64)
-processHeapLiveData =
+processHeapLive :: Process (WithStartTime Event) (Metric Word64)
+processHeapLive =
   repeatedly $
     await >>= \case
       i
@@ -127,7 +127,7 @@ processHeapLiveData =
 {- |
 The type of data associated with a `E.MemReturn` event.
 -}
-data MemReturnData = MemReturnData
+data MemReturn = MemReturn
   { current :: !Word32
   -- ^ The number of megablocks currently allocated.
   , needed :: !Word32
@@ -139,19 +139,19 @@ data MemReturnData = MemReturnData
 {- |
 This machine processes `E.MemReturn` events into metrics.
 -}
-processMemReturnData :: Process (WithStartTime Event) (Metric MemReturnData)
-processMemReturnData =
+processMemReturn :: Process (WithStartTime Event) (Metric MemReturn)
+processMemReturn =
   repeatedly $
     await >>= \case
       i
         | E.MemReturn{..} <- i.value.evSpec -> do
-            yield $ metric i MemReturnData{..} []
+            yield $ metric i MemReturn{..} []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
 -- GcStats
 
-data GcStatsData = GcStatsData
+data GcStats = GcStats
   { copied :: !Word64
   -- ^ Number of bytes copied.
   , slop :: !Word64
@@ -170,14 +170,14 @@ data GcStatsData = GcStatsData
 {- |
 This machine processes `E.GCStatsGHC` events into metrics.
 -}
-processGcStatsData :: Process (WithStartTime Event) (Metric GcStatsData)
-processGcStatsData =
+processGcStats :: Process (WithStartTime Event) (Metric GcStats)
+processGcStats =
   repeatedly $
     await >>= \case
       i
         | E.GCStatsGHC{..} <- i.value.evSpec -> do
             yield $
-              metric i GcStatsData{copied, slop, fragmentation = frag} $
+              metric i GcStats{copied, slop, fragmentation = frag} $
                 ["gen" ~= gen]
         | otherwise -> pure ()
 
@@ -187,22 +187,22 @@ processGcStatsData =
 {- |
 The type of all heap profile samples from a single garbage collection pass.
 -}
-newtype HeapProfSampleData = HeapProfSampleData
+newtype HeapProfSample = HeapProfSample
   { heapProfSampleMap :: HashMap Text (Metric Word64)
   }
   deriving (Show)
   deriving newtype (Semigroup, Monoid)
 
-instance GroupBy HeapProfSampleData where
-  type Key HeapProfSampleData = ()
+instance GroupBy HeapProfSample where
+  type Key HeapProfSample = ()
 
-  toKey :: HeapProfSampleData -> ()
+  toKey :: HeapProfSample -> ()
   toKey = const ()
 
 {- |
 Get the elements of a heap profile sample collection.
 -}
-heapProfSamples :: HeapProfSampleData -> [Metric Word64]
+heapProfSamples :: HeapProfSample -> [Metric Word64]
 heapProfSamples = M.elems . (.heapProfSampleMap)
 
 {- |
@@ -215,8 +215,8 @@ insertHeapProfSampleString ::
   Logger m ->
   Text ->
   Metric Word64 ->
-  HeapProfSampleData ->
-  m HeapProfSampleData
+  HeapProfSample ->
+  m HeapProfSample
 insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData = do
   let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
       insert maybeHeapProfSample = do
@@ -233,16 +233,16 @@ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleDat
 
         pure (Just heapProfSample)
   heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSampleData.heapProfSampleMap
-  pure HeapProfSampleData{heapProfSampleMap = heapProfSampleMap'}
+  pure HeapProfSample{heapProfSampleMap = heapProfSampleMap'}
 
 {- |
 Internal helper.
-The type of the state kept by `processHeapProfSampleData`.
+The type of the state kept by `processHeapProfSample`.
 -}
 data HeapProfSampleState = HeapProfSampleState
   { eitherShouldWarnOrHeapProfBreakdown :: !(Either Bool HeapProfBreakdown)
   , heapProfSampleEraStack :: ![Word64]
-  , maybeHeapProfSampleData :: !(Maybe HeapProfSampleData)
+  , maybeHeapProfSample :: !(Maybe HeapProfSample)
   }
   deriving (Show)
 
@@ -253,22 +253,22 @@ to determine the heap profile breakdown, processes `E.InfoTableProv` events to
 build an info table map, if necessary, and processes `E.HeapProfSampleBegin`
 and `E.HeapProfSampleEnd` events to maintain an era stack.
 -}
-processHeapProfSampleData ::
+processHeapProfSample ::
   (MonadIO m) =>
   Logger m ->
   Maybe (Table InfoProvId InfoProv) ->
   Maybe HeapProfBreakdown ->
-  ProcessT m (WithStartTime Event) HeapProfSampleData
-processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
+  ProcessT m (WithStartTime Event) HeapProfSample
+processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
         { eitherShouldWarnOrHeapProfBreakdown = maybe (Left True) Right maybeHeapProfBreakdown
         , heapProfSampleEraStack = mempty
-        , maybeHeapProfSampleData = mempty
+        , maybeHeapProfSample = mempty
         }
  where
-  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) HeapProfSampleData m Void
+  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) HeapProfSample m Void
   go st@HeapProfSampleState{..} = do
     await >>= \i -> case i.value.evSpec of
       -- Announces the heap profile breakdown, amongst other things.
@@ -285,8 +285,8 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
             go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
       -- Announces the beginning of a heap profile sample.
       E.HeapProfSampleBegin{..} -> do
-        -- Check that maybeHeapProfSampleData is Nothing.
-        for_ st.maybeHeapProfSampleData $ \heapProfSampleData -> do
+        -- Check that maybeHeapProfSample is Nothing.
+        for_ st.maybeHeapProfSample $ \heapProfSampleData -> do
           let msg =
                 "Unexpected event HeapProfSampleBegin while previous garbage collection pass was left open.\n\
                 \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
@@ -298,12 +298,12 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
         go
           st
             { heapProfSampleEraStack = heapProfSampleEra : heapProfSampleEraStack
-            , maybeHeapProfSampleData = Just mempty
+            , maybeHeapProfSample = Just mempty
             }
       -- Announces the end of a heap profile sample.
       E.HeapProfSampleEnd{..} -> do
         -- Yield the previous heap profile sample data
-        for_ st.maybeHeapProfSampleData yield
+        for_ st.maybeHeapProfSample yield
         -- Pop the heapProfSampleEraStack
         heapProfSampleEraStack' <-
           case L.uncons heapProfSampleEraStack of
@@ -328,7 +328,7 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
         go
           st
             { heapProfSampleEraStack = heapProfSampleEraStack'
-            , maybeHeapProfSampleData = Nothing
+            , maybeHeapProfSample = Nothing
             }
       -- Announces a heap profile sample.
       E.HeapProfSampleString{..}
@@ -381,9 +381,9 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
                             "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipName <> "."
                       pure maybeInfoProv
                 _otherwise -> pure Nothing
-            -- Get the HeapProfSampleData
+            -- Get the HeapProfSample
             heapProfSampleData <-
-              case st.maybeHeapProfSampleData of
+              case st.maybeHeapProfSample of
                 Nothing -> do
                   let msg =
                         "Unexpected event HeapProfSampleString out of scope of HeapProfSampleBegin and HeapProfSampleEnd.\n\
@@ -392,7 +392,7 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
                   pure mempty
                 Just heapProfSampleData ->
                   pure heapProfSampleData
-            -- Update the HeapProfSampleData
+            -- Update the HeapProfSample
             let heapProfSample =
                   metric i heapProfResidency $
                     [ "heapProfBreakdown" ~= heapProfBreakdownShow heapProfBreakdown
@@ -411,8 +411,8 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
             -- Continue with the updated HeapProfSampleState
             go
               st
-                { -- Add the update HeapProfSampleData
-                  maybeHeapProfSampleData = Just heapProfSampleData'
+                { -- Add the update HeapProfSample
+                  maybeHeapProfSample = Just heapProfSampleData'
                 }
       _otherwise -> go st
 
