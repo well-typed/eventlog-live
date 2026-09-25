@@ -16,7 +16,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Capability (
   processProductivity,
 
   -- ** Capability Usage Metrics
-  processCapabilityUsageDurationData,
+  processCapabilityUsageDuration,
   CapabilityUsageDuration (..),
   processCapabilityUsageDuration'Delta,
   processCapabilityUsageDuration'DeltaToCumulative,
@@ -157,11 +157,11 @@ processProductivity =
 This machine processes t`CapabilityUsageSpan` data and produces metrics
 that contain the cumulative elapsed time for each category (idle, GC, mutator).
 -}
-processCapabilityUsageDurationData ::
+processCapabilityUsageDuration ::
   forall m.
   (Monad m) =>
   ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
-processCapabilityUsageDurationData =
+processCapabilityUsageDuration =
   processCapabilityUsageDuration'Delta
     ~> processCapabilityUsageDuration'DeltaToCumulative
 

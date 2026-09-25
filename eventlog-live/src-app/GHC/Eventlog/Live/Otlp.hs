@@ -38,13 +38,13 @@ import GHC.Eventlog.Live.Otlp.Control (ControlServerApi (..), startControlServer
 import GHC.Eventlog.Live.Otlp.Environment (OpenTelemetrySdkOptions (..), PerSignal, ServiceName (..), Signal (..), forSignal, lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.Otlp.Exporter.Core (Exporter, withExporters)
 import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs)
-import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics)
+import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics, toExportMetricsServiceRequest, toMetric, toResourceMetrics, toScopeMetrics)
 import GHC.Eventlog.Live.Otlp.Exporter.Profiles (exportResourceProfiles)
 import GHC.Eventlog.Live.Otlp.Exporter.Traces (exportResourceSpans)
 import GHC.Eventlog.Live.Otlp.Options
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core
 import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (toExportMetricsServiceRequest, toResourceMetrics, toScopeMetrics)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
 import GHC.Eventlog.Live.Otlp.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Otlp.Processor.Logs (processLogEvents)
@@ -181,7 +181,7 @@ main = do
                 processProfileEvents logger ccdb ipedb fullConfig
                   ~> mapping (fmap (fmap TelemetryData'Sample))
               ]
-            ~> M.liftTick (asResourceTelemetryData eventlogResource eventlogLiveScope)
+            ~> M.liftTick (asResourceTelemetryData fullConfig eventlogResource eventlogLiveScope)
 
     -- Create a resource to represent the eventlog-live process.
     let internalResource :: OR.Resource
@@ -202,7 +202,7 @@ main = do
         processInternalTelemetry =
           M.mergeWithTickCC (M.chanSource myTelemetryDataChan)
             ~> processInternalTelemetryData fullConfig
-            ~> M.liftTick (asResourceTelemetryData internalResource eventlogLiveScope)
+            ~> M.liftTick (asResourceTelemetryData fullConfig internalResource eventlogLiveScope)
 
     -- Create the full machine to process eventlog data.
     let processAndExportTelemetry ccdb ipedb exporters =
@@ -262,7 +262,7 @@ main = do
 
 data TelemetryData
   = TelemetryData'Log OL.LogRecord
-  | TelemetryData'Metric OM.Metric
+  | TelemetryData'Metric SomeMetric
   | TelemetryData'Span OT.Span
   | TelemetryData'Sample (Sample Stack)
 
@@ -347,10 +347,11 @@ Repack a stream of `TelemetryData` to batched `ResourceTelemetryData`.
 -}
 asResourceTelemetryData ::
   (Foldable f) =>
+  FullConfig ->
   OR.Resource ->
   OC.InstrumentationScope ->
   Process (f TelemetryData) ResourceTelemetryData
-asResourceTelemetryData resource instrumentationScope =
+asResourceTelemetryData fullConfig resource instrumentationScope =
   mapping (toResourceTelemetryData . F.toList) ~> asParts
  where
   toResourceTelemetryData ::
@@ -359,13 +360,14 @@ asResourceTelemetryData resource instrumentationScope =
   toResourceTelemetryData telemetryData =
     catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
    where
-    (logRecords, metrics, spans, samples) = partitionTelemetryData telemetryData
+    (logRecords, someMetrics, spans, samples) = partitionTelemetryData telemetryData
 
     maybeResourceLogs = do
       scopeLogs <- toScopeLogs instrumentationScope logRecords
       resourceLogs <- toResourceLogs resource [scopeLogs]
       pure $ ResourceTelemetryData'Log resourceLogs
     maybeResourceMetrics = do
+      let metrics = mapMaybe (toMetric fullConfig) someMetrics
       scopeMetrics <- toScopeMetrics instrumentationScope metrics
       resourceMetrics <- toResourceMetrics resource [scopeMetrics]
       pure $ ResourceTelemetryData'Metric resourceMetrics
@@ -383,10 +385,10 @@ asResourceTelemetryData resource instrumentationScope =
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [Sample Stack])
+partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [OT.Span], [Sample Stack])
 partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([OL.LogRecord], [OM.Metric], [OT.Span], [Sample Stack]) -> [TelemetryData] -> ([OL.LogRecord], [OM.Metric], [OT.Span], [Sample Stack])
+  go :: ([OL.LogRecord], [SomeMetric], [OT.Span], [Sample Stack]) -> [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [OT.Span], [Sample Stack])
   go (logsRev, metricsRev, spansRev, samplesRev) = \case
     [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
     (TelemetryData'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest

@@ -5,163 +5,189 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (
+  -- * Known Metrics
+  KnownMetric (..),
+  SomeMetric (..),
+
+  -- * Metric Processor
   MetricProcessor (..),
-  runMetricProcessor,
+  process,
+  processorFor,
+  processWith,
+
+  -- * Multi-Metric Processor
+  MetricProcessors (..),
+  select,
+  processAllWith,
+
+  -- * Metric Aggregatorss
   MetricAggregators (..),
   viaSum,
   viaLast,
-  asGauge,
-  asSum,
-  toScopeMetrics,
-  toResourceMetrics,
-  toExportMetricsServiceRequest,
 )
 where
 
-import Control.Monad (unless)
 import Data.Coerce (Coercible, coerce)
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Default (Default)
-import Data.Function ((&))
-import Data.Int (Int16, Int32, Int64, Int8)
-import Data.Kind (Type)
-import Data.Machine (Process, ProcessT, asParts, await, echo, mapping, repeatedly, yield, (~>))
-import Data.Maybe (fromMaybe, mapMaybe)
-import Data.ProtoLens (Message (..))
+import Data.Default (Default (..))
+import Data.Functor.Identity (Identity (..))
+import Data.Kind (Constraint, Type)
+import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
-import Data.Text (Text)
-import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
-import GHC.Eventlog.Live.Data.Metric (Metric (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetricPointKind (..), KnownMetricType (..), KnownMetricUnit, Metric (..), MetricPointKind (..), MetricUnit (..), SAggregationTemporality (..), SMetricPointKind (..))
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, runIf, toMaybeKeyValue)
-import GHC.IsList (IsList (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (Symbol)
-import Lens.Family2 ((.~))
-import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
-import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
-import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
+import GHC.TypeLits (KnownSymbol, Symbol)
 
 --------------------------------------------------------------------------------
--- Generic Metric Processor
+-- Known Metrics
+--------------------------------------------------------------------------------
 
-type MetricProcessor :: Symbol -> Type -> (Type -> Type) -> Type -> Type -> Type -> Type -> Type
-data MetricProcessor metricProcessor metricProcessorConfig m a b c d
-  = ( Monad m
-    , HasField metricProcessor C.Metrics (Maybe metricProcessorConfig)
-    , C.IsMetricProcessorConfig metricProcessorConfig
-    , IsNumberDataPoint'Value d
-    ) =>
-  MetricProcessor
-  { metricProcessorProxy :: !(Proxy metricProcessor)
-  -- ^ The metric's field name in `C.Metrics`.
-  , dataProcessor :: !(ProcessT m a b)
-  -- ^ The metric's data processor
-  , aggregators :: !(MetricAggregators b c)
-  -- ^ The metric's aggregator
-  , postProcessor :: !(ProcessT m c (Metric d))
-  -- ^ The metric's post processor
-  , unit :: !Text
-  -- ^ The metric's unit (in UCUM format).
-  , asMetric'Data :: !(ProcessT m [OM.NumberDataPoint] OM.Metric'Data)
-  -- ^ A process to wrap data points as `OM.Metric'Data`.
-  }
+type KnownMetric :: Symbol -> Constraint
+class
+  ( HasField metric C.Metrics (Maybe (ConfigOf metric))
+  , C.IsMetricProcessorConfig (ConfigOf metric)
+  , Show (ConfigOf metric)
+  , Default (ConfigOf metric)
+  , KnownSymbol metric
+  , KnownMetricType (TypeOf metric)
+  , KnownMetricPointKind (PointKindOf metric)
+  , KnownMetricUnit (UnitOf metric)
+  ) =>
+  KnownMetric metric
+  where
+  type ConfigOf metric :: Type
+  type TypeOf metric :: Type
+  type UnitOf metric :: MetricUnit
+  type PointKindOf metric :: MetricPointKind
+
+type SomeMetric :: Type
+data SomeMetric
+  = forall metric. (KnownMetric metric) => SomeMetric !(Proxy metric) [Metric (TypeOf metric)]
+
+--------------------------------------------------------------------------------
+-- Metric Processor
+--------------------------------------------------------------------------------
 
 {- |
-Internal helper.
-Run a `MetricProcessor`.
+A t`MetricProcessor` holds the building blocks for the processing pipeline for a
+single metric.
 -}
-runMetricProcessor ::
-  forall metricProcessor metricProcessorConfig m a b c d.
-  (Default metricProcessorConfig, Show metricProcessorConfig) =>
-  MetricProcessor metricProcessor metricProcessorConfig m a b c d ->
-  -- | The full configuration.
+type MetricProcessor :: Symbol -> (Type -> Type) -> Type -> Type -> Type -> Type
+data MetricProcessor metric m a b c
+  = forall f.
+  (Monad m, KnownMetric metric, Foldable f) =>
+  MetricProcessor
+  { processor :: !(ProcessT m a b)
+  -- ^ The `processor` field holds the input processor. Usually, this processes events into t`Metric`.
+  , aggregators :: !(MetricAggregators b c)
+  -- ^ The `aggregators` field holds the aggregation strategies.
+  , ungroup :: !(c -> f (Metric (TypeOf metric)))
+  -- ^ The `ungroup` function is useful when one value holds multiple metrics of the same type.
+  }
+
+process ::
+  (Monad m, KnownMetric metric) =>
+  Proxy metric ->
+  ProcessT m i (Metric (TypeOf metric)) ->
   FullConfig ->
-  ProcessT m (Tick a) (Tick (DList OM.Metric))
-runMetricProcessor MetricProcessor{..} fullConfig =
-  let metricProcessorConfig :: C.Metrics -> Maybe metricProcessorConfig
-      metricProcessorConfig = getField @metricProcessor
-   in runIf (C.processorEnabled (.metrics) metricProcessorConfig fullConfig) $
-        M.liftTick dataProcessor
-          ~> aggregate aggregators (C.processorAggregationBatches (.metrics) metricProcessorConfig fullConfig)
-          ~> M.liftTick postProcessor
-          ~> mapping (fmap (D.singleton . toNumberDataPoint))
-          ~> M.batchByTicks (C.processorExportBatches (.metrics) metricProcessorConfig fullConfig)
-          ~> M.liftTick
-            ( mapping D.toList
-                ~> asMetric'Data
-                ~> asMetricWith fullConfig metricProcessorConfig [OM.unit .~ unit]
-                ~> mapping D.singleton
-            )
-{-# INLINE runMetricProcessor #-}
+  ProcessT m (Tick i) (Tick SomeMetric)
+process (metric :: Proxy metric) processor =
+  processWith @metric (processorFor metric processor)
+{-# INLINE process #-}
 
-asMetricWith ::
-  ( Show metricProcessorConfig
-  , Default metricProcessorConfig
-  , HasField "description" metricProcessorConfig (Maybe Text)
-  , HasField "name" metricProcessorConfig (Maybe Text)
-  ) =>
+processorFor ::
+  (Monad m, KnownMetric metric) =>
+  Proxy metric ->
+  ProcessT m i (Metric (TypeOf metric)) ->
+  MetricProcessor metric m i (Metric (TypeOf metric)) (Metric (TypeOf metric))
+processorFor (metric :: Proxy metric) processor =
+  MetricProcessor{processor = processor, aggregators = aggregatorsFor metric, ungroup = Identity}
+{-# INLINE processorFor #-}
+
+processWith ::
+  forall metric m a b c.
+  MetricProcessor metric m a b c ->
   FullConfig ->
-  (C.Metrics -> Maybe metricProcessorConfig) ->
-  [OM.Metric -> OM.Metric] ->
-  Process OM.Metric'Data OM.Metric
-asMetricWith fullConfig field f =
-  asMetric $
-    [ OM.name .~ C.processorName (.metrics) field fullConfig
-    , maybe id (OM.description .~) $ C.processorDescription (.metrics) field fullConfig
-    ]
-      <> f
-
-asMetric :: [OM.Metric -> OM.Metric] -> Process OM.Metric'Data OM.Metric
-asMetric f = mapping $ toMetric f
-
-toMetric :: [OM.Metric -> OM.Metric] -> OM.Metric'Data -> OM.Metric
-toMetric f metric'data = messageWith ((OM.maybe'data' .~ Just metric'data) : f)
-
-toExportMetricsServiceRequest :: [OM.ResourceMetrics] -> OMS.ExportMetricsServiceRequest
-toExportMetricsServiceRequest = (defMessage &) . (OM.resourceMetrics .~)
-
-toResourceMetrics :: OR.Resource -> [OM.ScopeMetrics] -> Maybe OM.ResourceMetrics
-toResourceMetrics resource scopeMetrics =
-  ifNonEmpty scopeMetrics $
-    messageWith [OM.resource .~ resource, OM.scopeMetrics .~ scopeMetrics]
-
-toScopeMetrics :: OC.InstrumentationScope -> [OM.Metric] -> Maybe OM.ScopeMetrics
-toScopeMetrics instrumentationScope metrics =
-  ifNonEmpty metrics $
-    messageWith [OM.scope .~ instrumentationScope, OM.metrics .~ metrics]
-
-asGauge :: Process [OM.NumberDataPoint] OM.Metric'Data
-asGauge =
-  repeatedly $ do
-    await >>= \dataPoints ->
-      unless (null dataPoints) $
-        yield (toGauge dataPoints)
-
-toGauge :: [OM.NumberDataPoint] -> OM.Metric'Data
-toGauge dataPoints = OM.Metric'Gauge . messageWith $ [OM.dataPoints .~ dataPoints]
-
-asSum :: [OM.Sum -> OM.Sum] -> Process [OM.NumberDataPoint] OM.Metric'Data
-asSum f =
-  repeatedly $
-    await >>= \dataPoints ->
-      unless (null dataPoints) $
-        yield (toSum f dataPoints)
-
-toSum :: [OM.Sum -> OM.Sum] -> [OM.NumberDataPoint] -> OM.Metric'Data
-toSum f dataPoints = OM.Metric'Sum . messageWith $ (OM.dataPoints .~ dataPoints) : f
+  ProcessT m (Tick a) (Tick SomeMetric)
+processWith MetricProcessor{..} fullConfig =
+  let metricConfig :: C.Metrics -> Maybe (ConfigOf metric)
+      metricConfig = getField @metric
+   in runIf (C.processorEnabled (.metrics) metricConfig fullConfig) $
+        M.liftTick processor
+          ~> aggregate aggregators (C.processorAggregationBatches (.metrics) metricConfig fullConfig)
+          ~> M.liftTick (mapping ungroup ~> asParts ~> mapping D.singleton)
+          ~> M.batchByTicks (C.processorExportBatches (.metrics) metricConfig fullConfig)
+          ~> M.liftTick (mapping $ SomeMetric (Proxy @metric) . D.toList)
+{-# INLINE processWith #-}
 
 --------------------------------------------------------------------------------
--- Metric Aggregation
+-- Multi-Metric Processor
+--------------------------------------------------------------------------------
+
+infixr 6 :&:
+
+{- |
+A t`MetricProcessors` holds a series of t`MetricProcessor`s that work from the same input type.
+-}
+type MetricProcessors :: [Symbol] -> (Type -> Type) -> Type -> Type
+data MetricProcessors metrics m a where
+  End ::
+    MetricProcessors '[] m i
+  (:&:) ::
+    forall metric metrics m i a b.
+    (KnownMetric metric) =>
+    (MetricProcessor metric m i a b) ->
+    MetricProcessors metrics m i ->
+    MetricProcessors (metric ': metrics) m i
+
+{- |
+Check if /any/ of the t`MetricProcessors` is enabled.
+-}
+anyProcessorEnabled :: FullConfig -> MetricProcessors metrics m i -> Bool
+anyProcessorEnabled _fullConfig End = False
+anyProcessorEnabled fullConfig ((:&:) @metric _ rest) = C.processorEnabled (.metrics) (getField @metric) fullConfig || anyProcessorEnabled fullConfig rest
+
+select ::
+  (Monad m, KnownMetric metric) =>
+  Proxy metric ->
+  (i -> TypeOf metric) ->
+  MetricProcessor metric m (Metric i) (Metric (TypeOf metric)) (Metric (TypeOf metric))
+select (metric :: Proxy metric) f =
+  MetricProcessor{processor = mapping (fmap f), aggregators = aggregatorsFor metric, ungroup = Identity}
+{-# INLINE select #-}
+
+processAllWith ::
+  forall metrics m i a.
+  (Monad m) =>
+  -- | The full configuration.
+  FullConfig ->
+  ProcessT m i a ->
+  MetricProcessors metrics m a ->
+  ProcessT m (Tick i) (Tick (DList SomeMetric))
+processAllWith fullConfig preprocessor processors =
+  runIf (anyProcessorEnabled fullConfig processors) $
+    M.liftTick preprocessor
+      ~> M.fanoutTick
+        [ processor ~> M.liftTick (mapping D.singleton)
+        | processor <- processAllWith' processors
+        ]
+ where
+  processAllWith' :: MetricProcessors metrics' m a -> [ProcessT m (Tick a) (Tick SomeMetric)]
+  processAllWith' End = []
+  processAllWith' (p :&: ps) = processWith p fullConfig : processAllWith' ps
+
+--------------------------------------------------------------------------------
+-- Metric Aggregators
+--------------------------------------------------------------------------------
 
 data MetricAggregators a b = MetricAggregators
   { nothing :: Process (Tick a) (Tick b)
@@ -170,6 +196,22 @@ data MetricAggregators a b = MetricAggregators
 
 {- |
 Internal helper.
+
+Get the aggregator for a known metric, based on its known `MetricPointKind`.
+-}
+aggregatorsFor ::
+  (KnownMetric metric) =>
+  Proxy metric ->
+  MetricAggregators (Metric (TypeOf metric)) (Metric (TypeOf metric))
+aggregatorsFor (_metric :: Proxy metric) =
+  case metricPointKindSing (Proxy @(PointKindOf metric)) of
+    SGauge -> viaLast
+    SSum SCumulative _sMonotonicity -> viaLast
+    SSum SDelta _sMonotonicity -> viaSum
+
+{- |
+Internal helper.
+
 Aggregate items based on the provided aggregators and aggregation strategy.
 -}
 aggregate :: MetricAggregators a b -> Int -> Process (Tick a) (Tick b)
@@ -179,6 +221,7 @@ aggregate MetricAggregators{..} aggregationBatches
 
 {- |
 Internal helper.
+
 Metric aggregators via the `Semigroup` instance for `Sum`.
 -}
 viaSum :: forall a. (Num a) => MetricAggregators (Metric a) (Metric a)
@@ -193,6 +236,7 @@ viaSum =
 
 {- |
 Internal helper.
+
 Metric aggregators via the `Semigroup` instance for `Last`.
 -}
 viaLast :: forall a. (GroupBy a) => MetricAggregators a a
@@ -207,6 +251,7 @@ viaLast =
 
 {- |
 Internal helper.
+
 This function aggregates items via a `Semigroup` instance and grouped by the `GroupBy` instance.
 -}
 batchByTicksVia ::
@@ -220,73 +265,3 @@ batchByTicksVia ticks (Proxy :: Proxy b) =
   mapping (fmap DG.singleton . coerce @(Tick a) @(Tick b))
     ~> M.batchByTicks @(GroupedBy b) ticks
     ~> M.liftTick (mapping (coerce @[Group b] @[Group a] . DG.groups))
-
-{- |
-Internal helper.
-Convert a metric datapoint to an `OM.NumberDataPoint`.
--}
-toNumberDataPoint :: (IsNumberDataPoint'Value v) => Metric v -> OM.NumberDataPoint
-toNumberDataPoint i =
-  messageWith
-    [ OM.maybe'value .~ Just (toNumberDataPoint'Value i.value)
-    , OM.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , OM.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
-    , OM.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
-    ]
-
-{- |
-Internal helper.
-Class of types that can be converted to `OM.NumberDataPoint'Value` values.
--}
-class IsNumberDataPoint'Value v where
-  toNumberDataPoint'Value :: v -> OM.NumberDataPoint'Value
-
-instance IsNumberDataPoint'Value Float where
-  toNumberDataPoint'Value :: Float -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble . realToFrac
-
-instance IsNumberDataPoint'Value Double where
-  toNumberDataPoint'Value :: Double -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsDouble
-
-instance IsNumberDataPoint'Value Word8 where
-  toNumberDataPoint'Value :: Word8 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Word16 where
-  toNumberDataPoint'Value :: Word16 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Word32 where
-  toNumberDataPoint'Value :: Word32 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
--- | __Warning__: This instance may cause overflow.
-instance IsNumberDataPoint'Value Word64 where
-  toNumberDataPoint'Value :: Word64 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
--- | __Warning__: This instance may cause overflow.
-instance IsNumberDataPoint'Value Word where
-  toNumberDataPoint'Value :: Word -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int8 where
-  toNumberDataPoint'Value :: Int8 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int16 where
-  toNumberDataPoint'Value :: Int16 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int32 where
-  toNumberDataPoint'Value :: Int32 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral
-
-instance IsNumberDataPoint'Value Int64 where
-  toNumberDataPoint'Value :: Int64 -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt
-
-instance IsNumberDataPoint'Value Int where
-  toNumberDataPoint'Value :: Int -> OM.NumberDataPoint'Value
-  toNumberDataPoint'Value = OM.NumberDataPoint'AsInt . fromIntegral

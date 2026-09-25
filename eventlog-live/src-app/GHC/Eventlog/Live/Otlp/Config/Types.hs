@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otlp.Config.Types
@@ -915,8 +914,8 @@ genericParseYAMLLogProcessorConfig ::
   (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> logProcessorConfig) ->
   YAML.Node YAML.Pos ->
   YAML.Parser logProcessorConfig
-genericParseYAMLLogProcessorConfig log mkLogProcessorConfig =
-  YAML.withMap log $ \m ->
+genericParseYAMLLogProcessorConfig log_ mkLogProcessorConfig =
+  YAML.withMap log_ $ \m ->
     mkLogProcessorConfig
       <$> m .:? "name"
       <*> m .:? "description"
