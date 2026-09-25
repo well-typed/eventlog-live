@@ -80,9 +80,8 @@ This machine processes `E.HeapSize` events into metrics.
 This metric is the current bytes allocated from the OS to use for the heap.
 -}
 processHeapSize :: Process (WithStartTime Event) (Metric Word64)
-processHeapSize = repeatedly go
- where
-  go =
+processHeapSize =
+  repeatedly $
     await >>= \case
       i
         | E.HeapSize{..} <- i.value.evSpec -> do
