@@ -124,12 +124,14 @@ common language
     NumericUnderscores
     OverloadedRecordDot
     PatternSynonyms
+    PolyKinds
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
     StandaloneKindSignatures
     TupleSections
+    TypeAbstractions
     TypeApplications
     TypeFamilies
     TypeOperators

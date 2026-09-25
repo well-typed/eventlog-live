@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otlp.Processor.Heap
@@ -13,8 +13,11 @@ where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
-import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
+import Data.DList qualified as D
+import Data.Machine (Process, ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
+import Data.Word (Word32, Word64)
+import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), MetricPointKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
@@ -23,14 +26,10 @@ import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
-import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.InfoProv qualified as IP
-import Lens.Family2 ((.~))
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 
 --------------------------------------------------------------------------------
 -- processHeapEvents
@@ -42,184 +41,141 @@ processHeapEvents ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
 processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig =
   M.fanoutTick
     [ processHeapAllocated fullConfig
-    , processBlocksSize fullConfig
+        ~> M.liftTick (mapping D.singleton)
     , processHeapSize fullConfig
+        ~> M.liftTick (mapping D.singleton)
+    , processBlocksSize fullConfig
+        ~> M.liftTick (mapping D.singleton)
     , processHeapLive fullConfig
+        ~> M.liftTick (mapping D.singleton)
     , processMemReturn fullConfig
     , processGcStats fullConfig
     , processHeapProfSample verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
+        ~> M.liftTick (mapping D.singleton)
     ]
 
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+instance KnownMetric "heapAllocated" where
+  type ConfigOf "heapAllocated" = C.HeapAllocatedMetric
+  type TypeOf "heapAllocated" = Word64
+  type UnitOf "heapAllocated" = 'Byte
+  type PointKindOf "heapAllocated" = 'Sum 'Cumulative 'Monotonic
+
+processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapAllocated =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapAllocated"
-      , dataProcessor = M.processHeapAllocated
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data =
-          asSum
-            [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
-            , OM.isMonotonic .~ True
-            ]
-      }
+  process (Proxy @"heapAllocated") M.processHeapAllocated
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+instance KnownMetric "heapSize" where
+  type ConfigOf "heapSize" = C.HeapSizeMetric
+  type TypeOf "heapSize" = Word64
+  type UnitOf "heapSize" = 'Byte
+  type PointKindOf "heapSize" = 'Gauge
+
+processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapSize =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapSize"
-      , dataProcessor = M.processHeapSize
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
+  process (Proxy @"heapSize") M.processHeapSize
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+instance KnownMetric "blocksSize" where
+  type ConfigOf "blocksSize" = C.BlocksSizeMetric
+  type TypeOf "blocksSize" = Word64
+  type UnitOf "blocksSize" = 'Byte
+  type PointKindOf "blocksSize" = 'Gauge
+
+processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processBlocksSize =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"blocksSize"
-      , dataProcessor = M.processBlocksSize
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
+  process (Proxy @"blocksSize") M.processBlocksSize
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+instance KnownMetric "heapLive" where
+  type ConfigOf "heapLive" = C.HeapLiveMetric
+  type TypeOf "heapLive" = Word64
+  type UnitOf "heapLive" = 'Byte
+  type PointKindOf "heapLive" = 'Gauge
+
+processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapLive =
-  runMetricProcessor
-    MetricProcessor
-      { metricProcessorProxy = Proxy @"heapLive"
-      , dataProcessor = M.processHeapLive
-      , aggregators = viaLast
-      , postProcessor = echo
-      , unit = "By"
-      , asMetric'Data = asGauge
-      }
+  process (Proxy @"heapLive") M.processHeapLive
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processMemReturn fullConfig =
-  runIf (shouldComputeMemReturn fullConfig) $
-    M.liftTick M.processMemReturn
-      ~> M.fanoutTick
-        [ runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"memCurrent"
-              , dataProcessor = mapping (fmap (.current))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "{mblock}"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        , runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"memNeeded"
-              , dataProcessor = mapping (fmap (.needed))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "{mblock}"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        , runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"memReturned"
-              , dataProcessor = mapping (fmap (.returned))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "{mblock}"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        ]
+instance KnownMetric "memCurrent" where
+  type ConfigOf "memCurrent" = C.MemCurrentMetric
+  type TypeOf "memCurrent" = Word32
+  type UnitOf "memCurrent" = 'MegaBlock
+  type PointKindOf "memCurrent" = 'Gauge
 
-{- |
-Internal helper.
-Determine whether the MemReturn data should be computed.
--}
-shouldComputeMemReturn :: FullConfig -> Bool
-shouldComputeMemReturn fullConfig =
-  C.processorEnabled (.metrics) (.memCurrent) fullConfig
-    || C.processorEnabled (.metrics) (.memNeeded) fullConfig
-    || C.processorEnabled (.metrics) (.memReturned) fullConfig
+instance KnownMetric "memNeeded" where
+  type ConfigOf "memNeeded" = C.MemNeededMetric
+  type TypeOf "memNeeded" = Word32
+  type UnitOf "memNeeded" = 'MegaBlock
+  type PointKindOf "memNeeded" = 'Gauge
+
+instance KnownMetric "memReturned" where
+  type ConfigOf "memReturned" = C.MemReturnedMetric
+  type TypeOf "memReturned" = Word32
+  type UnitOf "memReturned" = 'MegaBlock
+  type PointKindOf "memReturned" = 'Gauge
+
+processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
+processMemReturn fullConfig =
+  processAllWith fullConfig M.processMemReturn $
+    select (Proxy @"memCurrent") (.current)
+      :&: select (Proxy @"memNeeded") (.needed)
+      :&: select (Proxy @"memReturned") (.returned)
+      :&: End
 
 --------------------------------------------------------------------------------
 -- GcStats
 
-processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
-processGcStats fullConfig =
-  runIf (shouldComputeGcStats fullConfig) $
-    M.liftTick M.processGcStats
-      ~> M.fanoutTick
-        [ runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"gcCopied"
-              , dataProcessor = mapping (fmap (.copied))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "By"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        , runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"gcSlop"
-              , dataProcessor = mapping (fmap (.slop))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "By"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        , runMetricProcessor
-            MetricProcessor
-              { metricProcessorProxy = Proxy @"gcFragmentation"
-              , dataProcessor = mapping (fmap (.fragmentation))
-              , aggregators = viaLast
-              , postProcessor = echo
-              , unit = "By"
-              , asMetric'Data = asGauge
-              }
-            fullConfig
-        ]
+instance KnownMetric "gcCopied" where
+  type ConfigOf "gcCopied" = C.GcCopiedMetric
+  type TypeOf "gcCopied" = Word64
+  type UnitOf "gcCopied" = 'Byte
+  type PointKindOf "gcCopied" = 'Gauge
 
-{- |
-Internal helper.
-Determine whether the MemReturn data should be computed.
--}
-shouldComputeGcStats :: FullConfig -> Bool
-shouldComputeGcStats fullConfig =
-  C.processorEnabled (.metrics) (.gcCopied) fullConfig
-    || C.processorEnabled (.metrics) (.gcSlop) fullConfig
-    || C.processorEnabled (.metrics) (.gcFragmentation) fullConfig
+instance KnownMetric "gcSlop" where
+  type ConfigOf "gcSlop" = C.GcSlopMetric
+  type TypeOf "gcSlop" = Word64
+  type UnitOf "gcSlop" = 'Byte
+  type PointKindOf "gcSlop" = 'Gauge
+
+instance KnownMetric "gcFragmentation" where
+  type ConfigOf "gcFragmentation" = C.GcFragmentationMetric
+  type TypeOf "gcFragmentation" = Word64
+  type UnitOf "gcFragmentation" = 'Byte
+  type PointKindOf "gcFragmentation" = 'Gauge
+
+processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
+processGcStats fullConfig =
+  processAllWith fullConfig M.processGcStats $
+    select (Proxy @"gcCopied") (.copied)
+      :&: select (Proxy @"gcSlop") (.slop)
+      :&: select (Proxy @"gcFragmentation") (.fragmentation)
+      :&: End
 
 --------------------------------------------------------------------------------
 -- HeapProfSample
+
+instance KnownMetric "heapProfSample" where
+  type ConfigOf "heapProfSample" = C.HeapProfSampleMetric
+  type TypeOf "heapProfSample" = Word64
+  type UnitOf "heapProfSample" = 'Byte
+  type PointKindOf "heapProfSample" = 'Gauge
 
 processHeapProfSample ::
   (MonadIO m) =>
@@ -227,14 +183,11 @@ processHeapProfSample ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OM.Metric))
+  ProcessT m (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
-  runMetricProcessor
+  processWith @"heapProfSample"
     MetricProcessor
-      { metricProcessorProxy = Proxy @"heapProfSample"
-      , dataProcessor = M.processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown
+      { processor = M.processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown
       , aggregators = viaLast
-      , postProcessor = mapping M.heapProfSamples ~> asParts
-      , unit = "By"
-      , asMetric'Data = asGauge
+      , ungroup = M.heapProfSamples
       }

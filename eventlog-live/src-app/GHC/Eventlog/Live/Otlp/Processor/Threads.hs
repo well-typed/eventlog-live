@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Otlp.Processor.Threads
@@ -14,9 +14,10 @@ where
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Machine (ProcessT, asParts, echo, mapping, (~>))
+import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
+import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), MetricPointKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Data.Metric qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -28,13 +29,22 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (MetricProcessor (..), asGauge, asSum, runMetricProcessor, viaLast)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (KnownMetric (..), SomeMetric, process)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
-import GHC.RTS.Events (Event (..))
-import Lens.Family2 ((.~))
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
-import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
+import GHC.RTS.Events (Event (..), Timestamp)
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
+
+instance KnownMetric "capabilityUsage" where
+  type ConfigOf "capabilityUsage" = C.CapabilityUsageMetric
+  type TypeOf "capabilityUsage" = Timestamp
+  type UnitOf "capabilityUsage" = 'NanoSecond
+  type PointKindOf "capabilityUsage" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "productivity" where
+  type ConfigOf "productivity" = C.ProductivityMetric
+  type TypeOf "productivity" = Double
+  type UnitOf "productivity" = 'Percent
+  type PointKindOf "productivity" = 'Gauge
 
 data OneOf a b c = A !a | B !b | C !c
 
@@ -42,7 +52,7 @@ processThreadEvents ::
   (MonadIO m) =>
   Logger m ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either OM.Metric OT.Span)))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either SomeMetric OT.Span)))
 processThreadEvents verbosity fullConfig =
   runIf (shouldProcessThreadEvents fullConfig) $
     M.sortByTicks (.value.evTime) fullConfig.eventlogFlushIntervalX
@@ -71,32 +81,12 @@ processThreadEvents verbosity fullConfig =
                 ~> asParts
             )
             ~> M.fanoutTick
-              [ M.liftTick M.processCapabilityUsageDurationData
+              [ M.liftTick M.processCapabilityUsageDuration
                   ~> M.fanoutTick
-                    [ runMetricProcessor
-                        MetricProcessor
-                          { metricProcessorProxy = Proxy @"capabilityUsage"
-                          , dataProcessor = mapping M.toMetric
-                          , aggregators = viaLast
-                          , postProcessor = echo
-                          , unit = "ns"
-                          , asMetric'Data =
-                              asSum
-                                [ OM.aggregationTemporality .~ OM.AGGREGATION_TEMPORALITY_CUMULATIVE
-                                , OM.isMonotonic .~ True
-                                ]
-                          }
-                        fullConfig
-                    , runMetricProcessor
-                        MetricProcessor
-                          { metricProcessorProxy = Proxy @"productivity"
-                          , dataProcessor = M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)
-                          , aggregators = viaLast
-                          , postProcessor = echo
-                          , unit = "%"
-                          , asMetric'Data = asGauge
-                          }
-                        fullConfig
+                    [ process (Proxy @"capabilityUsage") (mapping M.toMetric) fullConfig
+                        ~> M.liftTick (mapping D.singleton)
+                    , process (Proxy @"productivity") (M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)) fullConfig
+                        ~> M.liftTick (mapping D.singleton)
                     ]
                   ~> mapping (fmap (fmap Left))
               , runIf (C.processorEnabled (.traces) (.capabilityUsage) fullConfig) $
