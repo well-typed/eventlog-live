@@ -32,6 +32,7 @@ import Data.Text qualified as Text
 import Data.Traversable.Compat (mapAccumM)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Data.Word (Word16, Word32)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, HasAttrs (..), (~=))
 import GHC.Eventlog.Live.Data.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
@@ -288,7 +289,7 @@ processProfSampleCostCentreData logger costCentreTable =
           costCentreStack <- V.zipWithM warnIfNotFound costCentreIds maybeCostCentres
 
           -- Yield the cost centre stack.
-          let !capNo = CapNo profCap
+          let !capNo = CapNo $ fromIntegral @Word16 @Word32 profCap
           let !maybeTimeUnixNano = tryGetTimeUnixNano i
           yield CostCentreStack{..}
         _otherwise -> pure ()
