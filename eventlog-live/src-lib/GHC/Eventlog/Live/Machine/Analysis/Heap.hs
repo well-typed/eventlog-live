@@ -70,7 +70,6 @@ processHeapAllocatedData =
             yield $
               metric i allocBytes $
                 [ "evCap" ~= i.value.evCap
-                , "heapCapset" ~= heapCapset
                 ]
         | otherwise -> pure ()
 
@@ -92,7 +91,6 @@ processHeapSizeData = repeatedly go
             yield $
               metric i sizeBytes $
                 [ "evCap" ~= i.value.evCap
-                , "heapCapset" ~= heapCapset
                 ]
         | otherwise -> pure ()
 
@@ -111,7 +109,6 @@ processBlocksSizeData =
             yield $
               metric i blocksSize $
                 [ "evCap" ~= i.value.evCap
-                , "heapCapset" ~= heapCapset
                 ]
         | otherwise -> pure ()
 
@@ -132,7 +129,6 @@ processHeapLiveData =
             yield $
               metric i liveBytes $
                 [ "evCap" ~= i.value.evCap
-                , "heapCapset" ~= heapCapset
                 ]
         | otherwise -> pure ()
 
@@ -163,7 +159,6 @@ processMemReturnData =
             yield $
               metric i MemReturnData{..} $
                 [ "evCap" ~= i.value.evCap
-                , "heapCapset" ~= heapCapset
                 ]
         | otherwise -> pure ()
 
@@ -198,7 +193,6 @@ processGcStatsData =
             yield $
               metric i GcStatsData{copied, slop, fragmentation = frag} $
                 [ "evCap" ~= i.value.evCap
-                , "heapCapset" ~= heapCapset
                 , "gen" ~= gen
                 ]
         | otherwise -> pure ()
