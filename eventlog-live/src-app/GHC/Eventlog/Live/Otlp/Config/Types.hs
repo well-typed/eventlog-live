@@ -328,7 +328,7 @@ instance ToYAML ThreadLabel where
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processStackFrame'Message`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessage`.
 -}
 data UserMessage = UserMessage
   { name :: Maybe Text
