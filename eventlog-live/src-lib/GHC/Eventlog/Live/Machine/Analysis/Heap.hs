@@ -35,6 +35,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
+import GHC.Eventlog.Live.Data.Capability (evCapNo)
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.Eventlog.Live.Data.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
 import GHC.Eventlog.Live.Data.Metric (Metric (..))
@@ -68,9 +69,7 @@ processHeapAllocatedData =
       i
         | E.HeapAllocated{..} <- i.value.evSpec ->
             yield $
-              metric i allocBytes $
-                [ "evCap" ~= i.value.evCap
-                ]
+              metric i allocBytes []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -89,9 +88,7 @@ processHeapSizeData = repeatedly go
       i
         | E.HeapSize{..} <- i.value.evSpec -> do
             yield $
-              metric i sizeBytes $
-                [ "evCap" ~= i.value.evCap
-                ]
+              metric i sizeBytes []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -107,9 +104,7 @@ processBlocksSizeData =
       i
         | E.BlocksSize{..} <- i.value.evSpec -> do
             yield $
-              metric i blocksSize $
-                [ "evCap" ~= i.value.evCap
-                ]
+              metric i blocksSize []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -127,9 +122,7 @@ processHeapLiveData =
       i
         | E.HeapLive{..} <- i.value.evSpec -> do
             yield $
-              metric i liveBytes $
-                [ "evCap" ~= i.value.evCap
-                ]
+              metric i liveBytes []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -157,9 +150,7 @@ processMemReturnData =
       i
         | E.MemReturn{..} <- i.value.evSpec -> do
             yield $
-              metric i MemReturnData{..} $
-                [ "evCap" ~= i.value.evCap
-                ]
+              metric i MemReturnData{..} []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -192,9 +183,7 @@ processGcStatsData =
         | E.GCStatsGHC{..} <- i.value.evSpec -> do
             yield $
               metric i GcStatsData{copied, slop, fragmentation = frag} $
-                [ "evCap" ~= i.value.evCap
-                , "gen" ~= gen
-                ]
+                ["gen" ~= gen]
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -411,8 +400,7 @@ processHeapProfSampleData logger maybeInfoProvTable maybeHeapProfBreakdown =
             -- Update the HeapProfSampleData
             let heapProfSample =
                   metric i heapProfResidency $
-                    [ "evCap" ~= i.value.evCap
-                    , "heapProfBreakdown" ~= heapProfBreakdownShow heapProfBreakdown
+                    [ "heapProfBreakdown" ~= heapProfBreakdownShow heapProfBreakdown
                     , "heapProfId" ~= heapProfId
                     , "heapProfLabel" ~= heapProfLabel
                     , "heapProfSampleEra" ~= (fst <$> L.uncons heapProfSampleEraStack)
@@ -452,5 +440,5 @@ metric i v attrs =
     { value = v
     , maybeTimeUnixNano = tryGetTimeUnixNano i
     , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
-    , attrs = attrs
+    , attrs = ["capNo" ~= evCapNo i.value] <> attrs
     }
