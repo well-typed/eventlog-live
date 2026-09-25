@@ -18,7 +18,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Thread (
   ThreadState (..),
   showThreadStateCategory,
   threadStateStatus,
-  threadStateCap,
+  threadStateCapNo,
   ThreadStateSpan (..),
   processThreadStateSpans,
   processThreadStateSpans',
@@ -31,6 +31,7 @@ import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
+import GHC.Eventlog.Live.Data.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
@@ -74,7 +75,7 @@ processThreadLabelData = repeatedly go
 The execution states of a mutator thread.
 -}
 data ThreadState
-  = Running {cap :: !Int}
+  = Running {capNo :: !CapNo}
   | Blocked {status :: !ThreadStopStatus}
   | Finished
   deriving (Show)
@@ -100,9 +101,9 @@ threadStateStatus = \case
 {- |
 Get the t`ThreadState` capability, if the `ThreadState` is `Running`.
 -}
-threadStateCap :: ThreadState -> Maybe Int
-threadStateCap = \case
-  Running{cap} -> Just cap
+threadStateCapNo :: ThreadState -> Maybe CapNo
+threadStateCapNo = \case
+  Running{capNo} -> Just capNo
   Blocked{} -> Nothing
   Finished{} -> Nothing
 
@@ -168,7 +169,7 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
  where
   getEventTime = (.evTime) . getEvent
   getEventInfo = (.evSpec) . getEvent
-  getEventCap = (.evCap) . getEvent
+  getEventCapNo = evCapNo . getEvent
 
   measure :: s -> Maybe ThreadId
   measure i = case getEventInfo i of
@@ -245,14 +246,14 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
           , -- ...the previous event was a `E.RunThread` event, then...
             Just E.RunThread{} <- getEventInfo <$> mi
           , -- ...gather the capability of the `E.RunThread` event, and...
-            Just cap <- getEventCap =<< mi
+            Just capNo <- getEventCapNo =<< mi
           , -- ...gather the end time of the previous event, and...
             Just startTimeUnixNano <- timeUnixNano =<< mi
           , -- ...gather the start time of the current event, and...
             Just endTimeUnixNano <- timeUnixNano j -> do
               -- ...yield a thread state span, and...
               yield . setThreadStateSpan j $
-                ThreadStateSpan{threadState = Running cap, ..}
+                ThreadStateSpan{threadState = Running capNo, ..}
               -- ...keep the current event.
               go (Just j)
           --

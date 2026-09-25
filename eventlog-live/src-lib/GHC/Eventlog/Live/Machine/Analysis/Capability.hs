@@ -55,6 +55,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Data.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
+import GHC.Eventlog.Live.Data.Capability (CapNo (..), evCapNo)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
@@ -80,7 +81,7 @@ data Productivity = Productivity
   , mutator :: !Timestamp
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
-  , cap :: Int
+  , capNo :: CapNo
   }
 
 instance HasField "value" Productivity Double where
@@ -91,7 +92,7 @@ instance HasField "value" Productivity Double where
 instance HasField "attrs" Productivity Attrs where
   getField :: Productivity -> Attrs
   getField Productivity{..} =
-    ["cap" ~= cap]
+    ["capNo" ~= capNo]
 
 instance Semigroup Productivity where
   (<>) :: Productivity -> Productivity -> Productivity
@@ -101,7 +102,7 @@ instance Semigroup Productivity where
       , mutator = max x.mutator y.mutator
       , maybeTimeUnixNano = getMax <$> (Max <$> x.maybeTimeUnixNano) <> (Max <$> y.maybeTimeUnixNano)
       , maybeStartTimeUnixNano = getMax <$> (Max <$> x.maybeStartTimeUnixNano) <> (Max <$> y.maybeStartTimeUnixNano)
-      , cap = assert (x.cap == y.cap) x.cap
+      , capNo = assert (x.capNo == y.capNo) x.capNo
       }
 
 {- |
@@ -127,11 +128,11 @@ processProductivity =
   liftRouter measure spawn
  where
   -- This measure splits the input by capability.
-  measure :: CapabilityUsageDuration Timestamp -> Maybe Int
-  measure cud = Just cud.cap
+  measure :: CapabilityUsageDuration Timestamp -> Maybe CapNo
+  measure cud = Just cud.capNo
 
-  spawn :: Int -> ProcessT m (CapabilityUsageDuration Timestamp) Productivity
-  spawn _cap = construct $ go Nothing
+  spawn :: CapNo -> ProcessT m (CapabilityUsageDuration Timestamp) Productivity
+  spawn _capNo = construct $ go Nothing
    where
     go ::
       Maybe Productivity ->
@@ -175,7 +176,7 @@ data CapabilityUsageDuration a
   { value :: !a
   , maybeTimeUnixNano :: !(Maybe Timestamp)
   , maybeStartTimeUnixNano :: !(Maybe Timestamp)
-  , cap :: !Int
+  , capNo :: !CapNo
   , usage :: !(Maybe CapabilityUser)
   {- ^
   If the capability is actively used, this value is `Just` a `CapabilityUser`.
@@ -187,7 +188,7 @@ data CapabilityUsageDuration a
 instance HasField "attrs" (CapabilityUsageDuration a) Attrs where
   getField :: CapabilityUsageDuration a -> Attrs
   getField CapabilityUsageDuration{..} =
-    [ "cap" ~= cap
+    [ "capNo" ~= capNo
     , "category" ~= maybe "Idle" showCapabilityUserCategory usage
     , "user" ~= usage
     ]
@@ -209,8 +210,8 @@ processCapabilityUsageDuration'DeltaToCumulative =
   -- 1. The `Int` represents the capability.
   -- 2. The `Maybe CapabilityUser` represents the usage category.
   --
-  measure :: CapabilityUsageDuration Timestamp -> Maybe (Int, Maybe CapabilityUser)
-  measure cud = Just (cud.cap, cud.usage)
+  measure :: CapabilityUsageDuration Timestamp -> Maybe (CapNo, Maybe CapabilityUser)
+  measure cud = Just (cud.capNo, cud.usage)
 
 {- |
 This machine processes t`CapabilityUsageSpan` spans and produces metrics that
@@ -224,11 +225,11 @@ processCapabilityUsageDuration'Delta ::
 processCapabilityUsageDuration'Delta =
   liftRouter measure spawn
  where
-  measure :: WithStartTime CapabilityUsageSpan -> Maybe Int
-  measure = Just . (.value.cap)
+  measure :: WithStartTime CapabilityUsageSpan -> Maybe CapNo
+  measure = Just . (.value.capNo)
 
-  spawn :: Int -> ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
-  spawn cap = construct $ go Nothing
+  spawn :: CapNo -> ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
+  spawn capNo = construct $ go Nothing
    where
     go ::
       Maybe CapabilityUsageSpan ->
@@ -245,7 +246,7 @@ processCapabilityUsageDuration'Delta =
                 { value = j.value.startTimeUnixNano - i.endTimeUnixNano
                 , maybeTimeUnixNano = Just i.endTimeUnixNano
                 , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-                , cap = cap
+                , capNo = capNo
                 , usage = Nothing -- Idle
                 }
         -- Yield a duration metric for the current span.
@@ -254,7 +255,7 @@ processCapabilityUsageDuration'Delta =
             { value = duration j.value
             , maybeTimeUnixNano = Just j.value.startTimeUnixNano
             , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
-            , cap = cap
+            , capNo = capNo
             , usage = Just $! capabilityUser j.value
             }
         go (Just j.value)
@@ -311,9 +312,9 @@ instance HasField "endTimeUnixNano" CapabilityUsageSpan Timestamp where
   getField :: CapabilityUsageSpan -> Timestamp
   getField = either (.endTimeUnixNano) (.endTimeUnixNano)
 
-instance HasField "cap" CapabilityUsageSpan Int where
-  getField :: CapabilityUsageSpan -> Int
-  getField = either (.cap) (.cap)
+instance HasField "capNo" CapabilityUsageSpan CapNo where
+  getField :: CapabilityUsageSpan -> CapNo
+  getField = either (.capNo) (.capNo)
 
 {-# SPECIALIZE duration :: CapabilityUsageSpan -> Timestamp #-}
 
@@ -370,7 +371,7 @@ A t`GCSpan` represents a segment of time during which the specified capability
 ran GC.
 -}
 data GCSpan = GCSpan
-  { cap :: !Int
+  { capNo :: !CapNo
   , startTimeUnixNano :: !Timestamp
   , endTimeUnixNano :: !Timestamp
   }
@@ -423,11 +424,11 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
  where
   getEventTime = (.evTime) . getEvent
   getEventInfo = (.evSpec) . getEvent
-  getEventCap = (.evCap) . getEvent
+  getEventCapNo = evCapNo . getEvent
 
-  measure :: s -> Maybe Int
+  measure :: s -> Maybe CapNo
   measure i
-    | accept (getEventInfo i) = getEventCap i
+    | accept (getEventInfo i) = getEventCapNo i
     | otherwise = Nothing
    where
     accept E.StartGC{} = True
@@ -435,8 +436,8 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
     accept _ = False
 
   -- TODO: Rewrite using `MealyT`
-  spawn :: Int -> ProcessT m s t
-  spawn cap = construct $ go Nothing
+  spawn :: CapNo -> ProcessT m s t
+  spawn capNo = construct $ go Nothing
    where
     -- The "mi" variable tracks the previous event for this capability, which
     -- is either `Nothing` or `Just` a `StartGC` or a `EndGC` event.
@@ -462,7 +463,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
                       T.pack $
                         printf
                           "Capability %d: Unsupported trace %s --> %s"
-                          cap
+                          capNo.value
                           (showEventInfo (getEventInfo i))
                           (showEventInfo (getEventInfo j))
                 lift $ writeLog logger WARN $ msg
@@ -494,7 +495,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
                   T.pack $
                     printf
                       "Capability %d: Unsupported trace %s --> %s"
-                      cap
+                      capNo.value
                       (maybe "?" (showEventInfo . getEventInfo) mi)
                       (showEventInfo (getEventInfo j))
             lift $ writeLog logger WARN $ msg
@@ -511,7 +512,7 @@ A t`MutatorSpan` represents a segment of time during which the specified
 capability ran the specified mutator thread.
 -}
 data MutatorSpan = MutatorSpan
-  { cap :: !Int
+  { capNo :: !CapNo
   , thread :: !ThreadId
   , startTimeUnixNano :: !Timestamp
   , endTimeUnixNano :: !Timestamp

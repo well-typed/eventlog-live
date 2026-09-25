@@ -921,7 +921,7 @@
                         "expr": "delta(ghc_eventlog_HeapAllocated_bytes_total{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}[$__interval])",
                         "fullMetaSearch": false,
                         "includeNullMetadata": true,
-                        "legendFormat": "Capability {{evCap}}",
+                        "legendFormat": "Capability {{capNo}}",
                         "range": true,
                         "useBackend": false
                       },

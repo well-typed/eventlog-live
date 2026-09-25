@@ -68,8 +68,7 @@ processHeapAllocatedData =
     await >>= \case
       i
         | E.HeapAllocated{..} <- i.value.evSpec ->
-            yield $
-              metric i allocBytes []
+            yield $ metric i allocBytes []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -87,8 +86,7 @@ processHeapSizeData = repeatedly go
     await >>= \case
       i
         | E.HeapSize{..} <- i.value.evSpec -> do
-            yield $
-              metric i sizeBytes []
+            yield $ metric i sizeBytes []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -103,8 +101,7 @@ processBlocksSizeData =
     await >>= \case
       i
         | E.BlocksSize{..} <- i.value.evSpec -> do
-            yield $
-              metric i blocksSize []
+            yield $ metric i blocksSize []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -121,8 +118,7 @@ processHeapLiveData =
     await >>= \case
       i
         | E.HeapLive{..} <- i.value.evSpec -> do
-            yield $
-              metric i liveBytes []
+            yield $ metric i liveBytes []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -149,8 +145,7 @@ processMemReturnData =
     await >>= \case
       i
         | E.MemReturn{..} <- i.value.evSpec -> do
-            yield $
-              metric i MemReturnData{..} []
+            yield $ metric i MemReturnData{..} []
         | otherwise -> pure ()
 
 -------------------------------------------------------------------------------

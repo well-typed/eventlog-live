@@ -1,3 +1,7 @@
+### 0.11.0.0
+
+- Changed "cap", "capability", and "evCap" attributes to "capNo" for consistency.
+
 ### 0.10.0.0
 
 - Add support for `ghc-stack-profiler-0.5.0.0` and drop support for previous versions.
