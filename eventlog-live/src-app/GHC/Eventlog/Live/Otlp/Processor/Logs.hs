@@ -46,7 +46,7 @@ processLogEvents fullConfig =
 processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
 processUserMessage fullConfig =
   runIf (C.processorEnabled (.logs) (.userMessage) fullConfig) $
-    M.liftTick M.processStackFrame'Message
+    M.liftTick M.processUserMessage
       ~> M.liftTick (mapping (D.singleton . toLogRecord))
       ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMessage) fullConfig)
 
