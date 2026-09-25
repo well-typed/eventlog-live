@@ -24,6 +24,7 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Maybe (mapMaybe)
 import Data.ProtoLens (Message (..))
 import GHC.Eventlog.Live.Data.Attribute ((~=))
+import GHC.Eventlog.Live.Data.Capability (CapNo)
 import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadStateSpan (..))
@@ -106,10 +107,10 @@ class ToSpan v where
 -- Interpret capability usage spans
 
 instance ToSpan CapabilityUsageSpan where
-  type Key CapabilityUsageSpan = Int
+  type Key CapabilityUsageSpan = CapNo
 
-  toKey :: CapabilityUsageSpan -> Int
-  toKey = (.cap)
+  toKey :: CapabilityUsageSpan -> CapNo
+  toKey = (.capNo)
 
   toSpan :: FullConfig -> CapabilityUsageSpan -> ByteString -> ByteString -> OT.Span
   toSpan fullConfig i traceId spanId =
@@ -123,7 +124,7 @@ instance ToSpan CapabilityUsageSpan where
       , OT.attributes
           .~ mapMaybe
             toMaybeKeyValue
-            [ "capability" ~= i.cap
+            [ "capNo" ~= i.capNo
             , "user" ~= user
             ]
       , OT.status
@@ -155,7 +156,7 @@ instance ToSpan ThreadStateSpan where
       , OT.attributes
           .~ mapMaybe
             toMaybeKeyValue
-            [ "capability" ~= M.threadStateCap i.threadState
+            [ "capNo" ~= M.threadStateCapNo i.threadState
             , "thread" ~= show i.thread
             , "status" ~= (show <$> M.threadStateStatus i.threadState)
             ]

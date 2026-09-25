@@ -225,7 +225,7 @@
                       "spec": {
                         "editorMode": "builder",
                         "expr": "ghc_eventlog_Productivity_percent{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}",
-                        "legendFormat": "Capability {{cap}}",
+                        "legendFormat": "Capability {{capNo}}",
                         "range": true
                       },
                       "version": "v0"

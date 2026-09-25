@@ -12,6 +12,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Log where
 import Data.Machine (Process, await, repeatedly, yield)
 import Data.Text (Text)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
+import GHC.Eventlog.Live.Data.Capability (evCapNo)
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
@@ -32,7 +33,7 @@ processStackFrame'Message =
         | E.UserMessage{..} <- i.value.evSpec ->
             yield $
               logRecord i msg (Just DEBUG) $
-                [ "evCap" ~= i.value.evCap
+                [ "capNo" ~= evCapNo i.value
                 , "kind" ~= ("UserMessage" :: Text)
                 ]
         | otherwise -> pure ()
@@ -51,7 +52,7 @@ processUserMarkerData =
         | E.UserMarker{..} <- i.value.evSpec ->
             yield $
               logRecord i markername (Just TRACE) $
-                [ "evCap" ~= i.value.evCap
+                [ "capNo" ~= evCapNo i.value
                 , "kind" ~= ("UserMarker" :: Text)
                 ]
         | otherwise -> pure ()
