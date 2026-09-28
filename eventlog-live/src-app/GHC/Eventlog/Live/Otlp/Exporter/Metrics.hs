@@ -32,9 +32,8 @@ import GHC.Eventlog.Live.Otlp.Config (FullConfig)
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (KnownMetric (..), SomeMetric (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (KnownMetric (..), SomeMetric (..), getConfig)
 import GHC.IsList (IsList (..))
-import GHC.Records (HasField (..))
 import Lens.Family2 ((.~), (^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Message (..), Protobuf)
@@ -225,8 +224,8 @@ toMetric fullConfig (SomeMetric (metric :: Proxy metric) measurements) = do
   metricData <- toMetric'Data metric (metricToNumberDataPoint metric <$> measurements)
   pure $
     messageWith $
-      [ OM.name .~ C.processorName (.metrics) (getField @metric) fullConfig
-      , maybe id (OM.description .~) $ C.processorDescription (.metrics) (getField @metric) fullConfig
+      [ OM.name .~ C.processorName (.metrics) (getConfig @metric) fullConfig
+      , maybe id (OM.description .~) $ C.processorDescription (.metrics) (getConfig @metric) fullConfig
       , OM.maybe'data' .~ Just metricData
       ]
 {-# INLINE toMetric #-}
