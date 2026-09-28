@@ -17,7 +17,7 @@ import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), MetricPointKind (..), MetricUnit (..), Monotonicity (..))
+import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), MetricKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Data.Metric qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -38,13 +38,13 @@ instance KnownMetric C.CapabilityUsageMetric where
   type NameOf C.CapabilityUsageMetric = "capabilityUsage"
   type TypeOf C.CapabilityUsageMetric = Timestamp
   type UnitOf C.CapabilityUsageMetric = 'NanoSecond
-  type PointKindOf C.CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
+  type KindOf C.CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
 
 instance KnownMetric C.ProductivityMetric where
   type NameOf C.ProductivityMetric = "productivity"
   type TypeOf C.ProductivityMetric = Double
   type UnitOf C.ProductivityMetric = 'Percent
-  type PointKindOf C.ProductivityMetric = 'Gauge
+  type KindOf C.ProductivityMetric = 'Gauge
 
 data OneOf a b c = A !a | B !b | C !c
 

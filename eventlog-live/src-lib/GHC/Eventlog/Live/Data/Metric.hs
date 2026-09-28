@@ -25,10 +25,10 @@ module GHC.Eventlog.Live.Data.Metric (
   SAggregationTemporality (..),
   KnownAggregationTemporality (..),
 
-  -- ** Metric Point Kind
-  MetricPointKind (..),
-  SMetricPointKind (..),
-  KnownMetricPointKind (..),
+  -- ** Metric Kind
+  MetricKind (..),
+  SMetricKind (..),
+  KnownMetricKind (..),
 
   -- ** Metric Unit
   MetricUnit (..),
@@ -180,25 +180,25 @@ instance KnownAggregationTemporality 'Delta where
 --------------------------------------------------------------------------------
 -- Metric Point Kinds
 
-data MetricPointKind
+data MetricKind
   = Gauge
   | Sum AggregationTemporality Monotonicity
 
-data SMetricPointKind metricPointKind where
-  SGauge :: SMetricPointKind 'Gauge
-  SSum :: SAggregationTemporality aggregationTemporality -> SMonotonicity monotonicity -> SMetricPointKind ('Sum aggregationTemporality monotonicity)
+data SMetricKind metricKind where
+  SGauge :: SMetricKind 'Gauge
+  SSum :: SAggregationTemporality aggregationTemporality -> SMonotonicity monotonicity -> SMetricKind ('Sum aggregationTemporality monotonicity)
 
-type KnownMetricPointKind :: MetricPointKind -> Constraint
-class KnownMetricPointKind metricPointKind where
-  metricPointKindSing :: Proxy metricPointKind -> SMetricPointKind metricPointKind
+type KnownMetricKind :: MetricKind -> Constraint
+class KnownMetricKind metricKind where
+  metricKindSing :: Proxy metricKind -> SMetricKind metricKind
 
-instance KnownMetricPointKind 'Gauge where
-  metricPointKindSing _proxy = SGauge
-  {-# INLINE metricPointKindSing #-}
+instance KnownMetricKind 'Gauge where
+  metricKindSing _proxy = SGauge
+  {-# INLINE metricKindSing #-}
 
-instance (KnownAggregationTemporality aggregationTemporality, KnownMonotonicity monotonicity) => KnownMetricPointKind ('Sum aggregationTemporality monotonicity) where
-  metricPointKindSing _proxy = SSum (aggregationTemporalitySing (Proxy @aggregationTemporality)) (monotonicitySing (Proxy @monotonicity))
-  {-# INLINE metricPointKindSing #-}
+instance (KnownAggregationTemporality aggregationTemporality, KnownMonotonicity monotonicity) => KnownMetricKind ('Sum aggregationTemporality monotonicity) where
+  metricKindSing _proxy = SSum (aggregationTemporalitySing (Proxy @aggregationTemporality)) (monotonicitySing (Proxy @monotonicity))
+  {-# INLINE metricKindSing #-}
 
 --------------------------------------------------------------------------------
 -- Metric Units

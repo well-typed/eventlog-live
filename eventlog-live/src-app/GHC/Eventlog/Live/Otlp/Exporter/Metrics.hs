@@ -25,7 +25,7 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word64, Word8)
-import GHC.Eventlog.Live.Data.Metric (KnownMetricPointKind (..), KnownMetricType (..), Metric (..), SAggregationTemporality (..), SMetricPointKind (..), SMetricType (..), SMonotonicity (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), KnownMetricType (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Otlp.Config (FullConfig)
@@ -237,7 +237,7 @@ toMetric'Data ::
   Maybe OM.Metric'Data
 toMetric'Data (_metric :: Proxy metric) dataPoints =
   ifNonEmpty dataPoints $
-    case metricPointKindSing (Proxy @(PointKindOf metric)) of
+    case metricKindSing (Proxy @(KindOf metric)) of
       SGauge ->
         OM.Metric'Gauge . messageWith $
           [ OM.dataPoints .~ dataPoints
