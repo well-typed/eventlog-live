@@ -39,7 +39,7 @@ import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
-import GHC.Eventlog.Live.Data.Metric (KnownMetricPointKind (..), KnownMetricType (..), KnownMetricUnit, Metric (..), MetricPointKind (..), MetricUnit (..), SAggregationTemporality (..), SMetricPointKind (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit, Metric (..), MetricKind (..), MetricUnit (..), SAggregationTemporality (..), SMetricKind (..))
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
@@ -60,7 +60,7 @@ class
   , Default metric
   , KnownSymbol (NameOf metric)
   , KnownMetricType (TypeOf metric)
-  , KnownMetricPointKind (PointKindOf metric)
+  , KnownMetricKind (KindOf metric)
   , KnownMetricUnit (UnitOf metric)
   ) =>
   KnownMetric metric
@@ -68,7 +68,7 @@ class
   type NameOf metric :: Symbol
   type TypeOf metric :: Type
   type UnitOf metric :: MetricUnit
-  type PointKindOf metric :: MetricPointKind
+  type KindOf metric :: MetricKind
 
 getConfig :: forall metric. (KnownMetric metric) => C.Metrics -> Maybe metric
 getConfig = getField @(NameOf metric)
@@ -201,14 +201,14 @@ data MetricAggregators a b = MetricAggregators
 {- |
 Internal helper.
 
-Get the aggregator for a known metric, based on its known `MetricPointKind`.
+Get the aggregator for a known metric, based on its known `MetricKind`.
 -}
 aggregatorsFor ::
   (KnownMetric metric) =>
   Proxy metric ->
   MetricAggregators (Metric (TypeOf metric)) (Metric (TypeOf metric))
 aggregatorsFor (_metric :: Proxy metric) =
-  case metricPointKindSing (Proxy @(PointKindOf metric)) of
+  case metricKindSing (Proxy @(KindOf metric)) of
     SGauge -> viaLast
     SSum SCumulative _sMonotonicity -> viaLast
     SSum SDelta _sMonotonicity -> viaSum
