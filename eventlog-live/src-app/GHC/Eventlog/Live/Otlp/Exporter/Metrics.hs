@@ -32,7 +32,7 @@ import GHC.Eventlog.Live.Otlp.Config (FullConfig)
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (KnownMetric (..), SomeMetric (..), getConfig)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric (..))
 import GHC.IsList (IsList (..))
 import Lens.Family2 ((.~), (^.))
 import Network.GRPC.Common qualified as G
@@ -224,20 +224,20 @@ toMetric fullConfig (SomeMetric (metric :: Proxy metric) measurements) = do
   metricData <- toMetric'Data metric (metricToNumberDataPoint metric <$> measurements)
   pure $
     messageWith $
-      [ OM.name .~ C.processorName (.metrics) (getConfig @metric) fullConfig
-      , maybe id (OM.description .~) $ C.processorDescription (.metrics) (getConfig @metric) fullConfig
+      [ OM.name .~ C.processorName (.metrics) (C.metricConfig @metric) fullConfig
+      , maybe id (OM.description .~) $ C.processorDescription (.metrics) (C.metricConfig @metric) fullConfig
       , OM.maybe'data' .~ Just metricData
       ]
 {-# INLINE toMetric #-}
 
 toMetric'Data ::
-  (KnownMetric metric) =>
+  (C.KnownMetric metric) =>
   Proxy metric ->
   [OM.NumberDataPoint] ->
   Maybe OM.Metric'Data
 toMetric'Data (_metric :: Proxy metric) dataPoints =
   ifNonEmpty dataPoints $
-    case metricKindSing (Proxy @(KindOf metric)) of
+    case metricKindSing (Proxy @(C.KindOf metric)) of
       SGauge ->
         OM.Metric'Gauge . messageWith $
           [ OM.dataPoints .~ dataPoints
@@ -251,9 +251,9 @@ toMetric'Data (_metric :: Proxy metric) dataPoints =
 {-# INLINE toMetric'Data #-}
 
 metricToNumberDataPoint ::
-  (KnownMetric metric) =>
+  (C.KnownMetric metric) =>
   Proxy metric ->
-  Metric (TypeOf metric) ->
+  Metric (C.TypeOf metric) ->
   OM.NumberDataPoint
 metricToNumberDataPoint (metric :: Proxy metric) =
   metricTypeIsNumberDataPoint'Value metric toNumberDataPoint
@@ -286,10 +286,10 @@ Internal helper.
 Every supported metric type has an instance of `IsNumberDataPoint'Value`.
 -}
 metricTypeIsNumberDataPoint'Value ::
-  (KnownMetric metric) =>
-  Proxy metric -> ((IsNumberDataPoint'Value (TypeOf metric)) => a) -> a
+  (C.KnownMetric metric) =>
+  Proxy metric -> ((IsNumberDataPoint'Value (C.TypeOf metric)) => a) -> a
 metricTypeIsNumberDataPoint'Value (_proxy :: Proxy metric) x =
-  case metricTypeSing (Proxy :: Proxy (TypeOf metric)) of
+  case metricTypeSing (Proxy :: Proxy (C.TypeOf metric)) of
     SMetricTypeFloat -> x
     SMetricTypeDouble -> x
     SMetricTypeWord -> x
