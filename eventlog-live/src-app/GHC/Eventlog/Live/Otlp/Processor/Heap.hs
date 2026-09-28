@@ -61,121 +61,121 @@ processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-instance KnownMetric "heapAllocated" where
-  type ConfigOf "heapAllocated" = C.HeapAllocatedMetric
-  type TypeOf "heapAllocated" = Word64
-  type UnitOf "heapAllocated" = 'Byte
-  type PointKindOf "heapAllocated" = 'Sum 'Cumulative 'Monotonic
+instance KnownMetric C.HeapAllocatedMetric where
+  type NameOf C.HeapAllocatedMetric = "heapAllocated"
+  type TypeOf C.HeapAllocatedMetric = Word64
+  type UnitOf C.HeapAllocatedMetric = 'Byte
+  type PointKindOf C.HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
 
 processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapAllocated =
-  process (Proxy @"heapAllocated") M.processHeapAllocated
+  process (Proxy @C.HeapAllocatedMetric) M.processHeapAllocated
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-instance KnownMetric "heapSize" where
-  type ConfigOf "heapSize" = C.HeapSizeMetric
-  type TypeOf "heapSize" = Word64
-  type UnitOf "heapSize" = 'Byte
-  type PointKindOf "heapSize" = 'Gauge
+instance KnownMetric C.HeapSizeMetric where
+  type NameOf C.HeapSizeMetric = "heapSize"
+  type TypeOf C.HeapSizeMetric = Word64
+  type UnitOf C.HeapSizeMetric = 'Byte
+  type PointKindOf C.HeapSizeMetric = 'Gauge
 
 processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapSize =
-  process (Proxy @"heapSize") M.processHeapSize
+  process (Proxy @C.HeapSizeMetric) M.processHeapSize
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-instance KnownMetric "blocksSize" where
-  type ConfigOf "blocksSize" = C.BlocksSizeMetric
-  type TypeOf "blocksSize" = Word64
-  type UnitOf "blocksSize" = 'Byte
-  type PointKindOf "blocksSize" = 'Gauge
+instance KnownMetric C.BlocksSizeMetric where
+  type NameOf C.BlocksSizeMetric = "blocksSize"
+  type TypeOf C.BlocksSizeMetric = Word64
+  type UnitOf C.BlocksSizeMetric = 'Byte
+  type PointKindOf C.BlocksSizeMetric = 'Gauge
 
 processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processBlocksSize =
-  process (Proxy @"blocksSize") M.processBlocksSize
+  process (Proxy @C.BlocksSizeMetric) M.processBlocksSize
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-instance KnownMetric "heapLive" where
-  type ConfigOf "heapLive" = C.HeapLiveMetric
-  type TypeOf "heapLive" = Word64
-  type UnitOf "heapLive" = 'Byte
-  type PointKindOf "heapLive" = 'Gauge
+instance KnownMetric C.HeapLiveMetric where
+  type NameOf C.HeapLiveMetric = "heapLive"
+  type TypeOf C.HeapLiveMetric = Word64
+  type UnitOf C.HeapLiveMetric = 'Byte
+  type PointKindOf C.HeapLiveMetric = 'Gauge
 
 processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapLive =
-  process (Proxy @"heapLive") M.processHeapLive
+  process (Proxy @C.HeapLiveMetric) M.processHeapLive
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-instance KnownMetric "memCurrent" where
-  type ConfigOf "memCurrent" = C.MemCurrentMetric
-  type TypeOf "memCurrent" = Word32
-  type UnitOf "memCurrent" = 'MegaBlock
-  type PointKindOf "memCurrent" = 'Gauge
+instance KnownMetric C.MemCurrentMetric where
+  type NameOf C.MemCurrentMetric = "memCurrent"
+  type TypeOf C.MemCurrentMetric = Word32
+  type UnitOf C.MemCurrentMetric = 'MegaBlock
+  type PointKindOf C.MemCurrentMetric = 'Gauge
 
-instance KnownMetric "memNeeded" where
-  type ConfigOf "memNeeded" = C.MemNeededMetric
-  type TypeOf "memNeeded" = Word32
-  type UnitOf "memNeeded" = 'MegaBlock
-  type PointKindOf "memNeeded" = 'Gauge
+instance KnownMetric C.MemNeededMetric where
+  type NameOf C.MemNeededMetric = "memNeeded"
+  type TypeOf C.MemNeededMetric = Word32
+  type UnitOf C.MemNeededMetric = 'MegaBlock
+  type PointKindOf C.MemNeededMetric = 'Gauge
 
-instance KnownMetric "memReturned" where
-  type ConfigOf "memReturned" = C.MemReturnedMetric
-  type TypeOf "memReturned" = Word32
-  type UnitOf "memReturned" = 'MegaBlock
-  type PointKindOf "memReturned" = 'Gauge
+instance KnownMetric C.MemReturnedMetric where
+  type NameOf C.MemReturnedMetric = "memReturned"
+  type TypeOf C.MemReturnedMetric = Word32
+  type UnitOf C.MemReturnedMetric = 'MegaBlock
+  type PointKindOf C.MemReturnedMetric = 'Gauge
 
 processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
 processMemReturn fullConfig =
   processAllWith fullConfig M.processMemReturn $
-    select (Proxy @"memCurrent") (.current)
-      :&: select (Proxy @"memNeeded") (.needed)
-      :&: select (Proxy @"memReturned") (.returned)
+    select (Proxy @C.MemCurrentMetric) (.current)
+      :&: select (Proxy @C.MemNeededMetric) (.needed)
+      :&: select (Proxy @C.MemReturnedMetric) (.returned)
       :&: End
 
 --------------------------------------------------------------------------------
 -- GcStats
 
-instance KnownMetric "gcCopied" where
-  type ConfigOf "gcCopied" = C.GcCopiedMetric
-  type TypeOf "gcCopied" = Word64
-  type UnitOf "gcCopied" = 'Byte
-  type PointKindOf "gcCopied" = 'Gauge
+instance KnownMetric C.GcCopiedMetric where
+  type NameOf C.GcCopiedMetric = "gcCopied"
+  type TypeOf C.GcCopiedMetric = Word64
+  type UnitOf C.GcCopiedMetric = 'Byte
+  type PointKindOf C.GcCopiedMetric = 'Gauge
 
-instance KnownMetric "gcSlop" where
-  type ConfigOf "gcSlop" = C.GcSlopMetric
-  type TypeOf "gcSlop" = Word64
-  type UnitOf "gcSlop" = 'Byte
-  type PointKindOf "gcSlop" = 'Gauge
+instance KnownMetric C.GcSlopMetric where
+  type NameOf C.GcSlopMetric = "gcSlop"
+  type TypeOf C.GcSlopMetric = Word64
+  type UnitOf C.GcSlopMetric = 'Byte
+  type PointKindOf C.GcSlopMetric = 'Gauge
 
-instance KnownMetric "gcFragmentation" where
-  type ConfigOf "gcFragmentation" = C.GcFragmentationMetric
-  type TypeOf "gcFragmentation" = Word64
-  type UnitOf "gcFragmentation" = 'Byte
-  type PointKindOf "gcFragmentation" = 'Gauge
+instance KnownMetric C.GcFragmentationMetric where
+  type NameOf C.GcFragmentationMetric = "gcFragmentation"
+  type TypeOf C.GcFragmentationMetric = Word64
+  type UnitOf C.GcFragmentationMetric = 'Byte
+  type PointKindOf C.GcFragmentationMetric = 'Gauge
 
 processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
 processGcStats fullConfig =
   processAllWith fullConfig M.processGcStats $
-    select (Proxy @"gcCopied") (.copied)
-      :&: select (Proxy @"gcSlop") (.slop)
-      :&: select (Proxy @"gcFragmentation") (.fragmentation)
+    select (Proxy @C.GcCopiedMetric) (.copied)
+      :&: select (Proxy @C.GcSlopMetric) (.slop)
+      :&: select (Proxy @C.GcFragmentationMetric) (.fragmentation)
       :&: End
 
 --------------------------------------------------------------------------------
 -- HeapProfSample
 
-instance KnownMetric "heapProfSample" where
-  type ConfigOf "heapProfSample" = C.HeapProfSampleMetric
-  type TypeOf "heapProfSample" = Word64
-  type UnitOf "heapProfSample" = 'Byte
-  type PointKindOf "heapProfSample" = 'Gauge
+instance KnownMetric C.HeapProfSampleMetric where
+  type NameOf C.HeapProfSampleMetric = "heapProfSample"
+  type TypeOf C.HeapProfSampleMetric = Word64
+  type UnitOf C.HeapProfSampleMetric = 'Byte
+  type PointKindOf C.HeapProfSampleMetric = 'Gauge
 
 processHeapProfSample ::
   (MonadIO m) =>
@@ -185,7 +185,7 @@ processHeapProfSample ::
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick SomeMetric)
 processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
-  processWith @"heapProfSample"
+  processWith @C.HeapProfSampleMetric
     MetricProcessor
       { processor = M.processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown
       , aggregators = viaLast

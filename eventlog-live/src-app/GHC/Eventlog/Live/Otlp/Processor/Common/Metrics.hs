@@ -7,6 +7,7 @@ Portability : portable
 module GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (
   -- * Known Metrics
   KnownMetric (..),
+  getConfig,
   SomeMetric (..),
 
   -- * Metric Processor
@@ -51,23 +52,27 @@ import GHC.TypeLits (KnownSymbol, Symbol)
 -- Known Metrics
 --------------------------------------------------------------------------------
 
-type KnownMetric :: Symbol -> Constraint
+type KnownMetric :: Type -> Constraint
 class
-  ( HasField metric C.Metrics (Maybe (ConfigOf metric))
-  , C.IsMetricProcessorConfig (ConfigOf metric)
-  , Show (ConfigOf metric)
-  , Default (ConfigOf metric)
-  , KnownSymbol metric
+  ( HasField (NameOf metric) C.Metrics (Maybe metric)
+  , C.IsMetricProcessorConfig metric
+  , Show metric
+  , Default metric
+  , KnownSymbol (NameOf metric)
   , KnownMetricType (TypeOf metric)
   , KnownMetricPointKind (PointKindOf metric)
   , KnownMetricUnit (UnitOf metric)
   ) =>
   KnownMetric metric
   where
-  type ConfigOf metric :: Type
+  type NameOf metric :: Symbol
   type TypeOf metric :: Type
   type UnitOf metric :: MetricUnit
   type PointKindOf metric :: MetricPointKind
+
+getConfig :: forall metric. (KnownMetric metric) => C.Metrics -> Maybe metric
+getConfig = getField @(NameOf metric)
+{-# INLINE getConfig #-}
 
 type SomeMetric :: Type
 data SomeMetric
@@ -81,7 +86,7 @@ data SomeMetric
 A t`MetricProcessor` holds the building blocks for the processing pipeline for a
 single metric.
 -}
-type MetricProcessor :: Symbol -> (Type -> Type) -> Type -> Type -> Type -> Type
+type MetricProcessor :: Type -> (Type -> Type) -> Type -> Type -> Type -> Type
 data MetricProcessor metric m a b c
   = forall f.
   (Monad m, KnownMetric metric, Foldable f) =>
@@ -119,14 +124,12 @@ processWith ::
   FullConfig ->
   ProcessT m (Tick a) (Tick SomeMetric)
 processWith MetricProcessor{..} fullConfig =
-  let metricConfig :: C.Metrics -> Maybe (ConfigOf metric)
-      metricConfig = getField @metric
-   in runIf (C.processorEnabled (.metrics) metricConfig fullConfig) $
-        M.liftTick processor
-          ~> aggregate aggregators (C.processorAggregationBatches (.metrics) metricConfig fullConfig)
-          ~> M.liftTick (mapping ungroup ~> asParts ~> mapping D.singleton)
-          ~> M.batchByTicks (C.processorExportBatches (.metrics) metricConfig fullConfig)
-          ~> M.liftTick (mapping $ SomeMetric (Proxy @metric) . D.toList)
+  runIf (C.processorEnabled (.metrics) (getConfig @metric) fullConfig) $
+    M.liftTick processor
+      ~> aggregate aggregators (C.processorAggregationBatches (.metrics) (getConfig @metric) fullConfig)
+      ~> M.liftTick (mapping ungroup ~> asParts ~> mapping D.singleton)
+      ~> M.batchByTicks (C.processorExportBatches (.metrics) (getConfig @metric) fullConfig)
+      ~> M.liftTick (mapping $ SomeMetric (Proxy @metric) . D.toList)
 {-# INLINE processWith #-}
 
 --------------------------------------------------------------------------------
@@ -138,7 +141,7 @@ infixr 6 :&:
 {- |
 A t`MetricProcessors` holds a series of t`MetricProcessor`s that work from the same input type.
 -}
-type MetricProcessors :: [Symbol] -> (Type -> Type) -> Type -> Type
+type MetricProcessors :: [Type] -> (Type -> Type) -> Type -> Type
 data MetricProcessors metrics m a where
   End ::
     MetricProcessors '[] m i
@@ -154,7 +157,8 @@ Check if /any/ of the t`MetricProcessors` is enabled.
 -}
 anyProcessorEnabled :: FullConfig -> MetricProcessors metrics m i -> Bool
 anyProcessorEnabled _fullConfig End = False
-anyProcessorEnabled fullConfig ((:&:) @metric _ rest) = C.processorEnabled (.metrics) (getField @metric) fullConfig || anyProcessorEnabled fullConfig rest
+anyProcessorEnabled fullConfig ((:&:) @metric _ rest) =
+  C.processorEnabled (.metrics) (getConfig @metric) fullConfig || anyProcessorEnabled fullConfig rest
 
 select ::
   (Monad m, KnownMetric metric) =>

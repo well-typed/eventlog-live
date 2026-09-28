@@ -34,17 +34,17 @@ import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
 import GHC.RTS.Events (Event (..), Timestamp)
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 
-instance KnownMetric "capabilityUsage" where
-  type ConfigOf "capabilityUsage" = C.CapabilityUsageMetric
-  type TypeOf "capabilityUsage" = Timestamp
-  type UnitOf "capabilityUsage" = 'NanoSecond
-  type PointKindOf "capabilityUsage" = 'Sum 'Cumulative 'Monotonic
+instance KnownMetric C.CapabilityUsageMetric where
+  type NameOf C.CapabilityUsageMetric = "capabilityUsage"
+  type TypeOf C.CapabilityUsageMetric = Timestamp
+  type UnitOf C.CapabilityUsageMetric = 'NanoSecond
+  type PointKindOf C.CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
 
-instance KnownMetric "productivity" where
-  type ConfigOf "productivity" = C.ProductivityMetric
-  type TypeOf "productivity" = Double
-  type UnitOf "productivity" = 'Percent
-  type PointKindOf "productivity" = 'Gauge
+instance KnownMetric C.ProductivityMetric where
+  type NameOf C.ProductivityMetric = "productivity"
+  type TypeOf C.ProductivityMetric = Double
+  type UnitOf C.ProductivityMetric = 'Percent
+  type PointKindOf C.ProductivityMetric = 'Gauge
 
 data OneOf a b c = A !a | B !b | C !c
 
@@ -83,9 +83,9 @@ processThreadEvents verbosity fullConfig =
             ~> M.fanoutTick
               [ M.liftTick M.processCapabilityUsageDuration
                   ~> M.fanoutTick
-                    [ process (Proxy @"capabilityUsage") (mapping M.toMetric) fullConfig
+                    [ process (Proxy @C.CapabilityUsageMetric) (mapping M.toMetric) fullConfig
                         ~> M.liftTick (mapping D.singleton)
-                    , process (Proxy @"productivity") (M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)) fullConfig
+                    , process (Proxy @C.ProductivityMetric) (M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)) fullConfig
                         ~> M.liftTick (mapping D.singleton)
                     ]
                   ~> mapping (fmap (fmap Left))
