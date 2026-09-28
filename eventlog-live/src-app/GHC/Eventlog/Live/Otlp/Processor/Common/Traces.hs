@@ -29,8 +29,8 @@ import GHC.Eventlog.Live.Machine.Analysis.Capability (CapabilityUsageSpan)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadStateSpan (..))
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
+import GHC.Eventlog.Live.Otlp.Config (FullConfig)
 import GHC.Eventlog.Live.Otlp.Config qualified as C
-import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
 import GHC.RTS.Events (ThreadId)
 import Lens.Family2 ((.~))

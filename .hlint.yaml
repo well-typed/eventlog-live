@@ -35,6 +35,18 @@
         as: LSMT,
         within: [GHC.Eventlog.Live.Database],
       }
+    - {
+        name: [GHC.Eventlog.Live.Otlp.Config.Types],
+        within:
+          [
+            GHC.Eventlog.Live.Otlp.Config,
+            GHC.Eventlog.Live.Otlp.Config.Default,
+          ],
+      }
+    - {
+        name: [GHC.Eventlog.Live.Otlp.Config.Default],
+        within: [GHC.Eventlog.Live.Otlp.Config],
+      }
 #   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
 #   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
 #
