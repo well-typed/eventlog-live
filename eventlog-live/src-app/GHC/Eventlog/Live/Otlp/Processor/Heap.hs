@@ -22,8 +22,8 @@ import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Otlp.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
-import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import IpeDB.Database qualified as DB

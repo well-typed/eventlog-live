@@ -11,9 +11,9 @@ import Data.Text qualified as T
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
 import GHC.Eventlog.Live.Options
+import GHC.Eventlog.Live.Otlp.Config (Config)
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
-import GHC.Eventlog.Live.Otlp.Config.Types (Config)
 import GHC.Eventlog.Live.Otlp.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.Otlp.Options.Raw (footerString, headerString, progDescString)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))

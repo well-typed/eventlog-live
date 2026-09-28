@@ -18,8 +18,8 @@ import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Otlp.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
-import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..))
 import GHC.RTS.Events (Event (..))

@@ -32,8 +32,8 @@ import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
+import GHC.Eventlog.Live.Otlp.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
-import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.Otlp.Environment (OpenTelemetrySdkOptions (..), PerSignal, ServiceName (..), Signal (..), forSignal, lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.Otlp.Exporter.Core (Exporter, withExporters)

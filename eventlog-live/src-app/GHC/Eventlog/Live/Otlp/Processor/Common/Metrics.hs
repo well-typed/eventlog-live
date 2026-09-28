@@ -39,9 +39,8 @@ import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..))
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Otlp.Config (KnownMetric (..), metricConfig)
+import GHC.Eventlog.Live.Otlp.Config (FullConfig, KnownMetric (..), metricConfig)
 import GHC.Eventlog.Live.Otlp.Config qualified as C
-import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
 
 --------------------------------------------------------------------------------
