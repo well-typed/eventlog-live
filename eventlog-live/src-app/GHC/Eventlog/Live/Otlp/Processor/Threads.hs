@@ -17,7 +17,6 @@ import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), MetricKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Data.Metric qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -29,22 +28,10 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (KnownMetric (..), SomeMetric, process)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric, process)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
-import GHC.RTS.Events (Event (..), Timestamp)
+import GHC.RTS.Events (Event (..))
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
-
-instance KnownMetric C.CapabilityUsageMetric where
-  type NameOf C.CapabilityUsageMetric = "capabilityUsage"
-  type TypeOf C.CapabilityUsageMetric = Timestamp
-  type UnitOf C.CapabilityUsageMetric = 'NanoSecond
-  type KindOf C.CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
-
-instance KnownMetric C.ProductivityMetric where
-  type NameOf C.ProductivityMetric = "productivity"
-  type TypeOf C.ProductivityMetric = Double
-  type UnitOf C.ProductivityMetric = 'Percent
-  type KindOf C.ProductivityMetric = 'Gauge
 
 data OneOf a b c = A !a | B !b | C !c
 

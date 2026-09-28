@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Otlp.Config
+Module      : GHEventlog.Live.Otlp.Config
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
@@ -35,6 +35,8 @@ module GHC.Eventlog.Live.Otlp.Config (
   -- *** Metric processor configuration types
   Metrics (..),
   IsMetricProcessorConfig,
+  KnownMetric (..),
+  metricConfig,
   shouldExportMetrics,
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
@@ -90,6 +92,7 @@ import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Lazy qualified as BSL
 import Data.Default (Default (..))
+import Data.Kind (Constraint, Type)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid (Any (..))
@@ -97,13 +100,17 @@ import Data.Semigroup (Semigroup (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import Data.Word (Word32, Word64)
 import Data.YAML qualified as YAML
+import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), KnownMetricKind, KnownMetricType, KnownMetricUnit, MetricKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Otlp.Config.Default (defaultConfig, getDefault)
 import GHC.Eventlog.Live.Otlp.Config.Types
-import GHC.Records (HasField)
+import GHC.RTS.Events (Timestamp)
+import GHC.Records (HasField (..))
 import GHC.Stack.Types (HasCallStack)
+import GHC.TypeLits (KnownSymbol, Symbol)
 import System.Exit (exitFailure)
 
 {- |
@@ -273,6 +280,113 @@ instance Default CallStackProfile where
 instance Default CostCentreStackProfile where
   def :: CostCentreStackProfile
   def = $(getDefault @'["processors", "profiles", "costCentreStackProfile"] defaultConfig)
+
+-------------------------------------------------------------------------------
+-- KnownMetric & Instances
+-------------------------------------------------------------------------------
+
+type KnownMetric :: Type -> Constraint
+class
+  ( HasField (NameOf metric) Metrics (Maybe metric)
+  , IsMetricProcessorConfig metric
+  , Show metric
+  , Default metric
+  , KnownSymbol (NameOf metric)
+  , KnownMetricType (TypeOf metric)
+  , KnownMetricKind (KindOf metric)
+  , KnownMetricUnit (UnitOf metric)
+  ) =>
+  KnownMetric metric
+  where
+  type NameOf metric :: Symbol
+  type TypeOf metric :: Type
+  type UnitOf metric :: MetricUnit
+  type KindOf metric :: MetricKind
+
+metricConfig :: forall metric. (KnownMetric metric) => Metrics -> Maybe metric
+metricConfig = getField @(NameOf metric)
+{-# INLINE metricConfig #-}
+
+-- NOTE: This should be kept in sync with the list of metrics.
+--       Specifically, there should be a `KnownMetric` instance for every metric.
+
+instance KnownMetric HeapAllocatedMetric where
+  type NameOf HeapAllocatedMetric = "heapAllocated"
+  type TypeOf HeapAllocatedMetric = Word64
+  type UnitOf HeapAllocatedMetric = 'Byte
+  type KindOf HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric HeapSizeMetric where
+  type NameOf HeapSizeMetric = "heapSize"
+  type TypeOf HeapSizeMetric = Word64
+  type UnitOf HeapSizeMetric = 'Byte
+  type KindOf HeapSizeMetric = 'Gauge
+
+instance KnownMetric BlocksSizeMetric where
+  type NameOf BlocksSizeMetric = "blocksSize"
+  type TypeOf BlocksSizeMetric = Word64
+  type UnitOf BlocksSizeMetric = 'Byte
+  type KindOf BlocksSizeMetric = 'Gauge
+
+instance KnownMetric HeapLiveMetric where
+  type NameOf HeapLiveMetric = "heapLive"
+  type TypeOf HeapLiveMetric = Word64
+  type UnitOf HeapLiveMetric = 'Byte
+  type KindOf HeapLiveMetric = 'Gauge
+
+instance KnownMetric MemCurrentMetric where
+  type NameOf MemCurrentMetric = "memCurrent"
+  type TypeOf MemCurrentMetric = Word32
+  type UnitOf MemCurrentMetric = 'MegaBlock
+  type KindOf MemCurrentMetric = 'Gauge
+
+instance KnownMetric MemNeededMetric where
+  type NameOf MemNeededMetric = "memNeeded"
+  type TypeOf MemNeededMetric = Word32
+  type UnitOf MemNeededMetric = 'MegaBlock
+  type KindOf MemNeededMetric = 'Gauge
+
+instance KnownMetric MemReturnedMetric where
+  type NameOf MemReturnedMetric = "memReturned"
+  type TypeOf MemReturnedMetric = Word32
+  type UnitOf MemReturnedMetric = 'MegaBlock
+  type KindOf MemReturnedMetric = 'Gauge
+
+instance KnownMetric GcCopiedMetric where
+  type NameOf GcCopiedMetric = "gcCopied"
+  type TypeOf GcCopiedMetric = Word64
+  type UnitOf GcCopiedMetric = 'Byte
+  type KindOf GcCopiedMetric = 'Gauge
+
+instance KnownMetric GcSlopMetric where
+  type NameOf GcSlopMetric = "gcSlop"
+  type TypeOf GcSlopMetric = Word64
+  type UnitOf GcSlopMetric = 'Byte
+  type KindOf GcSlopMetric = 'Gauge
+
+instance KnownMetric GcFragmentationMetric where
+  type NameOf GcFragmentationMetric = "gcFragmentation"
+  type TypeOf GcFragmentationMetric = Word64
+  type UnitOf GcFragmentationMetric = 'Byte
+  type KindOf GcFragmentationMetric = 'Gauge
+
+instance KnownMetric HeapProfSampleMetric where
+  type NameOf HeapProfSampleMetric = "heapProfSample"
+  type TypeOf HeapProfSampleMetric = Word64
+  type UnitOf HeapProfSampleMetric = 'Byte
+  type KindOf HeapProfSampleMetric = 'Gauge
+
+instance KnownMetric CapabilityUsageMetric where
+  type NameOf CapabilityUsageMetric = "capabilityUsage"
+  type TypeOf CapabilityUsageMetric = Timestamp
+  type UnitOf CapabilityUsageMetric = 'NanoSecond
+  type KindOf CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric ProductivityMetric where
+  type NameOf ProductivityMetric = "productivity"
+  type TypeOf ProductivityMetric = Double
+  type UnitOf ProductivityMetric = 'Percent
+  type KindOf ProductivityMetric = 'Gauge
 
 -------------------------------------------------------------------------------
 -- Accessors

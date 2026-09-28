@@ -6,8 +6,6 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (
   -- * Known Metrics
-  KnownMetric (..),
-  getConfig,
   SomeMetric (..),
 
   -- * Metric Processor
@@ -31,48 +29,24 @@ where
 import Data.Coerce (Coercible, coerce)
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Default (Default (..))
 import Data.Functor.Identity (Identity (..))
-import Data.Kind (Constraint, Type)
+import Data.Kind (Type)
 import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
-import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit, Metric (..), MetricKind (..), MetricUnit (..), SAggregationTemporality (..), SMetricKind (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..))
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Otlp.Config (KnownMetric (..), metricConfig)
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Config.Types (FullConfig)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol)
 
 --------------------------------------------------------------------------------
 -- Known Metrics
 --------------------------------------------------------------------------------
-
-type KnownMetric :: Type -> Constraint
-class
-  ( HasField (NameOf metric) C.Metrics (Maybe metric)
-  , C.IsMetricProcessorConfig metric
-  , Show metric
-  , Default metric
-  , KnownSymbol (NameOf metric)
-  , KnownMetricType (TypeOf metric)
-  , KnownMetricKind (KindOf metric)
-  , KnownMetricUnit (UnitOf metric)
-  ) =>
-  KnownMetric metric
-  where
-  type NameOf metric :: Symbol
-  type TypeOf metric :: Type
-  type UnitOf metric :: MetricUnit
-  type KindOf metric :: MetricKind
-
-getConfig :: forall metric. (KnownMetric metric) => C.Metrics -> Maybe metric
-getConfig = getField @(NameOf metric)
-{-# INLINE getConfig #-}
 
 type SomeMetric :: Type
 data SomeMetric
@@ -124,11 +98,11 @@ processWith ::
   FullConfig ->
   ProcessT m (Tick a) (Tick SomeMetric)
 processWith MetricProcessor{..} fullConfig =
-  runIf (C.processorEnabled (.metrics) (getConfig @metric) fullConfig) $
+  runIf (C.processorEnabled (.metrics) (metricConfig @metric) fullConfig) $
     M.liftTick processor
-      ~> aggregate aggregators (C.processorAggregationBatches (.metrics) (getConfig @metric) fullConfig)
+      ~> aggregate aggregators (C.processorAggregationBatches (.metrics) (metricConfig @metric) fullConfig)
       ~> M.liftTick (mapping ungroup ~> asParts ~> mapping D.singleton)
-      ~> M.batchByTicks (C.processorExportBatches (.metrics) (getConfig @metric) fullConfig)
+      ~> M.batchByTicks (C.processorExportBatches (.metrics) (metricConfig @metric) fullConfig)
       ~> M.liftTick (mapping $ SomeMetric (Proxy @metric) . D.toList)
 {-# INLINE processWith #-}
 
@@ -158,7 +132,7 @@ Check if /any/ of the t`MetricProcessors` is enabled.
 anyProcessorEnabled :: FullConfig -> MetricProcessors metrics m i -> Bool
 anyProcessorEnabled _fullConfig End = False
 anyProcessorEnabled fullConfig ((:&:) @metric _ rest) =
-  C.processorEnabled (.metrics) (getConfig @metric) fullConfig || anyProcessorEnabled fullConfig rest
+  C.processorEnabled (.metrics) (metricConfig @metric) fullConfig || anyProcessorEnabled fullConfig rest
 
 select ::
   (Monad m, KnownMetric metric) =>
