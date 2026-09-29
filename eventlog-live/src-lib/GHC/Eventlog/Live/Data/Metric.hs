@@ -77,7 +77,7 @@ toMetric ma =
     }
 
 --------------------------------------------------------------------------------
--- Generic Metric type
+-- Generic metric type
 --------------------------------------------------------------------------------
 
 {- |
@@ -209,19 +209,19 @@ data MetricUnit
   | NanoSecond
   | Percent
 
-toUCUM :: MetricUnit -> Text
-toUCUM =
-  T.pack . \case
-    Byte -> "By"
-    MegaBlock -> "{mblock}"
-    NanoSecond -> "ns"
-    Percent -> "%"
-
 data SMetricUnit metricUnit where
   SByte :: SMetricUnit 'Byte
   SMegaBlock :: SMetricUnit 'MegaBlock
   SNanoSecond :: SMetricUnit 'NanoSecond
   SPercent :: SMetricUnit 'Percent
+
+toUCUM :: SMetricUnit metricUnit -> Text
+toUCUM =
+  T.pack . \case
+    SByte -> "By"
+    SMegaBlock -> "{mblock}"
+    SNanoSecond -> "ns"
+    SPercent -> "%"
 
 type KnownMetricUnit :: MetricUnit -> Constraint
 class KnownMetricUnit metricUnit where
