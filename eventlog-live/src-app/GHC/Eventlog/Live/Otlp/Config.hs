@@ -63,6 +63,8 @@ module GHC.Eventlog.Live.Otlp.Config (
 
   -- *** Profiler processor configuration types
   Profiles (..),
+  KnownProfile (..),
+  profileConfig,
   IsProfileProcessorConfig,
   shouldExportProfiles,
   CallStackProfile (..),
@@ -102,7 +104,7 @@ import Data.Semigroup (Semigroup (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Word (Word32, Word64)
+import Data.Word (Word32, Word64, Word8)
 import Data.YAML qualified as YAML
 import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), KnownMetricKind, KnownMetricType, KnownMetricUnit, MetricKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
@@ -418,6 +420,44 @@ instance KnownTrace CapabilityUsageSpan where
 
 instance KnownTrace ThreadStateSpan where
   type GetTraceName ThreadStateSpan = "threadState"
+
+-------------------------------------------------------------------------------
+-- KnownProfile & Instances
+-------------------------------------------------------------------------------
+
+type KnownProfile :: Type -> Constraint
+class
+  ( HasField (GetProfileName profile) Profiles (Maybe profile)
+  , IsProfileProcessorConfig profile
+  , Show profile
+  , Default profile
+  , KnownSymbol (GetProfileName profile)
+  , KnownSymbol (GetProfileMetricName profile)
+  , Integral (GetProfileMetricType profile)
+  , KnownSymbol (GetProfileMetricUnit profile)
+  ) =>
+  KnownProfile profile
+  where
+  type GetProfileName profile :: Symbol
+  type GetProfileMetricName profile :: Symbol
+  type GetProfileMetricType profile :: Type
+  type GetProfileMetricUnit profile :: Symbol
+
+profileConfig :: forall profile. (KnownProfile profile) => Profiles -> Maybe profile
+profileConfig = getField @(GetProfileName profile)
+{-# INLINE profileConfig #-}
+
+instance KnownProfile CallStackProfile where
+  type GetProfileName CallStackProfile = "callStackProfile"
+  type GetProfileMetricName CallStackProfile = "callStack"
+  type GetProfileMetricType CallStackProfile = Word8
+  type GetProfileMetricUnit CallStackProfile = "count"
+
+instance KnownProfile CostCentreStackProfile where
+  type GetProfileName CostCentreStackProfile = "costCentreStackProfile"
+  type GetProfileMetricName CostCentreStackProfile = "costCentreStack"
+  type GetProfileMetricType CostCentreStackProfile = Word8
+  type GetProfileMetricUnit CostCentreStackProfile = "count"
 
 -------------------------------------------------------------------------------
 -- Accessors
