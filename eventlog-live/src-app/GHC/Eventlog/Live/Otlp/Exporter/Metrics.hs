@@ -16,7 +16,6 @@ module GHC.Eventlog.Live.Otlp.Exporter.Metrics (
 import Control.Exception (Exception (..), SomeException (..), catch)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Function ((&))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Machine (ProcessT, await, construct, yield)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -25,10 +24,10 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word64, Word8)
-import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), KnownMetricType (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..), toUCUM)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Otlp.Config (FullConfig)
+import GHC.Eventlog.Live.Otlp.Config (FullConfig, KnownMetric (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
@@ -36,7 +35,7 @@ import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric (..))
 import GHC.IsList (IsList (..))
 import Lens.Family2 ((.~), (^.))
 import Network.GRPC.Common qualified as G
-import Network.GRPC.Common.Protobuf (Message (..), Protobuf)
+import Network.GRPC.Common.Protobuf (Protobuf)
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService qualified as OMS
 import Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields qualified as OMS
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
@@ -201,7 +200,8 @@ countDataPointsInMetric metric =
 --------------------------------------------------------------------------------
 
 toExportMetricsServiceRequest :: [OM.ResourceMetrics] -> OMS.ExportMetricsServiceRequest
-toExportMetricsServiceRequest = (defMessage &) . (OM.resourceMetrics .~)
+toExportMetricsServiceRequest resourceMetrics =
+  messageWith [OM.resourceMetrics .~ resourceMetrics]
 {-# INLINE toExportMetricsServiceRequest #-}
 
 toResourceMetrics :: OR.Resource -> [OM.ScopeMetrics] -> Maybe OM.ResourceMetrics
@@ -226,6 +226,7 @@ toMetric fullConfig (SomeMetric (metric :: Proxy metric) measurements) = do
     messageWith $
       [ OM.name .~ C.processorName (.metrics) (C.metricConfig @metric) fullConfig
       , maybe id (OM.description .~) $ C.processorDescription (.metrics) (C.metricConfig @metric) fullConfig
+      , OM.unit .~ toUCUM (metricUnitSing (Proxy @(UnitOf metric)))
       , OM.maybe'data' .~ Just metricData
       ]
 {-# INLINE toMetric #-}
