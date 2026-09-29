@@ -183,11 +183,20 @@ library
     monad-control >=1.0 && <1.1,
     network >=3.2.7 && <3.3,
     optparse-applicative >=0.17 && <0.20,
+    random >=1.2 && <1.4,
     stm >=2.5 && <2.6,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.12.2 && <0.14,
+
+  -- 2026-09-29:
+  -- This includes a backport of uniformByteString.
+  hs-source-dirs:
+    src-lib-internal
+
+  other-modules:
+    System.Random.Compat
 
   -- 2026-07-17:
   -- This includes a vendored copy of mapAccumM from the base-compat
@@ -274,7 +283,6 @@ executable eventlog-live-otlp
     Options.Applicative.Compat
     Options.Applicative.Extra.Feature
     Paths_eventlog_live
-    System.Random.Compat
 
   autogen-modules: Paths_eventlog_live
   build-depends:
@@ -301,7 +309,6 @@ executable eventlog-live-otlp
     network-uri >=2.6 && <2.8,
     optparse-applicative >=0.17 && <0.20,
     proto-lens >=0.7.1 && <0.8,
-    random >=1.2 && <1.4,
     stm >=2.5 && <2.6,
     strict-list >=0.1 && <0.2,
     table-layout >=1.0 && <1.1,

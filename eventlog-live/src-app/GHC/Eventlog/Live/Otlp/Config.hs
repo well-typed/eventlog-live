@@ -55,6 +55,8 @@ module GHC.Eventlog.Live.Otlp.Config (
   -- *** Trace processor configuration types
   Traces (..),
   IsTraceProcessorConfig,
+  KnownTrace (..),
+  traceConfig,
   shouldExportTraces,
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
@@ -273,6 +275,9 @@ instance Default ThreadStateSpan where
   def :: ThreadStateSpan
   def = $(getDefault @'["processors", "traces", "threadState"] defaultConfig)
 
+-- NOTE: This should be kept in sync with the list of profiles.
+--       Specifically, there should be a `Default` instance for every profile.
+
 instance Default CallStackProfile where
   def :: CallStackProfile
   def = $(getDefault @'["processors", "profiles", "callStackProfile"] defaultConfig)
@@ -287,106 +292,132 @@ instance Default CostCentreStackProfile where
 
 type KnownMetric :: Type -> Constraint
 class
-  ( HasField (NameOf metric) Metrics (Maybe metric)
+  ( HasField (GetMetricName metric) Metrics (Maybe metric)
   , IsMetricProcessorConfig metric
   , Show metric
   , Default metric
-  , KnownSymbol (NameOf metric)
-  , KnownMetricType (TypeOf metric)
-  , KnownMetricKind (KindOf metric)
-  , KnownMetricUnit (UnitOf metric)
+  , KnownSymbol (GetMetricName metric)
+  , KnownMetricType (GetMetricType metric)
+  , KnownMetricKind (GetMetricKind metric)
+  , KnownMetricUnit (GetMetricUnit metric)
   ) =>
   KnownMetric metric
   where
-  type NameOf metric :: Symbol
-  type TypeOf metric :: Type
-  type UnitOf metric :: MetricUnit
-  type KindOf metric :: MetricKind
+  type GetMetricName metric :: Symbol
+  type GetMetricType metric :: Type
+  type GetMetricUnit metric :: MetricUnit
+  type GetMetricKind metric :: MetricKind
 
 metricConfig :: forall metric. (KnownMetric metric) => Metrics -> Maybe metric
-metricConfig = getField @(NameOf metric)
+metricConfig = getField @(GetMetricName metric)
 {-# INLINE metricConfig #-}
 
 -- NOTE: This should be kept in sync with the list of metrics.
 --       Specifically, there should be a `KnownMetric` instance for every metric.
 
 instance KnownMetric HeapAllocatedMetric where
-  type NameOf HeapAllocatedMetric = "heapAllocated"
-  type TypeOf HeapAllocatedMetric = Word64
-  type UnitOf HeapAllocatedMetric = 'Byte
-  type KindOf HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
+  type GetMetricName HeapAllocatedMetric = "heapAllocated"
+  type GetMetricType HeapAllocatedMetric = Word64
+  type GetMetricUnit HeapAllocatedMetric = 'Byte
+  type GetMetricKind HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
 
 instance KnownMetric HeapSizeMetric where
-  type NameOf HeapSizeMetric = "heapSize"
-  type TypeOf HeapSizeMetric = Word64
-  type UnitOf HeapSizeMetric = 'Byte
-  type KindOf HeapSizeMetric = 'Gauge
+  type GetMetricName HeapSizeMetric = "heapSize"
+  type GetMetricType HeapSizeMetric = Word64
+  type GetMetricUnit HeapSizeMetric = 'Byte
+  type GetMetricKind HeapSizeMetric = 'Gauge
 
 instance KnownMetric BlocksSizeMetric where
-  type NameOf BlocksSizeMetric = "blocksSize"
-  type TypeOf BlocksSizeMetric = Word64
-  type UnitOf BlocksSizeMetric = 'Byte
-  type KindOf BlocksSizeMetric = 'Gauge
+  type GetMetricName BlocksSizeMetric = "blocksSize"
+  type GetMetricType BlocksSizeMetric = Word64
+  type GetMetricUnit BlocksSizeMetric = 'Byte
+  type GetMetricKind BlocksSizeMetric = 'Gauge
 
 instance KnownMetric HeapLiveMetric where
-  type NameOf HeapLiveMetric = "heapLive"
-  type TypeOf HeapLiveMetric = Word64
-  type UnitOf HeapLiveMetric = 'Byte
-  type KindOf HeapLiveMetric = 'Gauge
+  type GetMetricName HeapLiveMetric = "heapLive"
+  type GetMetricType HeapLiveMetric = Word64
+  type GetMetricUnit HeapLiveMetric = 'Byte
+  type GetMetricKind HeapLiveMetric = 'Gauge
 
 instance KnownMetric MemCurrentMetric where
-  type NameOf MemCurrentMetric = "memCurrent"
-  type TypeOf MemCurrentMetric = Word32
-  type UnitOf MemCurrentMetric = 'MegaBlock
-  type KindOf MemCurrentMetric = 'Gauge
+  type GetMetricName MemCurrentMetric = "memCurrent"
+  type GetMetricType MemCurrentMetric = Word32
+  type GetMetricUnit MemCurrentMetric = 'MegaBlock
+  type GetMetricKind MemCurrentMetric = 'Gauge
 
 instance KnownMetric MemNeededMetric where
-  type NameOf MemNeededMetric = "memNeeded"
-  type TypeOf MemNeededMetric = Word32
-  type UnitOf MemNeededMetric = 'MegaBlock
-  type KindOf MemNeededMetric = 'Gauge
+  type GetMetricName MemNeededMetric = "memNeeded"
+  type GetMetricType MemNeededMetric = Word32
+  type GetMetricUnit MemNeededMetric = 'MegaBlock
+  type GetMetricKind MemNeededMetric = 'Gauge
 
 instance KnownMetric MemReturnedMetric where
-  type NameOf MemReturnedMetric = "memReturned"
-  type TypeOf MemReturnedMetric = Word32
-  type UnitOf MemReturnedMetric = 'MegaBlock
-  type KindOf MemReturnedMetric = 'Gauge
+  type GetMetricName MemReturnedMetric = "memReturned"
+  type GetMetricType MemReturnedMetric = Word32
+  type GetMetricUnit MemReturnedMetric = 'MegaBlock
+  type GetMetricKind MemReturnedMetric = 'Gauge
 
 instance KnownMetric GcCopiedMetric where
-  type NameOf GcCopiedMetric = "gcCopied"
-  type TypeOf GcCopiedMetric = Word64
-  type UnitOf GcCopiedMetric = 'Byte
-  type KindOf GcCopiedMetric = 'Gauge
+  type GetMetricName GcCopiedMetric = "gcCopied"
+  type GetMetricType GcCopiedMetric = Word64
+  type GetMetricUnit GcCopiedMetric = 'Byte
+  type GetMetricKind GcCopiedMetric = 'Gauge
 
 instance KnownMetric GcSlopMetric where
-  type NameOf GcSlopMetric = "gcSlop"
-  type TypeOf GcSlopMetric = Word64
-  type UnitOf GcSlopMetric = 'Byte
-  type KindOf GcSlopMetric = 'Gauge
+  type GetMetricName GcSlopMetric = "gcSlop"
+  type GetMetricType GcSlopMetric = Word64
+  type GetMetricUnit GcSlopMetric = 'Byte
+  type GetMetricKind GcSlopMetric = 'Gauge
 
 instance KnownMetric GcFragmentationMetric where
-  type NameOf GcFragmentationMetric = "gcFragmentation"
-  type TypeOf GcFragmentationMetric = Word64
-  type UnitOf GcFragmentationMetric = 'Byte
-  type KindOf GcFragmentationMetric = 'Gauge
+  type GetMetricName GcFragmentationMetric = "gcFragmentation"
+  type GetMetricType GcFragmentationMetric = Word64
+  type GetMetricUnit GcFragmentationMetric = 'Byte
+  type GetMetricKind GcFragmentationMetric = 'Gauge
 
 instance KnownMetric HeapProfSampleMetric where
-  type NameOf HeapProfSampleMetric = "heapProfSample"
-  type TypeOf HeapProfSampleMetric = Word64
-  type UnitOf HeapProfSampleMetric = 'Byte
-  type KindOf HeapProfSampleMetric = 'Gauge
+  type GetMetricName HeapProfSampleMetric = "heapProfSample"
+  type GetMetricType HeapProfSampleMetric = Word64
+  type GetMetricUnit HeapProfSampleMetric = 'Byte
+  type GetMetricKind HeapProfSampleMetric = 'Gauge
 
 instance KnownMetric CapabilityUsageMetric where
-  type NameOf CapabilityUsageMetric = "capabilityUsage"
-  type TypeOf CapabilityUsageMetric = Timestamp
-  type UnitOf CapabilityUsageMetric = 'NanoSecond
-  type KindOf CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
+  type GetMetricName CapabilityUsageMetric = "capabilityUsage"
+  type GetMetricType CapabilityUsageMetric = Timestamp
+  type GetMetricUnit CapabilityUsageMetric = 'NanoSecond
+  type GetMetricKind CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
 
 instance KnownMetric ProductivityMetric where
-  type NameOf ProductivityMetric = "productivity"
-  type TypeOf ProductivityMetric = Double
-  type UnitOf ProductivityMetric = 'Percent
-  type KindOf ProductivityMetric = 'Gauge
+  type GetMetricName ProductivityMetric = "productivity"
+  type GetMetricType ProductivityMetric = Double
+  type GetMetricUnit ProductivityMetric = 'Percent
+  type GetMetricKind ProductivityMetric = 'Gauge
+
+-------------------------------------------------------------------------------
+-- KnownTrace & Instances
+-------------------------------------------------------------------------------
+
+type KnownTrace :: Type -> Constraint
+class
+  ( HasField (GetTraceName trace) Traces (Maybe trace)
+  , IsTraceProcessorConfig trace
+  , Show trace
+  , Default trace
+  , KnownSymbol (GetTraceName trace)
+  ) =>
+  KnownTrace trace
+  where
+  type GetTraceName trace :: Symbol
+
+traceConfig :: forall trace. (KnownTrace trace) => Traces -> Maybe trace
+traceConfig = getField @(GetTraceName trace)
+{-# INLINE traceConfig #-}
+
+instance KnownTrace CapabilityUsageSpan where
+  type GetTraceName CapabilityUsageSpan = "capabilityUsage"
+
+instance KnownTrace ThreadStateSpan where
+  type GetTraceName ThreadStateSpan = "threadState"
 
 -------------------------------------------------------------------------------
 -- Accessors

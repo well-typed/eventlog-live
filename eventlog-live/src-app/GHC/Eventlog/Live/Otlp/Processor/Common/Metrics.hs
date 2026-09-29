@@ -49,7 +49,7 @@ import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
 
 type SomeMetric :: Type
 data SomeMetric
-  = forall metric. (KnownMetric metric) => SomeMetric !(Proxy metric) [Metric (TypeOf metric)]
+  = forall metric. (KnownMetric metric) => SomeMetric !(Proxy metric) [Metric (GetMetricType metric)]
 
 --------------------------------------------------------------------------------
 -- Metric Processor
@@ -68,14 +68,14 @@ data MetricProcessor metric m a b c
   -- ^ The `processor` field holds the input processor. Usually, this processes events into t`Metric`.
   , aggregators :: !(MetricAggregators b c)
   -- ^ The `aggregators` field holds the aggregation strategies.
-  , ungroup :: !(c -> f (Metric (TypeOf metric)))
+  , ungroup :: !(c -> f (Metric (GetMetricType metric)))
   -- ^ The `ungroup` function is useful when one value holds multiple metrics of the same type.
   }
 
 process ::
   (Monad m, KnownMetric metric) =>
   Proxy metric ->
-  ProcessT m i (Metric (TypeOf metric)) ->
+  ProcessT m i (Metric (GetMetricType metric)) ->
   FullConfig ->
   ProcessT m (Tick i) (Tick SomeMetric)
 process (metric :: Proxy metric) processor =
@@ -85,8 +85,8 @@ process (metric :: Proxy metric) processor =
 processorFor ::
   (Monad m, KnownMetric metric) =>
   Proxy metric ->
-  ProcessT m i (Metric (TypeOf metric)) ->
-  MetricProcessor metric m i (Metric (TypeOf metric)) (Metric (TypeOf metric))
+  ProcessT m i (Metric (GetMetricType metric)) ->
+  MetricProcessor metric m i (Metric (GetMetricType metric)) (Metric (GetMetricType metric))
 processorFor (metric :: Proxy metric) processor =
   MetricProcessor{processor = processor, aggregators = aggregatorsFor metric, ungroup = Identity}
 {-# INLINE processorFor #-}
@@ -136,8 +136,8 @@ anyProcessorEnabled fullConfig ((:&:) @metric _ rest) =
 select ::
   (Monad m, KnownMetric metric) =>
   Proxy metric ->
-  (i -> TypeOf metric) ->
-  MetricProcessor metric m (Metric i) (Metric (TypeOf metric)) (Metric (TypeOf metric))
+  (i -> GetMetricType metric) ->
+  MetricProcessor metric m (Metric i) (Metric (GetMetricType metric)) (Metric (GetMetricType metric))
 select (metric :: Proxy metric) f =
   MetricProcessor{processor = mapping (fmap f), aggregators = aggregatorsFor metric, ungroup = Identity}
 {-# INLINE select #-}
@@ -179,9 +179,9 @@ Get the aggregator for a known metric, based on its known `MetricKind`.
 aggregatorsFor ::
   (KnownMetric metric) =>
   Proxy metric ->
-  MetricAggregators (Metric (TypeOf metric)) (Metric (TypeOf metric))
+  MetricAggregators (Metric (GetMetricType metric)) (Metric (GetMetricType metric))
 aggregatorsFor (_metric :: Proxy metric) =
-  case metricKindSing (Proxy @(KindOf metric)) of
+  case metricKindSing (Proxy @(GetMetricKind metric)) of
     SGauge -> viaLast
     SSum SCumulative _sMonotonicity -> viaLast
     SSum SDelta _sMonotonicity -> viaSum

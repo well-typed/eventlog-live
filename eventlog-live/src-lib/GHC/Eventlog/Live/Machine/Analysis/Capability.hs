@@ -25,7 +25,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Capability (
   CapabilityUsageSpan,
   CapabilityUser (..),
   capabilityUser,
-  showCapabilityUserCategory,
+  showCapabilityUser,
   processCapabilityUsageSpans,
   processCapabilityUsageSpans',
 
@@ -189,7 +189,7 @@ instance HasField "attrs" (CapabilityUsageDuration a) Attrs where
   getField :: CapabilityUsageDuration a -> Attrs
   getField CapabilityUsageDuration{..} =
     [ "capNo" ~= capNo
-    , "category" ~= maybe "Idle" showCapabilityUserCategory usage
+    , "usage" ~= maybe "Idle" showCapabilityUser usage
     , "user" ~= usage
     ]
 
@@ -291,8 +291,8 @@ capabilityUser = either (const GC) (Mutator . (.thread))
 {- |
 Show the category of a `CapabilityUser` as either @"GC"@ or @"Mutator"@.
 -}
-showCapabilityUserCategory :: CapabilityUser -> Text
-showCapabilityUserCategory = \case
+showCapabilityUser :: CapabilityUser -> Text
+showCapabilityUser = \case
   GC{} -> "GC"
   Mutator{} -> "Mutator"
 
@@ -315,6 +315,16 @@ instance HasField "endTimeUnixNano" CapabilityUsageSpan Timestamp where
 instance HasField "capNo" CapabilityUsageSpan CapNo where
   getField :: CapabilityUsageSpan -> CapNo
   getField = either (.capNo) (.capNo)
+
+instance HasField "traceId" CapabilityUsageSpan CapNo where
+  getField :: CapabilityUsageSpan -> CapNo
+  getField = either (.traceId) (.traceId)
+
+instance HasField "attrs" CapabilityUsageSpan Attrs where
+  getField :: CapabilityUsageSpan -> Attrs
+  getField s =
+    ["usage" ~= showCapabilityUser (capabilityUser s)]
+      <> either (.attrs) (.attrs) s
 
 {-# SPECIALIZE duration :: CapabilityUsageSpan -> Timestamp #-}
 
@@ -376,6 +386,16 @@ data GCSpan = GCSpan
   , endTimeUnixNano :: !Timestamp
   }
   deriving (Show)
+
+instance HasField "traceId" GCSpan CapNo where
+  getField :: GCSpan -> CapNo
+  getField = (.capNo)
+
+instance HasField "attrs" GCSpan Attrs where
+  getField :: GCSpan -> Attrs
+  getField s =
+    [ "capNo" ~= s.capNo
+    ]
 
 {-# SPECIALIZE duration :: GCSpan -> Timestamp #-}
 
@@ -518,6 +538,17 @@ data MutatorSpan = MutatorSpan
   , endTimeUnixNano :: !Timestamp
   }
   deriving (Show)
+
+instance HasField "traceId" MutatorSpan CapNo where
+  getField :: MutatorSpan -> CapNo
+  getField = (.capNo)
+
+instance HasField "attrs" MutatorSpan Attrs where
+  getField :: MutatorSpan -> Attrs
+  getField s =
+    [ "capNo" ~= s.capNo
+    , "thread" ~= s.thread
+    ]
 
 {-# SPECIALIZE duration :: MutatorSpan -> Timestamp #-}
 

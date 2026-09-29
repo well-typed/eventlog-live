@@ -66,10 +66,10 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "alias": "$tag_category",
+                        "alias": "$tag_usage",
                         "disableTextWrap": false,
                         "editorMode": "builder",
-                        "expr": "sum by(category) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}[$__interval]))",
+                        "expr": "sum by(usage) (avg_over_time(ghc_eventlog_CapabilityUsageDuration_nanoseconds_total{exported_job=\"$service_name\", exported_instance=\"$service_instance_id\"}[$__interval]))",
                         "fullMetaSearch": false,
                         "groupBy": [
                           {
@@ -77,7 +77,7 @@
                             "type": "time"
                           },
                           {
-                            "params": ["category::tag"],
+                            "params": ["usage::tag"],
                             "type": "tag"
                           },
                           {

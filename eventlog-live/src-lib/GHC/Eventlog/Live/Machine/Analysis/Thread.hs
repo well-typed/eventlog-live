@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -16,8 +17,8 @@ module GHC.Eventlog.Live.Machine.Analysis.Thread (
 
   -- ** Thread State Spans
   ThreadState (..),
-  showThreadStateCategory,
-  threadStateStatus,
+  showThreadState,
+  threadStopStatus,
   threadStateCapNo,
   ThreadStateSpan (..),
   processThreadStateSpans,
@@ -31,14 +32,16 @@ import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
+import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Span (duration)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
-import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), Timestamp)
+import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), Timestamp, showThreadStopStatus)
 import GHC.RTS.Events qualified as E
+import GHC.Records (HasField (..))
 import Text.Printf (printf)
 
 -------------------------------------------------------------------------------
@@ -83,8 +86,8 @@ data ThreadState
 {- |
 Pretty-print a thread state as "Running", "Blocked", or "Finished".
 -}
-showThreadStateCategory :: ThreadState -> Text
-showThreadStateCategory = \case
+showThreadState :: ThreadState -> Text
+showThreadState = \case
   Running{} -> "Running"
   Blocked{} -> "Blocked"
   Finished{} -> "Finished"
@@ -92,8 +95,8 @@ showThreadStateCategory = \case
 {- |
 Get the t`ThreadState` status, if the t`ThreadState` is `Blocked`.
 -}
-threadStateStatus :: ThreadState -> Maybe ThreadStopStatus
-threadStateStatus = \case
+threadStopStatus :: ThreadState -> Maybe ThreadStopStatus
+threadStopStatus = \case
   Running{} -> Nothing
   Blocked{status} -> Just status
   Finished{} -> Nothing
@@ -118,6 +121,19 @@ data ThreadStateSpan
   , endTimeUnixNano :: !Timestamp
   }
   deriving (Show)
+
+instance HasField "traceId" ThreadStateSpan ThreadId where
+  getField :: ThreadStateSpan -> ThreadId
+  getField = (.thread)
+
+instance HasField "attrs" ThreadStateSpan Attrs where
+  getField :: ThreadStateSpan -> Attrs
+  getField s =
+    [ "capNo" ~= threadStateCapNo s.threadState
+    , "thread" ~= s.thread
+    , "threadState" ~= showThreadState s.threadState
+    , "threadStopStatus" ~= (showThreadStopStatus <$> threadStopStatus s.threadState)
+    ]
 
 {-# SPECIALIZE duration :: ThreadStateSpan -> Timestamp #-}
 

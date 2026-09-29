@@ -226,7 +226,7 @@ toMetric fullConfig (SomeMetric (metric :: Proxy metric) measurements) = do
     messageWith $
       [ OM.name .~ C.processorName (.metrics) (C.metricConfig @metric) fullConfig
       , maybe id (OM.description .~) $ C.processorDescription (.metrics) (C.metricConfig @metric) fullConfig
-      , OM.unit .~ toUCUM (metricUnitSing (Proxy @(UnitOf metric)))
+      , OM.unit .~ toUCUM (metricUnitSing (Proxy @(GetMetricUnit metric)))
       , OM.maybe'data' .~ Just metricData
       ]
 {-# INLINE toMetric #-}
@@ -238,7 +238,7 @@ toMetric'Data ::
   Maybe OM.Metric'Data
 toMetric'Data (_metric :: Proxy metric) dataPoints =
   ifNonEmpty dataPoints $
-    case metricKindSing (Proxy @(C.KindOf metric)) of
+    case metricKindSing (Proxy @(C.GetMetricKind metric)) of
       SGauge ->
         OM.Metric'Gauge . messageWith $
           [ OM.dataPoints .~ dataPoints
@@ -254,7 +254,7 @@ toMetric'Data (_metric :: Proxy metric) dataPoints =
 metricToNumberDataPoint ::
   (C.KnownMetric metric) =>
   Proxy metric ->
-  Metric (C.TypeOf metric) ->
+  Metric (C.GetMetricType metric) ->
   OM.NumberDataPoint
 metricToNumberDataPoint (metric :: Proxy metric) =
   metricTypeIsNumberDataPoint'Value metric toNumberDataPoint
@@ -288,9 +288,9 @@ Every supported metric type has an instance of `IsNumberDataPoint'Value`.
 -}
 metricTypeIsNumberDataPoint'Value ::
   (C.KnownMetric metric) =>
-  Proxy metric -> ((IsNumberDataPoint'Value (C.TypeOf metric)) => a) -> a
+  Proxy metric -> ((IsNumberDataPoint'Value (C.GetMetricType metric)) => a) -> a
 metricTypeIsNumberDataPoint'Value (_proxy :: Proxy metric) x =
-  case metricTypeSing (Proxy :: Proxy (C.TypeOf metric)) of
+  case metricTypeSing (Proxy :: Proxy (C.GetMetricType metric)) of
     SMetricTypeFloat -> x
     SMetricTypeDouble -> x
     SMetricTypeWord -> x
