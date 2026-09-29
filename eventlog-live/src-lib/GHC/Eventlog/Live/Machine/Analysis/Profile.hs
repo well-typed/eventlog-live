@@ -32,15 +32,17 @@ import Data.Text qualified as Text
 import Data.Traversable.Compat (mapAccumM)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
-import Data.Word (Word16, Word32)
-import GHC.Eventlog.Live.Data.Attribute (Attrs, HasAttrs (..), (~=))
+import Data.Word (Word16, Word32, Word8)
+import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Data.Capability (CapNo (..), fromCapabilityId)
+import GHC.Eventlog.Live.Data.Sample (Location (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Data.Thread (ThreadId (..), fromThreadId)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
+import GHC.Records (HasField (..))
 import GHC.Stack.Profiler.Core qualified as GSP
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre (CostCentre (..), CostCentreId (..))
@@ -62,11 +64,34 @@ data CallStack = CallStack
   }
   deriving stock (Show)
 
-instance HasAttrs CallStack where
-  getAttrs :: CallStack -> Attrs
-  getAttrs callStack =
-    [ "capability" ~= callStack.capNo
-    , "thread" ~= callStack.threadId
+instance HasField "value" CallStack Word8 where
+  getField :: CallStack -> Word8
+  getField _s = 1
+
+instance HasField "stack" CallStack (Vector Location) where
+  getField :: CallStack -> Vector Location
+  getField = fmap toLocation . (.callStack)
+   where
+    toLocation :: CallStackFrame -> Location
+    toLocation = \case
+      CallStackFrame _ipId (Just InfoProv{..})
+        -- If there's a non-empty ipLabel, use it.
+        | not (T.null ipLabel) ->
+            Location{name = ipModule <> ":" <> ipLabel, srcLoc = ipSrcLoc}
+        -- If there's a non-empty ipName, use it.
+        | not (T.null ipName) ->
+            Location{name = ipModule <> ":" <> ipName, srcLoc = ipSrcLoc}
+      -- Otherwise, there's no helpful location information.
+      CallStackFrame ipId maybeInfoProv ->
+        Location{name = T.show ipId, srcLoc = maybe UnhelpfulSrcLoc (.ipSrcLoc) maybeInfoProv}
+      CallStackMessage name srcLoc ->
+        Location{..}
+
+instance HasField "attrs" CallStack Attrs where
+  getField :: CallStack -> Attrs
+  getField s =
+    [ "capNo" ~= s.capNo
+    , "thread" ~= s.threadId
     ]
 
 {- |
@@ -249,11 +274,26 @@ data CostCentreStack = CostCentreStack
   }
   deriving stock (Show)
 
-instance HasAttrs CostCentreStack where
-  getAttrs :: CostCentreStack -> Attrs
-  getAttrs costCentreStack =
-    [ "capability" ~= costCentreStack.capNo
-    ]
+instance HasField "value" CostCentreStack Word8 where
+  getField :: CostCentreStack -> Word8
+  getField _s = 1
+
+instance HasField "stack" CostCentreStack (Vector Location) where
+  getField :: CostCentreStack -> Vector Location
+  getField = fmap toLocation . (.costCentreStack)
+   where
+    toLocation :: CostCentreStackFrame -> Location
+    toLocation = \case
+      CostCentreStackFrame _ccId (Just CostCentre{..})
+        -- If there's a non-empty ccLabel, use it.
+        | not (T.null ccLabel) ->
+            Location{name = ccModule <> ":" <> ccLabel, srcLoc = ccSrcLoc}
+      CostCentreStackFrame ccId maybeCostCentre ->
+        Location{name = T.show ccId, srcLoc = maybe UnhelpfulSrcLoc (.ccSrcLoc) maybeCostCentre}
+
+instance HasField "attrs" CostCentreStack Attrs where
+  getField :: CostCentreStack -> Attrs
+  getField s = ["capNo" ~= s.capNo]
 
 {- |
 A GHC cost-centre stack frame.

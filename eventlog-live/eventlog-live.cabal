@@ -149,6 +149,7 @@ library
     GHC.Eventlog.Live.Data.HeapProfBreakdown
     GHC.Eventlog.Live.Data.LogRecord
     GHC.Eventlog.Live.Data.Metric
+    GHC.Eventlog.Live.Data.Sample
     GHC.Eventlog.Live.Data.Severity
     GHC.Eventlog.Live.Data.Span
     GHC.Eventlog.Live.Data.Thread
