@@ -40,12 +40,12 @@ import GHC.Eventlog.Live.Otlp.Exporter.Core (Exporter, withExporters)
 import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs)
 import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics, toExportMetricsServiceRequest, toMetric, toResourceMetrics, toScopeMetrics)
 import GHC.Eventlog.Live.Otlp.Exporter.Profiles (exportResourceProfiles)
-import GHC.Eventlog.Live.Otlp.Exporter.Traces (exportResourceSpans)
+import GHC.Eventlog.Live.Otlp.Exporter.Traces (exportResourceSpans, toExportTracesServiceRequest, toResourceSpans, toScopeSpans, toSpans)
 import GHC.Eventlog.Live.Otlp.Options
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core
 import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (toExportTracesServiceRequest, toResourceSpans, toScopeSpans)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (SomeSpans)
 import GHC.Eventlog.Live.Otlp.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Otlp.Processor.Logs (processLogEvents)
 import GHC.Eventlog.Live.Otlp.Processor.Profiles (Sample, Stack, processProfileEvents, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
@@ -263,7 +263,7 @@ main = do
 data TelemetryData
   = TelemetryData'Log OL.LogRecord
   | TelemetryData'Metric SomeMetric
-  | TelemetryData'Span OT.Span
+  | TelemetryData'Span SomeSpans
   | TelemetryData'Sample (Sample Stack)
 
 data ResourceTelemetryData
@@ -360,7 +360,7 @@ asResourceTelemetryData fullConfig resource instrumentationScope =
   toResourceTelemetryData telemetryData =
     catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
    where
-    (logRecords, someMetrics, spans, samples) = partitionTelemetryData telemetryData
+    (logRecords, someMetrics, someSpans, samples) = partitionTelemetryData telemetryData
 
     maybeResourceLogs = do
       scopeLogs <- toScopeLogs instrumentationScope logRecords
@@ -372,6 +372,7 @@ asResourceTelemetryData fullConfig resource instrumentationScope =
       resourceMetrics <- toResourceMetrics resource [scopeMetrics]
       pure $ ResourceTelemetryData'Metric resourceMetrics
     maybeResourceSpans = do
+      let spans = concatMap (toSpans fullConfig) someSpans
       scopeSpans <- toScopeSpans instrumentationScope spans
       resourceSpans <- toResourceSpans resource [scopeSpans]
       pure $ ResourceTelemetryData'Span resourceSpans
@@ -385,15 +386,15 @@ asResourceTelemetryData fullConfig resource instrumentationScope =
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [OT.Span], [Sample Stack])
+partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [SomeSpans], [Sample Stack])
 partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([OL.LogRecord], [SomeMetric], [OT.Span], [Sample Stack]) -> [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [OT.Span], [Sample Stack])
+  go :: ([OL.LogRecord], [SomeMetric], [SomeSpans], [Sample Stack]) -> [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [SomeSpans], [Sample Stack])
   go (logsRev, metricsRev, spansRev, samplesRev) = \case
     [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
     (TelemetryData'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
     (TelemetryData'Metric metric : rest) -> go (logsRev, metric : metricsRev, spansRev, samplesRev) rest
-    (TelemetryData'Span span_ : rest) -> go (logsRev, metricsRev, span_ : spansRev, samplesRev) rest
+    (TelemetryData'Span spans : rest) -> go (logsRev, metricsRev, spans : spansRev, samplesRev) rest
     (TelemetryData'Sample sample : rest) -> go (logsRev, metricsRev, spansRev, sample : samplesRev) rest
 
 {- |

@@ -28,18 +28,19 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Otlp.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric, process)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (asSpan)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics qualified as CM
+import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (SomeSpans)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Traces qualified as CT
 import GHC.RTS.Events (Event (..))
-import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 
-data OneOf a b c = A !a | B !b | C !c
+data ABC a b c = A !a | B !b | C !c
 
 processThreadEvents ::
   (MonadIO m) =>
   Logger m ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either SomeMetric OT.Span)))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either SomeMetric SomeSpans)))
 processThreadEvents verbosity fullConfig =
   runIf (shouldProcessThreadEvents fullConfig) $
     M.sortByTicks (.value.evTime) fullConfig.eventlogFlushIntervalX
@@ -58,46 +59,32 @@ processThreadEvents verbosity fullConfig =
                     ]
             ]
         )
-      ~> M.liftTick
-        ( asParts
-            ~> mapping repackCapabilityUsageSpanOrThreadStateSpan
-        )
+      ~> M.liftTick (asParts ~> mapping repackCapabilityUsageSpanOrThreadStateSpan)
       ~> fanout
-        [ M.liftTick
-            ( mapping leftToMaybe
-                ~> asParts
-            )
+        [ M.liftTick (mapping leftToMaybe ~> asParts)
             ~> M.fanoutTick
               [ M.liftTick M.processCapabilityUsageDuration
                   ~> M.fanoutTick
-                    [ process (Proxy @C.CapabilityUsageMetric) (mapping M.toMetric) fullConfig
+                    [ CM.process (Proxy @C.CapabilityUsageMetric) (mapping M.toMetric) fullConfig
                         ~> M.liftTick (mapping D.singleton)
-                    , process (Proxy @C.ProductivityMetric) (M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)) fullConfig
+                    , CM.process (Proxy @C.ProductivityMetric) (M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)) fullConfig
                         ~> M.liftTick (mapping D.singleton)
                     ]
                   ~> mapping (fmap (fmap Left))
-              , runIf (C.processorEnabled (.traces) (.capabilityUsage) fullConfig) $
-                  M.liftTick
-                    ( M.dropStartTime
-                        ~> asSpan fullConfig
-                        ~> mapping (D.singleton . Right)
-                    )
-                    ~> M.batchByTick
+              , M.liftTick M.dropStartTime
+                  ~> CT.process (Proxy @C.CapabilityUsageSpan) fullConfig
+                  ~> M.liftTick (mapping (D.singleton . Right))
               ]
-        , runIf (C.processorEnabled (.traces) (.threadState) fullConfig) $
-            M.liftTick
-              ( mapping rightToMaybe
-                  ~> asParts
-                  ~> asSpan fullConfig
-                  ~> mapping (D.singleton . Right)
-              )
-              ~> M.batchByTick
+        , M.liftTick (mapping rightToMaybe ~> asParts)
+            ~> M.liftTick M.dropStartTime
+            ~> CT.process (Proxy @C.ThreadStateSpan) fullConfig
+            ~> M.liftTick (mapping (D.singleton . Right))
         ]
  where
   repackCapabilityUsageSpanOrThreadStateSpan = \case
     A i -> Left $ fmap Left i
     B i -> Left $ fmap Right i
-    C i -> Right i.value
+    C i -> Right i
 
 {- |
 Internal helper.

@@ -5,6 +5,12 @@ module GHC.Eventlog.Live.Otlp.Exporter.Traces (
   ExportTraceResult (..),
   RejectedSpansError (..),
   exportResourceSpans,
+
+  -- * Conversion to OTLP
+  toExportTracesServiceRequest,
+  toResourceSpans,
+  toScopeSpans,
+  toSpans,
 ) where
 
 import Control.Exception (Exception (..), SomeException (..), catch)
@@ -12,17 +18,27 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int64)
 import Data.Machine (ProcessT, await, construct, yield)
+import Data.Maybe (mapMaybe)
+import Data.Proxy (Proxy)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Data.Span (Span (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Otlp.Config (FullConfig, traceConfig)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
-import Lens.Family2 ((^.))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (SomeSpans (..))
+import GHC.IsList (IsList (..))
+import Lens.Family2 ((.~), (^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService qualified as OTS
 import Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields qualified as OTS
+import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
+import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
 import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import Text.Printf (printf)
@@ -153,3 +169,39 @@ countSpansInScopeSpans :: (Integral i) => OT.ScopeSpans -> i
 countSpansInScopeSpans scopeSpans =
   fromIntegral $
     V.length (scopeSpans ^. OT.vec'spans)
+
+--------------------------------------------------------------------------------
+-- Conversion to OTLP
+--------------------------------------------------------------------------------
+
+toExportTracesServiceRequest :: [OT.ResourceSpans] -> OTS.ExportTraceServiceRequest
+toExportTracesServiceRequest resourceSpans =
+  messageWith [OTS.resourceSpans .~ resourceSpans]
+{-# INLINE toExportTracesServiceRequest #-}
+
+toResourceSpans :: OR.Resource -> [OT.ScopeSpans] -> Maybe OT.ResourceSpans
+toResourceSpans resource scopeSpans =
+  ifNonEmpty scopeSpans $
+    messageWith [OT.resource .~ resource, OT.scopeSpans .~ scopeSpans]
+{-# INLINE toResourceSpans #-}
+
+toScopeSpans :: OC.InstrumentationScope -> [OT.Span] -> Maybe OT.ScopeSpans
+toScopeSpans instrumentationScope spans =
+  ifNonEmpty spans $
+    messageWith [OT.scope .~ instrumentationScope, OT.spans .~ spans]
+{-# INLINE toScopeSpans #-}
+
+toSpans :: FullConfig -> SomeSpans -> [OT.Span]
+toSpans fullConfig (SomeSpans (_trace :: Proxy trace) spans) =
+  map toSpan spans
+ where
+  toSpan :: Span -> OT.Span
+  toSpan s =
+    messageWith
+      [ OT.name .~ C.processorName (.traces) (traceConfig @trace) fullConfig
+      , OT.traceId .~ s.traceId
+      , OT.spanId .~ s.spanId
+      , OT.startTimeUnixNano .~ s.startTimeUnixNano
+      , OT.endTimeUnixNano .~ s.endTimeUnixNano
+      , OT.attributes .~ mapMaybe toMaybeKeyValue (toList s.attrs)
+      ]
