@@ -82,9 +82,8 @@ import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Proto.Opentelemetry.Proto.Resource.V1.Resource_Fields qualified as OR
-import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OS
 import Proto.Opentelemetry.Proto.Trace.V1.Trace qualified as OT
-import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OS
+import Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields qualified as OT
 import System.IO qualified as IO
 import System.IO.Temp (withSystemTempFile)
 import System.Process (getCurrentPid)
@@ -174,8 +173,8 @@ toProfiles = mapping (traverse (^. OP.vec'profiles)) ~> asParts
 {- |
 Stream scope spans as individual spans.
 -}
-toSpans :: (Monad m) => ProcessT m OS.ScopeSpans OS.Span
-toSpans = mapping (^. OS.vec'spans) ~> asParts
+toSpans :: (Monad m) => ProcessT m OT.ScopeSpans OT.Span
+toSpans = mapping (^. OT.vec'spans) ~> asParts
 
 {- |
 Stream resource logs as individual scope logs.
@@ -198,8 +197,8 @@ toScopeProfiles = mapping (traverse (^. OP.vec'scopeProfiles)) ~> asParts
 {- |
 Stream resource spans as individual scope spans.
 -}
-toScopeSpans :: (Monad m) => ProcessT m OS.ResourceSpans OS.ScopeSpans
-toScopeSpans = mapping (^. OS.vec'scopeSpans) ~> asParts
+toScopeSpans :: (Monad m) => ProcessT m OT.ResourceSpans OT.ScopeSpans
+toScopeSpans = mapping (^. OT.vec'scopeSpans) ~> asParts
 
 {- |
 Filter a resource telemetry stream to only resource logs.
