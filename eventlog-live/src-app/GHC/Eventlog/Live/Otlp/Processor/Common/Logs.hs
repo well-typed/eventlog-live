@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 {- |
 Module      : GHC.Eventlog.Live.Otlp.Processor.Common.Logs
 Description : Profile Processors for OTLP.
@@ -7,78 +5,39 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Otlp.Processor.Common.Logs (
-  ToLogRecord (..),
-  toExportLogsServiceRequest,
-  toResourceLogs,
-  toScopeLogs,
+  SomeLogs (..),
+  process,
 )
 where
 
-import Data.Function ((&))
-import Data.Maybe (fromMaybe, mapMaybe)
-import Data.ProtoLens (Message (..))
-import Data.Text (Text)
-import GHC.Eventlog.Live.Data.Attribute ((~=))
-import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
-import GHC.Eventlog.Live.Data.Severity (Severity)
-import GHC.Eventlog.Live.Data.Severity qualified as DS
-import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
-import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
-import GHC.IsList (IsList (..))
-import Lens.Family2 ((.~))
-import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS
-import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
-import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
-import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
-import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
-import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
-
-toExportLogsServiceRequest :: [OL.ResourceLogs] -> OLS.ExportLogsServiceRequest
-toExportLogsServiceRequest = (defMessage &) . (OL.resourceLogs .~)
-
-toResourceLogs :: OR.Resource -> [OL.ScopeLogs] -> Maybe OL.ResourceLogs
-toResourceLogs resource scopeLogs =
-  ifNonEmpty scopeLogs $
-    messageWith [OL.resource .~ resource, OL.scopeLogs .~ scopeLogs]
-
-toScopeLogs :: OC.InstrumentationScope -> [OL.LogRecord] -> Maybe OL.ScopeLogs
-toScopeLogs instrumentationScope logRecords =
-  ifNonEmpty logRecords $
-    messageWith [OL.scope .~ instrumentationScope, OL.logRecords .~ logRecords]
+import Data.DList qualified as D
+import Data.Kind (Type)
+import Data.Machine (ProcessT, mapping, (~>))
+import Data.Proxy (Proxy)
+import GHC.Eventlog.Live.Data.LogRecord (IsLogRecord, LogRecord, toLogRecord)
+import GHC.Eventlog.Live.Machine.Core (Tick)
+import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Otlp.Config (FullConfig, KnownLog, logConfig)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
 
 --------------------------------------------------------------------------------
--- Interpret logs
+-- Existential wrapper for logs
+--------------------------------------------------------------------------------
 
-class ToLogRecord v where
-  toLogRecord :: v -> OL.LogRecord
+type SomeLogs :: Type
+data SomeLogs
+  = forall log. (KnownLog log) => SomeLogs !(Proxy log) [LogRecord]
 
-instance ToLogRecord LogRecord where
-  toLogRecord :: LogRecord -> OL.LogRecord
-  toLogRecord i =
-    messageWith
-      [ OL.body .~ messageWith [OC.stringValue .~ i.body]
-      , OL.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-      , -- TODO: this could be set to the actual observed time in the processor.
-        OL.observedTimeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-      , OL.attributes .~ mapMaybe toMaybeKeyValue (toList i.attrs)
-      , OL.severityNumber .~ toSeverityNumber i.maybeSeverity
-      ]
-   where
-    toSeverityNumber :: Maybe Severity -> OL.SeverityNumber
-    toSeverityNumber = maybe OL.SEVERITY_NUMBER_UNSPECIFIED (toEnum . (.value) . DS.toSeverityNumber)
-
-instance ToLogRecord M.ThreadLabel where
-  toLogRecord :: M.ThreadLabel -> OL.LogRecord
-  toLogRecord i =
-    messageWith
-      [ OL.body .~ messageWith [OC.stringValue .~ i.threadlabel]
-      , OL.timeUnixNano .~ i.startTimeUnixNano
-      , -- TODO: this could be set to the actual observed time in the processor.
-        OL.observedTimeUnixNano .~ i.startTimeUnixNano
-      , OL.attributes
-          .~ mapMaybe
-            toMaybeKeyValue
-            [ "kind" ~= ("ThreadLabel" :: Text)
-            , "thread" ~= i.thread
-            ]
-      ]
+process ::
+  (Monad m, IsLogRecord l) =>
+  (KnownLog log) =>
+  Proxy log ->
+  ProcessT m i l ->
+  FullConfig ->
+  ProcessT m (Tick i) (Tick SomeLogs)
+process (log_ :: Proxy log) processor fullConfig =
+  runIf (C.processorEnabled (.logs) (logConfig @log) fullConfig) $
+    M.liftTick (processor ~> mapping (D.singleton . toLogRecord))
+      ~> M.batchByTicks (C.processorExportBatches (.logs) (logConfig @log) fullConfig)
+      ~> M.liftTick (mapping $ SomeLogs log_ . D.toList)

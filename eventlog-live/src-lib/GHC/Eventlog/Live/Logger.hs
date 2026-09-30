@@ -62,13 +62,13 @@ data MyTelemetryData
 Use a `Logger` to log a message with a severity.
 -}
 writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
-writeLog logger severity body =
+writeLog logger severity value =
   let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
    in logger
         <& MyTelemetryData'LogRecord
           { logRecord =
               LogRecord
-                { body
+                { value
                 , maybeSeverity = Just severity
                 , maybeTimeUnixNano = Nothing
                 , attrs = ["call-stack" ~= (prettyCallStack <$> maybeCallStack)]
@@ -156,7 +156,7 @@ formatLogRecord logRecord =
     [ -- format the severity
       maybe "" (\severity -> "[" <> TLB.fromString (toSeverityString severity) <> "] ") logRecord.maybeSeverity
     , -- format the body
-      TLB.fromText logRecord.body
+      TLB.fromText logRecord.value
     , -- format the call-stack, if any
       case A.lookup "call-stack" logRecord.attrs of
         Just (AttrText theCallStack)
