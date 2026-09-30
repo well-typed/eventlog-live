@@ -1,10 +1,5 @@
 # HLint configuration file
 # https://github.com/ndmitchell/hlint
-##########################
-
-# Specify additional command line arguments
-#
-# - arguments: [--color, --cpp-simple, -XQuasiQuotes]
 
 # Control which extensions/flags/modules/functions can be used
 #
@@ -23,65 +18,167 @@
           UndecidableInstances,
           QuasiQuotes,
         ]
-#  - name: [PatternGuards, ViewPatterns] # only these listed extensions can be used
-#  - {name: CPP, within: CrossPlatform} # CPP can only be used in a given module
-#
-# - flags:
-#   - {name: -w, within: []} # -w is allowed nowhere
-#
 - modules:
+    # There are orphan instances in GHC.Eventlog.Live.App.Config, which means
+    # that importing configuration types from the Types submodule will lead to
+    # rather confusing errors.
     - {
-        name: [Database.LSMTree, Database.LSMTree.Simple],
-        as: LSMT,
-        within: [GHC.Eventlog.Live.Database],
+        name: [GHC.Eventlog.Live.App.Config.Types],
+        within:
+          [GHC.Eventlog.Live.App.Config, GHC.Eventlog.Live.App.Config.Default],
       }
     - {
-        name: [GHC.Eventlog.Live.Otlp.Config.Types],
+        name: [GHC.Eventlog.Live.App.Config.Default],
+        within: [GHC.Eventlog.Live.App.Config],
+      }
+    # The modules from hs-opentelemetry-otlp may only be imported under the
+    # GHC.Eventlog.Live.App.Exporter.Otlp module prefix, and must be imported
+    # under specific names.
+    # This is in antipation of isolating all code specific to OTLP to that prefix,
+    # which only requires modifying GHC.Eventlog.Live.App.
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Common.V1.Common",
+            "Proto.Opentelemetry.Proto.Common.V1.Common_Fields",
+          ],
+        as: OC,
         within:
           [
-            GHC.Eventlog.Live.Otlp.Config,
-            GHC.Eventlog.Live.Otlp.Config.Default,
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
           ],
       }
     - {
-        name: [GHC.Eventlog.Live.Otlp.Config.Default],
-        within: [GHC.Eventlog.Live.Otlp.Config],
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService",
+            "Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService_Fields",
+          ],
+        as: OLS,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
       }
-#   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
-#   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
-#
-# - functions:
-#   - {name: unsafePerformIO, within: []} # unsafePerformIO can only appear in no modules
-
-# Add custom hints for this project
-#
-# Will suggest replacing "wibbleMany [myvar]" with "wibbleOne myvar"
-# - error: {lhs: "wibbleMany [x]", rhs: wibbleOne x}
-
-# The hints are named by the string they display in warning messages.
-# For example, if you see a warning starting like
-#
-# Main.hs:116:51: Warning: Redundant ==
-#
-# You can refer to that hint with `{name: Redundant ==}` (see below).
-
-# Turn on hints that are off by default
-#
-# Ban "module X(module X) where", to require a real export list
-# - warn: {name: Use explicit module export list}
-#
-# Replace a $ b $ c with a . b $ c
-# - group: {name: dollar, enabled: true}
-#
-# Generalise map to fmap, ++ to <>
-# - group: {name: generalise, enabled: true}
-#
-# Warn on use of partial functions
-# - group: {name: partial, enabled: true}
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Logs.V1.Logs",
+            "Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields",
+          ],
+        as: OL,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService",
+            "Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields",
+          ],
+        as: OMS,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Metrics.V1.Metrics",
+            "Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields",
+          ],
+        as: OM,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService",
+            "Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields",
+          ],
+        as: OPS,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Profiles.V1development.Profiles",
+            "Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields",
+          ],
+        as: OP,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Resource.V1.Resource",
+            "Proto.Opentelemetry.Proto.Resource.V1.Resource_Fields",
+          ],
+        as: OR,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService",
+            "Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields",
+          ],
+        as: OTS,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
+    - {
+        name:
+          [
+            "Proto.Opentelemetry.Proto.Trace.V1.Trace",
+            "Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields",
+          ],
+        as: OT,
+        within:
+          [
+            "GHC.Eventlog.Live.Test",
+            "GHC.Eventlog.Live.App.Exporter.Otlp",
+            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
+          ],
+      }
 
 # Ignore some builtin hints
-# - ignore: {name: Use let}
-# - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
+#
 - ignore:
     name: "Redundant $"
 - ignore:
@@ -90,8 +187,3 @@
     name: "Use fewer imports"
     within:
       - "Options.Applicative.Compat"
-# Define some custom infix operators
-# - fixity: infixr 3 ~^#^~
-
-# To generate a suitable file for HLint do:
-# $ hlint --default > .hlint.yaml

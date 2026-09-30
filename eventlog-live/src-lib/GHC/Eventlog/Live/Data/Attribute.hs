@@ -22,6 +22,7 @@ import Data.Hashable (Hashable)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Version (Version, showVersion)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Generics (Generic)
 import GHC.IsList (IsList (..))
@@ -185,6 +186,11 @@ instance IsAttrValue String where
 instance IsAttrValue Text where
   toAttrValue :: Text -> AttrValue
   toAttrValue = AttrText
+  {-# INLINE toAttrValue #-}
+
+instance IsAttrValue Version where
+  toAttrValue :: Version -> AttrValue
+  toAttrValue = toAttrValue . showVersion
   {-# INLINE toAttrValue #-}
 
 instance (IsAttrValue v) => IsAttrValue (Maybe v) where

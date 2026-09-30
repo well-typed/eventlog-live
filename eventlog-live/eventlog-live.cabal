@@ -248,31 +248,33 @@ executable eventlog-live-otlp
     src-app
 
   other-modules:
-    GHC.Eventlog.Live.Otlp
-    GHC.Eventlog.Live.Otlp.Config
-    GHC.Eventlog.Live.Otlp.Config.Default
-    GHC.Eventlog.Live.Otlp.Config.Default.Raw
-    GHC.Eventlog.Live.Otlp.Config.Types
-    GHC.Eventlog.Live.Otlp.Control
-    GHC.Eventlog.Live.Otlp.Environment
-    GHC.Eventlog.Live.Otlp.Exporter.Core
-    GHC.Eventlog.Live.Otlp.Exporter.Logs
-    GHC.Eventlog.Live.Otlp.Exporter.Metrics
-    GHC.Eventlog.Live.Otlp.Exporter.Profiles
-    GHC.Eventlog.Live.Otlp.Exporter.Traces
-    GHC.Eventlog.Live.Otlp.Options
-    GHC.Eventlog.Live.Otlp.Options.Raw
-    GHC.Eventlog.Live.Otlp.Processor.Common.Core
-    GHC.Eventlog.Live.Otlp.Processor.Common.Logs
-    GHC.Eventlog.Live.Otlp.Processor.Common.Metrics
-    GHC.Eventlog.Live.Otlp.Processor.Common.ProfilesDictionary
-    GHC.Eventlog.Live.Otlp.Processor.Common.SymbolTable
-    GHC.Eventlog.Live.Otlp.Processor.Common.Traces
-    GHC.Eventlog.Live.Otlp.Processor.Heap
-    GHC.Eventlog.Live.Otlp.Processor.Logs
-    GHC.Eventlog.Live.Otlp.Processor.Profiles
-    GHC.Eventlog.Live.Otlp.Processor.Threads
-    GHC.Eventlog.Live.Otlp.Stats
+    GHC.Eventlog.Live.App
+    GHC.Eventlog.Live.App.Config
+    GHC.Eventlog.Live.App.Config.Default
+    GHC.Eventlog.Live.App.Config.Default.Raw
+    GHC.Eventlog.Live.App.Config.Types
+    GHC.Eventlog.Live.App.Control
+    GHC.Eventlog.Live.App.Environment
+    GHC.Eventlog.Live.App.Exporter.Otlp
+    GHC.Eventlog.Live.App.Exporter.Otlp.Core
+    GHC.Eventlog.Live.App.Exporter.Otlp.Logs
+    GHC.Eventlog.Live.App.Exporter.Otlp.Metrics
+    GHC.Eventlog.Live.App.Exporter.Otlp.Profiles
+    GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary
+    GHC.Eventlog.Live.App.Exporter.Otlp.Traces
+    GHC.Eventlog.Live.App.Options
+    GHC.Eventlog.Live.App.Options.Raw
+    GHC.Eventlog.Live.App.Processor
+    GHC.Eventlog.Live.App.Processor.Common.Core
+    GHC.Eventlog.Live.App.Processor.Common.Logs
+    GHC.Eventlog.Live.App.Processor.Common.Metrics
+    GHC.Eventlog.Live.App.Processor.Common.SymbolTable
+    GHC.Eventlog.Live.App.Processor.Common.Traces
+    GHC.Eventlog.Live.App.Processor.Heap
+    GHC.Eventlog.Live.App.Processor.Logs
+    GHC.Eventlog.Live.App.Processor.Profiles
+    GHC.Eventlog.Live.App.Processor.Threads
+    GHC.Eventlog.Live.App.Stats
 
   hs-source-dirs:
     src-app-internal
