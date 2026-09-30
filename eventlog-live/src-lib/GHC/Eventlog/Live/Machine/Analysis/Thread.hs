@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- |
 Module      : GHC.Eventlog.Live.Machine.Analysis.Thread
@@ -13,7 +12,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Thread (
 
   -- ** Thread Labels
   ThreadLabel (..),
-  processThreadLabelData,
+  processThreadLabel,
 
   -- ** Thread State Spans
   ThreadState (..),
@@ -58,11 +57,23 @@ data ThreadLabel
   , startTimeUnixNano :: !Timestamp
   }
 
+instance HasField "value" ThreadLabel Text where
+  getField = (.threadlabel)
+
+instance HasField "maybeTimeUnixNano" ThreadLabel (Maybe Timestamp) where
+  getField = Just . (.startTimeUnixNano)
+
+instance HasField "maybeSeverity" ThreadLabel (Maybe Severity) where
+  getField = const Nothing
+
+instance HasField "attrs" ThreadLabel Attrs where
+  getField i = ["thread" ~= i.thread]
+
 {- |
 This machine processes `E.ThreadLabel` events and yields t`ThreadLabel` values.
 -}
-processThreadLabelData :: Process (WithStartTime Event) ThreadLabel
-processThreadLabelData = repeatedly go
+processThreadLabel :: Process (WithStartTime Event) ThreadLabel
+processThreadLabel = repeatedly go
  where
   go =
     await >>= \i -> case i.value.evSpec of

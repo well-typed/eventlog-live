@@ -15,6 +15,7 @@ import Control.Exception (bracket_)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList (DList)
 import Data.DList qualified as D
+import Data.Data (Proxy (..))
 import Data.Default (Default (..))
 import Data.Foldable qualified as F
 import Data.Machine (Process, ProcessT, asParts, mapping, stopped, (~>))
@@ -37,13 +38,14 @@ import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.Otlp.Environment (OpenTelemetrySdkOptions (..), PerSignal, ServiceName (..), Signal (..), forSignal, lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.Otlp.Exporter.Core (Exporter, withExporters)
-import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs)
+import GHC.Eventlog.Live.Otlp.Exporter.Logs (exportResourceLogs, toExportLogsServiceRequest, toLogRecords, toResourceLogs, toScopeLogs)
 import GHC.Eventlog.Live.Otlp.Exporter.Metrics (exportResourceMetrics, toExportMetricsServiceRequest, toMetric, toResourceMetrics, toScopeMetrics)
 import GHC.Eventlog.Live.Otlp.Exporter.Profiles (exportResourceProfiles, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
 import GHC.Eventlog.Live.Otlp.Exporter.Traces (exportResourceSpans, toExportTracesServiceRequest, toResourceSpans, toScopeSpans, toSpans)
 import GHC.Eventlog.Live.Otlp.Options
 import GHC.Eventlog.Live.Otlp.Processor.Common.Core
-import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..), toExportLogsServiceRequest, toResourceLogs, toScopeLogs)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (SomeLogs)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs qualified as CL
 import GHC.Eventlog.Live.Otlp.Processor.Common.Metrics (SomeMetric)
 import GHC.Eventlog.Live.Otlp.Processor.Common.Traces (SomeSpans)
 import GHC.Eventlog.Live.Otlp.Processor.Heap (processHeapEvents)
@@ -261,7 +263,7 @@ main = do
                     (processAndExportTelemetry ccdb ipedb exporters)
 
 data TelemetryData
-  = TelemetryData'Log OL.LogRecord
+  = TelemetryData'Log SomeLogs
   | TelemetryData'Metric SomeMetric
   | TelemetryData'Span SomeSpans
   | TelemetryData'Sample SomeSamples
@@ -360,9 +362,10 @@ asResourceTelemetryData fullConfig resource instrumentationScope =
   toResourceTelemetryData telemetryData =
     catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
    where
-    (logRecords, someMetrics, someSpans, someSamples) = partitionTelemetryData telemetryData
+    (someLogs, someMetrics, someSpans, someSamples) = partitionTelemetryData telemetryData
 
     maybeResourceLogs = do
+      let logRecords = concatMap (toLogRecords fullConfig) someLogs
       scopeLogs <- toScopeLogs instrumentationScope logRecords
       resourceLogs <- toResourceLogs resource [scopeLogs]
       pure $ ResourceTelemetryData'Log resourceLogs
@@ -386,10 +389,10 @@ asResourceTelemetryData fullConfig resource instrumentationScope =
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [SomeSpans], [SomeSamples])
+partitionTelemetryData :: [TelemetryData] -> ([SomeLogs], [SomeMetric], [SomeSpans], [SomeSamples])
 partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([OL.LogRecord], [SomeMetric], [SomeSpans], [SomeSamples]) -> [TelemetryData] -> ([OL.LogRecord], [SomeMetric], [SomeSpans], [SomeSamples])
+  go :: ([SomeLogs], [SomeMetric], [SomeSpans], [SomeSamples]) -> [TelemetryData] -> ([SomeLogs], [SomeMetric], [SomeSpans], [SomeSamples])
   go (logsRev, metricsRev, spansRev, samplesRev) = \case
     [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
     (TelemetryData'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
@@ -406,16 +409,17 @@ processInternalTelemetryData ::
   Process (Tick MyTelemetryData) (Tick (DList TelemetryData))
 processInternalTelemetryData fullConfig =
   M.fanoutTick
-    [ -- Process internal log messages.
-      M.liftTick (mapping getMyLogRecord ~> asParts ~> mapping (D.singleton . TelemetryData'Log . toLogRecord))
-        ~> M.batchByTicks (C.processorExportBatches (.logs) (.internalLogMessage) fullConfig)
-        -- TODO: Any internal metrics should be processed below.
+    [ CL.process (Proxy @C.InternalLogMessageLog) processInternalLogRecords fullConfig
+        ~> M.liftTick (mapping (D.singleton . TelemetryData'Log))
     ]
-
-getMyLogRecord :: MyTelemetryData -> Maybe LogRecord
-getMyLogRecord = \case
-  M.MyTelemetryData'LogRecord{..} -> Just logRecord
-  M.MyTelemetryData'Metric{} -> Nothing
+ where
+  processInternalLogRecords :: Process MyTelemetryData LogRecord
+  processInternalLogRecords = mapping getInternalLogRecord ~> asParts
+   where
+    getInternalLogRecord :: MyTelemetryData -> Maybe LogRecord
+    getInternalLogRecord = \case
+      M.MyTelemetryData'LogRecord{..} -> Just logRecord
+      M.MyTelemetryData'Metric{} -> Nothing
 
 --------------------------------------------------------------------------------
 -- Instrumentation Scope

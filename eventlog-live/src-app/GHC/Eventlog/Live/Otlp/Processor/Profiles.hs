@@ -12,6 +12,7 @@ module GHC.Eventlog.Live.Otlp.Processor.Profiles (
 where
 
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Kind (Type)
 import Data.Machine (ProcessT, mapping, (~>))
@@ -29,7 +30,6 @@ import GHC.RTS.Events (Event (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
-import Data.DList (DList)
 
 --------------------------------------------------------------------------------
 -- Profiles

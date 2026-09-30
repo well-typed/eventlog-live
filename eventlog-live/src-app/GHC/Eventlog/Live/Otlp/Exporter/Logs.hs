@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module GHC.Eventlog.Live.Otlp.Exporter.Logs (
@@ -5,26 +7,46 @@ module GHC.Eventlog.Live.Otlp.Exporter.Logs (
   ExportLogsResult (..),
   RejectedLogsError (..),
   exportResourceLogs,
+
+  -- * Conversion to OTLP
+  toExportLogsServiceRequest,
+  toResourceLogs,
+  toScopeLogs,
+  toLogRecords,
 ) where
 
 import Control.Exception (Exception (..), SomeException (..), catch)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Data (Proxy (..))
 import Data.Int (Int64)
 import Data.Machine (ProcessT, await, construct, yield)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
+import GHC.Eventlog.Live.Data.Attribute ((~=))
+import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Severity (Severity)
+import GHC.Eventlog.Live.Data.Severity qualified as DS
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Otlp.Config (FullConfig, logConfig)
+import GHC.Eventlog.Live.Otlp.Config qualified as C
 import GHC.Eventlog.Live.Otlp.Exporter.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export)
-import Lens.Family2 ((^.))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Core (ifNonEmpty, messageWith, toMaybeKeyValue)
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (SomeLogs (..))
+import GHC.IsList (IsList (..))
+import Lens.Family2 ((.~), (^.))
 import Network.GRPC.Common qualified as G
 import Network.GRPC.Common.Protobuf (Protobuf)
 import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService qualified as OLS
 import Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService_Fields qualified as OLS
+import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
+import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
+import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
 import Text.Printf (printf)
 
 --------------------------------------------------------------------------------
@@ -156,3 +178,40 @@ countLogRecordsInScopeLogs :: (Integral i) => OL.ScopeLogs -> i
 countLogRecordsInScopeLogs scopeLogs =
   fromIntegral $
     V.length (scopeLogs ^. OL.vec'logRecords)
+
+--------------------------------------------------------------------------------
+-- Conversion to OTLP
+--------------------------------------------------------------------------------
+
+toExportLogsServiceRequest :: [OL.ResourceLogs] -> OLS.ExportLogsServiceRequest
+toExportLogsServiceRequest resourceLogs =
+  messageWith [OL.resourceLogs .~ resourceLogs]
+
+toResourceLogs :: OR.Resource -> [OL.ScopeLogs] -> Maybe OL.ResourceLogs
+toResourceLogs resource scopeLogs =
+  ifNonEmpty scopeLogs $
+    messageWith [OL.resource .~ resource, OL.scopeLogs .~ scopeLogs]
+
+toScopeLogs :: OC.InstrumentationScope -> [OL.LogRecord] -> Maybe OL.ScopeLogs
+toScopeLogs instrumentationScope logRecords =
+  ifNonEmpty logRecords $
+    messageWith [OL.scope .~ instrumentationScope, OL.logRecords .~ logRecords]
+
+toLogRecords :: FullConfig -> SomeLogs -> [OL.LogRecord]
+toLogRecords fullConfig (SomeLogs (_log :: Proxy log) logRecords) =
+  [toLogRecord logRecord{attrs = ["name" ~= name] <> logRecord.attrs} | logRecord <- logRecords]
+ where
+  name = C.processorName (.logs) (logConfig @log) fullConfig
+
+toLogRecord :: LogRecord -> OL.LogRecord
+toLogRecord l =
+  messageWith
+    [ OL.body .~ messageWith [OC.stringValue .~ l.value]
+    , OL.timeUnixNano .~ fromMaybe 0 l.maybeTimeUnixNano
+    , OL.observedTimeUnixNano .~ fromMaybe 0 l.maybeTimeUnixNano
+    , OL.severityNumber .~ toSeverityNumber l.maybeSeverity
+    , OL.attributes .~ mapMaybe toMaybeKeyValue (toList l.attrs)
+    ]
+ where
+  toSeverityNumber :: Maybe Severity -> OL.SeverityNumber
+  toSeverityNumber = maybe OL.SEVERITY_NUMBER_UNSPECIFIED (toEnum . (.value) . DS.toSeverityNumber)

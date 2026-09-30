@@ -26,11 +26,13 @@ module GHC.Eventlog.Live.Otlp.Config (
   -- *** Log processor configuration types
   Logs (..),
   IsLogProcessorConfig,
+  KnownLog (..),
+  logConfig,
   shouldExportLogs,
-  ThreadLabel (..),
-  UserMarker (..),
-  UserMessage (..),
-  InternalLogMessage (..),
+  ThreadLabelLog (..),
+  UserMarkerLog (..),
+  UserMessageLog (..),
+  InternalLogMessageLog (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -195,20 +197,20 @@ instance Default Profiles where
 -- NOTE: This should be kept in sync with the list of logs.
 --       Specifically, there should be a `Default` instance for every log.
 
-instance Default ThreadLabel where
-  def :: ThreadLabel
+instance Default ThreadLabelLog where
+  def :: ThreadLabelLog
   def = $(getDefault @'["processors", "logs", "threadLabel"] defaultConfig)
 
-instance Default UserMarker where
-  def :: UserMarker
+instance Default UserMarkerLog where
+  def :: UserMarkerLog
   def = $(getDefault @'["processors", "logs", "userMarker"] defaultConfig)
 
-instance Default UserMessage where
-  def :: UserMessage
+instance Default UserMessageLog where
+  def :: UserMessageLog
   def = $(getDefault @'["processors", "logs", "userMessage"] defaultConfig)
 
-instance Default InternalLogMessage where
-  def :: InternalLogMessage
+instance Default InternalLogMessageLog where
+  def :: InternalLogMessageLog
   def = $(getDefault @'["processors", "logs", "internalLogMessage"] defaultConfig)
 
 -- NOTE: This should be kept in sync with the list of metrics.
@@ -287,6 +289,38 @@ instance Default CallStackProfile where
 instance Default CostCentreStackProfile where
   def :: CostCentreStackProfile
   def = $(getDefault @'["processors", "profiles", "costCentreStackProfile"] defaultConfig)
+
+-------------------------------------------------------------------------------
+-- KnownLog & Instances
+-------------------------------------------------------------------------------
+
+type KnownLog :: Type -> Constraint
+class
+  ( HasField (GetLogName log) Logs (Maybe log)
+  , IsLogProcessorConfig log
+  , Show log
+  , Default log
+  , KnownSymbol (GetLogName log)
+  ) =>
+  KnownLog log
+  where
+  type GetLogName log :: Symbol
+
+logConfig :: forall log. (KnownLog log) => Logs -> Maybe log
+logConfig = getField @(GetLogName log)
+{-# INLINE logConfig #-}
+
+instance KnownLog ThreadLabelLog where
+  type GetLogName ThreadLabelLog = "threadLabel"
+
+instance KnownLog UserMarkerLog where
+  type GetLogName UserMarkerLog = "userMarker"
+
+instance KnownLog UserMessageLog where
+  type GetLogName UserMessageLog = "userMessage"
+
+instance KnownLog InternalLogMessageLog where
+  type GetLogName InternalLogMessageLog = "internalLogMessage"
 
 -------------------------------------------------------------------------------
 -- KnownMetric & Instances

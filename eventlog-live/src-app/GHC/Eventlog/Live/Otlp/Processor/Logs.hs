@@ -12,6 +12,7 @@ where
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
+import Data.Data (Proxy (..))
 import Data.Machine (Process, ProcessT, mapping, (~>))
 import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
@@ -20,10 +21,9 @@ import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Otlp.Config (FullConfig (..))
 import GHC.Eventlog.Live.Otlp.Config qualified as C
-import GHC.Eventlog.Live.Otlp.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (ToLogRecord (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs (SomeLogs (..))
+import GHC.Eventlog.Live.Otlp.Processor.Common.Logs qualified as CL
 import GHC.RTS.Events (Event (..))
-import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 
 --------------------------------------------------------------------------------
 -- processLogEvents
@@ -32,40 +32,34 @@ import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 processLogEvents ::
   (MonadIO m) =>
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList SomeLogs))
 processLogEvents fullConfig =
   M.fanoutTick
     [ processThreadLabel fullConfig
+        ~> M.liftTick (mapping D.singleton)
     , processUserMarker fullConfig
+        ~> M.liftTick (mapping D.singleton)
     , processUserMessage fullConfig
+        ~> M.liftTick (mapping D.singleton)
     ]
 
 --------------------------------------------------------------------------------
 -- UserMessage
 
-processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processUserMessage fullConfig =
-  runIf (C.processorEnabled (.logs) (.userMessage) fullConfig) $
-    M.liftTick M.processUserMessage
-      ~> M.liftTick (mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMessage) fullConfig)
+processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
+processUserMessage =
+  CL.process (Proxy @C.UserMessageLog) M.processUserMessage
 
 --------------------------------------------------------------------------------
 -- UserMarker
 
-processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processUserMarker fullConfig =
-  runIf (C.processorEnabled (.logs) (.userMarker) fullConfig) $
-    M.liftTick M.processUserMarkerData
-      ~> M.liftTick (mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (.userMarker) fullConfig)
+processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
+processUserMarker =
+  CL.process (Proxy @C.UserMarkerLog) M.processUserMarker
 
 --------------------------------------------------------------------------------
 -- ThreadLabel
 
-processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList OL.LogRecord))
-processThreadLabel fullConfig =
-  runIf (C.processorEnabled (.logs) (.threadLabel) fullConfig) $
-    M.liftTick M.processThreadLabelData
-      ~> M.liftTick (mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (.threadLabel) fullConfig)
+processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
+processThreadLabel =
+  CL.process (Proxy @C.ThreadLabelLog) M.processThreadLabel

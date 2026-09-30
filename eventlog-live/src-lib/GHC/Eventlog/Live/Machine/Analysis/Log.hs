@@ -12,67 +12,73 @@ module GHC.Eventlog.Live.Machine.Analysis.Log where
 import Data.Machine (Process, await, repeatedly, yield)
 import Data.Text (Text)
 import GHC.Eventlog.Live.Data.Attribute (Attrs, (~=))
-import GHC.Eventlog.Live.Data.Capability (evCapNo)
-import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
-import GHC.RTS.Events (Event)
+import GHC.RTS.Events (Event, Timestamp)
 import GHC.RTS.Events qualified as E
+import GHC.Records (HasField (..))
 
 --------------------------------------------------------------------------------
 -- UserMessage
 
+data UserMessage = UserMessage
+  { value :: !Text
+  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , capNo :: !(Maybe CapNo)
+  }
+
+instance HasField "maybeSeverity" UserMessage (Maybe Severity) where
+  getField = const (Just TRACE)
+
+instance HasField "attrs" UserMessage Attrs where
+  getField i = ["capNo" ~= i.capNo]
+
 {- |
 This machine processes `E.UserMessage` events into logs.
 -}
-processUserMessage :: Process (WithStartTime Event) LogRecord
+processUserMessage :: Process (WithStartTime Event) UserMessage
 processUserMessage =
   repeatedly $
     await >>= \case
       i
         | E.UserMessage{..} <- i.value.evSpec ->
-            yield $
-              logRecord i msg (Just DEBUG) $
-                [ "capNo" ~= evCapNo i.value
-                , "kind" ~= ("UserMessage" :: Text)
-                ]
+            yield
+              UserMessage
+                { value = msg
+                , maybeTimeUnixNano = tryGetTimeUnixNano i
+                , capNo = evCapNo i.value
+                }
         | otherwise -> pure ()
 
 --------------------------------------------------------------------------------
 -- UserMarker
 
+data UserMarker = UserMarker
+  { value :: !Text
+  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , capNo :: !(Maybe CapNo)
+  }
+
+instance HasField "maybeSeverity" UserMarker (Maybe Severity) where
+  getField = const Nothing
+
+instance HasField "attrs" UserMarker Attrs where
+  getField i = ["capNo" ~= i.capNo]
+
 {- |
 This machine processes `E.UserMarker` events into logs.
 -}
-processUserMarkerData :: Process (WithStartTime Event) LogRecord
-processUserMarkerData =
+processUserMarker :: Process (WithStartTime Event) UserMarker
+processUserMarker =
   repeatedly $
     await >>= \case
       i
         | E.UserMarker{..} <- i.value.evSpec ->
-            yield $
-              logRecord i markername (Just TRACE) $
-                [ "capNo" ~= evCapNo i.value
-                , "kind" ~= ("UserMarker" :: Text)
-                ]
+            yield
+              UserMarker
+                { value = markername
+                , maybeTimeUnixNano = tryGetTimeUnixNano i
+                , capNo = evCapNo i.value
+                }
         | otherwise -> pure ()
-
-{- |
-Internal helper.
-Construct a t`LogRecord` from an event with a start time, a message, and any
-set of attributes. This is a smart constructor that pulls the timestamps out
-of the event.
--}
-logRecord ::
-  WithStartTime Event ->
-  Text ->
-  Maybe Severity ->
-  Attrs ->
-  LogRecord
-logRecord i body maybeSeverity attrs =
-  LogRecord
-    { body = body
-    , maybeTimeUnixNano = tryGetTimeUnixNano i
-    , maybeSeverity = maybeSeverity
-    , attrs = attrs
-    }

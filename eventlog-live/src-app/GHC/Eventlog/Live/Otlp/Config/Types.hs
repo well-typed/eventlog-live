@@ -18,10 +18,10 @@ module GHC.Eventlog.Live.Otlp.Config.Types (
   -- *** Log processor configuration types
   Logs (..),
   IsLogProcessorConfig,
-  ThreadLabel (..),
-  UserMarker (..),
-  UserMessage (..),
-  InternalLogMessage (..),
+  ThreadLabelLog (..),
+  UserMarkerLog (..),
+  UserMessageLog (..),
+  InternalLogMessageLog (..),
 
   -- *** Metric processor configuration types
   Metrics (..),
@@ -147,10 +147,10 @@ The configuration options for the span processors.
 --
 -- ...and update all the relevant locations.
 data Logs = Logs
-  { threadLabel :: Maybe ThreadLabel
-  , userMarker :: Maybe UserMarker
-  , userMessage :: Maybe UserMessage
-  , internalLogMessage :: Maybe InternalLogMessage
+  { threadLabel :: Maybe ThreadLabelLog
+  , userMarker :: Maybe UserMarkerLog
+  , userMessage :: Maybe UserMessageLog
+  , internalLogMessage :: Maybe InternalLogMessageLog
   }
   deriving (Lift, Show)
 
@@ -309,75 +309,75 @@ instance ToYAML Profiles where
 -------------------------------------------------------------------------------
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadLabelData`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadLabelLogData`.
 -}
-data ThreadLabel = ThreadLabel
+data ThreadLabelLog = ThreadLabelLog
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift, Show)
 
-instance FromYAML ThreadLabel where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabel
-  parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabel" ThreadLabel
+instance FromYAML ThreadLabelLog where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabelLog
+  parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabelLog" ThreadLabelLog
 
-instance ToYAML ThreadLabel where
-  toYAML :: ThreadLabel -> YAML.Node ()
+instance ToYAML ThreadLabelLog where
+  toYAML :: ThreadLabelLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessage`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessageLog`.
 -}
-data UserMessage = UserMessage
+data UserMessageLog = UserMessageLog
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift, Show)
 
-instance FromYAML UserMessage where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMessage
-  parseYAML = genericParseYAMLLogProcessorConfig "UserMessage" UserMessage
+instance FromYAML UserMessageLog where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMessageLog
+  parseYAML = genericParseYAMLLogProcessorConfig "UserMessageLog" UserMessageLog
 
-instance ToYAML UserMessage where
-  toYAML :: UserMessage -> YAML.Node ()
+instance ToYAML UserMessageLog where
+  toYAML :: UserMessageLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
-The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMarkerData`.
+The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMarkerLog`.
 -}
-data UserMarker = UserMarker
+data UserMarkerLog = UserMarkerLog
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift, Show)
 
-instance FromYAML UserMarker where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMarker
-  parseYAML = genericParseYAMLLogProcessorConfig "UserMarker" UserMarker
+instance FromYAML UserMarkerLog where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMarkerLog
+  parseYAML = genericParseYAMLLogProcessorConfig "UserMarkerLog" UserMarkerLog
 
-instance ToYAML UserMarker where
-  toYAML :: UserMarker -> YAML.Node ()
+instance ToYAML UserMarkerLog where
+  toYAML :: UserMarkerLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
 The configuration options for internal log messages.
 -}
-data InternalLogMessage = InternalLogMessage
+data InternalLogMessageLog = InternalLogMessageLog
   { name :: Maybe Text
   , description :: Maybe Text
   , export :: Maybe ExportStrategy
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalLogMessage where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser InternalLogMessage
-  parseYAML = genericParseYAMLLogProcessorConfig "InternalLogMessage" InternalLogMessage
+instance FromYAML InternalLogMessageLog where
+  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser InternalLogMessageLog
+  parseYAML = genericParseYAMLLogProcessorConfig "InternalLogMessageLog" InternalLogMessageLog
 
-instance ToYAML InternalLogMessage where
-  toYAML :: InternalLogMessage -> YAML.Node ()
+instance ToYAML InternalLogMessageLog where
+  toYAML :: InternalLogMessageLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 -------------------------------------------------------------------------------
