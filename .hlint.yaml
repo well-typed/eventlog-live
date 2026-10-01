@@ -29,6 +29,12 @@
         - GHC.Eventlog.Live.App.Config.Default
       within:
         - GHC.Eventlog.Live.App.Config
+    # The modules from template-haskell-lift may only be imported in the
+    # compatibility module.
+    - name:
+        - Language.Haskell.TH.Lift
+      within:
+        - Language.Haskell.TH.Lift.Compat
     # The modules from hs-opentelemetry-otlp may only be imported under the
     # GHC.Eventlog.Live.App.Exporter.Otlp module prefix, and must be imported
     # under specific names.
