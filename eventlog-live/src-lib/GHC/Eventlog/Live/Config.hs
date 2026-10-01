@@ -26,8 +26,6 @@ module GHC.Eventlog.Live.Config (
   -- *** Log processor configuration types
   Logs (..),
   IsLogProcessorConfig,
-  KnownLog (..),
-  logConfig,
   shouldExportLogs,
   ThreadLabelLog (..),
   UserMarkerLog (..),
@@ -37,8 +35,6 @@ module GHC.Eventlog.Live.Config (
   -- *** Metric processor configuration types
   Metrics (..),
   IsMetricProcessorConfig,
-  KnownMetric (..),
-  metricConfig,
   shouldExportMetrics,
   HeapAllocatedMetric (..),
   BlocksSizeMetric (..),
@@ -57,16 +53,12 @@ module GHC.Eventlog.Live.Config (
   -- *** Trace processor configuration types
   Traces (..),
   IsTraceProcessorConfig,
-  KnownTrace (..),
-  traceConfig,
   shouldExportTraces,
   CapabilityUsageSpan (..),
   ThreadStateSpan (..),
 
   -- *** Profiler processor configuration types
   Profiles (..),
-  KnownProfile (..),
-  profileConfig,
   IsProfileProcessorConfig,
   shouldExportProfiles,
   CallStackProfile (..),
@@ -104,53 +96,40 @@ import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Lazy qualified as BSL
 import Data.Default (Default (..))
-import Data.Kind (Constraint, Type)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid (Any (..))
 import Data.Semigroup (Semigroup (..))
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Word (Word32, Word64, Word8)
 import Data.YAML qualified as YAML
 import GHC.Eventlog.Live.Config.Default (defaultConfig, getDefault)
 import GHC.Eventlog.Live.Config.Default.Raw
 import GHC.Eventlog.Live.Config.Types
-import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), KnownMetricKind, KnownMetricType, KnownMetricUnit, MetricKind (..), MetricUnit (..), Monotonicity (..))
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.Stack.Types (HasCallStack)
-import GHC.TypeLits (KnownSymbol, Symbol)
-import System.Exit (exitFailure)
 
 {- |
 Read a `Config` from a configuration file.
 -}
 readConfigFile ::
-  Logger IO ->
   FilePath ->
-  IO Config
-readConfigFile logger filePath =
-  readConfig logger =<< liftIO (BSL.readFile filePath)
+  IO (Either String Config)
+readConfigFile filePath =
+  readConfig =<< liftIO (BSL.readFile filePath)
 
 {- |
 Read a `Config` from a `BSL.ByteString`.
 -}
 readConfig ::
-  Logger IO ->
   BSL.ByteString ->
-  IO Config
-readConfig logger fileContents = do
+  IO (Either String Config)
+readConfig fileContents = do
   case YAML.decode1 fileContents of
     Left (pos, errorMessage) -> do
-      writeLog logger FATAL $
-        T.pack $
-          YAML.prettyPosWithSource pos fileContents " error" <> errorMessage
-      liftIO exitFailure
-    Right config -> pure config
+      pure $ Left $ YAML.prettyPosWithSource pos fileContents " error" <> errorMessage
+    Right config ->
+      pure $ Right config
 
 {- |
 Pretty-print a `Config` to YAML.
@@ -296,209 +275,6 @@ instance Default CallStackProfile where
 instance Default CostCentreStackProfile where
   def :: CostCentreStackProfile
   def = $(getDefault @'["processors", "profiles", "costCentreStackProfile"] defaultConfig)
-
--------------------------------------------------------------------------------
--- KnownLog & Instances
--------------------------------------------------------------------------------
-
-type KnownLog :: Type -> Constraint
-class
-  ( HasField (GetLogName log) Logs (Maybe log)
-  , IsLogProcessorConfig log
-  , Show log
-  , Default log
-  , KnownSymbol (GetLogName log)
-  ) =>
-  KnownLog log
-  where
-  type GetLogName log :: Symbol
-
-logConfig :: forall log. (KnownLog log) => Logs -> Maybe log
-logConfig = getField @(GetLogName log)
-{-# INLINE logConfig #-}
-
-instance KnownLog ThreadLabelLog where
-  type GetLogName ThreadLabelLog = "threadLabel"
-
-instance KnownLog UserMarkerLog where
-  type GetLogName UserMarkerLog = "userMarker"
-
-instance KnownLog UserMessageLog where
-  type GetLogName UserMessageLog = "userMessage"
-
-instance KnownLog InternalLogMessageLog where
-  type GetLogName InternalLogMessageLog = "internalLogMessage"
-
--------------------------------------------------------------------------------
--- KnownMetric & Instances
--------------------------------------------------------------------------------
-
-type KnownMetric :: Type -> Constraint
-class
-  ( HasField (GetMetricName metric) Metrics (Maybe metric)
-  , IsMetricProcessorConfig metric
-  , Show metric
-  , Default metric
-  , KnownSymbol (GetMetricName metric)
-  , KnownMetricType (GetMetricType metric)
-  , KnownMetricKind (GetMetricKind metric)
-  , KnownMetricUnit (GetMetricUnit metric)
-  ) =>
-  KnownMetric metric
-  where
-  type GetMetricName metric :: Symbol
-  type GetMetricType metric :: Type
-  type GetMetricUnit metric :: MetricUnit
-  type GetMetricKind metric :: MetricKind
-
-metricConfig :: forall metric. (KnownMetric metric) => Metrics -> Maybe metric
-metricConfig = getField @(GetMetricName metric)
-{-# INLINE metricConfig #-}
-
--- NOTE: This should be kept in sync with the list of metrics.
---       Specifically, there should be a `KnownMetric` instance for every metric.
-
-instance KnownMetric HeapAllocatedMetric where
-  type GetMetricName HeapAllocatedMetric = "heapAllocated"
-  type GetMetricType HeapAllocatedMetric = Word64
-  type GetMetricUnit HeapAllocatedMetric = 'Byte
-  type GetMetricKind HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
-
-instance KnownMetric HeapSizeMetric where
-  type GetMetricName HeapSizeMetric = "heapSize"
-  type GetMetricType HeapSizeMetric = Word64
-  type GetMetricUnit HeapSizeMetric = 'Byte
-  type GetMetricKind HeapSizeMetric = 'Gauge
-
-instance KnownMetric BlocksSizeMetric where
-  type GetMetricName BlocksSizeMetric = "blocksSize"
-  type GetMetricType BlocksSizeMetric = Word64
-  type GetMetricUnit BlocksSizeMetric = 'Byte
-  type GetMetricKind BlocksSizeMetric = 'Gauge
-
-instance KnownMetric HeapLiveMetric where
-  type GetMetricName HeapLiveMetric = "heapLive"
-  type GetMetricType HeapLiveMetric = Word64
-  type GetMetricUnit HeapLiveMetric = 'Byte
-  type GetMetricKind HeapLiveMetric = 'Gauge
-
-instance KnownMetric MemCurrentMetric where
-  type GetMetricName MemCurrentMetric = "memCurrent"
-  type GetMetricType MemCurrentMetric = Word32
-  type GetMetricUnit MemCurrentMetric = 'MegaBlock
-  type GetMetricKind MemCurrentMetric = 'Gauge
-
-instance KnownMetric MemNeededMetric where
-  type GetMetricName MemNeededMetric = "memNeeded"
-  type GetMetricType MemNeededMetric = Word32
-  type GetMetricUnit MemNeededMetric = 'MegaBlock
-  type GetMetricKind MemNeededMetric = 'Gauge
-
-instance KnownMetric MemReturnedMetric where
-  type GetMetricName MemReturnedMetric = "memReturned"
-  type GetMetricType MemReturnedMetric = Word32
-  type GetMetricUnit MemReturnedMetric = 'MegaBlock
-  type GetMetricKind MemReturnedMetric = 'Gauge
-
-instance KnownMetric GcCopiedMetric where
-  type GetMetricName GcCopiedMetric = "gcCopied"
-  type GetMetricType GcCopiedMetric = Word64
-  type GetMetricUnit GcCopiedMetric = 'Byte
-  type GetMetricKind GcCopiedMetric = 'Gauge
-
-instance KnownMetric GcSlopMetric where
-  type GetMetricName GcSlopMetric = "gcSlop"
-  type GetMetricType GcSlopMetric = Word64
-  type GetMetricUnit GcSlopMetric = 'Byte
-  type GetMetricKind GcSlopMetric = 'Gauge
-
-instance KnownMetric GcFragmentationMetric where
-  type GetMetricName GcFragmentationMetric = "gcFragmentation"
-  type GetMetricType GcFragmentationMetric = Word64
-  type GetMetricUnit GcFragmentationMetric = 'Byte
-  type GetMetricKind GcFragmentationMetric = 'Gauge
-
-instance KnownMetric HeapProfSampleMetric where
-  type GetMetricName HeapProfSampleMetric = "heapProfSample"
-  type GetMetricType HeapProfSampleMetric = Word64
-  type GetMetricUnit HeapProfSampleMetric = 'Byte
-  type GetMetricKind HeapProfSampleMetric = 'Gauge
-
-instance KnownMetric CapabilityUsageMetric where
-  type GetMetricName CapabilityUsageMetric = "capabilityUsage"
-  type GetMetricType CapabilityUsageMetric = Timestamp
-  type GetMetricUnit CapabilityUsageMetric = 'NanoSecond
-  type GetMetricKind CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
-
-instance KnownMetric ProductivityMetric where
-  type GetMetricName ProductivityMetric = "productivity"
-  type GetMetricType ProductivityMetric = Double
-  type GetMetricUnit ProductivityMetric = 'Percent
-  type GetMetricKind ProductivityMetric = 'Gauge
-
--------------------------------------------------------------------------------
--- KnownTrace & Instances
--------------------------------------------------------------------------------
-
-type KnownTrace :: Type -> Constraint
-class
-  ( HasField (GetTraceName trace) Traces (Maybe trace)
-  , IsTraceProcessorConfig trace
-  , Show trace
-  , Default trace
-  , KnownSymbol (GetTraceName trace)
-  ) =>
-  KnownTrace trace
-  where
-  type GetTraceName trace :: Symbol
-
-traceConfig :: forall trace. (KnownTrace trace) => Traces -> Maybe trace
-traceConfig = getField @(GetTraceName trace)
-{-# INLINE traceConfig #-}
-
-instance KnownTrace CapabilityUsageSpan where
-  type GetTraceName CapabilityUsageSpan = "capabilityUsage"
-
-instance KnownTrace ThreadStateSpan where
-  type GetTraceName ThreadStateSpan = "threadState"
-
--------------------------------------------------------------------------------
--- KnownProfile & Instances
--------------------------------------------------------------------------------
-
-type KnownProfile :: Type -> Constraint
-class
-  ( HasField (GetProfileName profile) Profiles (Maybe profile)
-  , IsProfileProcessorConfig profile
-  , Show profile
-  , Default profile
-  , KnownSymbol (GetProfileName profile)
-  , KnownSymbol (GetProfileMetricName profile)
-  , Integral (GetProfileMetricType profile)
-  , KnownSymbol (GetProfileMetricUnit profile)
-  ) =>
-  KnownProfile profile
-  where
-  type GetProfileName profile :: Symbol
-  type GetProfileMetricName profile :: Symbol
-  type GetProfileMetricType profile :: Type
-  type GetProfileMetricUnit profile :: Symbol
-
-profileConfig :: forall profile. (KnownProfile profile) => Profiles -> Maybe profile
-profileConfig = getField @(GetProfileName profile)
-{-# INLINE profileConfig #-}
-
-instance KnownProfile CallStackProfile where
-  type GetProfileName CallStackProfile = "callStackProfile"
-  type GetProfileMetricName CallStackProfile = "callStack"
-  type GetProfileMetricType CallStackProfile = Word8
-  type GetProfileMetricUnit CallStackProfile = "count"
-
-instance KnownProfile CostCentreStackProfile where
-  type GetProfileName CostCentreStackProfile = "costCentreStackProfile"
-  type GetProfileMetricName CostCentreStackProfile = "costCentreStack"
-  type GetProfileMetricType CostCentreStackProfile = Word8
-  type GetProfileMetricUnit CostCentreStackProfile = "count"
 
 -------------------------------------------------------------------------------
 -- Accessors

@@ -5,15 +5,10 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Metric (
-  -- * Metric superclass
-  IsMetric,
-  toMetric,
-
-  -- * Generic metric type
-  Metric (..),
-
-  -- * Type-Level Information for Metrics
+  -- * Known Metrics
   SomeMetric (..),
+  KnownMetric (..),
+  metricConfig,
 
   -- ** Monotonicity
   Monotonicity (..),
@@ -39,19 +34,140 @@ module GHC.Eventlog.Live.Data.Metric (
   -- ** Metric Type
   SMetricType (..),
   KnownMetricType (..),
+
+  -- * Metric superclass
+  IsMetric,
+  toMetric,
+
+  -- * Generic metric type
+  Metric (..),
 ) where
 
 import Control.Exception (assert)
+import Data.Default (Default)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word16, Word32, Word64, Word8)
+import GHC.Eventlog.Live.Config
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.Eventlog.Live.Data.Group (GroupBy (..))
 import GHC.RTS.Events (Timestamp)
-import GHC.Records (HasField)
+import GHC.Records (HasField (..))
+import GHC.TypeLits (KnownSymbol, Symbol)
+
+--------------------------------------------------------------------------------
+-- Known Metrics
+--------------------------------------------------------------------------------
+
+type SomeMetric :: Type
+data SomeMetric
+  = forall metric. (KnownMetric metric) => SomeMetric !(Proxy metric) [Metric (GetMetricType metric)]
+
+type KnownMetric :: Type -> Constraint
+class
+  ( HasField (GetMetricName metric) Metrics (Maybe metric)
+  , IsMetricProcessorConfig metric
+  , Show metric
+  , Default metric
+  , KnownSymbol (GetMetricName metric)
+  , KnownMetricType (GetMetricType metric)
+  , KnownMetricKind (GetMetricKind metric)
+  , KnownMetricUnit (GetMetricUnit metric)
+  ) =>
+  KnownMetric metric
+  where
+  type GetMetricName metric :: Symbol
+  type GetMetricType metric :: Type
+  type GetMetricUnit metric :: MetricUnit
+  type GetMetricKind metric :: MetricKind
+
+metricConfig :: forall metric. (KnownMetric metric) => Metrics -> Maybe metric
+metricConfig = getField @(GetMetricName metric)
+{-# INLINE metricConfig #-}
+
+-- NOTE: This should be kept in sync with the list of metrics.
+--       Specifically, there should be a `KnownMetric` instance for every metric.
+
+instance KnownMetric HeapAllocatedMetric where
+  type GetMetricName HeapAllocatedMetric = "heapAllocated"
+  type GetMetricType HeapAllocatedMetric = Word64
+  type GetMetricUnit HeapAllocatedMetric = 'Byte
+  type GetMetricKind HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric HeapSizeMetric where
+  type GetMetricName HeapSizeMetric = "heapSize"
+  type GetMetricType HeapSizeMetric = Word64
+  type GetMetricUnit HeapSizeMetric = 'Byte
+  type GetMetricKind HeapSizeMetric = 'Gauge
+
+instance KnownMetric BlocksSizeMetric where
+  type GetMetricName BlocksSizeMetric = "blocksSize"
+  type GetMetricType BlocksSizeMetric = Word64
+  type GetMetricUnit BlocksSizeMetric = 'Byte
+  type GetMetricKind BlocksSizeMetric = 'Gauge
+
+instance KnownMetric HeapLiveMetric where
+  type GetMetricName HeapLiveMetric = "heapLive"
+  type GetMetricType HeapLiveMetric = Word64
+  type GetMetricUnit HeapLiveMetric = 'Byte
+  type GetMetricKind HeapLiveMetric = 'Gauge
+
+instance KnownMetric MemCurrentMetric where
+  type GetMetricName MemCurrentMetric = "memCurrent"
+  type GetMetricType MemCurrentMetric = Word32
+  type GetMetricUnit MemCurrentMetric = 'MegaBlock
+  type GetMetricKind MemCurrentMetric = 'Gauge
+
+instance KnownMetric MemNeededMetric where
+  type GetMetricName MemNeededMetric = "memNeeded"
+  type GetMetricType MemNeededMetric = Word32
+  type GetMetricUnit MemNeededMetric = 'MegaBlock
+  type GetMetricKind MemNeededMetric = 'Gauge
+
+instance KnownMetric MemReturnedMetric where
+  type GetMetricName MemReturnedMetric = "memReturned"
+  type GetMetricType MemReturnedMetric = Word32
+  type GetMetricUnit MemReturnedMetric = 'MegaBlock
+  type GetMetricKind MemReturnedMetric = 'Gauge
+
+instance KnownMetric GcCopiedMetric where
+  type GetMetricName GcCopiedMetric = "gcCopied"
+  type GetMetricType GcCopiedMetric = Word64
+  type GetMetricUnit GcCopiedMetric = 'Byte
+  type GetMetricKind GcCopiedMetric = 'Gauge
+
+instance KnownMetric GcSlopMetric where
+  type GetMetricName GcSlopMetric = "gcSlop"
+  type GetMetricType GcSlopMetric = Word64
+  type GetMetricUnit GcSlopMetric = 'Byte
+  type GetMetricKind GcSlopMetric = 'Gauge
+
+instance KnownMetric GcFragmentationMetric where
+  type GetMetricName GcFragmentationMetric = "gcFragmentation"
+  type GetMetricType GcFragmentationMetric = Word64
+  type GetMetricUnit GcFragmentationMetric = 'Byte
+  type GetMetricKind GcFragmentationMetric = 'Gauge
+
+instance KnownMetric HeapProfSampleMetric where
+  type GetMetricName HeapProfSampleMetric = "heapProfSample"
+  type GetMetricType HeapProfSampleMetric = Word64
+  type GetMetricUnit HeapProfSampleMetric = 'Byte
+  type GetMetricKind HeapProfSampleMetric = 'Gauge
+
+instance KnownMetric CapabilityUsageMetric where
+  type GetMetricName CapabilityUsageMetric = "capabilityUsage"
+  type GetMetricType CapabilityUsageMetric = Timestamp
+  type GetMetricUnit CapabilityUsageMetric = 'NanoSecond
+  type GetMetricKind CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric ProductivityMetric where
+  type GetMetricName ProductivityMetric = "productivity"
+  type GetMetricType ProductivityMetric = Double
+  type GetMetricUnit ProductivityMetric = 'Percent
+  type GetMetricKind ProductivityMetric = 'Gauge
 
 --------------------------------------------------------------------------------
 -- Superclass for metric types
@@ -118,18 +234,6 @@ instance (Semigroup a) => Semigroup (Metric a) where
 --------------------------------------------------------------------------------
 -- Type-Level Information for Metrics
 --------------------------------------------------------------------------------
-
--- TODO: Once the configuration hierarchy is moved into the library,
---       this type should be replaced with the variant of SomeMetric
---       that relies on KnownMetric rather han KnownMetricType.
-
-data SomeMetric
-  = forall metricType.
-  (KnownMetricType metricType) =>
-  SomeMetric
-  { metricName :: String
-  , metric :: Metric metricType
-  }
 
 --------------------------------------------------------------------------------
 -- Monotonicity

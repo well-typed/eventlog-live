@@ -1,12 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Profiles
+Module      : GHC.Eventlog.Live.Processor.Profiles
 Description : Profile Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Processor.Profiles (
-  -- * Profile processing
-  SomeSamples (..),
+module GHC.Eventlog.Live.Processor.Profiles (
   processProfileEvents,
 )
 where
@@ -14,18 +12,17 @@ where
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.DList (DList)
 import Data.DList qualified as D
-import Data.Kind (Type)
 import Data.Machine (ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Processor.Common.Core
-import GHC.Eventlog.Live.Config (FullConfig (..), KnownProfile (..))
+import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Sample (Sample, toSample)
+import GHC.Eventlog.Live.Data.Sample (SomeSamples (..), toSample)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Processor.Core
 import GHC.RTS.Events (Event (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
@@ -34,14 +31,6 @@ import IpeDB.Types.InfoProv qualified as IP
 --------------------------------------------------------------------------------
 -- Profiles
 --------------------------------------------------------------------------------
-
-type SomeSamples :: Type
-data SomeSamples
-  = forall profile.
-    (KnownProfile profile) =>
-    SomeSamples
-      !(Proxy profile)
-      ![Sample (GetProfileMetricType profile)]
 
 processProfileEvents ::
   forall m.

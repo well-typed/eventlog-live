@@ -35,12 +35,10 @@ import Data.Word (Word32)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core
 import GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary (ProfilesDictionary, SymbolIndex)
 import GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary qualified as PD
-import GHC.Eventlog.Live.App.Processor.Common.Core
-import GHC.Eventlog.Live.App.Processor.Profiles (SomeSamples (..))
-import GHC.Eventlog.Live.Config (FullConfig (..), KnownProfile (..), profileConfig)
+import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Attribute ((~=))
-import GHC.Eventlog.Live.Data.Sample (Location (..), Sample (..))
+import GHC.Eventlog.Live.Data.Sample (KnownProfile (..), Location (..), Sample (..), SomeSamples (..), profileConfig)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.IsList (IsList (..))

@@ -5,6 +5,11 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Span (
+  -- * Known Spans
+  SomeSpans (..),
+  KnownTrace (..),
+  traceConfig,
+
   -- * Span superclass
   IsSpan,
   duration,
@@ -20,15 +25,54 @@ module GHC.Eventlog.Live.Data.Span (
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State.Strict (State, runState, state)
 import Data.ByteString (ByteString)
+import Data.Default (Default)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.Hashable (Hashable)
+import Data.Kind (Constraint, Type)
 import Data.Machine (ProcessT, await, construct, yield)
+import Data.Proxy (Proxy)
+import GHC.Eventlog.Live.Config (CapabilityUsageSpan (..), IsTraceProcessorConfig, ThreadStateSpan (..), Traces (..))
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.RTS.Events (Timestamp)
-import GHC.Records (HasField)
+import GHC.Records (HasField (..))
+import GHC.TypeLits (KnownSymbol, Symbol)
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
+
+--------------------------------------------------------------------------------
+-- Known Spans
+--------------------------------------------------------------------------------
+
+type SomeSpans :: Type
+data SomeSpans
+  = forall trace. (KnownTrace trace) => SomeSpans !(Proxy trace) [Span]
+
+-------------------------------------------------------------------------------
+-- KnownTrace & Instances
+-------------------------------------------------------------------------------
+
+type KnownTrace :: Type -> Constraint
+class
+  ( HasField (GetTraceName trace) Traces (Maybe trace)
+  , IsTraceProcessorConfig trace
+  , Show trace
+  , Default trace
+  , KnownSymbol (GetTraceName trace)
+  ) =>
+  KnownTrace trace
+  where
+  type GetTraceName trace :: Symbol
+
+traceConfig :: forall trace. (KnownTrace trace) => Traces -> Maybe trace
+traceConfig = getField @(GetTraceName trace)
+{-# INLINE traceConfig #-}
+
+instance KnownTrace CapabilityUsageSpan where
+  type GetTraceName CapabilityUsageSpan = "capabilityUsage"
+
+instance KnownTrace ThreadStateSpan where
+  type GetTraceName ThreadStateSpan = "threadState"
 
 --------------------------------------------------------------------------------
 -- Superclass for span types

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Common.Profiles
+Module      : GHC.Eventlog.Live.Processor.Core.Profiles
 Description : Abstraction over ProfilesDictionary for the OTLP protocol.
 Stability   : experimental
 Portability : portable
@@ -34,8 +34,8 @@ import Data.ProtoLens (Message (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (messageWith, toMaybeAnyValue)
-import GHC.Eventlog.Live.App.Processor.Common.SymbolTable (SymbolIndex, SymbolTable)
-import GHC.Eventlog.Live.App.Processor.Common.SymbolTable qualified as ST
+import GHC.Eventlog.Live.App.Exporter.Otlp.SymbolTable (SymbolIndex, SymbolTable)
+import GHC.Eventlog.Live.App.Exporter.Otlp.SymbolTable qualified as ST
 import GHC.Eventlog.Live.Data.Attribute (Attr)
 import GHC.Generics (Generic)
 import Lens.Family2 (Lens', (.~), (^.))

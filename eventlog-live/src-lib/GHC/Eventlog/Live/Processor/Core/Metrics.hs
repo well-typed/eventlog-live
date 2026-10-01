@@ -1,13 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Common.Metrics
+Module      : GHC.Eventlog.Live.Processor.Core.Metrics
 Description : Common utilities for metric processors.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Processor.Common.Metrics (
-  -- * Known Metrics
-  SomeMetric (..),
-
+module GHC.Eventlog.Live.Processor.Core.Metrics (
   -- * Metric Processor
   MetricProcessor (..),
   process,
@@ -34,22 +31,14 @@ import Data.Kind (Type)
 import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
-import GHC.Eventlog.Live.App.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Config (FullConfig, KnownMetric (..), metricConfig)
+import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
-import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..))
+import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SomeMetric (..), metricConfig)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-
---------------------------------------------------------------------------------
--- Known Metrics
---------------------------------------------------------------------------------
-
-type SomeMetric :: Type
-data SomeMetric
-  = forall metric. (KnownMetric metric) => SomeMetric !(Proxy metric) [Metric (GetMetricType metric)]
+import GHC.Eventlog.Live.Processor.Core (runIf)
 
 --------------------------------------------------------------------------------
 -- Metric Processor

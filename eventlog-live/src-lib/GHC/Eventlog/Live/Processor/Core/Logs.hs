@@ -1,33 +1,27 @@
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Common.Logs
+Module      : GHC.Eventlog.Live.Processor.Core.Logs
 Description : Profile Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Processor.Common.Logs (
-  SomeLogs (..),
+module GHC.Eventlog.Live.Processor.Core.Logs (
   process,
 )
 where
 
 import Data.DList qualified as D
-import Data.Kind (Type)
 import Data.Machine (ProcessT, mapping, (~>))
 import Data.Proxy (Proxy)
-import GHC.Eventlog.Live.App.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.Config (FullConfig, KnownLog, logConfig)
+import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.LogRecord (IsLogRecord, LogRecord, toLogRecord)
+import GHC.Eventlog.Live.Data.Logs (IsLogRecord, KnownLog, SomeLogs (..), logConfig, toLogRecord)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Processor.Core (runIf)
 
 --------------------------------------------------------------------------------
--- Existential wrapper for logs
+-- Generic processor for logs
 --------------------------------------------------------------------------------
-
-type SomeLogs :: Type
-data SomeLogs
-  = forall log. (KnownLog log) => SomeLogs !(Proxy log) [LogRecord]
 
 process ::
   (Monad m, IsLogRecord l) =>

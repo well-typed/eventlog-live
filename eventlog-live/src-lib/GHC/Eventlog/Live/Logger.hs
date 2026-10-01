@@ -12,7 +12,6 @@ module GHC.Eventlog.Live.Logger (
   MyTelemetryData (..),
   writeLog,
   writeException,
-  writeMetric,
   filterBySeverity,
   stderrLogger,
   handleLogger,
@@ -37,8 +36,7 @@ import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Attribute qualified as A
-import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
-import GHC.Eventlog.Live.Data.Metric (KnownMetricType, Metric (..), SomeMetric (..))
+import GHC.Eventlog.Live.Data.Logs (LogRecord (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
 import GHC.IsList qualified as IsList
 import GHC.RTS.Events (Timestamp)
@@ -54,9 +52,8 @@ type Logger m = CCA.LogAction m MyTelemetryData
 {- |
 The type of internal telemetry data.
 -}
-data MyTelemetryData
-  = MyTelemetryData'LogRecord {logRecord :: !LogRecord}
-  | MyTelemetryData'Metric {metric :: !SomeMetric}
+newtype MyTelemetryData
+  = MyTelemetryData'LogRecord {logRecord :: LogRecord}
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -83,31 +80,6 @@ writeException logger e =
   writeLog logger ERROR (T.pack $ displayException e)
 
 {- |
-Use a `Logger` to log an internal metric.
--}
-writeMetric ::
-  forall m metricType.
-  (KnownMetricType metricType) =>
-  Logger m ->
-  -- | The metric name.
-  String ->
-  metricType ->
-  m ()
-writeMetric logger metricName value =
-  logger
-    <& MyTelemetryData'Metric
-      SomeMetric
-        { metricName
-        , metric =
-            Metric
-              { value
-              , maybeTimeUnixNano = Nothing
-              , maybeStartTimeUnixNano = Nothing
-              , attrs = []
-              }
-        }
-
-{- |
 A `Logger` that writes each `LogRecord` to a `IO.stderr` and ignores all other telemetry data.
 
 __TODO:__ Support the remaining telemetry data.
@@ -128,7 +100,6 @@ handleLogger handle = CCA.LogAction $ \case
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush handle
-  MyTelemetryData'Metric{} -> pure ()
 
 {- |
 Filter a @`Logger` m@ by a `Severity`.
@@ -144,7 +115,8 @@ filterBySeverity severityThreshold =
   severityFilter = \case
     MyTelemetryData'LogRecord{..} ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
-    _otherwise -> True
+
+-- _otherwise -> True
 
 {- |
 Internal helper.
@@ -224,16 +196,6 @@ addTimeUnixNano myTelemetryData =
           pure $
             MyTelemetryData'LogRecord
               LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
-      | otherwise -> pure myTelemetryData
-    MyTelemetryData'Metric{metric = SomeMetric{metricName, metric = Metric{..}}}
-      | isNothing maybeTimeUnixNano -> do
-          timeUnixNano <- getTimeUnixNano
-          pure $
-            MyTelemetryData'Metric
-              SomeMetric
-                { metricName
-                , metric = Metric{maybeTimeUnixNano = Just timeUnixNano, ..}
-                }
       | otherwise -> pure myTelemetryData
 
 {- |

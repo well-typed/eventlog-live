@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Logs
+Module      : GHC.Eventlog.Live.Processor.Logs
 Description : Log Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Processor.Logs (
+module GHC.Eventlog.Live.Processor.Logs (
   processLogEvents,
 )
 where
@@ -14,15 +14,15 @@ import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Data (Proxy (..))
 import Data.Machine (Process, ProcessT, mapping, (~>))
-import GHC.Eventlog.Live.App.Processor.Common.Logs (SomeLogs (..))
-import GHC.Eventlog.Live.App.Processor.Common.Logs qualified as CL
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
+import GHC.Eventlog.Live.Data.Logs (SomeLogs (..))
 import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Processor.Core.Logs (process)
 import GHC.RTS.Events (Event (..))
 
 --------------------------------------------------------------------------------
@@ -48,18 +48,18 @@ processLogEvents fullConfig =
 
 processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
 processUserMessage =
-  CL.process (Proxy @C.UserMessageLog) M.processUserMessage
+  process (Proxy @C.UserMessageLog) M.processUserMessage
 
 --------------------------------------------------------------------------------
 -- UserMarker
 
 processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
 processUserMarker =
-  CL.process (Proxy @C.UserMarkerLog) M.processUserMarker
+  process (Proxy @C.UserMarkerLog) M.processUserMarker
 
 --------------------------------------------------------------------------------
 -- ThreadLabel
 
 processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
 processThreadLabel =
-  CL.process (Proxy @C.ThreadLabelLog) M.processThreadLabel
+  process (Proxy @C.ThreadLabelLog) M.processThreadLabel

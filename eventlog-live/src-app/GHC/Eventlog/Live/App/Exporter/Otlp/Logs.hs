@@ -25,13 +25,11 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
-import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, messageWith, toMaybeKeyValues)
-import GHC.Eventlog.Live.App.Processor.Common.Core (ifNonEmpty)
-import GHC.Eventlog.Live.App.Processor.Common.Logs (SomeLogs (..))
-import GHC.Eventlog.Live.Config (FullConfig, logConfig)
+import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
+import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Attribute ((~=))
-import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Logs (LogRecord (..), SomeLogs (..), logConfig)
 import GHC.Eventlog.Live.Data.Severity (Severity)
 import GHC.Eventlog.Live.Data.Severity qualified as DS
 import GHC.Eventlog.Live.Logger (Logger)
