@@ -1,12 +1,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Threads
+Module      : GHC.Eventlog.Live.Processor.Threads
 Description : Thread Event Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Processor.Threads (
+module GHC.Eventlog.Live.Processor.Threads (
   processThreadEvents,
 )
 where
@@ -17,14 +17,10 @@ import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Processor.Common.Core (runIf)
-import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric)
-import GHC.Eventlog.Live.App.Processor.Common.Metrics qualified as CM
-import GHC.Eventlog.Live.App.Processor.Common.Traces (SomeSpans)
-import GHC.Eventlog.Live.App.Processor.Common.Traces qualified as CT
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Metric qualified as M
+import GHC.Eventlog.Live.Data.Metric (SomeMetric, toMetric)
+import GHC.Eventlog.Live.Data.Span (SomeSpans (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
@@ -32,6 +28,9 @@ import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
+import GHC.Eventlog.Live.Processor.Core (runIf)
+import GHC.Eventlog.Live.Processor.Core.Metrics qualified as CM
+import GHC.Eventlog.Live.Processor.Core.Traces qualified as CT
 import GHC.RTS.Events (Event (..))
 
 data ABC a b c = A !a | B !b | C !c
@@ -65,9 +64,9 @@ processThreadEvents verbosity fullConfig =
             ~> M.fanoutTick
               [ M.liftTick M.processCapabilityUsageDuration
                   ~> M.fanoutTick
-                    [ CM.process (Proxy @C.CapabilityUsageMetric) (mapping M.toMetric) fullConfig
+                    [ CM.process (Proxy @C.CapabilityUsageMetric) (mapping toMetric) fullConfig
                         ~> M.liftTick (mapping D.singleton)
-                    , CM.process (Proxy @C.ProductivityMetric) (M.processProductivity ~> mapping (fmap (* 100.0) . M.toMetric)) fullConfig
+                    , CM.process (Proxy @C.ProductivityMetric) (M.processProductivity ~> mapping (fmap (* 100.0) . toMetric)) fullConfig
                         ~> M.liftTick (mapping D.singleton)
                     ]
                   ~> mapping (fmap (fmap Left))

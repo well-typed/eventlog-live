@@ -14,18 +14,18 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Logs (exportResourceLogs, toExportLog
 import GHC.Eventlog.Live.App.Exporter.Otlp.Metrics (exportResourceMetrics, toExportMetricsServiceRequest, toMetric, toResourceMetrics, toScopeMetrics)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Profiles (exportResourceProfiles, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Traces (exportResourceSpans, toExportTracesServiceRequest, toResourceSpans, toScopeSpans, toSpans)
-import GHC.Eventlog.Live.App.Processor (InstrumentationScope (..), Resource (..), TelemetryData (..))
-import GHC.Eventlog.Live.App.Processor.Common.Core
-import GHC.Eventlog.Live.App.Processor.Common.Logs (SomeLogs)
-import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric)
-import GHC.Eventlog.Live.App.Processor.Common.Traces (SomeSpans)
-import GHC.Eventlog.Live.App.Processor.Profiles (SomeSamples)
 import GHC.Eventlog.Live.App.Stats (Stat (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
+import GHC.Eventlog.Live.Data.Logs (SomeLogs)
+import GHC.Eventlog.Live.Data.Metric (SomeMetric)
+import GHC.Eventlog.Live.Data.Sample (SomeSamples)
+import GHC.Eventlog.Live.Data.Span (SomeSpans)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), TelemetryData (..))
+import GHC.Eventlog.Live.Processor.Core
 import Lens.Family2 ((.~))
 import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC

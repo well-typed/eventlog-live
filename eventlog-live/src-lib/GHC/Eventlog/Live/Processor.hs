@@ -1,4 +1,4 @@
-module GHC.Eventlog.Live.App.Processor (
+module GHC.Eventlog.Live.Processor (
   Resource (..),
   TelemetryData (..),
   InstrumentationScope (..),
@@ -13,22 +13,22 @@ import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
-import GHC.Eventlog.Live.App.Processor.Common.Logs (SomeLogs)
-import GHC.Eventlog.Live.App.Processor.Common.Logs qualified as CL
-import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric)
-import GHC.Eventlog.Live.App.Processor.Common.Traces (SomeSpans)
-import GHC.Eventlog.Live.App.Processor.Heap (processHeapEvents)
-import GHC.Eventlog.Live.App.Processor.Logs (processLogEvents)
-import GHC.Eventlog.Live.App.Processor.Profiles (SomeSamples, processProfileEvents)
-import GHC.Eventlog.Live.App.Processor.Threads (processThreadEvents)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
-import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
+import GHC.Eventlog.Live.Data.Logs (LogRecord (..), SomeLogs)
+import GHC.Eventlog.Live.Data.Metric (SomeMetric)
+import GHC.Eventlog.Live.Data.Sample (SomeSamples)
+import GHC.Eventlog.Live.Data.Span (SomeSpans)
 import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData (..), chanSource)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime)
+import GHC.Eventlog.Live.Processor.Core.Logs qualified as CL
+import GHC.Eventlog.Live.Processor.Heap (processHeapEvents)
+import GHC.Eventlog.Live.Processor.Logs (processLogEvents)
+import GHC.Eventlog.Live.Processor.Profiles (processProfileEvents)
+import GHC.Eventlog.Live.Processor.Threads (processThreadEvents)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown)
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
@@ -92,4 +92,3 @@ processInternalTelemetry fullConfig myTelemetryDataChan =
   getInternalLogRecord :: MyTelemetryData -> Maybe LogRecord
   getInternalLogRecord = \case
     MyTelemetryData'LogRecord{..} -> Just logRecord
-    MyTelemetryData'Metric{} -> Nothing

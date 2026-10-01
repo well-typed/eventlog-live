@@ -148,7 +148,7 @@ library
     GHC.Eventlog.Live.Data.Capability
     GHC.Eventlog.Live.Data.Group
     GHC.Eventlog.Live.Data.HeapProfBreakdown
-    GHC.Eventlog.Live.Data.LogRecord
+    GHC.Eventlog.Live.Data.Logs
     GHC.Eventlog.Live.Data.Metric
     GHC.Eventlog.Live.Data.Sample
     GHC.Eventlog.Live.Data.Severity
@@ -166,6 +166,8 @@ library
     GHC.Eventlog.Live.Machine.Source
     GHC.Eventlog.Live.Machine.WithStartTime
     GHC.Eventlog.Live.Options
+    GHC.Eventlog.Live.Processor
+    GHC.Eventlog.Live.Processor.Core
     GHC.Eventlog.Live.Source
     GHC.Eventlog.Live.Source.Core
 
@@ -173,6 +175,13 @@ library
     GHC.Eventlog.Live.Config.Default
     GHC.Eventlog.Live.Config.Default.Raw
     GHC.Eventlog.Live.Config.Types
+    GHC.Eventlog.Live.Processor.Core.Logs
+    GHC.Eventlog.Live.Processor.Core.Metrics
+    GHC.Eventlog.Live.Processor.Core.Traces
+    GHC.Eventlog.Live.Processor.Heap
+    GHC.Eventlog.Live.Processor.Logs
+    GHC.Eventlog.Live.Processor.Profiles
+    GHC.Eventlog.Live.Processor.Threads
 
   build-depends:
     ansi-terminal >=1.1 && <1.2,
@@ -180,7 +189,6 @@ library
     bytestring >=0.11 && <0.13,
     clock >=0.8 && <0.9,
     co-log-core >=0.3 && <0.4,
-    containers >=0.6 && <0.9,
     data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
     file-embed >=0.0.16 && <0.1,
@@ -278,19 +286,10 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.App.Exporter.Otlp.Metrics
     GHC.Eventlog.Live.App.Exporter.Otlp.Profiles
     GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary
+    GHC.Eventlog.Live.App.Exporter.Otlp.SymbolTable
     GHC.Eventlog.Live.App.Exporter.Otlp.Traces
     GHC.Eventlog.Live.App.Options
     GHC.Eventlog.Live.App.Options.Raw
-    GHC.Eventlog.Live.App.Processor
-    GHC.Eventlog.Live.App.Processor.Common.Core
-    GHC.Eventlog.Live.App.Processor.Common.Logs
-    GHC.Eventlog.Live.App.Processor.Common.Metrics
-    GHC.Eventlog.Live.App.Processor.Common.SymbolTable
-    GHC.Eventlog.Live.App.Processor.Common.Traces
-    GHC.Eventlog.Live.App.Processor.Heap
-    GHC.Eventlog.Live.App.Processor.Logs
-    GHC.Eventlog.Live.App.Processor.Profiles
-    GHC.Eventlog.Live.App.Processor.Threads
     GHC.Eventlog.Live.App.Stats
 
   hs-source-dirs:
@@ -309,7 +308,7 @@ executable eventlog-live-otlp
     base >=4.16 && <5,
     bytestring >=0.11 && <0.13,
     case-insensitive >=1.2 && <1.3,
-    containers >=0.6 && <0.8,
+    containers >=0.6 && <0.9,
     data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
     eventlog-live,

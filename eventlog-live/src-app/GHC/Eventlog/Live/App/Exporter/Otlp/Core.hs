@@ -19,6 +19,7 @@ module GHC.Eventlog.Live.App.Exporter.Otlp.Core (
   HttpError (..),
 
   -- * Helpers for conversion to OTLP
+  ifNonEmpty,
   messageWith,
   (.~?),
   toMaybeKeyValues,
@@ -396,6 +397,10 @@ httpCompression = \case
 --------------------------------------------------------------------------------
 -- Conversion to OLTP
 --------------------------------------------------------------------------------
+
+-- | Return the second argument if the first argument is non-empty.
+ifNonEmpty :: [a] -> b -> Maybe b
+ifNonEmpty xs r = if null xs then Nothing else Just r
 
 -- | Construct a message with a list of modifications applied.
 messageWith :: (Message msg) => [msg -> msg] -> msg

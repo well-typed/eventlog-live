@@ -27,7 +27,6 @@ import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceN
 import GHC.Eventlog.Live.App.Exporter.Otlp (exportTelemetryData)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
-import GHC.Eventlog.Live.App.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.App.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
@@ -38,6 +37,7 @@ import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
+import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.IsList (IsList (..))
@@ -47,7 +47,7 @@ import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
 import Options.Applicative qualified as O
 import Paths_eventlog_live qualified as App
-import System.Exit (die)
+import System.Exit (die, exitFailure)
 
 --------------------------------------------------------------------------------
 -- Instrumentation Scope
@@ -95,7 +95,12 @@ main = do
     let readConfigFile configFile = do
           writeLog logger DEBUG $
             "Reading configuration file from " <> T.pack configFile
-          config <- C.readConfigFile logger configFile
+          let onConfigError :: String -> IO x
+              onConfigError errMsg = do
+                writeLog logger FATAL (T.pack errMsg)
+                exitFailure
+          config <-
+            either onConfigError pure =<< C.readConfigFile configFile
           writeLog logger DEBUG $
             "Configuration file:\n" <> C.prettyConfig config
           pure config

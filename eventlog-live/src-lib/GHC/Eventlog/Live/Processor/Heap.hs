@@ -1,12 +1,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
-Module      : GHC.Eventlog.Live.App.Processor.Heap
+Module      : GHC.Eventlog.Live.Processor.Heap
 Description : Heap Event Processors for OTLP.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Processor.Heap (
+module GHC.Eventlog.Live.Processor.Heap (
   processHeapEvents,
 )
 where
@@ -16,15 +16,16 @@ import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Machine (Process, ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Processor.Common.Metrics
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
+import GHC.Eventlog.Live.Data.Metric (SomeMetric (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Processor.Core.Metrics
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.InfoProv qualified as IP
