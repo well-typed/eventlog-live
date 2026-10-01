@@ -6,184 +6,121 @@
 - extensions:
     - default: false # all extension are banned by default
     - name:
-        [
-          AllowAmbiguousTypes,
-          CPP,
-          ImplicitParams,
-          MagicHash,
-          NoImplicitPrelude,
-          OverloadedLists,
-          OverloadedStrings,
-          TemplateHaskell,
-          UndecidableInstances,
-          QuasiQuotes,
-        ]
+        - AllowAmbiguousTypes
+        - CPP
+        - ImplicitParams
+        - MagicHash
+        - NoImplicitPrelude
+        - OverloadedLists
+        - OverloadedStrings
+        - TemplateHaskell
+        - UndecidableInstances
+        - QuasiQuotes
 - modules:
     # There are orphan instances in GHC.Eventlog.Live.App.Config, which means
     # that importing configuration types from the Types submodule will lead to
     # rather confusing errors.
-    - {
-        name: [GHC.Eventlog.Live.App.Config.Types],
-        within:
-          [GHC.Eventlog.Live.App.Config, GHC.Eventlog.Live.App.Config.Default],
-      }
-    - {
-        name: [GHC.Eventlog.Live.App.Config.Default],
-        within: [GHC.Eventlog.Live.App.Config],
-      }
+    - name:
+        - GHC.Eventlog.Live.App.Config.Types
+      within:
+        - GHC.Eventlog.Live.App.Config
+        - GHC.Eventlog.Live.App.Config.Default
+    - name:
+        - GHC.Eventlog.Live.App.Config.Default
+      within:
+        - GHC.Eventlog.Live.App.Config
     # The modules from hs-opentelemetry-otlp may only be imported under the
     # GHC.Eventlog.Live.App.Exporter.Otlp module prefix, and must be imported
     # under specific names.
     # This is in antipation of isolating all code specific to OTLP to that prefix,
     # which only requires modifying GHC.Eventlog.Live.App.
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Common.V1.Common",
-            "Proto.Opentelemetry.Proto.Common.V1.Common_Fields",
-          ],
-        as: OC,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService",
-            "Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService_Fields",
-          ],
-        as: OLS,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Logs.V1.Logs",
-            "Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields",
-          ],
-        as: OL,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService",
-            "Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields",
-          ],
-        as: OMS,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Metrics.V1.Metrics",
-            "Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields",
-          ],
-        as: OM,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService",
-            "Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields",
-          ],
-        as: OPS,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Profiles.V1development.Profiles",
-            "Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields",
-          ],
-        as: OP,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Resource.V1.Resource",
-            "Proto.Opentelemetry.Proto.Resource.V1.Resource_Fields",
-          ],
-        as: OR,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService",
-            "Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields",
-          ],
-        as: OTS,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-    - {
-        name:
-          [
-            "Proto.Opentelemetry.Proto.Trace.V1.Trace",
-            "Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields",
-          ],
-        as: OT,
-        within:
-          [
-            "GHC.Eventlog.Live.Test",
-            "GHC.Eventlog.Live.App.Exporter.Otlp",
-            "GHC.Eventlog.Live.App.Exporter.Otlp.*",
-          ],
-      }
-
+    - name:
+        - Proto.Opentelemetry.Proto.Common.V1.Common
+        - Proto.Opentelemetry.Proto.Common.V1.Common_Fields
+      as: OC
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService
+        - Proto.Opentelemetry.Proto.Collector.Logs.V1.LogsService_Fields
+      as: OLS
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Logs.V1.Logs
+        - Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields
+      as: OL
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService
+        - Proto.Opentelemetry.Proto.Collector.Metrics.V1.MetricsService_Fields
+      as: OMS
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Metrics.V1.Metrics
+        - Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields
+      as: OM
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService
+        - Proto.Opentelemetry.Proto.Collector.Profiles.V1development.ProfilesService_Fields
+      as: OPS
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Profiles.V1development.Profiles
+        - Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields
+      as: OP
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Resource.V1.Resource
+        - Proto.Opentelemetry.Proto.Resource.V1.Resource_Fields
+      as: OR
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService
+        - Proto.Opentelemetry.Proto.Collector.Trace.V1.TraceService_Fields
+      as: OTS
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
+    - name:
+        - Proto.Opentelemetry.Proto.Trace.V1.Trace
+        - Proto.Opentelemetry.Proto.Trace.V1.Trace_Fields
+      as: OT
+      within:
+        - GHC.Eventlog.Live.Test
+        - GHC.Eventlog.Live.App.Exporter.Otlp
+        - GHC.Eventlog.Live.App.Exporter.Otlp.*
 # Ignore some builtin hints
 #
 - ignore:
-    name: "Redundant $"
+    name: Redundant $
 - ignore:
-    name: "Use ?~"
+    name: Use ?~
 - ignore:
-    name: "Use fewer imports"
+    name: Use fewer imports
     within:
-      - "Options.Applicative.Compat"
+      - Options.Applicative.Compat
