@@ -17,7 +17,7 @@ import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.Eventlog.Live.Data.Logs (LogRecord (..), SomeLogs)
-import GHC.Eventlog.Live.Data.Metric (SomeMetric)
+import GHC.Eventlog.Live.Data.Metric (SomeMetrics)
 import GHC.Eventlog.Live.Data.Sample (SomeSamples)
 import GHC.Eventlog.Live.Data.Span (SomeSpans)
 import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData (..), chanSource)
@@ -42,7 +42,7 @@ data InstrumentationScope
 
 data TelemetryData
   = TelemetryData'Log SomeLogs
-  | TelemetryData'Metric SomeMetric
+  | TelemetryData'Metric SomeMetrics
   | TelemetryData'Span SomeSpans
   | TelemetryData'Sample SomeSamples
 

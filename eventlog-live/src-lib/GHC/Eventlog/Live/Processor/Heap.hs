@@ -18,7 +18,7 @@ import Data.Machine (Process, ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Metric (SomeMetric (..))
+import GHC.Eventlog.Live.Data.Metric (SomeMetrics (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
@@ -40,7 +40,7 @@ processHeapEvents ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList SomeMetrics))
 processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig =
   M.fanoutTick
     [ processHeapAllocated fullConfig
@@ -60,35 +60,35 @@ processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
 --------------------------------------------------------------------------------
 -- HeapAllocated
 
-processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
+processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapAllocated =
   process (Proxy @C.HeapAllocatedMetric) M.processHeapAllocated
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
-processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
+processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapSize =
   process (Proxy @C.HeapSizeMetric) M.processHeapSize
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
-processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
+processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processBlocksSize =
   process (Proxy @C.BlocksSizeMetric) M.processBlocksSize
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
-processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetric)
+processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapLive =
   process (Proxy @C.HeapLiveMetric) M.processHeapLive
 
 --------------------------------------------------------------------------------
 -- MemReturn
 
-processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
+processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetrics))
 processMemReturn fullConfig =
   processAllWith fullConfig M.processMemReturn $
     select (Proxy @C.MemCurrentMetric) (.current)
@@ -99,7 +99,7 @@ processMemReturn fullConfig =
 --------------------------------------------------------------------------------
 -- GcStats
 
-processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetric))
+processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetrics))
 processGcStats fullConfig =
   processAllWith fullConfig M.processGcStats $
     select (Proxy @C.GcCopiedMetric) (.copied)
@@ -116,7 +116,7 @@ processHeapProfSample ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
   Maybe HeapProfBreakdown ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick SomeMetric)
+  ProcessT m (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   processWith @C.HeapProfSampleMetric
     MetricProcessor

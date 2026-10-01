@@ -18,7 +18,7 @@ import GHC.Eventlog.Live.App.Stats (Stat (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Logs (SomeLogs)
-import GHC.Eventlog.Live.Data.Metric (SomeMetric)
+import GHC.Eventlog.Live.Data.Metric (SomeMetrics)
 import GHC.Eventlog.Live.Data.Sample (SomeSamples)
 import GHC.Eventlog.Live.Data.Span (SomeSpans)
 import GHC.Eventlog.Live.Logger (Logger)
@@ -166,10 +166,10 @@ toResourceTelemetryData
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([SomeLogs], [SomeMetric], [SomeSpans], [SomeSamples])
+partitionTelemetryData :: [TelemetryData] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
 partitionTelemetryData = go ([], [], [], [])
  where
-  go :: ([SomeLogs], [SomeMetric], [SomeSpans], [SomeSamples]) -> [TelemetryData] -> ([SomeLogs], [SomeMetric], [SomeSpans], [SomeSamples])
+  go :: ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples]) -> [TelemetryData] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
   go (logsRev, metricsRev, spansRev, samplesRev) = \case
     [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
     (TelemetryData'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest

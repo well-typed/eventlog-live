@@ -6,7 +6,7 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Data.Metric (
   -- * Known Metrics
-  SomeMetric (..),
+  SomeMetrics (..),
   KnownMetric (..),
   metricConfig,
 
@@ -62,9 +62,9 @@ import GHC.TypeLits (KnownSymbol, Symbol)
 -- Known Metrics
 --------------------------------------------------------------------------------
 
-type SomeMetric :: Type
-data SomeMetric
-  = forall metric. (KnownMetric metric) => SomeMetric !(Proxy metric) [Metric (GetMetricType metric)]
+type SomeMetrics :: Type
+data SomeMetrics
+  = forall metric. (KnownMetric metric) => SomeMetrics !(Proxy metric) [Metric (GetMetricType metric)]
 
 type KnownMetric :: Type -> Constraint
 class

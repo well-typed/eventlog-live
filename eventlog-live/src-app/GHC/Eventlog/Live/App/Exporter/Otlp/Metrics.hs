@@ -27,7 +27,7 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..), SomeMetric (..), metricConfig, toUCUM)
+import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..), SomeMetrics (..), metricConfig, toUCUM)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import Lens.Family2 ((.~), (^.))
@@ -215,9 +215,9 @@ toScopeMetrics instrumentationScope metrics =
 
 toMetric ::
   FullConfig ->
-  SomeMetric ->
+  SomeMetrics ->
   Maybe OM.Metric
-toMetric fullConfig (SomeMetric (metric :: Proxy metric) measurements) = do
+toMetric fullConfig (SomeMetrics (metric :: Proxy metric) measurements) = do
   metricData <- toMetric'Data metric (metricToNumberDataPoint metric <$> measurements)
   pure $
     messageWith $

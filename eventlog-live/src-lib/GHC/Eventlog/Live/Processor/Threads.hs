@@ -19,7 +19,7 @@ import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Metric (SomeMetric, toMetric)
+import GHC.Eventlog.Live.Data.Metric (SomeMetrics, toMetric)
 import GHC.Eventlog.Live.Data.Span (SomeSpans (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
@@ -39,7 +39,7 @@ processThreadEvents ::
   (MonadIO m) =>
   Logger m ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either SomeMetric SomeSpans)))
+  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either SomeMetrics SomeSpans)))
 processThreadEvents verbosity fullConfig =
   runIf (shouldProcessThreadEvents fullConfig) $
     M.sortByTicks (.value.evTime) fullConfig.eventlogFlushIntervalX
