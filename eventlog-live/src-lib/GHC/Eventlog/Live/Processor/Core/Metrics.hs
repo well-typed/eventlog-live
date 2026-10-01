@@ -35,7 +35,7 @@ import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
-import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SomeMetric (..), metricConfig)
+import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SomeMetrics (..), metricConfig)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
@@ -66,7 +66,7 @@ process ::
   Proxy metric ->
   ProcessT m i (Metric (GetMetricType metric)) ->
   FullConfig ->
-  ProcessT m (Tick i) (Tick SomeMetric)
+  ProcessT m (Tick i) (Tick SomeMetrics)
 process (metric :: Proxy metric) processor =
   processWith @metric (processorFor metric processor)
 {-# INLINE process #-}
@@ -84,14 +84,14 @@ processWith ::
   forall metric m a b c.
   MetricProcessor metric m a b c ->
   FullConfig ->
-  ProcessT m (Tick a) (Tick SomeMetric)
+  ProcessT m (Tick a) (Tick SomeMetrics)
 processWith MetricProcessor{..} fullConfig =
   runIf (C.processorEnabled (.metrics) (metricConfig @metric) fullConfig) $
     M.liftTick processor
       ~> aggregate aggregators (C.processorAggregationBatches (.metrics) (metricConfig @metric) fullConfig)
       ~> M.liftTick (mapping ungroup ~> asParts ~> mapping D.singleton)
       ~> M.batchByTicks (C.processorExportBatches (.metrics) (metricConfig @metric) fullConfig)
-      ~> M.liftTick (mapping $ SomeMetric (Proxy @metric) . D.toList)
+      ~> M.liftTick (mapping $ SomeMetrics (Proxy @metric) . D.toList)
 {-# INLINE processWith #-}
 
 --------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ processAllWith ::
   FullConfig ->
   ProcessT m i a ->
   MetricProcessors metrics m a ->
-  ProcessT m (Tick i) (Tick (DList SomeMetric))
+  ProcessT m (Tick i) (Tick (DList SomeMetrics))
 processAllWith fullConfig preprocessor processors =
   runIf (anyProcessorEnabled fullConfig processors) $
     M.liftTick preprocessor
@@ -147,7 +147,7 @@ processAllWith fullConfig preprocessor processors =
         | processor <- processAllWith' processors
         ]
  where
-  processAllWith' :: MetricProcessors metrics' m a -> [ProcessT m (Tick a) (Tick SomeMetric)]
+  processAllWith' :: MetricProcessors metrics' m a -> [ProcessT m (Tick a) (Tick SomeMetrics)]
   processAllWith' End = []
   processAllWith' (p :&: ps) = processWith p fullConfig : processAllWith' ps
 
