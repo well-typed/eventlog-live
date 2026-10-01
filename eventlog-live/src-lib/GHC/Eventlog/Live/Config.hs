@@ -8,7 +8,7 @@ Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Config (
+module GHC.Eventlog.Live.Config (
   -- * Configuration type
   Config (..),
   readConfigFile,
@@ -91,6 +91,12 @@ module GHC.Eventlog.Live.App.Config (
   -- *** Batch interval
   toBatchIntervalMs,
   toBatches,
+
+  -- * Default configuration file
+  defaultConfigByteString,
+  defaultConfigString,
+  defaultConfigJSONSchemaByteString,
+  defaultConfigJSONSchemaString,
 ) where
 
 import Control.Exception (assert)
@@ -108,8 +114,9 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Word (Word32, Word64, Word8)
 import Data.YAML qualified as YAML
-import GHC.Eventlog.Live.App.Config.Default (defaultConfig, getDefault)
-import GHC.Eventlog.Live.App.Config.Types
+import GHC.Eventlog.Live.Config.Default (defaultConfig, getDefault)
+import GHC.Eventlog.Live.Config.Default.Raw
+import GHC.Eventlog.Live.Config.Types
 import GHC.Eventlog.Live.Data.Metric (AggregationTemporality (..), KnownMetricKind, KnownMetricType, KnownMetricUnit, MetricKind (..), MetricUnit (..), Monotonicity (..))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)

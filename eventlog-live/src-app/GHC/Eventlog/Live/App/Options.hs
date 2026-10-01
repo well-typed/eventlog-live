@@ -10,11 +10,10 @@ import Data.List qualified as L
 import Data.Text qualified as T
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
-import GHC.Eventlog.Live.App.Config (Config)
-import GHC.Eventlog.Live.App.Config qualified as C
-import GHC.Eventlog.Live.App.Config.Default.Raw (defaultConfigJSONSchemaString, defaultConfigString)
 import GHC.Eventlog.Live.App.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.App.Options.Raw (footerString, headerString, progDescString)
+import GHC.Eventlog.Live.Config (Config)
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Options
 import GHC.Eventlog.Live.Source.Core (EventlogSourceOptions (..))
 import GHC.Eventlog.Socket.Compat (MyEventlogSocket (..), maybeMyEventlogSocketParser)
@@ -139,14 +138,14 @@ configFileParser =
 
 defaultsPrinter :: O.Parser (a -> a)
 defaultsPrinter =
-  O.infoOption defaultConfigString . mconcat $
+  O.infoOption C.defaultConfigString . mconcat $
     [ O.long "print-defaults"
     , O.help "Print default configuration options."
     ]
 
 configJSONSchemaPrinter :: O.Parser (a -> a)
 configJSONSchemaPrinter =
-  O.infoOption defaultConfigJSONSchemaString . mconcat $
+  O.infoOption C.defaultConfigJSONSchemaString . mconcat $
     [ O.long "print-config-json-schema"
     , O.help "Print JSON Schema for configuration format."
     ]

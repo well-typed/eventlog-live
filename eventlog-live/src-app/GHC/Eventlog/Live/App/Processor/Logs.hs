@@ -14,10 +14,10 @@ import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Data (Proxy (..))
 import Data.Machine (Process, ProcessT, mapping, (~>))
-import GHC.Eventlog.Live.App.Config (FullConfig (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Processor.Common.Logs (SomeLogs (..))
 import GHC.Eventlog.Live.App.Processor.Common.Logs qualified as CL
+import GHC.Eventlog.Live.Config (FullConfig (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)

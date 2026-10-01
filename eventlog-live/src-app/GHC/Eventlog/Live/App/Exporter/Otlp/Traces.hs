@@ -22,11 +22,11 @@ import Data.Proxy (Proxy)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
-import GHC.Eventlog.Live.App.Config (FullConfig, traceConfig)
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, messageWith, toMaybeKeyValues)
 import GHC.Eventlog.Live.App.Processor.Common.Core (ifNonEmpty)
 import GHC.Eventlog.Live.App.Processor.Common.Traces (SomeSpans (..))
+import GHC.Eventlog.Live.Config (FullConfig, traceConfig)
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Span (Span (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))

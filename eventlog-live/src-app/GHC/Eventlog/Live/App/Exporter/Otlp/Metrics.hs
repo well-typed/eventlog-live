@@ -24,11 +24,11 @@ import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word64, Word8)
-import GHC.Eventlog.Live.App.Config (FullConfig, KnownMetric (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, messageWith, toMaybeKeyValues)
 import GHC.Eventlog.Live.App.Processor.Common.Core (ifNonEmpty)
 import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric (..))
+import GHC.Eventlog.Live.Config (FullConfig, KnownMetric (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..), toUCUM)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))

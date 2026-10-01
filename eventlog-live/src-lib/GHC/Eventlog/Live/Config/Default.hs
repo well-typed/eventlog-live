@@ -3,12 +3,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 {- |
-Module      : GHC.Eventlog.Live.App.Config
+Module      : GHC.Eventlog.Live.Config
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Config.Default (
+module GHC.Eventlog.Live.Config.Default (
   defaultConfig,
 
   -- * Internal helpers for defining `Default` instances
@@ -21,8 +21,8 @@ import Data.Bifunctor (Bifunctor (..))
 import Data.Kind (Type)
 import Data.List (intercalate)
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Config.Default.Raw (decodeThrow, defaultConfigByteString)
-import GHC.Eventlog.Live.App.Config.Types (Config)
+import GHC.Eventlog.Live.Config.Default.Raw (decodeThrow, defaultConfigByteString)
+import GHC.Eventlog.Live.Config.Types (Config)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Language.Haskell.TH.Lift.Compat (Exp, Lift (..), Q)
