@@ -17,18 +17,18 @@
         - UndecidableInstances
         - QuasiQuotes
 - modules:
-    # There are orphan instances in GHC.Eventlog.Live.App.Config, which means
+    # There are orphan instances in GHC.Eventlog.Live.Config, which means
     # that importing configuration types from the Types submodule will lead to
     # rather confusing errors.
     - name:
-        - GHC.Eventlog.Live.App.Config.Types
+        - GHC.Eventlog.Live.Config.Types
       within:
-        - GHC.Eventlog.Live.App.Config
-        - GHC.Eventlog.Live.App.Config.Default
+        - GHC.Eventlog.Live.Config
+        - GHC.Eventlog.Live.Config.Default
     - name:
-        - GHC.Eventlog.Live.App.Config.Default
+        - GHC.Eventlog.Live.Config.Default
       within:
-        - GHC.Eventlog.Live.App.Config
+        - GHC.Eventlog.Live.Config
     # The modules from template-haskell-lift may only be imported in the
     # compatibility module.
     - name:

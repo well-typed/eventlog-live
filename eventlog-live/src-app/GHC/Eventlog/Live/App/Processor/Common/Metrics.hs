@@ -34,9 +34,9 @@ import Data.Kind (Type)
 import Data.Machine (Process, ProcessT, asParts, echo, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
-import GHC.Eventlog.Live.App.Config (FullConfig, KnownMetric (..), metricConfig)
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Processor.Common.Core (runIf)
+import GHC.Eventlog.Live.Config (FullConfig, KnownMetric (..), metricConfig)
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Data.Group qualified as DG
 import GHC.Eventlog.Live.Data.Metric (KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..))

@@ -13,8 +13,6 @@ import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
-import GHC.Eventlog.Live.App.Config (FullConfig (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Processor.Common.Logs (SomeLogs)
 import GHC.Eventlog.Live.App.Processor.Common.Logs qualified as CL
 import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric)
@@ -23,6 +21,8 @@ import GHC.Eventlog.Live.App.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.App.Processor.Logs (processLogEvents)
 import GHC.Eventlog.Live.App.Processor.Profiles (SomeSamples, processProfileEvents)
 import GHC.Eventlog.Live.App.Processor.Threads (processThreadEvents)
+import GHC.Eventlog.Live.Config (FullConfig (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Attribute (Attrs)
 import GHC.Eventlog.Live.Data.LogRecord (LogRecord (..))
 import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData (..), chanSource)

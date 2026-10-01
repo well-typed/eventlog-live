@@ -17,13 +17,13 @@ import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Config (FullConfig (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Processor.Common.Core (runIf)
 import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric)
 import GHC.Eventlog.Live.App.Processor.Common.Metrics qualified as CM
 import GHC.Eventlog.Live.App.Processor.Common.Traces (SomeSpans)
 import GHC.Eventlog.Live.App.Processor.Common.Traces qualified as CT
+import GHC.Eventlog.Live.Config (FullConfig (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Metric qualified as M
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M

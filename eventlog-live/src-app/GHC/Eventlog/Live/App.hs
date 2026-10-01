@@ -22,8 +22,6 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
-import GHC.Eventlog.Live.App.Config (FullConfig (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceName (..), lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.App.Exporter.Otlp (exportTelemetryData)
@@ -31,6 +29,8 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.App.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.App.Stats (Stat (..), eventCountTick, processStats)
+import GHC.Eventlog.Live.Config (FullConfig (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)

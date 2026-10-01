@@ -143,6 +143,7 @@ library
     src-lib
 
   exposed-modules:
+    GHC.Eventlog.Live.Config
     GHC.Eventlog.Live.Data.Attribute
     GHC.Eventlog.Live.Data.Capability
     GHC.Eventlog.Live.Data.Group
@@ -168,6 +169,11 @@ library
     GHC.Eventlog.Live.Source
     GHC.Eventlog.Live.Source.Core
 
+  other-modules:
+    GHC.Eventlog.Live.Config.Default
+    GHC.Eventlog.Live.Config.Default.Raw
+    GHC.Eventlog.Live.Config.Types
+
   build-depends:
     ansi-terminal >=1.1 && <1.2,
     base >=4.16 && <5,
@@ -175,10 +181,13 @@ library
     clock >=0.8 && <0.9,
     co-log-core >=0.3 && <0.4,
     containers >=0.6 && <0.9,
+    data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
+    file-embed >=0.0.16 && <0.1,
     ghc-events >=0.20 && <0.21,
     ghc-stack-profiler-core ==0.5.0.0,
     hashable >=1.4 && <1.6,
+    HsYAML >=0.2 && <0.3,
     ipedb >=0.2 && <0.3,
     machines >=0.7.4 && <0.8,
     monad-control >=1.0 && <1.1,
@@ -233,6 +242,18 @@ library
       time >=1.4 && <1.16,
       transformers-base >=0.4 && <0.5,
 
+  -- 2025-11-06:
+  -- This configures the build requirements for using either template-haskell
+  -- or template-haskell-lift.
+  if flag(use-template-haskell-lift)
+    build-depends: template-haskell-lift >=0.1 && <0.2
+    cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
+  else
+    build-depends: template-haskell >=2.2 && <3
+
+  other-modules:
+    Language.Haskell.TH.Lift.Compat
+
 executable eventlog-live-otlp
   import: language
   main-is: eventlog-live-otlp.hs
@@ -249,10 +270,6 @@ executable eventlog-live-otlp
 
   other-modules:
     GHC.Eventlog.Live.App
-    GHC.Eventlog.Live.App.Config
-    GHC.Eventlog.Live.App.Config.Default
-    GHC.Eventlog.Live.App.Config.Default.Raw
-    GHC.Eventlog.Live.App.Config.Types
     GHC.Eventlog.Live.App.Control
     GHC.Eventlog.Live.App.Environment
     GHC.Eventlog.Live.App.Exporter.Otlp
@@ -282,7 +299,6 @@ executable eventlog-live-otlp
   other-modules:
     GHC.Debug.Stub.Compat
     GHC.Eventlog.Socket.Compat
-    Language.Haskell.TH.Lift.Compat
     Options.Applicative.Compat
     Options.Applicative.Extra.Feature
     Paths_eventlog_live
@@ -302,7 +318,6 @@ executable eventlog-live-otlp
     grapesy >=1.0.0 && <1.2,
     hashable >=1.4 && <1.6,
     hs-opentelemetry-otlp >=0.2.0 && <0.3,
-    HsYAML >=0.2 && <0.3,
     http-client >=0.7 && <0.8,
     http-client-tls >=0.3.5 && <0.4,
     http-types >=0.12 && <0.13,
@@ -352,14 +367,6 @@ executable eventlog-live-otlp
   if flag(use-hs-opentelemetry-api)
     build-depends: hs-opentelemetry-api >=1.0.0.0 && <1.1
   else
+    build-depends: template-haskell
     hs-source-dirs: vendor/hs-opentelemetry-api-1.0.0.0/src
     other-modules: OpenTelemetry.Baggage
-
-  -- 2025-11-06:
-  -- This configures the build requirements for using either template-haskell
-  -- or template-haskell-lift.
-  if flag(use-template-haskell-lift)
-    build-depends: template-haskell-lift >=0.1 && <0.2
-    cpp-options: -DEVENTLOG_LIVE_OTELCOL_USE_TEMPLATE_HASKELL_LIFT
-  else
-    build-depends: template-haskell >=2.2 && <3

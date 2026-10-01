@@ -17,9 +17,9 @@ import Data.DList qualified as D
 import Data.Kind (Type)
 import Data.Machine (ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Config (FullConfig (..), KnownProfile (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Processor.Common.Core
+import GHC.Eventlog.Live.Config (FullConfig (..), KnownProfile (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Data.Sample (Sample, toSample)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M

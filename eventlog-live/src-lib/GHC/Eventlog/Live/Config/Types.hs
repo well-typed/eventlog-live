@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.App.Config.Types
+Module      : GHC.Eventlog.Live.Config.Types
 Description : The implementation of @eventlog-live-otlp@.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.App.Config.Types (
+module GHC.Eventlog.Live.Config.Types (
   -- * Configuration type
   Config (..),
   FullConfig (..),

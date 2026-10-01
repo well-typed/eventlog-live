@@ -16,9 +16,9 @@ import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Machine (Process, ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.App.Config (FullConfig (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Processor.Common.Metrics
+import GHC.Eventlog.Live.Config (FullConfig (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M

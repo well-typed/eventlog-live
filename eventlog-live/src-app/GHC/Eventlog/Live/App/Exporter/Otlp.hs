@@ -8,8 +8,6 @@ import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.Text qualified as T
 import Data.Version (showVersion)
-import GHC.Eventlog.Live.App.Config (FullConfig (..))
-import GHC.Eventlog.Live.App.Config qualified as C
 import GHC.Eventlog.Live.App.Environment (PerSignal, Signal (..), forSignal)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (Exporter, messageWith, toMaybeKeyValues)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Logs (exportResourceLogs, toExportLogsServiceRequest, toLogRecords, toResourceLogs, toScopeLogs)
@@ -23,6 +21,8 @@ import GHC.Eventlog.Live.App.Processor.Common.Metrics (SomeMetric)
 import GHC.Eventlog.Live.App.Processor.Common.Traces (SomeSpans)
 import GHC.Eventlog.Live.App.Processor.Profiles (SomeSamples)
 import GHC.Eventlog.Live.App.Stats (Stat (..))
+import GHC.Eventlog.Live.Config (FullConfig (..))
+import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
