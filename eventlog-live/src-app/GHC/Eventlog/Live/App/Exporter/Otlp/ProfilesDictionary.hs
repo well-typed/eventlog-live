@@ -36,7 +36,7 @@ import Data.Text qualified as T
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (messageWith, toMaybeAnyValue)
 import GHC.Eventlog.Live.App.Exporter.Otlp.SymbolTable (SymbolIndex, SymbolTable)
 import GHC.Eventlog.Live.App.Exporter.Otlp.SymbolTable qualified as ST
-import GHC.Eventlog.Live.Data.Attribute (Attr)
+import GHC.Eventlog.Live.Types.Attribute (Attr)
 import GHC.Generics (Generic)
 import Lens.Family2 (Lens', (.~), (^.))
 import Lens.Family2.Unchecked (lens)

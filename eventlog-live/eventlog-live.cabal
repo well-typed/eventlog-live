@@ -144,16 +144,6 @@ library
 
   exposed-modules:
     GHC.Eventlog.Live.Config
-    GHC.Eventlog.Live.Data.Attribute
-    GHC.Eventlog.Live.Data.Capability
-    GHC.Eventlog.Live.Data.Group
-    GHC.Eventlog.Live.Data.HeapProfBreakdown
-    GHC.Eventlog.Live.Data.Logs
-    GHC.Eventlog.Live.Data.Metric
-    GHC.Eventlog.Live.Data.Sample
-    GHC.Eventlog.Live.Data.Severity
-    GHC.Eventlog.Live.Data.Span
-    GHC.Eventlog.Live.Data.Thread
     GHC.Eventlog.Live.Logger
     GHC.Eventlog.Live.Machine.Analysis.Capability
     GHC.Eventlog.Live.Machine.Analysis.Heap
@@ -170,6 +160,16 @@ library
     GHC.Eventlog.Live.Processor.Core
     GHC.Eventlog.Live.Source
     GHC.Eventlog.Live.Source.Core
+    GHC.Eventlog.Live.Types.Attribute
+    GHC.Eventlog.Live.Types.Capability
+    GHC.Eventlog.Live.Types.Group
+    GHC.Eventlog.Live.Types.HeapProfBreakdown
+    GHC.Eventlog.Live.Types.Logs
+    GHC.Eventlog.Live.Types.Metrics
+    GHC.Eventlog.Live.Types.Profiles
+    GHC.Eventlog.Live.Types.Severity
+    GHC.Eventlog.Live.Types.Thread
+    GHC.Eventlog.Live.Types.Traces
 
   other-modules:
     GHC.Eventlog.Live.Config.Default

@@ -4,7 +4,7 @@ Description : Representation for OTLP stack samples.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Sample (
+module GHC.Eventlog.Live.Types.Profiles (
   -- * Samples
   SomeSamples (..),
   KnownProfile (..),
@@ -26,7 +26,7 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Word (Word8)
 import GHC.Eventlog.Live.Config (CallStackProfile (..), CostCentreStackProfile (..), IsProfileProcessorConfig, Profiles (..))
-import GHC.Eventlog.Live.Data.Attribute (Attrs)
+import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol)

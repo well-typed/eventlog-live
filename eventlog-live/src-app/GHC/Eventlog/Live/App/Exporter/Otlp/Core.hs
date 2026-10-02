@@ -45,9 +45,9 @@ import Data.Text.Encoding qualified as TE
 import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.App.Environment (Compression (..))
 import GHC.Eventlog.Live.App.Environment qualified as E (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), Timeout (..), defaultPortFor)
-import GHC.Eventlog.Live.Data.Attribute (Attr, AttrValue (..), Attrs)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Types.Attribute (Attr, AttrValue (..), Attrs)
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.IsList (IsList (..))
 import GHC.IsList qualified as IsList
 import Lens.Family2 (Setter, (.~))

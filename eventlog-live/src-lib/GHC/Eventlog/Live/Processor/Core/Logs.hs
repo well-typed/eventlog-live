@@ -14,10 +14,10 @@ import Data.Machine (ProcessT, mapping, (~>))
 import Data.Proxy (Proxy)
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Logs (IsLogRecord, KnownLog, SomeLogs (..), logConfig, toLogRecord)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
+import GHC.Eventlog.Live.Types.Logs (IsLogRecord, KnownLog, SomeLogs (..), logConfig, toLogRecord)
 
 --------------------------------------------------------------------------------
 -- Generic processor for logs

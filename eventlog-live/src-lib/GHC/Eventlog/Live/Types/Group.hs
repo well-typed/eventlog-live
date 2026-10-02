@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.Data.Group
+Module      : GHC.Eventlog.Live.Types.Group
 Description : Reprsentation for grouped data.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Group (
+module GHC.Eventlog.Live.Types.Group (
   -- * GroupBy
   GroupBy (..),
   Group (..),

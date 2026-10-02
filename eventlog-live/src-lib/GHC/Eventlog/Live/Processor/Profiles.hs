@@ -16,13 +16,13 @@ import Data.Machine (ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Sample (SomeSamples (..), toSample)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Processor.Core
+import GHC.Eventlog.Live.Types.Profiles (SomeSamples (..), toSample)
 import GHC.RTS.Events (Event (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC

@@ -33,12 +33,12 @@ import Data.Proxy (Proxy (..))
 import Data.Semigroup (Last (..), Sum (..))
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Group (Group, GroupBy, GroupedBy)
-import GHC.Eventlog.Live.Data.Group qualified as DG
-import GHC.Eventlog.Live.Data.Metric (KnownMetric (..), KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SomeMetrics (..), metricConfig)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
+import GHC.Eventlog.Live.Types.Group (Group, GroupBy, GroupedBy)
+import GHC.Eventlog.Live.Types.Group qualified as DG
+import GHC.Eventlog.Live.Types.Metrics (KnownMetric (..), KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SomeMetrics (..), metricConfig)
 
 --------------------------------------------------------------------------------
 -- Metric Processor

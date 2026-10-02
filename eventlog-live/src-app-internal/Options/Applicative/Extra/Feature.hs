@@ -11,8 +11,8 @@ import Control.Monad (unless)
 import Data.Default (Default (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import Options.Applicative qualified as O
 import Options.Applicative.Help.Pretty qualified as OP
 import System.Exit (exitFailure)

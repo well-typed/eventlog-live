@@ -22,7 +22,7 @@ import Options.Applicative.Extra.Feature qualified as OF
 #ifdef EVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
 import Data.Foldable (for_)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 #else

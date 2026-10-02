@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module      : GHC.Eventlog.Live.Data.HeapProfBreakdown
+Module      : GHC.Eventlog.Live.Types.HeapProfBreakdown
 Description : Utilities for GHC heap profiling breakdowns.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.HeapProfBreakdown (
+module GHC.Eventlog.Live.Types.HeapProfBreakdown (
   HeapProfBreakdown (..),
   heapProfBreakdownEitherReader,
   heapProfBreakdownShow,

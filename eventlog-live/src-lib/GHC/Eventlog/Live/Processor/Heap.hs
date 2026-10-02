@@ -18,7 +18,6 @@ import Data.Machine (Process, ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Metric (SomeMetrics (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
@@ -26,6 +25,7 @@ import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Processor.Core.Metrics
+import GHC.Eventlog.Live.Types.Metrics (SomeMetrics (..))
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.InfoProv qualified as IP
