@@ -52,27 +52,27 @@ data SomeSpans
 -- KnownTrace & Instances
 -------------------------------------------------------------------------------
 
-type KnownTrace :: Type -> Constraint
+type KnownTrace :: Symbol -> Constraint
 class
-  ( HasField (GetTraceName trace) Traces (Maybe trace)
-  , IsTraceProcessorConfig trace
-  , Show trace
-  , Default trace
-  , KnownSymbol (GetTraceName trace)
+  ( HasField trace Traces (Maybe (GetTraceConf trace))
+  , IsTraceProcessorConfig (GetTraceConf trace)
+  , Show (GetTraceConf trace)
+  , Default (GetTraceConf trace)
+  , KnownSymbol trace
   ) =>
   KnownTrace trace
   where
-  type GetTraceName trace :: Symbol
+  type GetTraceConf trace :: Type
 
-traceConfig :: forall trace. (KnownTrace trace) => Traces -> Maybe trace
-traceConfig = getField @(GetTraceName trace)
+traceConfig :: forall trace. (KnownTrace trace) => Proxy trace -> Traces -> Maybe (GetTraceConf trace)
+traceConfig (_trace :: Proxy trace) = getField @trace
 {-# INLINE traceConfig #-}
 
-instance KnownTrace CapabilityUsageSpan where
-  type GetTraceName CapabilityUsageSpan = "capabilityUsage"
+instance KnownTrace "capabilityUsage" where
+  type GetTraceConf "capabilityUsage" = CapabilityUsageSpan
 
-instance KnownTrace ThreadStateSpan where
-  type GetTraceName ThreadStateSpan = "threadState"
+instance KnownTrace "threadState" where
+  type GetTraceConf "threadState" = ThreadStateSpan
 
 --------------------------------------------------------------------------------
 -- Superclass for span types

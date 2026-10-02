@@ -251,7 +251,7 @@ getSample fullConfig (_profile :: Proxy profile) sample = do
   stackIndex <- getStack sample.stack
 
   -- Encode the attributes.
-  let name = C.processorName (.profiles) (profileConfig @profile) fullConfig
+  let name = C.processorName (.profiles) (profileConfig $ Proxy @profile) fullConfig
   let attributes = "__name__" ~= name : toList sample.attrs
   attributeIndices <- catMaybes <$> traverse PD.getAttr attributes
 

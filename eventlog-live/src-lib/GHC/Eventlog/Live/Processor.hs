@@ -14,7 +14,6 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData (..), chanSource)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -82,7 +81,7 @@ processInternalTelemetry ::
 processInternalTelemetry fullConfig myTelemetryDataChan =
   M.mergeWithTickCC (chanSource myTelemetryDataChan)
     ~> M.fanoutTick
-      [ CL.process (Proxy @C.InternalLogMessageLog) processInternalLogRecords fullConfig
+      [ CL.process (Proxy @"internalLogMessage") processInternalLogRecords fullConfig
           ~> M.liftTick (mapping (D.singleton . TelemetryData'Log))
       ]
  where

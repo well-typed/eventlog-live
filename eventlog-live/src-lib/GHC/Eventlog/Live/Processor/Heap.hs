@@ -17,7 +17,6 @@ import Data.DList qualified as D
 import Data.Machine (Process, ProcessT, mapping, (~>))
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Heap (GcStats (..), MemReturn (..))
 import GHC.Eventlog.Live.Machine.Analysis.Heap qualified as M
@@ -62,28 +61,28 @@ processHeapEvents verbosity maybeInfoProvTable maybeHeapProfBreakdown fullConfig
 
 processHeapAllocated :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapAllocated =
-  process (Proxy @C.HeapAllocatedMetric) M.processHeapAllocated
+  process (Proxy @"heapAllocated") M.processHeapAllocated
 
 --------------------------------------------------------------------------------
 -- HeapSize
 
 processHeapSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapSize =
-  process (Proxy @C.HeapSizeMetric) M.processHeapSize
+  process (Proxy @"heapSize") M.processHeapSize
 
 --------------------------------------------------------------------------------
 -- BlocksSize
 
 processBlocksSize :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processBlocksSize =
-  process (Proxy @C.BlocksSizeMetric) M.processBlocksSize
+  process (Proxy @"blocksSize") M.processBlocksSize
 
 --------------------------------------------------------------------------------
 -- HeapLive
 
 processHeapLive :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapLive =
-  process (Proxy @C.HeapLiveMetric) M.processHeapLive
+  process (Proxy @"heapLive") M.processHeapLive
 
 --------------------------------------------------------------------------------
 -- MemReturn
@@ -91,9 +90,9 @@ processHeapLive =
 processMemReturn :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetrics))
 processMemReturn fullConfig =
   processAllWith fullConfig M.processMemReturn $
-    select (Proxy @C.MemCurrentMetric) (.current)
-      :&: select (Proxy @C.MemNeededMetric) (.needed)
-      :&: select (Proxy @C.MemReturnedMetric) (.returned)
+    select (Proxy @"memCurrent") (.current)
+      :&: select (Proxy @"memNeeded") (.needed)
+      :&: select (Proxy @"memReturned") (.returned)
       :&: End
 
 --------------------------------------------------------------------------------
@@ -102,9 +101,9 @@ processMemReturn fullConfig =
 processGcStats :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick (DList SomeMetrics))
 processGcStats fullConfig =
   processAllWith fullConfig M.processGcStats $
-    select (Proxy @C.GcCopiedMetric) (.copied)
-      :&: select (Proxy @C.GcSlopMetric) (.slop)
-      :&: select (Proxy @C.GcFragmentationMetric) (.fragmentation)
+    select (Proxy @"gcCopied") (.copied)
+      :&: select (Proxy @"gcSlop") (.slop)
+      :&: select (Proxy @"gcFragmentation") (.fragmentation)
       :&: End
 
 --------------------------------------------------------------------------------
@@ -118,7 +117,7 @@ processHeapProfSample ::
   FullConfig ->
   ProcessT m (Tick (WithStartTime Event)) (Tick SomeMetrics)
 processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
-  processWith @C.HeapProfSampleMetric
+  processWith @"heapProfSample"
     MetricProcessor
       { processor = M.processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown
       , aggregators = viaLast

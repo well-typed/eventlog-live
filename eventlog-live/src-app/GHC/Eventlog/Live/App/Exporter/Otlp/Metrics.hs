@@ -221,8 +221,8 @@ toMetric fullConfig (SomeMetrics (metric :: Proxy metric) measurements) = do
   metricData <- toMetric'Data metric (metricToNumberDataPoint metric <$> measurements)
   pure $
     messageWith $
-      [ OM.name .~ C.processorName (.metrics) (metricConfig @metric) fullConfig
-      , maybe id (OM.description .~) $ C.processorDescription (.metrics) (metricConfig @metric) fullConfig
+      [ OM.name .~ C.processorName (.metrics) (metricConfig $ Proxy @metric) fullConfig
+      , maybe id (OM.description .~) $ C.processorDescription (.metrics) (metricConfig $ Proxy @metric) fullConfig
       , OM.unit .~ toUCUM (metricUnitSing (Proxy @(GetMetricUnit metric)))
       , OM.maybe'data' .~ Just metricData
       ]

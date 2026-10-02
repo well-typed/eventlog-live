@@ -39,6 +39,7 @@ import GHC.Eventlog.Live.Processor.Core (runIf)
 import GHC.Eventlog.Live.Types.Group (Group, GroupBy, GroupedBy)
 import GHC.Eventlog.Live.Types.Group qualified as DG
 import GHC.Eventlog.Live.Types.Metrics (KnownMetric (..), KnownMetricKind (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SomeMetrics (..), metricConfig)
+import GHC.TypeLits (Symbol)
 
 --------------------------------------------------------------------------------
 -- Metric Processor
@@ -48,7 +49,7 @@ import GHC.Eventlog.Live.Types.Metrics (KnownMetric (..), KnownMetricKind (..), 
 A t`MetricProcessor` holds the building blocks for the processing pipeline for a
 single metric.
 -}
-type MetricProcessor :: Type -> (Type -> Type) -> Type -> Type -> Type -> Type
+type MetricProcessor :: Symbol -> (Type -> Type) -> Type -> Type -> Type -> Type
 data MetricProcessor metric m a b c
   = forall f.
   (Monad m, KnownMetric metric, Foldable f) =>
@@ -86,11 +87,11 @@ processWith ::
   FullConfig ->
   ProcessT m (Tick a) (Tick SomeMetrics)
 processWith MetricProcessor{..} fullConfig =
-  runIf (C.processorEnabled (.metrics) (metricConfig @metric) fullConfig) $
+  runIf (C.processorEnabled (.metrics) (metricConfig $ Proxy @metric) fullConfig) $
     M.liftTick processor
-      ~> aggregate aggregators (C.processorAggregationBatches (.metrics) (metricConfig @metric) fullConfig)
+      ~> aggregate aggregators (C.processorAggregationBatches (.metrics) (metricConfig $ Proxy @metric) fullConfig)
       ~> M.liftTick (mapping ungroup ~> asParts ~> mapping D.singleton)
-      ~> M.batchByTicks (C.processorExportBatches (.metrics) (metricConfig @metric) fullConfig)
+      ~> M.batchByTicks (C.processorExportBatches (.metrics) (metricConfig $ Proxy @metric) fullConfig)
       ~> M.liftTick (mapping $ SomeMetrics (Proxy @metric) . D.toList)
 {-# INLINE processWith #-}
 
@@ -103,7 +104,7 @@ infixr 6 :&:
 {- |
 A t`MetricProcessors` holds a series of t`MetricProcessor`s that work from the same input type.
 -}
-type MetricProcessors :: [Type] -> (Type -> Type) -> Type -> Type
+type MetricProcessors :: [Symbol] -> (Type -> Type) -> Type -> Type
 data MetricProcessors metrics m a where
   End ::
     MetricProcessors '[] m i
@@ -120,7 +121,7 @@ Check if /any/ of the t`MetricProcessors` is enabled.
 anyProcessorEnabled :: FullConfig -> MetricProcessors metrics m i -> Bool
 anyProcessorEnabled _fullConfig End = False
 anyProcessorEnabled fullConfig ((_ :: MetricProcessor metric m i a b) :&: rest) =
-  C.processorEnabled (.metrics) (metricConfig @metric) fullConfig || anyProcessorEnabled fullConfig rest
+  C.processorEnabled (.metrics) (metricConfig $ Proxy @metric) fullConfig || anyProcessorEnabled fullConfig rest
 
 select ::
   (Monad m, KnownMetric metric) =>
