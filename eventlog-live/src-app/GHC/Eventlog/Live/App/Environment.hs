@@ -42,8 +42,8 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Traversable (for)
 import Data.Word (Word16)
-import GHC.Eventlog.Live.Data.Severity (Severity (..), fromSeverityString)
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Types.Severity (Severity (..), fromSeverityString)
 import GHC.IsList qualified as IsList
 import GHC.Records (HasField (..))
 import Network.URI (URI (..), URIAuth (..))

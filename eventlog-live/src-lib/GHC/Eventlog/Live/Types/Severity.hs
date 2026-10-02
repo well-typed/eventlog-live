@@ -4,7 +4,7 @@ Description : Representation for OTLP log record severities.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Severity (
+module GHC.Eventlog.Live.Types.Severity (
   Severity (..),
   SeverityNumber (..),
   toSeverityNumber,

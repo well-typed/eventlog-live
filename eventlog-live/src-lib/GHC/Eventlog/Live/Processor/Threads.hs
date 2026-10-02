@@ -19,8 +19,6 @@ import Data.Machine.Fanout (fanout)
 import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Metric (SomeMetrics, toMetric)
-import GHC.Eventlog.Live.Data.Span (SomeSpans (..))
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
@@ -31,6 +29,8 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
 import GHC.Eventlog.Live.Processor.Core.Metrics qualified as CM
 import GHC.Eventlog.Live.Processor.Core.Traces qualified as CT
+import GHC.Eventlog.Live.Types.Metrics (SomeMetrics, toMetric)
+import GHC.Eventlog.Live.Types.Traces (SomeSpans (..))
 import GHC.RTS.Events (Event (..))
 
 data ABC a b c = A !a | B !b | C !c

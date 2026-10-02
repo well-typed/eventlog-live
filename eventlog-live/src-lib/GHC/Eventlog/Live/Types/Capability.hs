@@ -1,10 +1,10 @@
 {- |
-Module      : GHC.Eventlog.Live.Data.Capability
+Module      : GHC.Eventlog.Live.Types.Capability
 Description : Reprsentation for capability data.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Capability (
+module GHC.Eventlog.Live.Types.Capability (
   CapNo (..),
   evCapNo,
   fromCapabilityId,
@@ -12,7 +12,7 @@ module GHC.Eventlog.Live.Data.Capability (
 
 import Data.Hashable (Hashable)
 import Data.Word (Word32)
-import GHC.Eventlog.Live.Data.Attribute (IsAttrValue)
+import GHC.Eventlog.Live.Types.Attribute (IsAttrValue)
 import GHC.RTS.Events (Event (..))
 import GHC.Stack.Profiler.Core (CapabilityId (..))
 

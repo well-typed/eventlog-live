@@ -15,10 +15,10 @@ import Data.Machine (ProcessT, mapping, (~>))
 import Data.Proxy (Proxy)
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Span (IsSpan, KnownTrace, SomeSpans (..), asSpan, traceConfig)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
+import GHC.Eventlog.Live.Types.Traces (IsSpan, KnownTrace, SomeSpans (..), asSpan, traceConfig)
 
 --------------------------------------------------------------------------------
 -- Existential wrapper for spans

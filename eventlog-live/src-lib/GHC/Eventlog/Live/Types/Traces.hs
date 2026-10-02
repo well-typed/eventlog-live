@@ -4,7 +4,7 @@ Description : Representation for OTLP spans.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Span (
+module GHC.Eventlog.Live.Types.Traces (
   -- * Known Spans
   SomeSpans (..),
   KnownTrace (..),
@@ -33,7 +33,7 @@ import Data.Kind (Constraint, Type)
 import Data.Machine (ProcessT, await, construct, yield)
 import Data.Proxy (Proxy)
 import GHC.Eventlog.Live.Config (CapabilityUsageSpan (..), IsTraceProcessorConfig, ThreadStateSpan (..), Traces (..))
-import GHC.Eventlog.Live.Data.Attribute (Attrs)
+import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol)

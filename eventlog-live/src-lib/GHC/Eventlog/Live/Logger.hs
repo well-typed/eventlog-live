@@ -34,10 +34,10 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
-import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
-import GHC.Eventlog.Live.Data.Attribute qualified as A
-import GHC.Eventlog.Live.Data.Logs (LogRecord (..))
-import GHC.Eventlog.Live.Data.Severity (Severity (..), toSeverityString)
+import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
+import GHC.Eventlog.Live.Types.Attribute qualified as A
+import GHC.Eventlog.Live.Types.Logs (LogRecord (..))
+import GHC.Eventlog.Live.Types.Severity (Severity (..), toSeverityString)
 import GHC.IsList qualified as IsList
 import GHC.RTS.Events (Timestamp)
 import GHC.Stack (CallStack, callStack, popCallStack, prettyCallStack)

@@ -71,9 +71,9 @@ import Data.Text qualified as T
 import Data.Traversable (for)
 import Data.Void (Void)
 import Data.Word (Word64)
-import GHC.Eventlog.Live.Data.Metric (Metric)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Types.Metrics (Metric)
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import Text.Printf (printf)
 
 {- $setup

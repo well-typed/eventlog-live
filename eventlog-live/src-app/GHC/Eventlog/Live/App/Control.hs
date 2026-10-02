@@ -44,7 +44,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Word (Word8)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)
 import GHC.Eventlog.Socket.Control qualified as C
 import GHC.Generics (Generic)

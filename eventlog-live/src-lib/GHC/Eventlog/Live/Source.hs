@@ -24,13 +24,13 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.Decoder
 import GHC.Eventlog.Live.Machine.Sink
 import GHC.Eventlog.Live.Machine.Source
 import GHC.Eventlog.Live.Source.Core
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.RTS.Events (Event)
 import Network.Socket (Socket)
 import Network.Socket qualified as S

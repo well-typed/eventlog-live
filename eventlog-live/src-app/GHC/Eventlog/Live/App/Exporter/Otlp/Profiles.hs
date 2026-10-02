@@ -37,10 +37,10 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary (ProfilesDictionar
 import GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary qualified as PD
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Attribute ((~=))
-import GHC.Eventlog.Live.Data.Sample (KnownProfile (..), Location (..), Sample (..), SomeSamples (..), profileConfig)
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Types.Attribute ((~=))
+import GHC.Eventlog.Live.Types.Profiles (KnownProfile (..), Location (..), Sample (..), SomeSamples (..), profileConfig)
 import GHC.IsList (IsList (..))
 import GHC.TypeLits (symbolVal)
 import IpeDB.Types.SrcLoc (Point (..), SrcLoc (..))

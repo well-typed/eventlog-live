@@ -22,7 +22,7 @@ import Options.Applicative.Extra.Feature qualified as OF
 #ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
 import Data.Text qualified as T
 import GHC.Debug.Stub qualified as GHC.Debug (withGhcDebug, withGhcDebugTCP, withGhcDebugUnix)
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)
 import System.Exit (exitFailure)
 import Text.Read (readEither)

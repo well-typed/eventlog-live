@@ -4,7 +4,7 @@ Description : Representation for OTLP attributes.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Attribute (
+module GHC.Eventlog.Live.Types.Attribute (
   HasAttrs (..),
   Attrs,
   lookup,

@@ -16,13 +16,13 @@ import Data.Data (Proxy (..))
 import Data.Machine (Process, ProcessT, mapping, (~>))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Logs (SomeLogs (..))
 import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Processor.Core.Logs (process)
+import GHC.Eventlog.Live.Types.Logs (SomeLogs (..))
 import GHC.RTS.Events (Event (..))
 
 --------------------------------------------------------------------------------

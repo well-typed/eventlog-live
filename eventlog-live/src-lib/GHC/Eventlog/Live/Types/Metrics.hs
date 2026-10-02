@@ -4,7 +4,7 @@ Description : Representation for OTLP metrics.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Metric (
+module GHC.Eventlog.Live.Types.Metrics (
   -- * Known Metrics
   SomeMetrics (..),
   KnownMetric (..),
@@ -52,8 +52,8 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Config
-import GHC.Eventlog.Live.Data.Attribute (Attrs)
-import GHC.Eventlog.Live.Data.Group (GroupBy (..))
+import GHC.Eventlog.Live.Types.Attribute (Attrs)
+import GHC.Eventlog.Live.Types.Group (GroupBy (..))
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol)

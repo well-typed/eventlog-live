@@ -1,16 +1,16 @@
 {- |
-Module      : GHC.Eventlog.Live.Data.Thread
+Module      : GHC.Eventlog.Live.Types.Thread
 Description : Reprsentation for thread data.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Data.Thread (
+module GHC.Eventlog.Live.Types.Thread (
   ThreadId (..),
   fromThreadId,
 ) where
 
 import Data.Word (Word64)
-import GHC.Eventlog.Live.Data.Attribute (IsAttrValue)
+import GHC.Eventlog.Live.Types.Attribute (IsAttrValue)
 import GHC.Stack.Profiler.Core qualified as GSP
 
 {- |

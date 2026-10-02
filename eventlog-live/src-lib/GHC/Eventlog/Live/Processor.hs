@@ -15,11 +15,6 @@ import Data.Text (Text)
 import Data.Version (Version)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Attribute (Attrs)
-import GHC.Eventlog.Live.Data.Logs (LogRecord (..), SomeLogs)
-import GHC.Eventlog.Live.Data.Metric (SomeMetrics)
-import GHC.Eventlog.Live.Data.Sample (SomeSamples)
-import GHC.Eventlog.Live.Data.Span (SomeSpans)
 import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData (..), chanSource)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
@@ -29,6 +24,11 @@ import GHC.Eventlog.Live.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Processor.Logs (processLogEvents)
 import GHC.Eventlog.Live.Processor.Profiles (processProfileEvents)
 import GHC.Eventlog.Live.Processor.Threads (processThreadEvents)
+import GHC.Eventlog.Live.Types.Attribute (Attrs)
+import GHC.Eventlog.Live.Types.Logs (LogRecord (..), SomeLogs)
+import GHC.Eventlog.Live.Types.Metrics (SomeMetrics)
+import GHC.Eventlog.Live.Types.Profiles (SomeSamples)
+import GHC.Eventlog.Live.Types.Traces (SomeSpans)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown)
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC

@@ -30,8 +30,6 @@ import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.App.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Data.Attribute (AttrValue (..), (~=))
-import GHC.Eventlog.Live.Data.Severity (Severity (..))
 import GHC.Eventlog.Live.Logger (writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -39,6 +37,8 @@ import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
+import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
+import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Event (..))
