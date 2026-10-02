@@ -15,6 +15,9 @@ module GHC.Eventlog.Live.Types.Attribute (
   (~=),
 ) where
 
+import Data.Aeson (ToJSON)
+import Data.Aeson.Encoding (null_)
+import Data.Aeson.Types (Encoding, ToJSON (..), Value (..))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable)
@@ -53,6 +56,16 @@ instance IsList Attrs where
 
   toList :: Attrs -> [Item Attrs]
   toList = M.toList . (.attrMap)
+
+instance ToJSON Attrs where
+  toJSON :: Attrs -> Value
+  toJSON Attrs{..} = toJSON attrMap
+
+  toEncoding :: Attrs -> Encoding
+  toEncoding Attrs{..} = toEncoding attrMap
+
+  omitField :: Attrs -> Bool
+  omitField Attrs{..} = M.null attrMap
 
 {- |
 An attribute is a key-value pair where the key is any string and the value is
@@ -99,6 +112,41 @@ data AttrValue
   deriving (Eq, Generic, Show)
 
 instance Hashable AttrValue
+
+instance ToJSON AttrValue where
+  toJSON :: AttrValue -> Value
+  toJSON = \case
+    AttrBool v -> toJSON v
+    AttrInt v -> toJSON v
+    AttrInt8 v -> toJSON v
+    AttrInt16 v -> toJSON v
+    AttrInt32 v -> toJSON v
+    AttrInt64 v -> toJSON v
+    AttrWord v -> toJSON v
+    AttrWord8 v -> toJSON v
+    AttrWord16 v -> toJSON v
+    AttrWord32 v -> toJSON v
+    AttrWord64 v -> toJSON v
+    AttrDouble v -> toJSON v
+    AttrText v -> toJSON v
+    AttrNull -> Null
+
+  toEncoding :: AttrValue -> Encoding
+  toEncoding = \case
+    AttrBool v -> toEncoding v
+    AttrInt v -> toEncoding v
+    AttrInt8 v -> toEncoding v
+    AttrInt16 v -> toEncoding v
+    AttrInt32 v -> toEncoding v
+    AttrInt64 v -> toEncoding v
+    AttrWord v -> toEncoding v
+    AttrWord8 v -> toEncoding v
+    AttrWord16 v -> toEncoding v
+    AttrWord32 v -> toEncoding v
+    AttrWord64 v -> toEncoding v
+    AttrDouble v -> toEncoding v
+    AttrText v -> toEncoding v
+    AttrNull -> null_
 
 {- |
 Utility class to help construct values of the t`AttrValue` type.
