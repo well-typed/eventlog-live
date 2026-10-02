@@ -119,7 +119,7 @@ Check if /any/ of the t`MetricProcessors` is enabled.
 -}
 anyProcessorEnabled :: FullConfig -> MetricProcessors metrics m i -> Bool
 anyProcessorEnabled _fullConfig End = False
-anyProcessorEnabled fullConfig ((:&:) @metric _ rest) =
+anyProcessorEnabled fullConfig ((_ :: MetricProcessor metric m i a b) :&: rest) =
   C.processorEnabled (.metrics) (metricConfig @metric) fullConfig || anyProcessorEnabled fullConfig rest
 
 select ::
