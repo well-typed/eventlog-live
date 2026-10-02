@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module GHC.Eventlog.Live.Processor (
   Resource (..),
   TelemetryData (..),
@@ -8,6 +10,7 @@ module GHC.Eventlog.Live.Processor (
 ) where
 
 import Control.Concurrent.STM (TChan)
+import Data.Aeson.Types (Encoding, KeyValue (..), ToJSON (..), Value (..), pairs)
 import Data.DList qualified as D
 import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
 import Data.Proxy (Proxy (..))
@@ -23,7 +26,7 @@ import GHC.Eventlog.Live.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Processor.Logs (processLogEvents)
 import GHC.Eventlog.Live.Processor.Profiles (processProfileEvents)
 import GHC.Eventlog.Live.Processor.Threads (processThreadEvents)
-import GHC.Eventlog.Live.Types.Attribute (Attrs)
+import GHC.Eventlog.Live.Types.Attribute (Attrs, IsAttrValue (toAttrValue))
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..), SomeLogs)
 import GHC.Eventlog.Live.Types.Metrics (SomeMetrics)
 import GHC.Eventlog.Live.Types.Profiles (SomeSamples)
@@ -35,9 +38,25 @@ import IpeDB.Types.InfoProv qualified as IP
 
 newtype Resource
   = Resource {attrs :: Attrs}
+  deriving newtype (ToJSON)
 
 data InstrumentationScope
   = InstrumentationScope {name :: Text, version :: Version}
+
+instance ToJSON InstrumentationScope where
+  toJSON :: InstrumentationScope -> Value
+  toJSON = Object . instrumentationScopeToKV
+
+  toEncoding :: InstrumentationScope -> Encoding
+  toEncoding = pairs . instrumentationScopeToKV
+
+instrumentationScopeToKV :: (KeyValue e kv, Monoid kv) => InstrumentationScope -> kv
+instrumentationScopeToKV s =
+  mconcat
+    [ "name" .= s.name
+    , "version" .= toAttrValue s.version
+    ]
+{-# INLINE instrumentationScopeToKV #-}
 
 data TelemetryData
   = TelemetryData'Log SomeLogs
@@ -45,11 +64,42 @@ data TelemetryData
   | TelemetryData'Span SomeSpans
   | TelemetryData'Sample SomeSamples
 
+instance ToJSON TelemetryData where
+  toJSON :: TelemetryData -> Value
+  toJSON = \case
+    TelemetryData'Log x -> toJSON x
+    TelemetryData'Metric x -> toJSON x
+    TelemetryData'Span x -> toJSON x
+    TelemetryData'Sample x -> toJSON x
+
+  toEncoding :: TelemetryData -> Encoding
+  toEncoding = \case
+    TelemetryData'Log x -> toEncoding x
+    TelemetryData'Metric x -> toEncoding x
+    TelemetryData'Span x -> toEncoding x
+    TelemetryData'Sample x -> toEncoding x
+
 data ExportRequest = ExportRequest
   { resource :: !Resource
   , scope :: !InstrumentationScope
   , telemetry :: ![TelemetryData]
   }
+
+exportRequestToKV :: (KeyValue e kv, Monoid kv) => ExportRequest -> kv
+exportRequestToKV r =
+  mconcat
+    [ "resource" .= r.resource
+    , "scope" .= r.scope
+    , "telemetry" .= r.telemetry
+    ]
+{-# INLINE exportRequestToKV #-}
+
+instance ToJSON ExportRequest where
+  toJSON :: ExportRequest -> Value
+  toJSON = Object . exportRequestToKV
+
+  toEncoding :: ExportRequest -> Encoding
+  toEncoding = pairs . exportRequestToKV
 
 -- Create machine that processes eventlog data into telemetry data
 processEventlogTelemetry ::
