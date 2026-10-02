@@ -13,6 +13,8 @@ module GHC.Eventlog.Live.Types.Severity (
   fromSeverityString,
 ) where
 
+import Data.Aeson (Value)
+import Data.Aeson.Types (Encoding, ToJSON (..))
 import Data.Char (toUpper)
 import Data.Ix (Ix)
 import Text.Read (readMaybe)
@@ -55,6 +57,13 @@ data Severity
   | FATAL3
   | FATAL4
   deriving (Bounded, Enum, Eq, Ord, Read, Show, Ix)
+
+instance ToJSON Severity where
+  toJSON :: Severity -> Value
+  toJSON = toJSON . (.value) . toSeverityNumber
+
+  toEncoding :: Severity -> Encoding
+  toEncoding = toEncoding . (.value) . toSeverityNumber
 
 {- |
 Convert from a `Severity` to a `SeverityNumber`.

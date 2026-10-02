@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Sample
 Description : Representation for OTLP stack samples.
@@ -19,18 +21,21 @@ module GHC.Eventlog.Live.Types.Profiles (
   Location (..),
 ) where
 
+import Data.Aeson.Types (Encoding, KeyValue (..), KeyValueOmit (..), ToJSON (..), Value (..), pairs)
 import Data.Default (Default)
+import Data.Int (Int64)
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Word (Word8)
 import GHC.Eventlog.Live.Config (CallStackProfile (..), CostCentreStackProfile (..), IsProfileProcessorConfig, Profiles (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol)
-import IpeDB.Types.SrcLoc (SrcLoc)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import IpeDB.Types.SrcLoc (Range (..), SrcLoc (..))
 
 --------------------------------------------------------------------------------
 -- Samples
@@ -43,6 +48,25 @@ data SomeSamples
     SomeSamples
       !(Proxy profile)
       ![Sample (GetProfileMetricType profile)]
+
+instance ToJSON SomeSamples where
+  toJSON :: SomeSamples -> Value
+  toJSON = Object . someSamplesToKV
+
+  toEncoding :: SomeSamples -> Encoding
+  toEncoding = pairs . someSamplesToKV
+
+  omitField :: SomeSamples -> Bool
+  omitField (SomeSamples _profile samples) = null samples
+
+someSamplesToKV :: (KeyValueOmit e kv, Monoid kv) => SomeSamples -> kv
+someSamplesToKV (SomeSamples (profile :: Proxy profile) samples) =
+  mconcat $
+    [ "type" .= ("profile" :: Text)
+    , "name" .= symbolVal profile
+    , "values" .?= (fmap (fromIntegral @_ @Int64) <$> samples)
+    ]
+{-# INLINE someSamplesToKV #-}
 
 -------------------------------------------------------------------------------
 -- KnownProfile & Instances
@@ -118,8 +142,81 @@ data Sample v = Sample
   , attrs :: Attrs
   -- ^ A set of attributes.
   }
+  deriving (Functor)
+
+instance (ToJSON v) => ToJSON (Sample v) where
+  toJSON :: Sample v -> Value
+  toJSON = Object . sampleToKV
+
+  toEncoding :: Sample v -> Encoding
+  toEncoding = pairs . sampleToKV
+
+sampleToKV ::
+  forall e kv v.
+  (KeyValueOmit e kv, Monoid kv, ToJSON v) =>
+  Sample v -> kv
+sampleToKV s =
+  mconcat
+    [ "value" .= s.value
+    , "stack" .?= s.stack
+    , "time_unix_nano" .?= s.maybeTimeUnixNano
+    , "attrs" .?= s.attrs
+    ]
+{-# INLINE sampleToKV #-}
 
 data Location = Location
   { name :: !Text
   , srcLoc :: !SrcLoc
   }
+
+instance ToJSON Location where
+  toJSON :: Location -> Value
+  toJSON = Object . locationToKV
+
+  toEncoding :: Location -> Encoding
+  toEncoding = pairs . locationToKV
+
+locationToKV ::
+  forall e kv.
+  (KeyValueOmit e kv, Monoid kv) =>
+  Location -> kv
+locationToKV l =
+  mconcat
+    [ "name" .= l.name `onlyIf` (not . T.null)
+    , srcLocToKV l.srcLoc
+    ]
+ where
+  srcLocToKV :: SrcLoc -> kv
+  srcLocToKV = \case
+    UnhelpfulSrcLoc ->
+      mempty
+    SrcLoc{..} ->
+      mconcat
+        [ "file" .?= srcFilePath `onlyIf` (not . null)
+        , maybe mempty rangeToKV srcRange
+        ]
+
+  rangeToKV :: Range -> kv
+  rangeToKV = \case
+    Range'Point{..} ->
+      mconcat
+        [ "line" .= line
+        , "column" .= column
+        ]
+    Range'OneLine{..} ->
+      mconcat
+        [ "line" .= line
+        , "column" .= column
+        , "end_column" .= endColumn
+        ]
+    Range'MultiLine{..} ->
+      mconcat
+        [ "line" .= line
+        , "column" .= column
+        , "end_line" .= endLine
+        , "end_column" .= endColumn
+        ]
+
+  onlyIf :: a -> (a -> Bool) -> Maybe a
+  onlyIf a p = if p a then Just a else Nothing
+{-# INLINE locationToKV #-}

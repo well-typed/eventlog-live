@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.LogRecord
 Description : Representation for OTLP log records.
@@ -18,6 +20,7 @@ module GHC.Eventlog.Live.Types.Logs (
   LogRecord (..),
 ) where
 
+import Data.Aeson.Types (Encoding, KeyValue (..), KeyValueOmit (..), ToJSON (..), Value (..), pairs)
 import Data.Default (Default)
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy)
@@ -27,7 +30,7 @@ import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Severity (Severity)
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 
 -------------------------------------------------------------------------------
 -- KnownLog & Instances
@@ -36,6 +39,25 @@ import GHC.TypeLits (KnownSymbol, Symbol)
 type SomeLogs :: Type
 data SomeLogs
   = forall log. (KnownLog log) => SomeLogs !(Proxy log) [LogRecord]
+
+instance ToJSON SomeLogs where
+  toJSON :: SomeLogs -> Value
+  toJSON = Object . someLogsToKV
+
+  toEncoding :: SomeLogs -> Encoding
+  toEncoding = pairs . someLogsToKV
+
+  omitField :: SomeLogs -> Bool
+  omitField (SomeLogs _log logs) = null logs
+
+someLogsToKV :: (KeyValueOmit e kv, Monoid kv) => SomeLogs -> kv
+someLogsToKV (SomeLogs (log_ :: Proxy log) logs) =
+  mconcat $
+    [ "type" .= ("log" :: Text)
+    , "name" .= symbolVal log_
+    , "values" .?= logs
+    ]
+{-# INLINE someLogsToKV #-}
 
 type KnownLog :: Symbol -> Constraint
 class
@@ -102,3 +124,20 @@ data LogRecord = LogRecord
   -- ^ A set of attributes.
   }
   deriving (Show)
+
+instance ToJSON LogRecord where
+  toJSON :: LogRecord -> Value
+  toJSON = Object . logRecordToKV
+
+  toEncoding :: LogRecord -> Encoding
+  toEncoding = pairs . logRecordToKV
+
+logRecordToKV :: (KeyValueOmit e kv, Monoid kv) => LogRecord -> kv
+logRecordToKV l =
+  mconcat $
+    [ "value" .= l.value
+    , "time_unix_nano" .?= l.maybeTimeUnixNano
+    , "severity" .?= l.maybeSeverity
+    , "attrs" .?= l.attrs
+    ]
+{-# INLINE logRecordToKV #-}

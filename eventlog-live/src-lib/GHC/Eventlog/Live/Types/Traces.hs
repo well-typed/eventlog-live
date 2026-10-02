@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Span
 Description : Representation for OTLP spans.
@@ -24,7 +26,10 @@ module GHC.Eventlog.Live.Types.Traces (
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State.Strict (State, runState, state)
+import Data.Aeson.Types (Encoding, KeyValue (..), KeyValueOmit (..), ToJSON (..), Value (..), pairs)
+import Data.Base64.Types qualified as B64
 import Data.ByteString (ByteString)
+import Data.ByteString.Base64 qualified as B64B
 import Data.Default (Default)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
@@ -32,11 +37,12 @@ import Data.Hashable (Hashable)
 import Data.Kind (Constraint, Type)
 import Data.Machine (ProcessT, await, construct, yield)
 import Data.Proxy (Proxy)
+import Data.Text (Text)
 import GHC.Eventlog.Live.Config (CapabilityUsageSpan (..), IsTraceProcessorConfig, ThreadStateSpan (..), Traces (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import System.Random (StdGen, initStdGen)
 import System.Random.Compat (uniformByteString)
 
@@ -47,6 +53,25 @@ import System.Random.Compat (uniformByteString)
 type SomeSpans :: Type
 data SomeSpans
   = forall trace. (KnownTrace trace) => SomeSpans !(Proxy trace) [Span]
+
+instance ToJSON SomeSpans where
+  toJSON :: SomeSpans -> Value
+  toJSON = Object . someSpansToKV
+
+  toEncoding :: SomeSpans -> Encoding
+  toEncoding = pairs . someSpansToKV
+
+  omitField :: SomeSpans -> Bool
+  omitField (SomeSpans _trace spans) = null spans
+
+someSpansToKV :: (KeyValueOmit e kv, Monoid kv) => SomeSpans -> kv
+someSpansToKV (SomeSpans (trace :: Proxy trace) spans) =
+  mconcat $
+    [ "type" .= ("trace" :: Text)
+    , "name" .= symbolVal trace
+    , "values" .?= spans
+    ]
+{-# INLINE someSpansToKV #-}
 
 -------------------------------------------------------------------------------
 -- KnownTrace & Instances
@@ -118,6 +143,32 @@ data Span = Span
   , endTimeUnixNano :: !Timestamp
   , attrs :: Attrs
   }
+
+instance HasField "traceIdBase64" Span Text where
+  getField :: Span -> Text
+  getField = B64.extractBase64 . B64B.encodeBase64 . (.traceId)
+
+instance HasField "spanIdBase64" Span Text where
+  getField :: Span -> Text
+  getField = B64.extractBase64 . B64B.encodeBase64 . (.spanId)
+
+instance ToJSON Span where
+  toJSON :: Span -> Value
+  toJSON = Object . spanToKV
+
+  toEncoding :: Span -> Encoding
+  toEncoding = pairs . spanToKV
+
+spanToKV :: (KeyValueOmit e kv, Monoid kv) => Span -> kv
+spanToKV s =
+  mconcat $
+    [ "trace_id" .= s.traceIdBase64
+    , "span_id" .= s.spanIdBase64
+    , "start_time_unix_nano" .= s.startTimeUnixNano
+    , "end_time_unix_nano" .= s.endTimeUnixNano
+    , "attrs" .?= s.attrs
+    ]
+{-# INLINE spanToKV #-}
 
 data ToSpanState k = ToSpanState
   { traceIdMap :: !(HashMap k ByteString)

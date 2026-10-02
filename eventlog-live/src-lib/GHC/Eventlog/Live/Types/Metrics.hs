@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Module      : GHC.Eventlog.Live.Metric
 Description : Representation for OTLP metrics.
@@ -44,6 +46,9 @@ module GHC.Eventlog.Live.Types.Metrics (
 ) where
 
 import Control.Exception (assert)
+import Data.Aeson (KeyValue (..))
+import Data.Aeson.Types (Encoding, KeyValueOmit (..), ToJSON (..), Value (..), pairs)
+import Data.Coerce (coerce)
 import Data.Default (Default)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Kind (Constraint, Type)
@@ -56,7 +61,7 @@ import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 
 --------------------------------------------------------------------------------
 -- Known Metrics
@@ -65,6 +70,25 @@ import GHC.TypeLits (KnownSymbol, Symbol)
 type SomeMetrics :: Type
 data SomeMetrics
   = forall metric. (KnownMetric metric) => SomeMetrics !(Proxy metric) [Metric (GetMetricType metric)]
+
+instance ToJSON SomeMetrics where
+  toJSON :: SomeMetrics -> Value
+  toJSON = Object . someMetricsToKV
+
+  toEncoding :: SomeMetrics -> Encoding
+  toEncoding = pairs . someMetricsToKV
+
+  omitField :: SomeMetrics -> Bool
+  omitField (SomeMetrics _metric metrics) = null metrics
+
+someMetricsToKV :: (KeyValueOmit e kv, Monoid kv) => SomeMetrics -> kv
+someMetricsToKV (SomeMetrics (metric :: Proxy metric) metrics) =
+  mconcat $
+    [ "type" .= ("metric" :: Text)
+    , "name" .= symbolVal metric
+    , "values" .?= coerce @_ @[Metric (KnownMetricValue (GetMetricType metric))] metrics
+    ]
+{-# INLINE someMetricsToKV #-}
 
 type KnownMetric :: Symbol -> Constraint
 class
@@ -214,6 +238,23 @@ data Metric a = Metric
   -- ^ A set of attributes.
   }
   deriving (Functor, Foldable, Traversable, Show)
+
+instance (ToJSON a) => ToJSON (Metric a) where
+  toJSON :: Metric a -> Value
+  toJSON = Object . metricToKV
+
+  toEncoding :: Metric a -> Encoding
+  toEncoding = pairs . metricToKV
+
+metricToKV :: (KeyValueOmit e kv, Monoid kv, ToJSON a) => Metric a -> kv
+metricToKV m =
+  mconcat $
+    [ "value" .= m.value
+    , "time_unix_nano" .?= m.maybeTimeUnixNano
+    , "start_time_unix_nano" .?= m.maybeStartTimeUnixNano
+    , "attrs" .?= m.attrs
+    ]
+{-# INLINE metricToKV #-}
 
 instance GroupBy (Metric a) where
   type Key (Metric a) = Attrs
@@ -426,3 +467,38 @@ instance KnownMetricType Int64 where
   metricTypeSing :: Proxy Int64 -> SMetricType Int64
   metricTypeSing _proxy = SMetricTypeInt64
   {-# INLINE metricTypeSing #-}
+
+newtype KnownMetricValue a = KnownMetricValue a
+
+instance (KnownMetricType a) => ToJSON (KnownMetricValue a) where
+  toJSON :: KnownMetricValue a -> Value
+  toJSON =
+    case metricTypeSing (Proxy @a) of
+      SMetricTypeFloat -> toJSON
+      SMetricTypeDouble -> toJSON
+      SMetricTypeWord -> toJSON
+      SMetricTypeWord8 -> toJSON
+      SMetricTypeWord16 -> toJSON
+      SMetricTypeWord32 -> toJSON
+      SMetricTypeWord64 -> toJSON
+      SMetricTypeInt -> toJSON
+      SMetricTypeInt8 -> toJSON
+      SMetricTypeInt16 -> toJSON
+      SMetricTypeInt32 -> toJSON
+      SMetricTypeInt64 -> toJSON
+
+  toEncoding :: KnownMetricValue a -> Encoding
+  toEncoding =
+    case metricTypeSing (Proxy @a) of
+      SMetricTypeFloat -> toEncoding
+      SMetricTypeDouble -> toEncoding
+      SMetricTypeWord -> toEncoding
+      SMetricTypeWord8 -> toEncoding
+      SMetricTypeWord16 -> toEncoding
+      SMetricTypeWord32 -> toEncoding
+      SMetricTypeWord64 -> toEncoding
+      SMetricTypeInt -> toEncoding
+      SMetricTypeInt8 -> toEncoding
+      SMetricTypeInt16 -> toEncoding
+      SMetricTypeInt32 -> toEncoding
+      SMetricTypeInt64 -> toEncoding
