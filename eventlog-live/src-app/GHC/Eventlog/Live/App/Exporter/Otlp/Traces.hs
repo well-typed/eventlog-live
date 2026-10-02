@@ -18,7 +18,7 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int64)
 import Data.Machine (ProcessT, await, construct, yield)
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy (..))
 import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Vector qualified as V
@@ -194,7 +194,7 @@ toSpans fullConfig (SomeSpans (_trace :: Proxy trace) spans) =
   toSpan :: Span -> OT.Span
   toSpan s =
     messageWith
-      [ OT.name .~ C.processorName (.traces) (traceConfig @trace) fullConfig
+      [ OT.name .~ C.processorName (.traces) (traceConfig $ Proxy @trace) fullConfig
       , OT.traceId .~ s.traceId
       , OT.spanId .~ s.spanId
       , OT.startTimeUnixNano .~ s.startTimeUnixNano

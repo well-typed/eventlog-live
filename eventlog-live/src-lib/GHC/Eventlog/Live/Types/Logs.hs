@@ -37,33 +37,33 @@ type SomeLogs :: Type
 data SomeLogs
   = forall log. (KnownLog log) => SomeLogs !(Proxy log) [LogRecord]
 
-type KnownLog :: Type -> Constraint
+type KnownLog :: Symbol -> Constraint
 class
-  ( HasField (GetLogName log) Logs (Maybe log)
-  , IsLogProcessorConfig log
-  , Show log
-  , Default log
-  , KnownSymbol (GetLogName log)
+  ( HasField log Logs (Maybe (GetLogConf log))
+  , IsLogProcessorConfig (GetLogConf log)
+  , Show (GetLogConf log)
+  , Default (GetLogConf log)
+  , KnownSymbol log
   ) =>
   KnownLog log
   where
-  type GetLogName log :: Symbol
+  type GetLogConf log :: Type
 
-logConfig :: forall log. (KnownLog log) => Logs -> Maybe log
-logConfig = getField @(GetLogName log)
+logConfig :: forall log. (KnownLog log) => Proxy log -> Logs -> Maybe (GetLogConf log)
+logConfig (_log :: Proxy log) = getField @log
 {-# INLINE logConfig #-}
 
-instance KnownLog ThreadLabelLog where
-  type GetLogName ThreadLabelLog = "threadLabel"
+instance KnownLog "threadLabel" where
+  type GetLogConf "threadLabel" = ThreadLabelLog
 
-instance KnownLog UserMarkerLog where
-  type GetLogName UserMarkerLog = "userMarker"
+instance KnownLog "userMarker" where
+  type GetLogConf "userMarker" = UserMarkerLog
 
-instance KnownLog UserMessageLog where
-  type GetLogName UserMessageLog = "userMessage"
+instance KnownLog "userMessage" where
+  type GetLogConf "userMessage" = UserMessageLog
 
-instance KnownLog InternalLogMessageLog where
-  type GetLogName InternalLogMessageLog = "internalLogMessage"
+instance KnownLog "internalLogMessage" where
+  type GetLogConf "internalLogMessage" = InternalLogMessageLog
 
 --------------------------------------------------------------------------------
 -- Log Records

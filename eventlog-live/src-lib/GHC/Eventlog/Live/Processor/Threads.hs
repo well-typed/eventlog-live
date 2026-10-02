@@ -64,19 +64,19 @@ processThreadEvents verbosity fullConfig =
             ~> M.fanoutTick
               [ M.liftTick M.processCapabilityUsageDuration
                   ~> M.fanoutTick
-                    [ CM.process (Proxy @C.CapabilityUsageMetric) (mapping toMetric) fullConfig
+                    [ CM.process (Proxy @"capabilityUsage") (mapping toMetric) fullConfig
                         ~> M.liftTick (mapping D.singleton)
-                    , CM.process (Proxy @C.ProductivityMetric) (M.processProductivity ~> mapping (fmap (* 100.0) . toMetric)) fullConfig
+                    , CM.process (Proxy @"productivity") (M.processProductivity ~> mapping (fmap (* 100.0) . toMetric)) fullConfig
                         ~> M.liftTick (mapping D.singleton)
                     ]
                   ~> mapping (fmap (fmap Left))
               , M.liftTick M.dropStartTime
-                  ~> CT.process (Proxy @C.CapabilityUsageSpan) fullConfig
+                  ~> CT.process (Proxy @"capabilityUsage") fullConfig
                   ~> M.liftTick (mapping (D.singleton . Right))
               ]
         , M.liftTick (mapping rightToMaybe ~> asParts)
             ~> M.liftTick M.dropStartTime
-            ~> CT.process (Proxy @C.ThreadStateSpan) fullConfig
+            ~> CT.process (Proxy @"threadState") fullConfig
             ~> M.liftTick (mapping (D.singleton . Right))
         ]
  where

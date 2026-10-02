@@ -12,7 +12,7 @@ where
 import Control.Monad.IO.Class (MonadIO)
 import Data.DList qualified as D
 import Data.Machine (ProcessT, mapping, (~>))
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -31,8 +31,8 @@ process ::
   FullConfig ->
   ProcessT m (Tick s) (Tick SomeSpans)
 process (trace :: Proxy trace) fullConfig =
-  runIf (C.processorEnabled (.traces) (traceConfig @trace) fullConfig) $
+  runIf (C.processorEnabled (.traces) (traceConfig $ Proxy @trace) fullConfig) $
     M.liftTick asSpan
       ~> M.liftTick (mapping D.singleton)
-      ~> M.batchByTicks (C.processorExportBatches (.traces) (traceConfig @trace) fullConfig)
+      ~> M.batchByTicks (C.processorExportBatches (.traces) (traceConfig $ Proxy @trace) fullConfig)
       ~> M.liftTick (mapping $ SomeSpans trace . D.toList)

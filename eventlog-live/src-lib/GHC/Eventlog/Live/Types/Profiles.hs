@@ -48,39 +48,39 @@ data SomeSamples
 -- KnownProfile & Instances
 -------------------------------------------------------------------------------
 
-type KnownProfile :: Type -> Constraint
+type KnownProfile :: Symbol -> Constraint
 class
-  ( HasField (GetProfileName profile) Profiles (Maybe profile)
-  , IsProfileProcessorConfig profile
-  , Show profile
-  , Default profile
-  , KnownSymbol (GetProfileName profile)
+  ( HasField profile Profiles (Maybe (GetProfileConf profile))
+  , IsProfileProcessorConfig (GetProfileConf profile)
+  , Show (GetProfileConf profile)
+  , Default (GetProfileConf profile)
+  , KnownSymbol profile
   , KnownSymbol (GetProfileMetricName profile)
   , Integral (GetProfileMetricType profile)
   , KnownSymbol (GetProfileMetricUnit profile)
   ) =>
   KnownProfile profile
   where
-  type GetProfileName profile :: Symbol
+  type GetProfileConf profile :: Type
   type GetProfileMetricName profile :: Symbol
   type GetProfileMetricType profile :: Type
   type GetProfileMetricUnit profile :: Symbol
 
-profileConfig :: forall profile. (KnownProfile profile) => Profiles -> Maybe profile
-profileConfig = getField @(GetProfileName profile)
+profileConfig :: forall profile. (KnownProfile profile) => Proxy profile -> Profiles -> Maybe (GetProfileConf profile)
+profileConfig (_profile :: Proxy profile) = getField @profile
 {-# INLINE profileConfig #-}
 
-instance KnownProfile CallStackProfile where
-  type GetProfileName CallStackProfile = "callStackProfile"
-  type GetProfileMetricName CallStackProfile = "callStack"
-  type GetProfileMetricType CallStackProfile = Word8
-  type GetProfileMetricUnit CallStackProfile = "count"
+instance KnownProfile "callStackProfile" where
+  type GetProfileConf "callStackProfile" = CallStackProfile
+  type GetProfileMetricName "callStackProfile" = "callStack"
+  type GetProfileMetricType "callStackProfile" = Word8
+  type GetProfileMetricUnit "callStackProfile" = "count"
 
-instance KnownProfile CostCentreStackProfile where
-  type GetProfileName CostCentreStackProfile = "costCentreStackProfile"
-  type GetProfileMetricName CostCentreStackProfile = "costCentreStack"
-  type GetProfileMetricType CostCentreStackProfile = Word8
-  type GetProfileMetricUnit CostCentreStackProfile = "count"
+instance KnownProfile "costCentreStackProfile" where
+  type GetProfileConf "costCentreStackProfile" = CostCentreStackProfile
+  type GetProfileMetricName "costCentreStackProfile" = "costCentreStack"
+  type GetProfileMetricType "costCentreStackProfile" = Word8
+  type GetProfileMetricUnit "costCentreStackProfile" = "count"
 
 --------------------------------------------------------------------------------
 -- Superclass for span types

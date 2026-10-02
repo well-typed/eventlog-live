@@ -15,7 +15,6 @@ import Data.DList qualified as D
 import Data.Data (Proxy (..))
 import Data.Machine (Process, ProcessT, mapping, (~>))
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -48,18 +47,18 @@ processLogEvents fullConfig =
 
 processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
 processUserMessage =
-  process (Proxy @C.UserMessageLog) M.processUserMessage
+  process (Proxy @"userMessage") M.processUserMessage
 
 --------------------------------------------------------------------------------
 -- UserMarker
 
 processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
 processUserMarker =
-  process (Proxy @C.UserMarkerLog) M.processUserMarker
+  process (Proxy @"userMarker") M.processUserMarker
 
 --------------------------------------------------------------------------------
 -- ThreadLabel
 
 processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
 processThreadLabel =
-  process (Proxy @C.ThreadLabelLog) M.processThreadLabel
+  process (Proxy @"threadLabel") M.processThreadLabel

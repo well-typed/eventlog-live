@@ -66,108 +66,108 @@ type SomeMetrics :: Type
 data SomeMetrics
   = forall metric. (KnownMetric metric) => SomeMetrics !(Proxy metric) [Metric (GetMetricType metric)]
 
-type KnownMetric :: Type -> Constraint
+type KnownMetric :: Symbol -> Constraint
 class
-  ( HasField (GetMetricName metric) Metrics (Maybe metric)
-  , IsMetricProcessorConfig metric
-  , Show metric
-  , Default metric
-  , KnownSymbol (GetMetricName metric)
+  ( HasField metric Metrics (Maybe (GetMetricConf metric))
+  , IsMetricProcessorConfig (GetMetricConf metric)
+  , Show (GetMetricConf metric)
+  , Default (GetMetricConf metric)
+  , KnownSymbol metric
   , KnownMetricType (GetMetricType metric)
   , KnownMetricKind (GetMetricKind metric)
   , KnownMetricUnit (GetMetricUnit metric)
   ) =>
   KnownMetric metric
   where
-  type GetMetricName metric :: Symbol
+  type GetMetricConf metric :: Type
   type GetMetricType metric :: Type
   type GetMetricUnit metric :: MetricUnit
   type GetMetricKind metric :: MetricKind
 
-metricConfig :: forall metric. (KnownMetric metric) => Metrics -> Maybe metric
-metricConfig = getField @(GetMetricName metric)
+metricConfig :: forall metric. (KnownMetric metric) => Proxy metric -> Metrics -> Maybe (GetMetricConf metric)
+metricConfig (_metric :: Proxy metric) = getField @metric
 {-# INLINE metricConfig #-}
 
 -- NOTE: This should be kept in sync with the list of metrics.
 --       Specifically, there should be a `KnownMetric` instance for every metric.
 
-instance KnownMetric HeapAllocatedMetric where
-  type GetMetricName HeapAllocatedMetric = "heapAllocated"
-  type GetMetricType HeapAllocatedMetric = Word64
-  type GetMetricUnit HeapAllocatedMetric = 'Byte
-  type GetMetricKind HeapAllocatedMetric = 'Sum 'Cumulative 'Monotonic
+instance KnownMetric "heapAllocated" where
+  type GetMetricConf "heapAllocated" = HeapAllocatedMetric
+  type GetMetricType "heapAllocated" = Word64
+  type GetMetricUnit "heapAllocated" = 'Byte
+  type GetMetricKind "heapAllocated" = 'Sum 'Cumulative 'Monotonic
 
-instance KnownMetric HeapSizeMetric where
-  type GetMetricName HeapSizeMetric = "heapSize"
-  type GetMetricType HeapSizeMetric = Word64
-  type GetMetricUnit HeapSizeMetric = 'Byte
-  type GetMetricKind HeapSizeMetric = 'Gauge
+instance KnownMetric "heapSize" where
+  type GetMetricConf "heapSize" = HeapSizeMetric
+  type GetMetricType "heapSize" = Word64
+  type GetMetricUnit "heapSize" = 'Byte
+  type GetMetricKind "heapSize" = 'Gauge
 
-instance KnownMetric BlocksSizeMetric where
-  type GetMetricName BlocksSizeMetric = "blocksSize"
-  type GetMetricType BlocksSizeMetric = Word64
-  type GetMetricUnit BlocksSizeMetric = 'Byte
-  type GetMetricKind BlocksSizeMetric = 'Gauge
+instance KnownMetric "blocksSize" where
+  type GetMetricConf "blocksSize" = BlocksSizeMetric
+  type GetMetricType "blocksSize" = Word64
+  type GetMetricUnit "blocksSize" = 'Byte
+  type GetMetricKind "blocksSize" = 'Gauge
 
-instance KnownMetric HeapLiveMetric where
-  type GetMetricName HeapLiveMetric = "heapLive"
-  type GetMetricType HeapLiveMetric = Word64
-  type GetMetricUnit HeapLiveMetric = 'Byte
-  type GetMetricKind HeapLiveMetric = 'Gauge
+instance KnownMetric "heapLive" where
+  type GetMetricConf "heapLive" = HeapLiveMetric
+  type GetMetricType "heapLive" = Word64
+  type GetMetricUnit "heapLive" = 'Byte
+  type GetMetricKind "heapLive" = 'Gauge
 
-instance KnownMetric MemCurrentMetric where
-  type GetMetricName MemCurrentMetric = "memCurrent"
-  type GetMetricType MemCurrentMetric = Word32
-  type GetMetricUnit MemCurrentMetric = 'MegaBlock
-  type GetMetricKind MemCurrentMetric = 'Gauge
+instance KnownMetric "memCurrent" where
+  type GetMetricConf "memCurrent" = MemCurrentMetric
+  type GetMetricType "memCurrent" = Word32
+  type GetMetricUnit "memCurrent" = 'MegaBlock
+  type GetMetricKind "memCurrent" = 'Gauge
 
-instance KnownMetric MemNeededMetric where
-  type GetMetricName MemNeededMetric = "memNeeded"
-  type GetMetricType MemNeededMetric = Word32
-  type GetMetricUnit MemNeededMetric = 'MegaBlock
-  type GetMetricKind MemNeededMetric = 'Gauge
+instance KnownMetric "memNeeded" where
+  type GetMetricConf "memNeeded" = MemNeededMetric
+  type GetMetricType "memNeeded" = Word32
+  type GetMetricUnit "memNeeded" = 'MegaBlock
+  type GetMetricKind "memNeeded" = 'Gauge
 
-instance KnownMetric MemReturnedMetric where
-  type GetMetricName MemReturnedMetric = "memReturned"
-  type GetMetricType MemReturnedMetric = Word32
-  type GetMetricUnit MemReturnedMetric = 'MegaBlock
-  type GetMetricKind MemReturnedMetric = 'Gauge
+instance KnownMetric "memReturned" where
+  type GetMetricConf "memReturned" = MemReturnedMetric
+  type GetMetricType "memReturned" = Word32
+  type GetMetricUnit "memReturned" = 'MegaBlock
+  type GetMetricKind "memReturned" = 'Gauge
 
-instance KnownMetric GcCopiedMetric where
-  type GetMetricName GcCopiedMetric = "gcCopied"
-  type GetMetricType GcCopiedMetric = Word64
-  type GetMetricUnit GcCopiedMetric = 'Byte
-  type GetMetricKind GcCopiedMetric = 'Gauge
+instance KnownMetric "gcCopied" where
+  type GetMetricConf "gcCopied" = GcCopiedMetric
+  type GetMetricType "gcCopied" = Word64
+  type GetMetricUnit "gcCopied" = 'Byte
+  type GetMetricKind "gcCopied" = 'Gauge
 
-instance KnownMetric GcSlopMetric where
-  type GetMetricName GcSlopMetric = "gcSlop"
-  type GetMetricType GcSlopMetric = Word64
-  type GetMetricUnit GcSlopMetric = 'Byte
-  type GetMetricKind GcSlopMetric = 'Gauge
+instance KnownMetric "gcSlop" where
+  type GetMetricConf "gcSlop" = GcSlopMetric
+  type GetMetricType "gcSlop" = Word64
+  type GetMetricUnit "gcSlop" = 'Byte
+  type GetMetricKind "gcSlop" = 'Gauge
 
-instance KnownMetric GcFragmentationMetric where
-  type GetMetricName GcFragmentationMetric = "gcFragmentation"
-  type GetMetricType GcFragmentationMetric = Word64
-  type GetMetricUnit GcFragmentationMetric = 'Byte
-  type GetMetricKind GcFragmentationMetric = 'Gauge
+instance KnownMetric "gcFragmentation" where
+  type GetMetricConf "gcFragmentation" = GcFragmentationMetric
+  type GetMetricType "gcFragmentation" = Word64
+  type GetMetricUnit "gcFragmentation" = 'Byte
+  type GetMetricKind "gcFragmentation" = 'Gauge
 
-instance KnownMetric HeapProfSampleMetric where
-  type GetMetricName HeapProfSampleMetric = "heapProfSample"
-  type GetMetricType HeapProfSampleMetric = Word64
-  type GetMetricUnit HeapProfSampleMetric = 'Byte
-  type GetMetricKind HeapProfSampleMetric = 'Gauge
+instance KnownMetric "heapProfSample" where
+  type GetMetricConf "heapProfSample" = HeapProfSampleMetric
+  type GetMetricType "heapProfSample" = Word64
+  type GetMetricUnit "heapProfSample" = 'Byte
+  type GetMetricKind "heapProfSample" = 'Gauge
 
-instance KnownMetric CapabilityUsageMetric where
-  type GetMetricName CapabilityUsageMetric = "capabilityUsage"
-  type GetMetricType CapabilityUsageMetric = Timestamp
-  type GetMetricUnit CapabilityUsageMetric = 'NanoSecond
-  type GetMetricKind CapabilityUsageMetric = 'Sum 'Cumulative 'Monotonic
+instance KnownMetric "capabilityUsage" where
+  type GetMetricConf "capabilityUsage" = CapabilityUsageMetric
+  type GetMetricType "capabilityUsage" = Timestamp
+  type GetMetricUnit "capabilityUsage" = 'NanoSecond
+  type GetMetricKind "capabilityUsage" = 'Sum 'Cumulative 'Monotonic
 
-instance KnownMetric ProductivityMetric where
-  type GetMetricName ProductivityMetric = "productivity"
-  type GetMetricType ProductivityMetric = Double
-  type GetMetricUnit ProductivityMetric = 'Percent
-  type GetMetricKind ProductivityMetric = 'Gauge
+instance KnownMetric "productivity" where
+  type GetMetricConf "productivity" = ProductivityMetric
+  type GetMetricType "productivity" = Double
+  type GetMetricUnit "productivity" = 'Percent
+  type GetMetricKind "productivity" = 'Gauge
 
 --------------------------------------------------------------------------------
 -- Superclass for metric types

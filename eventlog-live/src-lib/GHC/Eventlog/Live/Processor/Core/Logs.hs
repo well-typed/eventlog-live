@@ -11,7 +11,7 @@ where
 
 import Data.DList qualified as D
 import Data.Machine (ProcessT, mapping, (~>))
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy (..))
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -31,7 +31,7 @@ process ::
   FullConfig ->
   ProcessT m (Tick i) (Tick SomeLogs)
 process (log_ :: Proxy log) processor fullConfig =
-  runIf (C.processorEnabled (.logs) (logConfig @log) fullConfig) $
+  runIf (C.processorEnabled (.logs) (logConfig $ Proxy @log) fullConfig) $
     M.liftTick (processor ~> mapping (D.singleton . toLogRecord))
-      ~> M.batchByTicks (C.processorExportBatches (.logs) (logConfig @log) fullConfig)
+      ~> M.batchByTicks (C.processorExportBatches (.logs) (logConfig $ Proxy @log) fullConfig)
       ~> M.liftTick (mapping $ SomeLogs log_ . D.toList)

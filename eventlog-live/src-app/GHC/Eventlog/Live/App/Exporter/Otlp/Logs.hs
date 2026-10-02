@@ -198,7 +198,7 @@ toLogRecords :: FullConfig -> SomeLogs -> [OL.LogRecord]
 toLogRecords fullConfig (SomeLogs (_log :: Proxy log) logRecords) =
   [toLogRecord logRecord{attrs = ["name" ~= name] <> logRecord.attrs} | logRecord <- logRecords]
  where
-  name = C.processorName (.logs) (logConfig @log) fullConfig
+  name = C.processorName (.logs) (logConfig $ Proxy @log) fullConfig
 
 toLogRecord :: LogRecord -> OL.LogRecord
 toLogRecord l =

@@ -63,7 +63,7 @@ processGhcStackProfiler logger ipedb config =
   runIf (C.processorEnabled (.profiles) (.callStackProfile) config) $
     M.liftTick (M.processGhcStackProfilerData logger ipedb ~> mapping (D.singleton . toSample))
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.callStackProfile) config)
-      ~> M.liftTick (mapping $ SomeSamples (Proxy @C.CallStackProfile) . D.toList)
+      ~> M.liftTick (mapping $ SomeSamples (Proxy @"callStackProfile") . D.toList)
 
 --------------------------------------------------------------------------------
 -- Processor for cost-centre stack samples
@@ -80,4 +80,4 @@ processProfSampleCostCentre logger ccdb config =
   runIf (C.processorEnabled (.profiles) (.costCentreStackProfile) config) $
     M.liftTick (M.processProfSampleCostCentreData logger ccdb ~> mapping (D.singleton . toSample))
       ~> M.batchByTicks (C.processorExportBatches (.profiles) (.callStackProfile) config)
-      ~> M.liftTick (mapping $ SomeSamples (Proxy @C.CostCentreStackProfile) . D.toList)
+      ~> M.liftTick (mapping $ SomeSamples (Proxy @"costCentreStackProfile") . D.toList)
