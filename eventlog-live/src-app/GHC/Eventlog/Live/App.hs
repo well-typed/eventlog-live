@@ -11,31 +11,41 @@ module GHC.Eventlog.Live.App (
   main,
 ) where
 
-import Control.Concurrent.STM.TChan (newTChanIO)
+import Control.Concurrent (forkIO)
+import Control.Concurrent.STM (readTChan)
+import Control.Concurrent.STM.TChan (TChan, dupTChan, newBroadcastTChanIO, newTChanIO, writeTChan)
 import Control.Exception (bracket_)
+import Control.Monad (forever)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Except (runExceptT)
+import Data.Aeson (encode)
+import Data.ByteString.Lazy qualified as BSL
+import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Default (Default (..))
-import Data.Machine (ProcessT, asParts, mapping, stopped, (~>))
+import Data.Functor (void)
+import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, stopped, (~>))
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Void (absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.App.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceName (..), lookupLogLevel, lookupOpenTelemetrySdkOptions)
-import GHC.Eventlog.Live.App.Exporter.Otlp (exportTelemetryData)
+import GHC.Eventlog.Live.App.Exporter.Otlp (exportToOtlp)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.App.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (writeLog)
+import GHC.Eventlog.Live.Logger (Logger, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
-import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
+import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), TelemetryData, processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -45,6 +55,7 @@ import GHC.RTS.Events (Event (..))
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
+import Network.WebSockets qualified as WS
 import Options.Applicative qualified as O
 import Paths_eventlog_live qualified as App
 import System.Exit (die, exitFailure)
@@ -62,6 +73,37 @@ appName = "eventlog-live-otlp"
 appScope :: InstrumentationScope
 appScope = InstrumentationScope{name = appName, version = App.version}
 
+broadcast :: TChan a -> ProcessT IO a x
+broadcast chan =
+  repeatedly $
+    await >>= \x -> do
+      liftIO (atomically (writeTChan chan x))
+
+startViewerServer ::
+  Logger IO ->
+  TChan (Resource, InstrumentationScope, DList TelemetryData) ->
+  IO ()
+startViewerServer logger broadcastChan =
+  void . forkIO $ do
+    writeLog logger INFO $ "Start viewer"
+    WS.runServer "127.0.0.1" 30180 $ viewerApp logger broadcastChan
+
+viewerApp ::
+  Logger IO ->
+  TChan (Resource, InstrumentationScope, DList TelemetryData) ->
+  WS.ServerApp
+viewerApp logger broadcastChan pending = do
+  conn <- WS.acceptRequest pending
+  writeLog logger INFO $ "Accepted viewer connection"
+  -- WS.withPingThread conn 30 (pure ()) $ do
+  -- chan <- atomically (dupTChan broadcastChan)
+  forever $ do
+    telemetry <- atomically (readTChan broadcastChan)
+    let jsonBytes = encode telemetry
+    let jsonText = TE.decodeUtf8 (BSL.toStrict jsonBytes)
+    writeLog logger INFO $ "Send: " <> jsonText
+    WS.sendTextData conn jsonBytes
+
 {- |
 The main function for @eventlog-live-otlp@.
 -}
@@ -70,8 +112,12 @@ main = do
   -- Parse the command-line options
   Options{..} <- O.execParser options
 
-  -- Construct a channel for internal telemetry
+  -- Create a channel for internal telemetry
   myTelemetryDataChan <- newTChanIO
+
+  -- Create a channel for the viewer websocket
+  -- viewerBroadcastChan <- newBroadcastTChanIO
+  viewerBroadcastChan <- newTChanIO
 
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
@@ -90,6 +136,9 @@ main = do
     --
     -- Start the control server.
     controlServerApi <- startControlServer logger controlOptions
+
+    -- Start the viewer server.
+    startViewerServer logger viewerBroadcastChan
 
     -- Read the configuration file.
     let readConfigFile configFile = do
@@ -189,7 +238,10 @@ main = do
                   ]
                   ~> M.liftTick asParts
                   -- ...and export it.
-                  ~> exportTelemetryData logger fullConfig exporters
+                  ~> M.fanoutTickCC
+                    [ M.liftTick (broadcast viewerBroadcastChan)
+                    , exportToOtlp logger fullConfig exporters
+                    ]
               ]
             -- Process the statistics
             -- TODO: windowSize should be the maximum of all aggregation and export intervals
