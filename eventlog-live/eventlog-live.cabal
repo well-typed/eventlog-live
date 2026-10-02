@@ -131,7 +131,6 @@ common language
     StandaloneDeriving
     StandaloneKindSignatures
     TupleSections
-    TypeAbstractions
     TypeApplications
     TypeFamilies
     TypeOperators
