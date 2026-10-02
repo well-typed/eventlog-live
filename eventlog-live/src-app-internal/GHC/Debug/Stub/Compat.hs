@@ -19,7 +19,7 @@ import Options.Applicative qualified as O
 import Options.Applicative.Extra.Feature (Feature (..))
 import Options.Applicative.Extra.Feature qualified as OF
 
-#ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
+#ifdef EVENTLOG_LIVE_USE_GHC_DEBUG_STUB
 import Data.Text qualified as T
 import GHC.Debug.Stub qualified as GHC.Debug (withGhcDebug, withGhcDebugTCP, withGhcDebugUnix)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -39,7 +39,7 @@ useGhcDebugStub :: Feature
 useGhcDebugStub = Feature{flag = "use-ghc-debug-stub", isOn = isOn, info = "Cannot open ghc-debug socket."}
  where
   isOn :: Bool
-#ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
+#ifdef EVENTLOG_LIVE_USE_GHC_DEBUG_STUB
   isOn = True
 #else
   isOn = False
@@ -60,7 +60,7 @@ Internal helper.
 Start @ghc-debug@ on the given `MyGhcDebugSocket`.
 -}
 withMyGhcDebug :: Logger IO -> Maybe MyGhcDebugSocket -> IO a -> IO a
-#ifdef EVENTLOG_LIVE_OTELCOL_USE_GHC_DEBUG_STUB
+#ifdef EVENTLOG_LIVE_USE_GHC_DEBUG_STUB
 withMyGhcDebug logger maybeMyGhcDebugSocket action =
   case maybeMyGhcDebugSocket of
     Nothing -> action

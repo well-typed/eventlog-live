@@ -19,7 +19,7 @@ import Options.Applicative qualified as O
 import Options.Applicative.Extra.Feature (Feature (..))
 import Options.Applicative.Extra.Feature qualified as OF
 
-#ifdef EVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
+#ifdef EVENTLOG_LIVE_USE_EVENTLOG_SOCKET
 import Data.Foldable (for_)
 import Data.Text qualified as T
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -38,7 +38,7 @@ useEventlogSocket :: Feature
 useEventlogSocket = Feature{flag = "use-eventlog-socket", isOn = isOn, info = "Cannot open eventlog socket."}
  where
   isOn :: Bool
-#ifdef EVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
+#ifdef EVENTLOG_LIVE_USE_EVENTLOG_SOCKET
   isOn = True
 #else
   isOn = False
@@ -68,7 +68,7 @@ myEventlogSocketUnixParser =
 Set @eventlog-socket@ as the eventlog writer.
 -}
 startMyEventlogSocket :: Logger IO -> Maybe MyEventlogSocket -> IO ()
-#ifdef EVENTLOG_LIVE_OTELCOL_USE_EVENTLOG_SOCKET
+#ifdef EVENTLOG_LIVE_USE_EVENTLOG_SOCKET
 startMyEventlogSocket logger maybeMyEventlogSocket =
   for_ maybeMyEventlogSocket $ \case
     MyEventlogSocketUnix myEventlogSocketUnix -> do

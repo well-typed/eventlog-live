@@ -25,7 +25,7 @@ import Options.Applicative.Extra.Feature qualified as OF
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 
-#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+#ifdef EVENTLOG_LIVE_FEATURE_CONTROL
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
@@ -72,7 +72,7 @@ control :: Feature
 control = Feature{flag = "control", isOn = isOn, info = "Cannot start control server."}
  where
   isOn :: Bool
-#ifdef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+#ifdef EVENTLOG_LIVE_FEATURE_CONTROL
   isOn = True
 #else
   isOn = False
@@ -110,7 +110,7 @@ startControlServer :: Logger IO -> ControlOptions -> IO ControlServerApi
 --------------------------------------------------------------------------------
 -- Control App - Disabled
 --------------------------------------------------------------------------------
-#ifndef EVENTLOG_LIVE_OTELCOL_FEATURE_CONTROL
+#ifndef EVENTLOG_LIVE_FEATURE_CONTROL
 
 startControlServer logger controlOptions = do
   when (shouldStart controlOptions) $
