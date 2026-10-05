@@ -36,23 +36,26 @@ const addNumberDataPoint = (
 function Plot({ url, options }: Options) {
   const wsRef = useRef<WebSocket | null>(null);
   const [data, setData] = useState<uPlot.AlignedData>([[], []]);
+  const [messages, setMessages] = useState<string[]>([]);
 
   useEffect(() => {
     const socket = new WebSocket(url);
     wsRef.current = socket;
 
     socket.onmessage = (event) => {
-      try {
-        const measure = JSON.parse(event.data);
-        if (isNumberDataPoint(measure)) {
-          console.debug(`Measure: ${JSON.stringify(measure)}`);
-          return setData((oldData) => addNumberDataPoint(oldData, measure));
-        } else {
-          console.error(`Malformed Message: ${measure}`);
-        }
-      } catch (e) {
-        console.error(`Syntax Error: ${e}`);
-      }
+      console.log(event);
+      setMessages((old) => [...old, event.data]);
+      // try {
+      //   const measure = JSON.parse(event.data);
+      //   if (isNumberDataPoint(measure)) {
+      //     console.debug(`Measure: ${JSON.stringify(measure)}`);
+      //     return setData((oldData) => addNumberDataPoint(oldData, measure));
+      //   } else {
+      //     console.error(`Malformed Message: ${measure}`);
+      //   }
+      // } catch (e) {
+      //   console.error(`Syntax Error: ${e}`);
+      // }
     };
 
     socket.onerror = (event) => {
@@ -64,11 +67,21 @@ function Plot({ url, options }: Options) {
     };
   }, []);
 
-  if (wsRef.current?.readyState === WebSocket.OPEN) {
-    return <UplotReact data={data} options={options} />;
-  } else {
-    return <div>Not connected.</div>;
-  }
+  // if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+  //   return <UplotReact data={data} options={options} />;
+  // } else {
+  //   return <div>Not connected.</div>;
+  // }
+  return (
+    <div>
+      <h1>Messages</h1>
+      <ul>
+        {messages.map((message) => (
+          <li>{message}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 const options: uPlot.Options = {
