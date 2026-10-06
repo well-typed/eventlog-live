@@ -188,15 +188,15 @@ chanSource chan = repeatedly $ do
 Add the current Unix timestamp in nanoseconds to telemetry data.
 -}
 addTimeUnixNano :: InternalTelemetry -> IO InternalTelemetry
-addTimeUnixNano myTelemetryData =
-  case myTelemetryData of
+addTimeUnixNano myTelemetry =
+  case myTelemetry of
     InternalTelemetry'LogRecord{logRecord = LogRecord{..}}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
           pure $
             InternalTelemetry'LogRecord
               LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
-      | otherwise -> pure myTelemetryData
+      | otherwise -> pure myTelemetry
 
 {- |
 Get the current Unix time in nanoseconds.

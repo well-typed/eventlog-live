@@ -3,8 +3,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module GHC.Eventlog.Live.Test (
-  -- * Running a machine-based assertion on `ResourceTelemetryData`
-  assertResourceTelemetryData,
+  -- * Running a machine-based assertion on `ResourceTelemetry`
+  assertResourceTelemetry,
   hasInput,
   withLogRecord'body,
   toLogRecords,
@@ -35,7 +35,7 @@ module GHC.Eventlog.Live.Test (
   withEventlogLiveOtlp,
 
   -- * Running an OTLP server
-  ResourceTelemetryData (..),
+  ResourceTelemetry (..),
   HasOtlpServerInfo,
   OtlpServerInfo (..),
   withGrpcOtlpServer,
@@ -91,7 +91,7 @@ import Test.Tasty (TestName)
 import Test.Tasty.HUnit (Assertion)
 
 --------------------------------------------------------------------------------
--- Running a machine-based assertion on `ResourceTelemetryData`
+-- Running a machine-based assertion on `ResourceTelemetry`
 --------------------------------------------------------------------------------
 
 {- |
@@ -203,50 +203,50 @@ toScopeSpans = mapping (^. OT.vec'scopeSpans) ~> asParts
 {- |
 Filter a resource telemetry stream to only resource logs.
 -}
-toResourceLogs :: (Monad m) => ProcessT m ResourceTelemetryData OL.ResourceLogs
+toResourceLogs :: (Monad m) => ProcessT m ResourceTelemetry OL.ResourceLogs
 toResourceLogs =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Logs logs -> traverse_ yield logs
+      ResourceTelemetry'Logs logs -> traverse_ yield logs
       _otherwise -> pure ()
 
 {- |
 Filter a resource telemetry stream to only resource metrics.
 -}
-toResourceMetrics :: (Monad m) => ProcessT m ResourceTelemetryData OM.ResourceMetrics
+toResourceMetrics :: (Monad m) => ProcessT m ResourceTelemetry OM.ResourceMetrics
 toResourceMetrics =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Metrics metrics -> traverse_ yield metrics
+      ResourceTelemetry'Metrics metrics -> traverse_ yield metrics
       _otherwise -> pure ()
 
 {- |
 Filter a resource telemetry stream to only resource profiles.
 -}
-toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetryData (OP.ProfilesDictionary, OP.ResourceProfiles)
+toResourceProfiles :: (Monad m) => ProcessT m ResourceTelemetry (OP.ProfilesDictionary, OP.ResourceProfiles)
 toResourceProfiles =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Profiles dictionary profiles ->
+      ResourceTelemetry'Profiles dictionary profiles ->
         traverse_ (\profile -> yield (dictionary, profile)) profiles
       _otherwise -> pure ()
 
 {- |
 Filter a resource telemetry stream to only resource spans.
 -}
-toResourceSpans :: (Monad m) => ProcessT m ResourceTelemetryData OT.ResourceSpans
+toResourceSpans :: (Monad m) => ProcessT m ResourceTelemetry OT.ResourceSpans
 toResourceSpans =
   repeatedly $
     await >>= \case
-      ResourceTelemetryData'Spans spans -> traverse_ yield spans
+      ResourceTelemetry'Spans spans -> traverse_ yield spans
       _otherwise -> pure ()
 
 {- |
-Run a machine-based assertion on `ResourceTelemetryData`.
+Run a machine-based assertion on `ResourceTelemetry`.
 -}
-assertResourceTelemetryData :: (HasOtlpServerInfo) => ProcessT IO ResourceTelemetryData x -> Assertion
-assertResourceTelemetryData validateResourceTelemetryData =
-  runT_ $ source ~> validateResourceTelemetryData
+assertResourceTelemetry :: (HasOtlpServerInfo) => ProcessT IO ResourceTelemetry x -> Assertion
+assertResourceTelemetry validateResourceTelemetry =
+  runT_ $ source ~> validateResourceTelemetry
  where
   OtlpServerInfo{..} = ?otlpServerInfo
   source = repeatedly (yield =<< liftIO next)
@@ -379,11 +379,11 @@ withTempConfigFile maybeConfigBody action =
 {- |
 A batch of resource telemetry data.
 -}
-data ResourceTelemetryData
-  = ResourceTelemetryData'Logs !(Vector OL.ResourceLogs)
-  | ResourceTelemetryData'Metrics !(Vector OM.ResourceMetrics)
-  | ResourceTelemetryData'Profiles !OP.ProfilesDictionary !(Vector OP.ResourceProfiles)
-  | ResourceTelemetryData'Spans !(Vector OT.ResourceSpans)
+data ResourceTelemetry
+  = ResourceTelemetry'Logs !(Vector OL.ResourceLogs)
+  | ResourceTelemetry'Metrics !(Vector OM.ResourceMetrics)
+  | ResourceTelemetry'Profiles !OP.ProfilesDictionary !(Vector OP.ResourceProfiles)
+  | ResourceTelemetry'Spans !(Vector OT.ResourceSpans)
   deriving (Show)
 
 {- |
@@ -399,7 +399,7 @@ The `next` field contains an IO action that retrieves the next batch of resource
 The `host` and `port` fields contain the information needed to connect to the server.
 -}
 data OtlpServerInfo = OtlpServerInfo
-  { next :: IO ResourceTelemetryData
+  { next :: IO ResourceTelemetry
   , host :: HostName
   , port :: PortNumber
   }
@@ -419,11 +419,11 @@ withGrpcOtlpServer action = do
   let programInfo = ProgramInfo{..}
   let debugServerInfo msg = debug (ProgramOut programInfo msg)
 
-  -- Create the queue for the ResourceTelemetryData.
+  -- Create the queue for the ResourceTelemetry.
   queue <- newTQueueIO
 
   -- Create the action that enqueues data.
-  let enqueue :: ResourceTelemetryData -> IO ()
+  let enqueue :: ResourceTelemetry -> IO ()
       enqueue = atomically . writeTQueue queue
 
   -- Create the handlers for various kinds of telemetry exports.
@@ -431,26 +431,26 @@ withGrpcOtlpServer action = do
       logsServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let logs = req ^. OLS.vec'resourceLogs
         debugServerInfo $ "Received " <> show (V.length logs) <> " resource logs"
-        enqueue (ResourceTelemetryData'Logs logs)
+        enqueue (ResourceTelemetry'Logs logs)
         pure G.defMessage
   let metricsServiceExportHandler :: G.ServerHandler IO (G.Protobuf OMS.MetricsService "export")
       metricsServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let metrics = req ^. OMS.vec'resourceMetrics
         debugServerInfo $ "Received " <> show (V.length metrics) <> " resource metrics"
-        enqueue (ResourceTelemetryData'Metrics metrics)
+        enqueue (ResourceTelemetry'Metrics metrics)
         pure G.defMessage
   let profilesServiceExportHandler :: G.ServerHandler IO (G.Protobuf OPS.ProfilesService "export")
       profilesServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let dictionary = req ^. OPS.dictionary
         let profiles = req ^. OPS.vec'resourceProfiles
         debugServerInfo $ "Received " <> show (V.length profiles) <> " resource profiles"
-        enqueue (ResourceTelemetryData'Profiles dictionary profiles)
+        enqueue (ResourceTelemetry'Profiles dictionary profiles)
         pure G.defMessage
   let tracesServiceExportHandler :: G.ServerHandler IO (G.Protobuf OTS.TraceService "export")
       tracesServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let spans = req ^. OTS.vec'resourceSpans
         debugServerInfo $ "Received " <> show (V.length spans) <> " resource spans"
-        enqueue (ResourceTelemetryData'Spans spans)
+        enqueue (ResourceTelemetry'Spans spans)
         pure G.defMessage
 
   -- Create the server methods.
@@ -486,7 +486,7 @@ withGrpcOtlpServer action = do
     debugServerInfo $ "Started OTLP server on " <> host <> ":" <> show port
 
     -- Create the action that dequeues data.
-    let next :: IO ResourceTelemetryData
+    let next :: IO ResourceTelemetry
         next = atomically $ readTQueue queue
 
     -- Run the continuation.

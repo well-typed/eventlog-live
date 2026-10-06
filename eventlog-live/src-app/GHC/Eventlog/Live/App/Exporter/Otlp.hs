@@ -1,5 +1,5 @@
 module GHC.Eventlog.Live.App.Exporter.Otlp (
-  exportTelemetryData,
+  exportTelemetry,
 ) where
 
 import Data.DList (DList)
@@ -20,7 +20,7 @@ import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope (..), Resource (..), TelemetryData (..))
+import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope (..), Resource (..), Telemetry (..))
 import GHC.Eventlog.Live.Processor.Core
 import GHC.Eventlog.Live.Types.Logs (SomeLogs)
 import GHC.Eventlog.Live.Types.Metrics (SomeMetrics)
@@ -50,23 +50,23 @@ toInstrumentationScope InstrumentationScope{..} =
     , OC.version .~ T.pack (showVersion version)
     ]
 
-data ResourceTelemetryData
-  = ResourceTelemetryData'Log OL.ResourceLogs
-  | ResourceTelemetryData'Metric OM.ResourceMetrics
-  | ResourceTelemetryData'Span OT.ResourceSpans
-  | ResourceTelemetryData'Profile OP.ProfilesData
+data ResourceTelemetry
+  = ResourceTelemetry'Log OL.ResourceLogs
+  | ResourceTelemetry'Metric OM.ResourceMetrics
+  | ResourceTelemetry'Span OT.ResourceSpans
+  | ResourceTelemetry'Profile OP.ProfilesData
 
 {- |
 Internal helper.
 Export resource telemetry data and yield statistics.
 -}
-exportTelemetryData ::
+exportTelemetry ::
   Logger IO ->
   FullConfig ->
   PerSignal (Maybe Exporter) ->
   ProcessT IO (Tick ExportRequest) (Tick (DList Stat))
-exportTelemetryData logger fullConfig exporters =
-  M.liftTick (mapping (toResourceTelemetryData fullConfig) ~> asParts)
+exportTelemetry logger fullConfig exporters =
+  M.liftTick (mapping (toResourceTelemetry fullConfig) ~> asParts)
     ~> M.fanoutTick
       [ -- Export logs.
         runIf (C.shouldExportLogs fullConfig) $
@@ -105,39 +105,39 @@ exportTelemetryData logger fullConfig exporters =
               ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
       ]
 
-getResourceLogs :: ResourceTelemetryData -> Maybe OL.ResourceLogs
+getResourceLogs :: ResourceTelemetry -> Maybe OL.ResourceLogs
 getResourceLogs = \case
-  (ResourceTelemetryData'Log resourceLogs) -> Just resourceLogs
+  (ResourceTelemetry'Log resourceLogs) -> Just resourceLogs
   _otherwise -> Nothing
 
-getResourceMetrics :: ResourceTelemetryData -> Maybe OM.ResourceMetrics
+getResourceMetrics :: ResourceTelemetry -> Maybe OM.ResourceMetrics
 getResourceMetrics = \case
-  (ResourceTelemetryData'Metric resourceMetrics) -> Just resourceMetrics
+  (ResourceTelemetry'Metric resourceMetrics) -> Just resourceMetrics
   _otherwise -> Nothing
 
-getResourceSpans :: ResourceTelemetryData -> Maybe OT.ResourceSpans
+getResourceSpans :: ResourceTelemetry -> Maybe OT.ResourceSpans
 getResourceSpans = \case
-  (ResourceTelemetryData'Span resourceSpans) -> Just resourceSpans
+  (ResourceTelemetry'Span resourceSpans) -> Just resourceSpans
   _otherwise -> Nothing
 
-getResourceProfiles :: ResourceTelemetryData -> Maybe OP.ProfilesData
+getResourceProfiles :: ResourceTelemetry -> Maybe OP.ProfilesData
 getResourceProfiles = \case
-  (ResourceTelemetryData'Profile profilesData) -> Just profilesData
+  (ResourceTelemetry'Profile profilesData) -> Just profilesData
   _otherwise -> Nothing
 
 {- |
 Internal helper.
 
-Repack `TelemetryData` into batched `ResourceTelemetryData`.
+Repack `Telemetry` into batched `ResourceTelemetry`.
 -}
-toResourceTelemetryData ::
+toResourceTelemetry ::
   FullConfig ->
   ExportRequest ->
-  [ResourceTelemetryData]
-toResourceTelemetryData fullConfig ExportRequest{..} =
+  [ResourceTelemetry]
+toResourceTelemetry fullConfig ExportRequest{..} =
   catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
  where
-  (someLogs, someMetrics, someSpans, someSamples) = partitionTelemetryData telemetry
+  (someLogs, someMetrics, someSpans, someSamples) = partitionTelemetry telemetry
   resource' = toResource resource
   scope' = toInstrumentationScope scope
 
@@ -145,34 +145,34 @@ toResourceTelemetryData fullConfig ExportRequest{..} =
     let logRecords = concatMap (toLogRecords fullConfig) someLogs
     scopeLogs <- toScopeLogs scope' logRecords
     resourceLogs <- toResourceLogs resource' [scopeLogs]
-    pure $ ResourceTelemetryData'Log resourceLogs
+    pure $ ResourceTelemetry'Log resourceLogs
   maybeResourceMetrics = do
     let metrics = mapMaybe (toMetric fullConfig) someMetrics
     scopeMetrics <- toScopeMetrics scope' metrics
     resourceMetrics <- toResourceMetrics resource' [scopeMetrics]
-    pure $ ResourceTelemetryData'Metric resourceMetrics
+    pure $ ResourceTelemetry'Metric resourceMetrics
   maybeResourceSpans = do
     let spans = concatMap (toSpans fullConfig) someSpans
     scopeSpans <- toScopeSpans scope' spans
     resourceSpans <- toResourceSpans resource' [scopeSpans]
-    pure $ ResourceTelemetryData'Span resourceSpans
+    pure $ ResourceTelemetry'Span resourceSpans
   maybeProfiles = do
     (profiles, dictionary) <- toProfiles fullConfig someSamples
     scopeProfiles <- toScopeProfiles scope' profiles
     resourceProfiles <- toResourceProfiles resource' [scopeProfiles]
     profilesData <- toProfilesData [resourceProfiles] dictionary
-    pure $ ResourceTelemetryData'Profile profilesData
+    pure $ ResourceTelemetry'Profile profilesData
 
 {- |
-Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
+Partition a stream of `Telemetry` batches to individual batches for each kind of telemetry data.
 -}
-partitionTelemetryData :: [TelemetryData] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
-partitionTelemetryData = go ([], [], [], [])
+partitionTelemetry :: [Telemetry] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
+partitionTelemetry = go ([], [], [], [])
  where
-  go :: ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples]) -> [TelemetryData] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
+  go :: ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples]) -> [Telemetry] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
   go (logsRev, metricsRev, spansRev, samplesRev) = \case
     [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
-    (TelemetryData'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
-    (TelemetryData'Metric metric : rest) -> go (logsRev, metric : metricsRev, spansRev, samplesRev) rest
-    (TelemetryData'Span spans : rest) -> go (logsRev, metricsRev, spans : spansRev, samplesRev) rest
-    (TelemetryData'Sample sample : rest) -> go (logsRev, metricsRev, spansRev, sample : samplesRev) rest
+    (Telemetry'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
+    (Telemetry'Metric metric : rest) -> go (logsRev, metric : metricsRev, spansRev, samplesRev) rest
+    (Telemetry'Span spans : rest) -> go (logsRev, metricsRev, spans : spansRev, samplesRev) rest
+    (Telemetry'Sample sample : rest) -> go (logsRev, metricsRev, spansRev, sample : samplesRev) rest

@@ -24,7 +24,7 @@ import Data.Void (absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.App.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceName (..), lookupLogLevel, lookupOpenTelemetrySdkOptions)
-import GHC.Eventlog.Live.App.Exporter.Otlp (exportTelemetryData)
+import GHC.Eventlog.Live.App.Exporter.Otlp (exportTelemetry)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.App.Stats (Stat (..), eventCountTick, processStats)
@@ -189,7 +189,7 @@ main = do
                   ]
                   ~> M.liftTick asParts
                   -- ...and export it.
-                  ~> exportTelemetryData logger fullConfig exporters
+                  ~> exportTelemetry logger fullConfig exporters
               ]
             -- Process the statistics
             -- TODO: windowSize should be the maximum of all aggregation and export intervals
