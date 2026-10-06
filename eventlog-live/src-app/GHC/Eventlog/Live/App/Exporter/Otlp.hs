@@ -20,7 +20,7 @@ import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), TelemetryData (..))
+import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope (..), Resource (..), TelemetryData (..))
 import GHC.Eventlog.Live.Processor.Core
 import GHC.Eventlog.Live.Types.Logs (SomeLogs)
 import GHC.Eventlog.Live.Types.Metrics (SomeMetrics)
@@ -64,7 +64,7 @@ exportTelemetryData ::
   Logger IO ->
   FullConfig ->
   PerSignal (Maybe Exporter) ->
-  ProcessT IO (Tick (Resource, InstrumentationScope, DList TelemetryData)) (Tick (DList Stat))
+  ProcessT IO (Tick ExportRequest) (Tick (DList Stat))
 exportTelemetryData logger fullConfig exporters =
   M.liftTick (mapping (toResourceTelemetryData fullConfig) ~> asParts)
     ~> M.fanoutTick
@@ -132,36 +132,36 @@ Repack `TelemetryData` into batched `ResourceTelemetryData`.
 -}
 toResourceTelemetryData ::
   FullConfig ->
-  (Resource, InstrumentationScope, DList TelemetryData) ->
+  ExportRequest ->
   [ResourceTelemetryData]
-toResourceTelemetryData
-  fullConfig
-  (toResource -> resource, toInstrumentationScope -> instrumentationScope, D.toList -> telemetryData) =
-    catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
-   where
-    (someLogs, someMetrics, someSpans, someSamples) = partitionTelemetryData telemetryData
+toResourceTelemetryData fullConfig ExportRequest{..} =
+  catMaybes [maybeResourceLogs, maybeResourceMetrics, maybeResourceSpans, maybeProfiles]
+ where
+  (someLogs, someMetrics, someSpans, someSamples) = partitionTelemetryData telemetry
+  resource' = toResource resource
+  scope' = toInstrumentationScope scope
 
-    maybeResourceLogs = do
-      let logRecords = concatMap (toLogRecords fullConfig) someLogs
-      scopeLogs <- toScopeLogs instrumentationScope logRecords
-      resourceLogs <- toResourceLogs resource [scopeLogs]
-      pure $ ResourceTelemetryData'Log resourceLogs
-    maybeResourceMetrics = do
-      let metrics = mapMaybe (toMetric fullConfig) someMetrics
-      scopeMetrics <- toScopeMetrics instrumentationScope metrics
-      resourceMetrics <- toResourceMetrics resource [scopeMetrics]
-      pure $ ResourceTelemetryData'Metric resourceMetrics
-    maybeResourceSpans = do
-      let spans = concatMap (toSpans fullConfig) someSpans
-      scopeSpans <- toScopeSpans instrumentationScope spans
-      resourceSpans <- toResourceSpans resource [scopeSpans]
-      pure $ ResourceTelemetryData'Span resourceSpans
-    maybeProfiles = do
-      (profiles, dictionary) <- toProfiles fullConfig someSamples
-      scopeProfiles <- toScopeProfiles instrumentationScope profiles
-      resourceProfiles <- toResourceProfiles resource [scopeProfiles]
-      profilesData <- toProfilesData [resourceProfiles] dictionary
-      pure $ ResourceTelemetryData'Profile profilesData
+  maybeResourceLogs = do
+    let logRecords = concatMap (toLogRecords fullConfig) someLogs
+    scopeLogs <- toScopeLogs scope' logRecords
+    resourceLogs <- toResourceLogs resource' [scopeLogs]
+    pure $ ResourceTelemetryData'Log resourceLogs
+  maybeResourceMetrics = do
+    let metrics = mapMaybe (toMetric fullConfig) someMetrics
+    scopeMetrics <- toScopeMetrics scope' metrics
+    resourceMetrics <- toResourceMetrics resource' [scopeMetrics]
+    pure $ ResourceTelemetryData'Metric resourceMetrics
+  maybeResourceSpans = do
+    let spans = concatMap (toSpans fullConfig) someSpans
+    scopeSpans <- toScopeSpans scope' spans
+    resourceSpans <- toResourceSpans resource' [scopeSpans]
+    pure $ ResourceTelemetryData'Span resourceSpans
+  maybeProfiles = do
+    (profiles, dictionary) <- toProfiles fullConfig someSamples
+    scopeProfiles <- toScopeProfiles scope' profiles
+    resourceProfiles <- toResourceProfiles resource' [scopeProfiles]
+    profilesData <- toProfilesData [resourceProfiles] dictionary
+    pure $ ResourceTelemetryData'Profile profilesData
 
 {- |
 Partition a stream of `TelemetryData` batches to individual batches for each kind of telemetry data.
