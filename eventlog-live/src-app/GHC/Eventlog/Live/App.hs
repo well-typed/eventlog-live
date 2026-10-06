@@ -181,11 +181,11 @@ main = do
                       , -- Process InfoProv events.
                         indexInfoProvEvents ipedb
                       , -- Process the eventlog events.
-                        processEventlogTelemetry logger fullConfig maybeHeapProfBreakdown ccdb ipedb
-                          ~> M.liftTick (mapping $ D.singleton . (eventlogResource,appScope,))
+                        processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
+                          ~> M.liftTick (mapping D.singleton)
                       ]
-                  , processInternalTelemetry fullConfig myTelemetryDataChan
-                      ~> M.liftTick (mapping $ D.singleton . (internalResource,appScope,))
+                  , processInternalTelemetry fullConfig internalResource appScope myTelemetryDataChan
+                      ~> M.liftTick (mapping D.singleton)
                   ]
                   ~> M.liftTick asParts
                   -- ...and export it.
