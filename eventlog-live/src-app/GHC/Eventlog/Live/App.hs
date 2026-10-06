@@ -11,7 +11,7 @@ module GHC.Eventlog.Live.App (
   main,
 ) where
 
-import Control.Concurrent.STM.TChan (newTChanIO)
+import Control.Concurrent.STM.TQueue (newTQueueIO)
 import Control.Exception (bracket_)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
@@ -70,14 +70,14 @@ main = do
   -- Parse the command-line options
   Options{..} <- O.execParser options
 
-  -- Construct a channel for internal telemetry
-  internalTelemetryChan <- newTChanIO
+  -- Create a queue for internal telemetry
+  internalTelemetryQueue <- newTQueueIO
 
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
   let logger =
         M.filterBySeverity logLevel $
-          M.stderrLogger <> M.chanLogger internalTelemetryChan
+          M.stderrLogger <> M.queueLogger internalTelemetryQueue
 
   -- Lookup the OpenTelemetry SDK options
   OpenTelemetrySdkOptions{..} <-
@@ -184,7 +184,7 @@ main = do
                         processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
                           ~> M.liftTick (mapping D.singleton)
                       ]
-                  , processInternalTelemetry fullConfig internalResource appScope internalTelemetryChan
+                  , processInternalTelemetry fullConfig internalResource appScope internalTelemetryQueue
                       ~> M.liftTick (mapping D.singleton)
                   ]
                   ~> M.liftTick asParts
