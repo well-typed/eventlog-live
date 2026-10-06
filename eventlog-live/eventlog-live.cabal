@@ -44,14 +44,6 @@ flag control
   default: False
   manual: True
 
--- 2025-12-09:
--- This flag should enable switching between concurrent-machines and the
--- vendored copy of the packages, as it currently does not easily build.
-flag use-concurrent-machines
-  description: Use concurrent-machines in place of the vendored copy
-  default: False
-  manual: True
-
 -- 2026-07-29:
 -- This flag should enable switching between hs-opentelemetry-api and the
 -- vendored copy of the packages, as only a small subset is needed.
@@ -191,6 +183,7 @@ library
     bytestring >=0.11 && <0.13,
     clock >=0.8 && <0.9,
     co-log-core >=0.3 && <0.4,
+    containers >=0.6 && <0.9,
     data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
     file-embed >=0.0.16 && <0.1,
@@ -200,7 +193,6 @@ library
     HsYAML >=0.2 && <0.3,
     ipedb >=0.2 && <0.3,
     machines >=0.7.4 && <0.8,
-    monad-control >=1.0 && <1.1,
     network >=3.2.7 && <3.3,
     optparse-applicative >=0.17 && <0.20,
     random >=1.2 && <1.4,
@@ -226,31 +218,6 @@ library
 
   other-modules:
     Data.Traversable.Compat
-
-  -- 2025-12-09:
-  -- This configures the build requirements for the vendored copy of
-  -- the concurrent-machines package version 0.3.1.5.
-  if flag(use-concurrent-machines)
-    build-depends: concurrent-machines >=0.1 && <0.4
-  else
-    ghc-options: -Wno-prepositive-qualified-module
-    hs-source-dirs: vendor/concurrent-machines-0.3.1.5/src
-    other-modules:
-      Data.Machine.Concurrent
-      Data.Machine.Concurrent.AsyncStep
-      Data.Machine.Concurrent.Buffer
-      Data.Machine.Concurrent.Fanout
-      Data.Machine.Concurrent.Scatter
-      Data.Machine.Concurrent.Tee
-      Data.Machine.Concurrent.Wye
-      Data.Machine.Regulated
-
-    build-depends:
-      async >=2.0.1 && <2.3,
-      containers >=0.5 && <0.8,
-      lifted-async >=0.10 && <0.12,
-      time >=1.4 && <1.16,
-      transformers-base >=0.4 && <0.5,
 
   -- 2025-11-06:
   -- This configures the build requirements for using either template-haskell
