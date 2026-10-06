@@ -24,13 +24,12 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logDebug, logInfo)
 import GHC.Eventlog.Live.Machine.Core
 import GHC.Eventlog.Live.Machine.Decoder
 import GHC.Eventlog.Live.Machine.Sink
 import GHC.Eventlog.Live.Machine.Source
 import GHC.Eventlog.Live.Source.Core
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.RTS.Events (Event)
 import Network.Socket (Socket)
 import Network.Socket qualified as S
@@ -112,7 +111,7 @@ withEventlogSourceHandle ::
 withEventlogSourceHandle logger initialTimeoutS timeoutExponent eventlogSource action = do
   case eventlogSource of
     EventlogSourceOptionsStdin -> do
-      writeLog logger INFO $
+      logInfo logger $
         "Reading eventlog from stdin"
       let enter = do
             maybeStdinTextEncoding <- IO.hGetEncoding IO.stdin
@@ -123,12 +122,12 @@ withEventlogSourceHandle logger initialTimeoutS timeoutExponent eventlogSource a
             IO.hSetNewlineMode IO.stdin IO.nativeNewlineMode
       E.bracket enter leave . const . action $ EventlogSourceHandleStdin
     EventlogSourceOptionsFile eventlogFile -> do
-      writeLog logger INFO $
+      logInfo logger $
         "Reading eventlog from " <> T.pack eventlogFile
       IO.withBinaryFile eventlogFile IO.ReadMode $ \handle ->
         action $ EventlogSourceHandleFile handle
     EventlogSourceOptionsSocket eventlogSocketAddr -> do
-      writeLog logger INFO $
+      logInfo logger $
         "Waiting to connect on " <> prettyEventlogSocketAddr eventlogSocketAddr
       E.bracket (connectRetry logger initialTimeoutS timeoutExponent eventlogSocketAddr) S.close $ \socket ->
         action $ EventlogSourceHandleSocket socket
@@ -155,19 +154,19 @@ connectRetry logger initialTimeoutS timeoutExponent eventlogSocketAddr =
   connectLoop :: Double -> IO Socket
   connectLoop timeoutS = do
     let connect = do
-          writeLog logger DEBUG $
+          logDebug logger $
             "Trying to connect on " <> prettyEventlogSocketAddr eventlogSocketAddr
           socket <- tryConnect eventlogSocketAddr
-          writeLog logger DEBUG $
+          logDebug logger $
             "Connected on " <> prettyEventlogSocketAddr eventlogSocketAddr
           pure socket
     let cleanup (e :: E.IOException) = do
-          writeLog logger DEBUG $
+          logDebug logger $
             "Failed to connect on "
               <> prettyEventlogSocketAddr eventlogSocketAddr
               <> ": "
               <> T.pack (displayException e)
-          writeLog logger DEBUG $
+          logDebug logger $
             "Waiting "
               <> prettyTimeoutMcs timeoutS
               <> " to retry..."

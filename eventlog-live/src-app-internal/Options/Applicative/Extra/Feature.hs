@@ -11,11 +11,9 @@ import Control.Monad (unless)
 import Data.Default (Default (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
+import GHC.Eventlog.Live.Logger (Logger, logFatal)
 import Options.Applicative qualified as O
 import Options.Applicative.Help.Pretty qualified as OP
-import System.Exit (exitFailure)
 
 data Feature = Feature
   { flag :: !String
@@ -58,5 +56,4 @@ Exit with the feature info.
 exitIfUnsupported :: Feature -> Logger IO -> IO ()
 exitIfUnsupported feature logger =
   unless feature.isOn $ do
-    writeLog logger FATAL (T.pack feature.info)
-    exitFailure
+    logFatal logger (T.pack feature.info)

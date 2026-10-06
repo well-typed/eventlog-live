@@ -22,10 +22,8 @@ import Options.Applicative.Extra.Feature qualified as OF
 #ifdef EVENTLOG_LIVE_USE_GHC_DEBUG_STUB
 import Data.Text qualified as T
 import GHC.Debug.Stub qualified as GHC.Debug (withGhcDebug, withGhcDebugTCP, withGhcDebugUnix)
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (writeLog)
-import System.Exit (exitFailure)
 import Text.Read (readEither)
+import GHC.Eventlog.Live.Logger (logInfo, logFatal)
 #else
 import Data.Maybe (isJust)
 import Control.Monad (when)
@@ -65,22 +63,21 @@ withMyGhcDebug logger maybeMyGhcDebugSocket action =
   case maybeMyGhcDebugSocket of
     Nothing -> action
     Just MyGhcDebugSocketDefault -> do
-      writeLog logger INFO $
+      logInfo logger $
         "Start ghc-debug with default socket."
       GHC.Debug.withGhcDebug action
     Just (MyGhcDebugSocketUnix myGhcDebugSocketUnix) -> do
-      writeLog logger INFO $
+      logInfo logger $
         "Start ghc-debug with Unix domain socket at " <> T.pack myGhcDebugSocketUnix <> "."
       GHC.Debug.withGhcDebugUnix myGhcDebugSocketUnix action
     Just (MyGhcDebugSocketTcp myGhcDebugSocketTcp) -> do
       let (host, port) = break (== ':') myGhcDebugSocketTcp
-      writeLog logger INFO $
+      logInfo logger $
         "Start ghc-debug with TCP/IP socket at " <> T.pack host <> ":" <> T.pack port <> "."
       case readEither port of
         Left _parseError -> do
-          writeLog logger FATAL $
+          logFatal logger $
             T.pack $ "Could not parse ghc-debug TCP address " <> myGhcDebugSocketTcp <> "."
-          exitFailure
         Right portWord16 ->
           GHC.Debug.withGhcDebugTCP host portWord16 action
 #else

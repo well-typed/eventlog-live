@@ -30,10 +30,9 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Logs (ExportLogsResult (..))
 import GHC.Eventlog.Live.App.Exporter.Otlp.Metrics (ExportMetricsResult (..))
 import GHC.Eventlog.Live.App.Exporter.Otlp.Profiles (ExportProfileResult (..))
 import GHC.Eventlog.Live.App.Exporter.Otlp.Traces (ExportTraceResult (..))
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logDebug, logError, logWarn)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Records (HasField (..))
 import StrictList qualified as Strict
 import System.Console.ANSI (hNowSupportsANSI)
@@ -310,62 +309,62 @@ logStat logger = \case
   EventCountStat eventCount ->
     -- Log received events.
     when (eventCount.value > 0) $ do
-      writeLog logger DEBUG $
+      logDebug logger $
         "Received " <> showText eventCount.value <> " events."
   ExportLogsResultStat exportLogsResult -> do
     -- Log exported events.
     when (exportLogsResult.exportedLogRecords > 0) $ do
-      writeLog logger DEBUG $
+      logDebug logger $
         "Exported " <> showText exportLogsResult.exportedLogRecords <> " logs."
     -- Log rejected events.
     when (exportLogsResult.rejectedLogRecords > 0) $ do
-      writeLog logger ERROR $
+      logError logger $
         "Rejected " <> showText exportLogsResult.rejectedLogRecords <> " logs."
     -- Log exception.
     for_ exportLogsResult.maybeSomeException $ \someException -> do
-      writeLog logger ERROR $
+      logError logger $
         T.pack $
           displayException someException
   ExportMetricsResultStat exportMetricsResult -> do
     -- Log exported events.
     when (exportMetricsResult.exportedDataPoints > 0) $ do
-      writeLog logger DEBUG $
+      logDebug logger $
         "Exported " <> showText exportMetricsResult.exportedDataPoints <> " metrics."
     -- Log rejected events.
     when (exportMetricsResult.rejectedDataPoints > 0) $ do
-      writeLog logger ERROR $
+      logError logger $
         "Rejected " <> showText exportMetricsResult.rejectedDataPoints <> " metrics."
     -- Log exception.
     for_ exportMetricsResult.maybeSomeException $ \someException -> do
-      writeLog logger ERROR $
+      logError logger $
         T.pack $
           displayException someException
   ExportTraceResultStat exportTracesResult -> do
     -- Log exported events.
     when (exportTracesResult.exportedSpans > 0) $ do
-      writeLog logger DEBUG $
+      logDebug logger $
         "Exported " <> showText exportTracesResult.exportedSpans <> " spans."
     -- Log rejected events.
     when (exportTracesResult.rejectedSpans > 0) $ do
-      writeLog logger ERROR $
+      logError logger $
         "Rejected " <> showText exportTracesResult.rejectedSpans <> " spans."
     -- Log exception.
     for_ exportTracesResult.maybeSomeException $ \someException -> do
-      writeLog logger ERROR $
+      logError logger $
         T.pack $
           displayException someException
   ExportProfileResultStat exportProfilesResult -> do
     -- Log exported events.
     when (exportProfilesResult.exportedProfiles > 0) $
-      writeLog logger DEBUG $
+      logDebug logger $
         "Exported " <> showText exportProfilesResult.exportedProfiles <> " profiles."
     -- Log rejected events.
     when (exportProfilesResult.rejectedProfiles > 0) $
-      writeLog logger ERROR $
+      logError logger $
         "Rejected " <> showText exportProfilesResult.rejectedProfiles <> " profiles."
     -- Log exception.
     for_ exportProfilesResult.maybeSomeException $ \someException -> do
-      writeLog logger ERROR . T.pack $ displayException someException
+      logError logger . T.pack $ displayException someException
 
 {- |
 Internal helper.
@@ -432,7 +431,7 @@ warnIfStderrSupportsANSI ::
 warnIfStderrSupportsANSI logger = do
   supportsANSI <- hNowSupportsANSI IO.stderr
   when supportsANSI $ do
-    writeLog logger WARN $
+    logWarn logger $
       "When statistics are enabled, stderr should be redirected to a file."
 
 -------------------------------------------------------------------------------

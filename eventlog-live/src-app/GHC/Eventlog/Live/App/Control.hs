@@ -44,8 +44,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Word (Word8)
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (writeLog)
+import GHC.Eventlog.Live.Logger (logTrace, logInfo, logDebug)
 import GHC.Eventlog.Socket.Control qualified as C
 import GHC.Generics (Generic)
 import Network.Socket (Socket)
@@ -127,7 +126,7 @@ startControlServer logger controlOptions
     -- Determine the control port
     let port = maybe 30179 (.port) controlOptions.controlPort
 
-    writeLog logger INFO $
+    logInfo logger $
       "Starting control server on " <> T.pack (show port)
     -- Create middleware that logs all incoming requests.
     requestLogger <- mkLoggerMiddleware logger
@@ -156,14 +155,14 @@ startControlServer logger controlOptions
 
     -- When notified of a new connection, update the eventlogSourceHandleMap.
     let notifyNewConnection serviceName eventlogSourceHandle = do
-          writeLog logger DEBUG $
+          logDebug logger $
             "New connection for service " <> serviceName.serviceName <> "."
           atomically $
             modifyTVar' eventlogSourceHandleMap (M.insert serviceName eventlogSourceHandle)
 
     -- When notified of the end of a connection, update the eventlogSourceHandleMap.
     let notifyEndConnection serviceName = do
-          writeLog logger DEBUG $
+          logDebug logger $
             "End connection for service " <> serviceName.serviceName <> "."
           atomically $
             modifyTVar' eventlogSourceHandleMap (M.delete serviceName)
@@ -179,7 +178,7 @@ mkLoggerMiddleware :: Logger IO -> IO Middleware
 mkLoggerMiddleware logger =
   mkRequestLogger $
     defaultRequestLoggerSettings
-      { destination = Callback $ writeLog logger TRACE2 . TE.decodeUtf8Lenient . fromLogStr
+      { destination = Callback $ logTrace logger . TE.decodeUtf8Lenient . fromLogStr
       , outputFormat =
           DetailedWithSettings
             defaultDetailedSettings
@@ -230,7 +229,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
  where
   health :: Handler ()
   health = do
-    liftIO . writeLog logger DEBUG $
+    liftIO . logDebug logger $
       "Received request on /health."
 
   controlApi :: Server ControlApi
@@ -241,7 +240,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
      where
       callCustomCommand :: CustomCommandReq -> Handler (Union '[CustomCommandAccept, CustomCommandReject])
       callCustomCommand req = do
-        liftIO . writeLog logger DEBUG $
+        liftIO . logDebug logger $
           "Received request on /control/" <> namespaceText <> " with command ID " <> T.pack (show commandId) <> " for " <> req.serviceName <> "."
         -- Construct the user namespace.
         liftIO (eitherUserNamespace namespaceText) >>= \case
@@ -271,7 +270,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
      where
       startProfiling :: StartProfilingReq -> Handler ()
       startProfiling req = do
-        liftIO . writeLog logger DEBUG $
+        liftIO . logDebug logger $
           "Received request on /control/eventlog-socket/start-profiling for " <> req.serviceName <> "."
         -- Send the control command over the socket.
         withSocketFor (ServiceName req.serviceName) $ \socket -> do
@@ -279,7 +278,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
 
       stopProfiling :: StopProfilingReq -> Handler ()
       stopProfiling req = do
-        liftIO . writeLog logger DEBUG $
+        liftIO . logDebug logger $
           "Received request on /control/eventlog-socket/stop-profiling for " <> req.serviceName <> "."
         -- Send the control command over the socket.
         withSocketFor (ServiceName req.serviceName) $ \socket -> do
@@ -287,7 +286,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
 
       startHeapProfiling :: StartHeapProfilingReq -> Handler ()
       startHeapProfiling req = do
-        liftIO . writeLog logger DEBUG $
+        liftIO . logDebug logger $
           "Received request on /control/eventlog-socket/start-heap-profiling for " <> req.serviceName <> "."
         -- Send the control command over the socket.
         withSocketFor (ServiceName req.serviceName) $ \socket -> do
@@ -295,7 +294,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
 
       stopHeapProfiling :: StopHeapProfilingReq -> Handler ()
       stopHeapProfiling req = do
-        liftIO . writeLog logger DEBUG $
+        liftIO . logDebug logger $
           "Received request on /control/eventlog-socket/stop-heap-profiling for " <> req.serviceName <> "."
         -- Send the control command over the socket.
         withSocketFor (ServiceName req.serviceName) $ \socket -> do
@@ -303,7 +302,7 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
 
       requestHeapCensus :: RequestHeapCensusReq -> Handler ()
       requestHeapCensus req = do
-        liftIO . writeLog logger DEBUG $
+        liftIO . logDebug logger $
           "Received request on /control/eventlog-socket/request-heap-census for " <> req.serviceName <> "."
         -- Send the control command over the socket.
         withSocketFor (ServiceName req.serviceName) $ \socket -> do
@@ -313,14 +312,14 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
     badCORSPreflight
       | corsIgnoreFailures = do
           -- This accepts malformed CORS preflight requests.
-          liftIO . writeLog logger DEBUG $ "Accepted malformed CORS preflight request."
+          liftIO . logDebug logger $ "Accepted malformed CORS preflight request."
           respond . WithStatus @204 $
             addHeader @"Access-Control-Allow-Origin" @String "*" $
               addHeader @"Access-Control-Allow-Methods" @String "GET, POST" $
                 addHeader @"Access-Control-Allow-Headers" @String "*" $
                   NoContent
       | otherwise = do
-          liftIO . writeLog logger DEBUG $ "Accepted malformed CORS preflight request."
+          liftIO . logDebug logger $ "Accepted malformed CORS preflight request."
           respond . WithStatus @400 $
             NoContent
 

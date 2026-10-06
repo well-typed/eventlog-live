@@ -10,8 +10,13 @@ Portability : portable
 module GHC.Eventlog.Live.Logger (
   Logger,
   InternalTelemetry (..),
-  writeLog,
-  writeException,
+  logTrace,
+  logDebug,
+  logInfo,
+  logWarn,
+  logError,
+  logFatal,
+  logException,
   filterBySeverity,
   stderrLogger,
   handleLogger,
@@ -44,10 +49,12 @@ import GHC.Stack (CallStack, callStack, popCallStack, prettyCallStack)
 import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
+import System.Exit (exitFailure)
 import System.IO qualified as IO
 import Prelude hiding (log)
 
-type Logger m = CCA.LogAction m (Tick InternalTelemetry)
+newtype Logger m = Logger {unLogger :: CCA.LogAction m (Tick InternalTelemetry)}
+  deriving newtype (Semigroup, Monoid)
 
 {- |
 The type of internal telemetry data.
@@ -61,7 +68,7 @@ Use a `Logger` to log a message with a severity.
 writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity value =
   let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
-   in logger
+   in logger.unLogger
         <& Item
           InternalTelemetry'LogsRecord
             { logRecord =
@@ -74,11 +81,47 @@ writeLog logger severity value =
             }
 
 {- |
+Use a `Logger` to log a message with `TRACE` severity.
+-}
+logTrace :: (HasCallStack) => Logger m -> Text -> m ()
+logTrace = flip writeLog TRACE
+
+{- |
+Use a `Logger` to log a message with `DEBUG` severity.
+-}
+logDebug :: (HasCallStack) => Logger m -> Text -> m ()
+logDebug = flip writeLog DEBUG
+
+{- |
+Use a `Logger` to log a message with `INFO` severity.
+-}
+logInfo :: (HasCallStack) => Logger m -> Text -> m ()
+logInfo = flip writeLog INFO
+
+{- |
+Use a `Logger` to log a message with `WARN` severity.
+-}
+logWarn :: (HasCallStack) => Logger m -> Text -> m ()
+logWarn = flip writeLog WARN
+
+{- |
+Use a `Logger` to log a message with `ERROR` severity.
+-}
+logError :: (HasCallStack) => Logger m -> Text -> m ()
+logError = flip writeLog ERROR
+
+{- |
+Use a `Logger` to log a message with `FATAL` severity and exit.
+-}
+logFatal :: (HasCallStack) => Logger IO -> Text -> IO x
+logFatal logger message = writeLog logger FATAL message >> exitFailure
+
+{- |
 Use a `Logger` to log an exception.
 -}
-writeException :: (Exception e) => Logger m -> e -> m ()
-writeException logger e =
-  writeLog logger ERROR (T.pack $ displayException e)
+logException :: (Exception e) => Logger m -> e -> m ()
+logException logger e =
+  logError logger (T.pack $ displayException e)
 
 {- |
 A `Logger` that writes each `LogRecord` to a `IO.stderr` and ignores all other telemetry data.
@@ -96,7 +139,7 @@ __TODO:__ Support the remaining telemetry data.
 handleLogger ::
   IO.Handle ->
   Logger IO
-handleLogger handle = CCA.LogAction $ \case
+handleLogger handle = Logger . CCA.LogAction $ \case
   Tick ->
     pure ()
   Item InternalTelemetry'LogsRecord{..} -> liftIO $ do
@@ -113,7 +156,7 @@ filterBySeverity ::
   Logger m ->
   Logger m
 filterBySeverity severityThreshold =
-  cfilter severityFilter
+  Logger . cfilter severityFilter . (.unLogger)
  where
   severityFilter = \case
     Tick -> True
@@ -175,7 +218,7 @@ A `Logger` that writes the internal telemetry data to a queue.
 -}
 queueLogger :: TQueue (Tick InternalTelemetry) -> Logger IO
 queueLogger queue =
-  CCA.LogAction $ \x -> do
+  Logger . CCA.LogAction $ \x -> do
     traverse addTimeUnixNano x >>= \x' ->
       atomically (writeTQueue queue x')
 

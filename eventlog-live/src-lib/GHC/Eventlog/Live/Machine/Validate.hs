@@ -1,4 +1,3 @@
-{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
@@ -18,9 +17,8 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Foldable (for_)
 import Data.Machine (ProcessT, await, construct)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logDebug, logError, logTrace, logWarn)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), TickInfo (..))
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import Text.Printf (printf)
 
 -------------------------------------------------------------------------------
@@ -46,14 +44,14 @@ validateInput logger ticks = construct $ start ticks
   start remaining
     | remaining <= 0 = do
         let msg = printf "No input after %d ticks. Did you pass -l to the GHC RTS?" ticks
-        lift $ writeLog logger WARN $ T.pack msg
+        lift $ logWarn logger $ T.pack msg
         pure ()
     | otherwise = do
         let msg = "Waiting for " <> T.pack (show remaining) <> " more ticks before showing input warning."
-        lift $ writeLog logger DEBUG $ msg
+        lift $ logDebug logger $ msg
         await >>= \case
           Item{} ->
-            lift $ writeLog logger DEBUG $ "Received item. Cancelled input warning."
+            lift $ logDebug logger $ "Received item. Cancelled input warning."
           Tick ->
             start (pred remaining)
 
@@ -80,7 +78,7 @@ validateOrder logger timestamp = construct $ go Nothing
                     "Encountered two out-of-order inputs.\n\
                     \Did you pass --eventlog-flush-interval=SECONDS to the GHC RTS?\n\
                     \Did you pass the same flag to this program?"
-              lift $ writeLog logger ERROR $ T.pack msg1
+              lift $ logError logger $ T.pack msg1
               let msg2 =
                     printf
                       "Out-of-order inputs:\n\
@@ -88,7 +86,7 @@ validateOrder logger timestamp = construct $ go Nothing
                       \- %s"
                       (show old)
                       (show new)
-              lift $ writeLog logger DEBUG $ T.pack msg2
+              lift $ logDebug logger $ T.pack msg2
         _otherwise -> do
           go (Just new)
 
@@ -110,8 +108,8 @@ validateTicks logger = construct $ go Nothing
           tick
             | tick' == tick + 1 -> do
                 let msg = "Saw tick " <> T.pack (show tick) <> "."
-                lift $ writeLog logger TRACE $ msg
+                lift $ logTrace logger $ msg
             | otherwise -> do
                 let msg = "Encountered non-increasing ticks " <> T.pack (show tick) <> " and " <> T.pack (show tick') <> "."
-                lift $ writeLog logger ERROR $ msg
+                lift $ logError logger $ msg
         go (Just tick')

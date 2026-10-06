@@ -24,6 +24,7 @@ import GHC.Eventlog.Live.Machine.Analysis.Capability qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Machine.Validate (validateOrder)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
@@ -45,7 +46,7 @@ processThreadEvents verbosity fullConfig =
     M.sortByTicks (.value.evTime) fullConfig.eventlogFlushIntervalX
       ~> M.liftTick
         ( fanout
-            [ M.validateOrder verbosity (.value.evTime)
+            [ validateOrder verbosity (.value.evTime)
             , runIf (shouldComputeCapabilityUsageSpan fullConfig) $
                 M.processGCSpans verbosity
                   ~> mapping (D.singleton . A)

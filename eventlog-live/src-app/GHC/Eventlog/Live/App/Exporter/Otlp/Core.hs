@@ -45,9 +45,8 @@ import Data.Text.Encoding qualified as TE
 import Data.Text.IO qualified as TIO
 import GHC.Eventlog.Live.App.Environment (Compression (..))
 import GHC.Eventlog.Live.App.Environment qualified as E (Endpoint (..), ExporterOptions (..), OtlpExporterOptions (..), PerSignal (..), Protocol (..), Timeout (..), defaultPortFor)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logDebug, logTrace)
 import GHC.Eventlog.Live.Types.Attribute (Attr, AttrValue (..), Attrs)
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.IsList (IsList (..))
 import GHC.IsList qualified as IsList
 import Lens.Family2 (Setter, (.~))
@@ -194,7 +193,7 @@ withOtlpGrpcExporter ::
   (OtlpGrpcExporter -> IO a) ->
   IO a
 withOtlpGrpcExporter logger options action = do
-  writeLog logger DEBUG . T.pack $
+  logDebug logger . T.pack $
     "OTLP gRPC Exporter - Endpoint: " <> show options.endpoint
   let !connParams =
         G.def
@@ -288,7 +287,7 @@ withOtlpHttpProtobufExporter ::
   (OtlpHttpProtobufExporter -> IO a) ->
   IO a
 withOtlpHttpProtobufExporter logger options action = do
-  writeLog logger DEBUG . T.pack $
+  logDebug logger . T.pack $
     "OTLP HTTP/Protobuf Exporter - Endpoint: " <> show options.endpoint
   -- Create HTTP manager settings.
   let responseTimeout
@@ -305,7 +304,7 @@ withOtlpHttpProtobufExporter logger options action = do
   manager <-
     H.newTlsManagerWith H.tlsManagerSettings{H.managerResponseTimeout = responseTimeout}
   -- Create the HTTP headers.
-  writeLog logger TRACE . T.pack $
+  logTrace logger . T.pack $
     "OTLP HTTP/Protobuf Exporter - Headers: " <> show options.maybeHeaders
   let headers =
         [ (CI.mk (Baggage.tokenValue token), TE.encodeUtf8 value)
@@ -356,9 +355,9 @@ exportHttpProtobuf logger OtlpHttpProtobufExporter{..} req = do
                 <> headers -- user-provided
                 <> compressionHeaders
           }
-  writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - HTTP Request:  " <> show request
+  logTrace logger . T.pack $ "HTTP/Protobuf Exporter - HTTP Request:  " <> show request
   response <- H.httpLbs request manager
-  writeLog logger TRACE . T.pack $ "HTTP/Protobuf Exporter - HTTP Response:  " <> show response
+  logTrace logger . T.pack $ "HTTP/Protobuf Exporter - HTTP Response:  " <> show response
   let status = H.responseStatus response
   let body = BSL.toStrict (H.responseBody response)
   if HTTP.statusIsSuccessful status

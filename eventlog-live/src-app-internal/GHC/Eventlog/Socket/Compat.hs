@@ -23,7 +23,7 @@ import Options.Applicative.Extra.Feature qualified as OF
 import Data.Foldable (for_)
 import Data.Text qualified as T
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
-import GHC.Eventlog.Live.Logger (writeLog)
+import GHC.Eventlog.Live.Logger (logInfo)
 import GHC.Eventlog.Socket qualified as Eventlog.Socket
 #else
 import Control.Monad (when)
@@ -72,7 +72,7 @@ startMyEventlogSocket :: Logger IO -> Maybe MyEventlogSocket -> IO ()
 startMyEventlogSocket logger maybeMyEventlogSocket =
   for_ maybeMyEventlogSocket $ \case
     MyEventlogSocketUnix myEventlogSocketUnix -> do
-      writeLog logger INFO $
+      logInfo logger $
         "Start eventlog-socket with Unix domain socket at " <> T.pack myEventlogSocketUnix <> "."
       Eventlog.Socket.startWait myEventlogSocketUnix
 #else

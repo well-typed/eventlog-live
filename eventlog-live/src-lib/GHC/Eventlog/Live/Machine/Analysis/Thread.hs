@@ -31,7 +31,7 @@ import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
@@ -295,7 +295,7 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
                         \but should not happen multiple times per thread."
                         thread
                         (showEventInfo (getEventInfo j))
-              lift $ writeLog logger WARN $ msg
+              lift $ logWarn logger $ msg
 
               --
               -- This case may trigger for any event that isn't `E.RunThread`

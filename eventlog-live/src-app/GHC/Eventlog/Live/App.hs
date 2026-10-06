@@ -33,8 +33,7 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (queueSource, writeLog)
-import GHC.Eventlog.Live.Logger qualified as M
+import GHC.Eventlog.Live.Logger (logFatal, filterBySeverity, logDebug, queueLogger, queueSource, stderrLogger)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
@@ -42,7 +41,6 @@ import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Event (..))
@@ -51,7 +49,7 @@ import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
 import Options.Applicative qualified as O
 import Paths_eventlog_live qualified as App
-import System.Exit (die, exitFailure)
+import System.Exit (die)
 
 --------------------------------------------------------------------------------
 -- Instrumentation Scope
@@ -83,8 +81,8 @@ main = do
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
   let logger =
-        M.filterBySeverity logLevel $
-          M.stderrLogger <> M.queueLogger internalTelemetryQueue
+        filterBySeverity logLevel $
+          stderrLogger <> queueLogger internalTelemetryQueue
 
   -- Lookup the OpenTelemetry SDK options
   OpenTelemetrySdkOptions{..} <-
@@ -100,15 +98,14 @@ main = do
 
     -- Read the configuration file.
     let readConfigFile configFile = do
-          writeLog logger DEBUG $
+          logDebug logger $
             "Reading configuration file from " <> T.pack configFile
           let onConfigError :: String -> IO x
               onConfigError errMsg = do
-                writeLog logger FATAL (T.pack errMsg)
-                exitFailure
+                logFatal logger (T.pack errMsg)
           config <-
             either onConfigError pure =<< C.readConfigFile configFile
-          writeLog logger DEBUG $
+          logDebug logger $
             "Configuration file:\n" <> C.prettyConfig config
           pure config
 
@@ -116,9 +113,9 @@ main = do
     fullConfig <-
       C.toFullConfig eventlogFlushIntervalS
         <$> maybe (pure def) readConfigFile maybeConfigFile
-    writeLog logger DEBUG $
+    logDebug logger $
       "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
-    writeLog logger DEBUG $
+    logDebug logger $
       "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
 
     -- Find the service name, if any:

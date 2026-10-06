@@ -42,7 +42,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Traversable (for)
 import Data.Word (Word16)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logTrace, logWarn)
 import GHC.Eventlog.Live.Types.Severity (Severity (..), fromSeverityString)
 import GHC.IsList qualified as IsList
 import GHC.Records (HasField (..))
@@ -449,7 +449,7 @@ readBoolean logger optionName boolean
   | CI.mk boolean == "true" = pure True
   | CI.mk boolean == "false" = pure False
   | otherwise = do
-      lift . writeLog logger WARN . T.pack $
+      lift . logWarn logger . T.pack $
         "Environment variable " <> optionName <> " has non-boolean value '" <> boolean <> "'. Use 'true' or 'false'."
       pure False
 
@@ -497,7 +497,7 @@ readEndpoint protocol maybeInsecure logger optionName = go True
   go retry endpoint = do
     let maybeURI = URI.parseAbsoluteURI endpoint
     for_ maybeURI $ \uri ->
-      lift . writeLog logger TRACE . T.pack $
+      lift . logTrace logger . T.pack $
         "Environment variable " <> optionName <> " specifies URI: " <> showURI uri
     case maybeURI of
       Nothing
@@ -517,13 +517,13 @@ readEndpoint protocol maybeInsecure logger optionName = go True
             throwE $ "Environment variable " <> optionName <> " specifies URI with unsupported scheme '" <> endpoint <> "'. Use 'http' or 'https'."
       Just URI{uriAuthority = Just URIAuth{..}, ..} -> do
         unless (null uriUserInfo) $
-          lift . writeLog logger WARN . T.pack $
+          lift . logWarn logger . T.pack $
             "Environment variable " <> optionName <> " specifies URI with user info '" <> uriUserInfo <> "'."
         unless (null uriQuery) $
-          lift . writeLog logger WARN . T.pack $
+          lift . logWarn logger . T.pack $
             "Environment variable " <> optionName <> " specifies URI with query '" <> uriQuery <> "'."
         unless (null uriFragment) $
-          lift . writeLog logger WARN . T.pack $
+          lift . logWarn logger . T.pack $
             "Environment variable " <> optionName <> " specifies URI with fragment '" <> uriFragment <> "'."
         pure
           Endpoint
@@ -571,7 +571,7 @@ readTimeout logger optionName timeout
   | Just milliseconds <- readMaybe @Word timeout =
       pure (Timeout milliseconds)
   | otherwise = do
-      lift . writeLog logger WARN . T.pack $
+      lift . logWarn logger . T.pack $
         "Environment variable " <> optionName <> " specifies malformed timeout '" <> timeout <> "'."
       pure def
 
