@@ -9,7 +9,7 @@ module GHC.Eventlog.Live.Processor (
   processInternalTelemetry,
 ) where
 
-import Control.Concurrent.STM (TChan)
+import Control.Concurrent.STM.TQueue (TQueue)
 import Data.Aeson.Types (Encoding, KeyValue (..), ToJSON (..), Value (..), pairs)
 import Data.DList qualified as D
 import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
@@ -17,7 +17,7 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Logger (InternalTelemetry (..), Logger, chanSource)
+import GHC.Eventlog.Live.Logger (InternalTelemetry (..), Logger, queueSource)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime)
@@ -137,10 +137,10 @@ processInternalTelemetry ::
   FullConfig ->
   Resource ->
   InstrumentationScope ->
-  TChan InternalTelemetry ->
+  TQueue InternalTelemetry ->
   ProcessT IO (Tick x) (Tick ExportRequest)
-processInternalTelemetry fullConfig resource scope myTelemetryChan =
-  M.mergeWithTickCC (chanSource myTelemetryChan)
+processInternalTelemetry fullConfig resource scope internalTelemetryQueue =
+  M.mergeWithTickCC (queueSource internalTelemetryQueue)
     ~> M.fanoutTick
       [ CL.process (Proxy @"internalLogMessage") processInternalLogRecords fullConfig
           ~> M.liftTick (mapping (D.singleton . Telemetry'Logs))

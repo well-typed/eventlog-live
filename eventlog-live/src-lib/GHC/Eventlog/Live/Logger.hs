@@ -15,14 +15,14 @@ module GHC.Eventlog.Live.Logger (
   filterBySeverity,
   stderrLogger,
   handleLogger,
-  chanLogger,
-  chanSource,
+  queueLogger,
+  queueSource,
 ) where
 
 import Colog.Core.Action (cfilter, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TChan (TChan, readTChan, writeTChan)
+import Control.Concurrent.STM.TQueue (TQueue, readTQueue, writeTQueue)
 import Control.Exception (Exception (..), bracket_)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
@@ -116,8 +116,6 @@ filterBySeverity severityThreshold =
     InternalTelemetry'LogsRecord{..} ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
 
--- _otherwise -> True
-
 {- |
 Internal helper.
 Format the message appropriately for the given verbosity level and threshold.
@@ -169,19 +167,18 @@ withSeverityColor maybeSeverity handle action = do
         bracket_ setVerbosityColor setDefaultColor $ action handle
 
 {- |
-A `Logger` that writes the internal telemetry data to a channel.
+A `Logger` that writes the internal telemetry data to a queue.
 -}
-chanLogger :: TChan InternalTelemetry -> Logger IO
-chanLogger chan =
-  CCA.LogAction $
-    atomically . writeTChan chan <=< addTimeUnixNano
+queueLogger :: TQueue InternalTelemetry -> Logger IO
+queueLogger queue =
+  CCA.LogAction $ atomically . writeTQueue queue <=< addTimeUnixNano
 
 {- |
-A `Souce` that reads the data from a channel.
+A `Souce` that reads the data from a queue.
 -}
-chanSource :: (MonadIO m) => TChan a -> SourceT m a
-chanSource chan = repeatedly $ do
-  a <- liftIO $ atomically $ readTChan chan
+queueSource :: (MonadIO m) => TQueue a -> SourceT m a
+queueSource queue = repeatedly $ do
+  a <- liftIO (atomically $ readTQueue queue)
   yield a
 
 {- |
