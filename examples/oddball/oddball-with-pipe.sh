@@ -53,7 +53,6 @@ echo 'Start oddball' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--stats \
 		--config='$DIR/eventlog-live.yaml' \
 		--eventlog-file='${ODDBALL_EVENTLOG_FIFO}' \
 	    -hT \

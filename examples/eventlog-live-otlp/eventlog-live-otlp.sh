@@ -57,7 +57,6 @@ EVENTLOG_LIVE_OTLP_FOR_ODDBALL_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
 	OTEL_SERVICE_NAME='eventlog-live-otlp-for-oddball' \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--stats \
 		--config='$DIR/config/eventlog-live.yaml' \
 		--eventlog-flush-interval=1 \
 	    --eventlog-socket='${GHC_EVENTLOG_UNIX_PATH}' \
@@ -72,7 +71,6 @@ EVENTLOG_LIVE_OTLP_FOR_ITSELF_CMD="
 echo 'Start eventlog-live-otlp (for itself)' && \
 	OTEL_SERVICE_NAME='eventlog-live-otlp-for-eventlog-live-otlp' \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-	--stats \
 	--config='$DIR/config/eventlog-live-for-eventlog-live.yaml' \
 	--eventlog-flush-interval=1 \
     --eventlog-socket='${MY_GHC_EVENTLOG_UNIX_PATH}' \

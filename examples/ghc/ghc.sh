@@ -122,7 +122,6 @@ GHC_CMD="cd \"${CABAL_SYNTAX_DIR}\" && ${GHC_CMD} -fforce-recomp +RTS -l -hT --e
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--stats \
 		--config='$DIR/eventlog-live.yaml' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT
