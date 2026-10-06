@@ -12,8 +12,6 @@ module GHC.Eventlog.Live.Machine.Core (
   HasTickInfo,
   Tick (Item, Tick, TickWithInfo, tickInfo),
   fanoutTick,
-  fanoutTickCC,
-  mergeWithTickCC,
   batchByTickList,
   batchByTicksList,
   batchByTick,
@@ -44,7 +42,6 @@ module GHC.Eventlog.Live.Machine.Core (
 ) where
 
 import Control.Monad (when)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.State.Strict (get, put, runState)
 import Data.DList qualified as D
 import Data.Foldable (Foldable (..))
@@ -55,8 +52,7 @@ import Data.HashMap.Strict qualified as M
 import Data.Hashable (Hashable (..))
 import Data.Kind (Constraint)
 import Data.List qualified as L
-import Data.Machine (Is (..), MachineT (..), Moore (..), Plan, PlanT, Process, ProcessT, SourceT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
-import Data.Machine.Concurrent qualified as CC
+import Data.Machine (Is (..), MachineT (..), Moore (..), Plan, PlanT, Process, ProcessT, Step (..), asParts, await, construct, encased, mapping, repeatedly, starve, stopped, yield, (~>))
 import Data.Machine.Fanout (fanout)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
@@ -182,39 +178,6 @@ fanoutTick processes =
         ~> mapping D.singleton
     ]
     ~> asParts
-
-{- |
-Variant of `fanoutTick` that runs processes concurrently.
--}
-fanoutTickCC ::
-  forall m a b.
-  (MonadBaseControl IO m, Semigroup b) =>
-  [ProcessT m (Tick a) (Tick b)] ->
-  ProcessT m (Tick a) (Tick b)
-fanoutTickCC processes =
-  fanout
-    [ CC.fanout
-        [ process ~> dropTick
-        | process <- processes
-        ]
-        ~> mapping (D.singleton . Item)
-    , onlyTick
-        ~> mapping D.singleton
-    ]
-    ~> asParts
-
-{- |
-Merges a stream of ticks into an existing source.
-All items are discarded.
-The source is run concurrently with its input.
--}
-mergeWithTickCC ::
-  forall m x a.
-  (MonadBaseControl IO m) =>
-  SourceT m a ->
-  ProcessT m (Tick x) (Tick a)
-mergeWithTickCC source =
-  CC.scatter [onlyTick, source ~> mapping Item]
 
 {- |
 Batches items to lists.
