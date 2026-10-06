@@ -99,15 +99,9 @@ main = do
 
     -- Read the configuration file.
     let readConfigFile configFile = do
-          logDebug logger $
-            "Reading configuration file from " <> T.pack configFile
-          let onConfigError :: String -> IO x
-              onConfigError errMsg = do
-                logFatal logger (T.pack errMsg)
-          config <-
-            either onConfigError pure =<< C.readConfigFile configFile
-          logDebug logger $
-            "Configuration file:\n" <> C.prettyConfig config
+          logDebug logger $ "Reading configuration file from " <> T.pack configFile
+          config <- either (logFatal logger . T.pack) pure =<< C.readConfigFile configFile
+          logDebug logger $ "Configuration file:\n" <> C.prettyConfig config
           pure config
 
     -- Read the configuration file and add derived settings.
