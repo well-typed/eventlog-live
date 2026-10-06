@@ -153,6 +153,7 @@ library
     GHC.Eventlog.Live.Machine.Decoder
     GHC.Eventlog.Live.Machine.Sink
     GHC.Eventlog.Live.Machine.Source
+    GHC.Eventlog.Live.Machine.Validate
     GHC.Eventlog.Live.Machine.WithStartTime
     GHC.Eventlog.Live.Options
     GHC.Eventlog.Live.Processor

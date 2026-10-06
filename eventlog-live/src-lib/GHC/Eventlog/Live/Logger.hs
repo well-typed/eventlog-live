@@ -24,7 +24,6 @@ import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue (TQueue, readTQueue, writeTQueue)
 import Control.Exception (Exception (..), bracket_)
-import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Ix (Ix (..))
 import Data.Machine (SourceT, repeatedly, yield)
@@ -34,6 +33,7 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
+import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Attribute qualified as A
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..))
@@ -47,7 +47,7 @@ import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), 
 import System.IO qualified as IO
 import Prelude hiding (log)
 
-type Logger m = CCA.LogAction m InternalTelemetry
+type Logger m = CCA.LogAction m (Tick InternalTelemetry)
 
 {- |
 The type of internal telemetry data.
@@ -62,15 +62,16 @@ writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity value =
   let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
    in logger
-        <& InternalTelemetry'LogsRecord
-          { logRecord =
-              LogRecord
-                { value
-                , maybeSeverity = Just severity
-                , maybeTimeUnixNano = Nothing
-                , attrs = ["call-stack" ~= (prettyCallStack <$> maybeCallStack)]
-                }
-          }
+        <& Item
+          InternalTelemetry'LogsRecord
+            { logRecord =
+                LogRecord
+                  { value
+                  , maybeSeverity = Just severity
+                  , maybeTimeUnixNano = Nothing
+                  , attrs = ["call-stack" ~= (prettyCallStack <$> maybeCallStack)]
+                  }
+            }
 
 {- |
 Use a `Logger` to log an exception.
@@ -96,7 +97,9 @@ handleLogger ::
   IO.Handle ->
   Logger IO
 handleLogger handle = CCA.LogAction $ \case
-  InternalTelemetry'LogsRecord logRecord -> liftIO $ do
+  Tick ->
+    pure ()
+  Item InternalTelemetry'LogsRecord{..} -> liftIO $ do
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush handle
@@ -113,7 +116,8 @@ filterBySeverity severityThreshold =
   cfilter severityFilter
  where
   severityFilter = \case
-    InternalTelemetry'LogsRecord{..} ->
+    Tick -> True
+    Item InternalTelemetry'LogsRecord{..} ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
 
 {- |
@@ -169,9 +173,11 @@ withSeverityColor maybeSeverity handle action = do
 {- |
 A `Logger` that writes the internal telemetry data to a queue.
 -}
-queueLogger :: TQueue InternalTelemetry -> Logger IO
+queueLogger :: TQueue (Tick InternalTelemetry) -> Logger IO
 queueLogger queue =
-  CCA.LogAction $ atomically . writeTQueue queue <=< addTimeUnixNano
+  CCA.LogAction $ \x -> do
+    traverse addTimeUnixNano x >>= \x' ->
+      atomically (writeTQueue queue x')
 
 {- |
 A `Souce` that reads the data from a queue.
