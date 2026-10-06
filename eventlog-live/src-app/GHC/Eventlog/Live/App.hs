@@ -34,7 +34,7 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (Logger, filterBySeverity, logDebug, logFatal, logTick, queueLogger, queueSource, stderrLogger)
+import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, filterBySeverity, logDebug, logFatal, logMetric, logTick, queueLogger, queueSource, stderrLogger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
@@ -139,6 +139,8 @@ main = do
             ~> M.fanoutTick
               [ -- Log a warning if no input has been received after 10 ticks.
                 validateInput logger 10
+              , -- Log event counts.
+                countEvents logger
               , -- Log ticks.
                 logTicks logger
               , -- If no cost-centre database was provided, index the cost-centre events.
@@ -222,15 +224,18 @@ main = do
     () <- takeMVar exportRequestProcessorFinished
     pure ()
 
--- A machine that enqueues values in a `TQueue`.
-enqueue :: TQueue a -> ProcessT IO a Void
-enqueue queue = repeatedly $ await >>= liftIO . atomically . writeTQueue queue
-
 -- Log all ticks.
 logTicks :: (Monad m) => Logger m -> ProcessT m (Tick x) y
 logTicks logger = onlyTick ~> logTicks'
  where
   logTicks' = repeatedly $ await >>= lift . logTick logger
+
+-- Count all input events.
+countEvents :: (Monad m) => Logger m -> ProcessT m (Tick x) y
+countEvents logger =
+  M.batchByTickList ~> countEvents'
+ where
+  countEvents' = repeatedly $ await >>= lift . logMetric logger EventCount . fromIntegral . length
 
 -- Run an action with access to a cost-centre table.
 withCostCentreTable :: Maybe FilePath -> DB.Session -> (DB.Table CC.CostCentreId CC.CostCentre -> IO ()) -> IO ()
@@ -267,6 +272,10 @@ indexInfoProvEvents =
 --------------------------------------------------------------------------------
 -- Internal helpers
 --------------------------------------------------------------------------------
+
+-- A machine that enqueues values in a `TQueue`.
+enqueue :: TQueue a -> ProcessT IO a Void
+enqueue queue = repeatedly $ await >>= liftIO . atomically . writeTQueue queue
 
 onlyIf :: a -> Bool -> Maybe a
 onlyIf a b = if b then Just a else Nothing
