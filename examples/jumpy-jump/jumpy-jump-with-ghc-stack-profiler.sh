@@ -58,7 +58,6 @@ echo 'Start jumpy-jump' && \
 EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for jumpy-jump)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
-		--stats \
 		--config='$DIR/eventlog-live.yaml' \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
