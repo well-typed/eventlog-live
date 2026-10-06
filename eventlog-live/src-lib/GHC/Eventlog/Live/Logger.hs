@@ -10,6 +10,7 @@ Portability : portable
 module GHC.Eventlog.Live.Logger (
   Logger,
   InternalTelemetry (..),
+  logTick,
   logTrace,
   logDebug,
   logInfo,
@@ -79,6 +80,12 @@ writeLog logger severity value =
                   , attrs = ["call-stack" ~= (prettyCallStack <$> maybeCallStack)]
                   }
             }
+
+{- |
+Use a `Logger` to log a `Tick`.
+-}
+logTick :: (Applicative m) => Logger m -> Tick x -> m ()
+logTick logger = \case Tick -> logger.unLogger <& Tick; Item{} -> pure ()
 
 {- |
 Use a `Logger` to log a message with `TRACE` severity.

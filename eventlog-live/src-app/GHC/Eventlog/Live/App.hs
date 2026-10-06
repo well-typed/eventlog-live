@@ -17,6 +17,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue)
 import Control.Exception (bracket_)
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
 import Data.Default (Default (..))
@@ -33,8 +34,8 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (logFatal, filterBySeverity, logDebug, queueLogger, queueSource, stderrLogger)
-import GHC.Eventlog.Live.Machine.Core (Tick)
+import GHC.Eventlog.Live.Logger (Logger, filterBySeverity, logDebug, logFatal, logTick, queueLogger, queueSource, stderrLogger)
+import GHC.Eventlog.Live.Machine.Core (Tick, dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
@@ -138,6 +139,8 @@ main = do
             ~> M.fanoutTick
               [ -- Log a warning if no input has been received after 10 ticks.
                 validateInput logger 10
+              , -- Log ticks.
+                logTicks logger
               , -- If no cost-centre database was provided, index the cost-centre events.
                 indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
               , -- If no info-prov database was provided, index the info-prov events.
@@ -211,6 +214,12 @@ main = do
 enqueue :: TQueue a -> ProcessT IO a Void
 enqueue queue = repeatedly $ await >>= liftIO . atomically . writeTQueue queue
 
+-- Log all ticks.
+logTicks :: (Monad m) => Logger m -> ProcessT m (Tick x) y
+logTicks logger = onlyTick ~> logTicks'
+ where
+  logTicks' = repeatedly $ await >>= lift . logTick logger
+
 -- Run an action with access to a cost-centre table.
 withCostCentreTable :: Maybe FilePath -> DB.Session -> (DB.Table CC.CostCentreId CC.CostCentre -> IO ()) -> IO ()
 withCostCentreTable maybeCCDBPath session =
@@ -230,18 +239,18 @@ withInfoProvTable maybeIpeDBPath session =
 -- Create machine that indexes CostCentre data.
 indexCostCentreEvents ::
   Maybe (DB.Table CC.CostCentreId CC.CostCentre) ->
-  ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+  ProcessT IO (Tick (M.WithStartTime Event)) x
 indexCostCentreEvents =
   -- If a cost-centre database was not provided, don't index any new entries.
-  maybe stopped (\ccdb -> M.liftTick (DB.indexer (CC.toCostCentre . (.value)) def ccdb ~> mapping absurd))
+  maybe stopped (\ccdb -> dropTick ~> DB.indexer (CC.toCostCentre . (.value)) def ccdb ~> mapping absurd)
 
 -- Create machine that indexes InfoProv data.
 indexInfoProvEvents ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
-  ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+  ProcessT IO (Tick (M.WithStartTime Event)) x
 indexInfoProvEvents =
   -- If an IPE database was not provided, don't index any new entries.
-  maybe stopped (\ipedb -> M.liftTick (DB.indexer (IP.toInfoProv . (.value)) def ipedb ~> mapping absurd))
+  maybe stopped (\ipedb -> dropTick ~> DB.indexer (IP.toInfoProv . (.value)) def ipedb ~> mapping absurd)
 
 --------------------------------------------------------------------------------
 -- Internal helpers
