@@ -1,24 +1,8 @@
-import { Attrs } from "./attrs";
-
-export type MetricName =
-  | "heapAllocated"
-  | "heapSize"
-  | "blocksSize"
-  | "heapLive"
-  | "memCurrent"
-  | "memNeeded"
-  | "memReturned"
-  | "gcCopied"
-  | "gcSlop"
-  | "gcFragmentation"
-  | "heapProfSample"
-  | "capabilityUsage"
-  | "productivity";
+import { Attrs, isAttrs } from "./attrs";
 
 export interface SomeMetrics {
-  type: "metric";
-  name: MetricName;
-  values: Array<Metric>;
+  name: string;
+  metrics: Array<Metric>;
 }
 
 export interface Metric {
@@ -28,11 +12,30 @@ export interface Metric {
   attrs?: Attrs;
 }
 
-function isMetric(value: any): value is Metric {
+export function isSomeMetrics(metrics: any): metrics is SomeMetrics {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    Object.hasOwn(value, "value") &&
-    typeof value.number === "number"
+    typeof metrics === "object" &&
+    metrics !== null &&
+    Object.hasOwn(metrics, "name") &&
+    typeof metrics.name === "string" &&
+    Object.hasOwn(metrics, "metrics") &&
+    Array.isArray(metrics.metrics) &&
+    metrics.metrics.every(isMetric)
+  );
+}
+
+export function isMetric(metric: any): metric is Metric {
+  return (
+    typeof metric === "object" &&
+    metric !== null &&
+    Object.hasOwn(metric, "value") &&
+    typeof metric.value === "number" &&
+    (Object.hasOwn(metric, "time_unix_nano")
+      ? typeof metric.time_unix_nano === "number"
+      : true) &&
+    (Object.hasOwn(metric, "start_time_unix_nano")
+      ? typeof metric.start_time_unix_nano === "number"
+      : true) &&
+    (Object.hasOwn(metric, "attrs") ? isAttrs(metric.attrs) : true)
   );
 }
