@@ -1,13 +1,13 @@
 module GHC.Eventlog.Live.Processor (
   Resource (..),
   TelemetryData (..),
+  ExportRequest (..),
   InstrumentationScope (..),
   processEventlogTelemetry,
   processInternalTelemetry,
 ) where
 
 import Control.Concurrent.STM (TChan)
-import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
 import Data.Proxy (Proxy (..))
@@ -45,15 +45,23 @@ data TelemetryData
   | TelemetryData'Span SomeSpans
   | TelemetryData'Sample SomeSamples
 
+data ExportRequest = ExportRequest
+  { resource :: !Resource
+  , scope :: !InstrumentationScope
+  , telemetry :: ![TelemetryData]
+  }
+
 -- Create machine that processes eventlog data into telemetry data
 processEventlogTelemetry ::
   Logger IO ->
   FullConfig ->
+  Resource ->
+  InstrumentationScope ->
   Maybe HeapProfBreakdown ->
   DB.Table CC.CostCentreId CC.CostCentre ->
   DB.Table IP.InfoProvId IP.InfoProv ->
-  ProcessT IO (Tick (WithStartTime Event)) (Tick (DList TelemetryData))
-processEventlogTelemetry logger fullConfig maybeHeapProfBreakdown ccdb ipedb =
+  ProcessT IO (Tick (WithStartTime Event)) (Tick ExportRequest)
+processEventlogTelemetry logger fullConfig resource scope maybeHeapProfBreakdown ccdb ipedb =
   M.fanoutTick
     [ -- Process the heap events.
       processHeapEvents logger (Just ipedb) maybeHeapProfBreakdown fullConfig
@@ -68,6 +76,7 @@ processEventlogTelemetry logger fullConfig maybeHeapProfBreakdown ccdb ipedb =
       processProfileEvents logger ccdb ipedb fullConfig
         ~> mapping (fmap (fmap TelemetryData'Sample))
     ]
+    ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
 
 {- |
 Create the machine that processes internal telemetry data
@@ -76,14 +85,17 @@ NOTE: This process only takes a stream of inputs to use their tick.
 -}
 processInternalTelemetry ::
   FullConfig ->
+  Resource ->
+  InstrumentationScope ->
   TChan MyTelemetryData ->
-  ProcessT IO (Tick x) (Tick (DList TelemetryData))
-processInternalTelemetry fullConfig myTelemetryDataChan =
+  ProcessT IO (Tick x) (Tick ExportRequest)
+processInternalTelemetry fullConfig resource scope myTelemetryDataChan =
   M.mergeWithTickCC (chanSource myTelemetryDataChan)
     ~> M.fanoutTick
       [ CL.process (Proxy @"internalLogMessage") processInternalLogRecords fullConfig
           ~> M.liftTick (mapping (D.singleton . TelemetryData'Log))
       ]
+    ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
  where
   processInternalLogRecords :: Process MyTelemetryData LogRecord
   processInternalLogRecords = mapping getInternalLogRecord ~> asParts
