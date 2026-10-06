@@ -37,6 +37,7 @@ import GHC.Eventlog.Live.Logger (queueSource, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
+import GHC.Eventlog.Live.Machine.Validate (validateInput)
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
 import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
@@ -134,22 +135,12 @@ main = do
                   uncurry (~=) <$> maybe [] (.attributes) maybeResourceAttributes
             }
 
-    -- Create a resource to represent the eventlog-live process.
-    let _internalResource :: Resource
-        _internalResource =
-          Resource
-            { attrs =
-                [ "service.name" ~= AttrText (appName <> "-for-" <> serviceName.serviceName)
-                , "service.version" ~= App.version
-                ]
-            }
-
     -- Create machine to process eventlog into export requests.
     let processEventlog ccdb ipedb =
           M.liftTick M.withStartTime
             ~> M.fanoutTick
               [ -- Log a warning if no input has been received after 10 ticks.
-                M.validateInput logger 10
+                validateInput logger 10
               , -- If no cost-centre database was provided, index the cost-centre events.
                 indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
               , -- If no info-prov database was provided, index the info-prov events.
@@ -187,6 +178,22 @@ main = do
                         (processEventlog ccdb ipedb)
           putMVar eventlogProcessorFinished ()
     _eventlogProcessor <- forkIO runEventlogProcessor
+
+    -- Create a resource to represent the eventlog-live process.
+    let _internalResource :: Resource
+        _internalResource =
+          Resource
+            { attrs =
+                [ "service.name" ~= AttrText (appName <> "-for-" <> serviceName.serviceName)
+                , "service.version" ~= App.version
+                ]
+            }
+
+    -- Create machine to process eventlog into export requests.
+    -- let processInternalTelemetry =
+    --       runT_ @IO $
+    --         queueSource internalTelemetryQueue
+    --           ~>
 
     -- Create machine to process export requests.
     exportRequestProcessorFinished <- newEmptyMVar
