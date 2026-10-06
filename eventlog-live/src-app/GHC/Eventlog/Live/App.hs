@@ -71,13 +71,13 @@ main = do
   Options{..} <- O.execParser options
 
   -- Construct a channel for internal telemetry
-  myTelemetryDataChan <- newTChanIO
+  internalTelemetryChan <- newTChanIO
 
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
   let logger =
         M.filterBySeverity logLevel $
-          M.stderrLogger <> M.chanLogger myTelemetryDataChan
+          M.stderrLogger <> M.chanLogger internalTelemetryChan
 
   -- Lookup the OpenTelemetry SDK options
   OpenTelemetrySdkOptions{..} <-
@@ -184,7 +184,7 @@ main = do
                         processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
                           ~> M.liftTick (mapping D.singleton)
                       ]
-                  , processInternalTelemetry fullConfig internalResource appScope myTelemetryDataChan
+                  , processInternalTelemetry fullConfig internalResource appScope internalTelemetryChan
                       ~> M.liftTick (mapping D.singleton)
                   ]
                   ~> M.liftTick asParts
