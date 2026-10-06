@@ -1,5 +1,5 @@
 module GHC.Eventlog.Live.App.Exporter.Otlp (
-  exportTelemetry,
+  exportToOtlp,
 ) where
 
 import Data.DList qualified as D
@@ -58,12 +58,12 @@ data ResourceTelemetry
 Internal helper.
 Export resource telemetry data and yield statistics.
 -}
-exportTelemetry ::
+exportToOtlp ::
   Logger IO ->
   FullConfig ->
   PerSignal (Maybe Exporter) ->
   ProcessT IO (Tick ExportRequest) (Tick ())
-exportTelemetry logger fullConfig exporters =
+exportToOtlp logger fullConfig exporters =
   M.liftTick (mapping (toResourceTelemetry fullConfig) ~> asParts)
     ~> M.fanoutTick
       [ -- Export logs.
