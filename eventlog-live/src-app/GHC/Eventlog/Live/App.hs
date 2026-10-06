@@ -11,31 +11,34 @@ module GHC.Eventlog.Live.App (
   main,
 ) where
 
-import Control.Concurrent.STM.TQueue (newTQueueIO)
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue)
 import Control.Exception (bracket_)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
 import Data.Default (Default (..))
-import Data.Machine (ProcessT, asParts, mapping, stopped, (~>))
-import Data.Maybe (fromMaybe, isJust)
+import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, (~>))
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.App.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceName (..), lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.App.Exporter.Otlp (exportTelemetry)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
-import GHC.Eventlog.Live.App.Stats (Stat (..), eventCountTick, processStats)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (writeLog)
+import GHC.Eventlog.Live.Logger (queueSource, writeLog)
 import GHC.Eventlog.Live.Logger qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
-import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
+import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -72,6 +75,9 @@ main = do
 
   -- Create a queue for internal telemetry
   internalTelemetryQueue <- newTQueueIO
+
+  -- Create a queue for export requests
+  exportRequestQueue <- newTQueueIO
 
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
@@ -114,14 +120,6 @@ main = do
     writeLog logger DEBUG $
       "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
 
-    -- Determine the window size for statistics
-    let windowSizeX =
-          (10 *) . maximum @[] $
-            [ fullConfig.eventlogFlushIntervalX
-            , C.maximumAggregationBatches fullConfig
-            , C.maximumExportBatches fullConfig
-            ]
-
     -- Find the service name, if any:
     let !serviceName =
           fromMaybe (ServiceName "undefined") $
@@ -137,8 +135,8 @@ main = do
             }
 
     -- Create a resource to represent the eventlog-live process.
-    let internalResource :: Resource
-        internalResource =
+    let _internalResource :: Resource
+        _internalResource =
           Resource
             { attrs =
                 [ "service.name" ~= AttrText (appName <> "-for-" <> serviceName.serviceName)
@@ -146,82 +144,70 @@ main = do
                 ]
             }
 
-    -- Create machine that indexes CostCentre data.
-    let indexCostCentreEvents ::
-          DB.Table CC.CostCentreId CC.CostCentre ->
-          ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
-        indexCostCentreEvents ccdb
-          -- If a cost-centre database was provided, don't index any new entries.
-          | isJust maybeCCDBPath = stopped
-          | otherwise = M.liftTick (DB.indexer (CC.toCostCentre . (.value)) def ccdb ~> mapping absurd)
-
-    -- Create machine that indexes InfoProv data.
-    let indexInfoProvEvents ::
-          DB.Table IP.InfoProvId IP.InfoProv ->
-          ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
-        indexInfoProvEvents ipedb
-          -- If an IPE database was provided, don't index any new entries.
-          | isJust maybeIpeDBPath = stopped
-          | otherwise = M.liftTick (DB.indexer (IP.toInfoProv . (.value)) def ipedb ~> mapping absurd)
-
-    -- Create the full machine to process eventlog data.
-    let processAndExportTelemetry ccdb ipedb exporters =
+    -- Create machine to process eventlog into export requests.
+    let processEventlog ccdb ipedb =
           M.liftTick M.withStartTime
             ~> M.fanoutTick
               [ -- Log a warning if no input has been received after 10 ticks.
                 M.validateInput logger 10
-              , -- Count the number of input events between each tick.
-                eventCountTick
-                  ~> mapping (fmap (D.singleton . EventCountStat))
-              , -- Process eventlog and internal telemetry...
-                M.fanoutTickCC
-                  [ M.fanoutTick
-                      [ -- Process CostCentre events.
-                        indexCostCentreEvents ccdb
-                      , -- Process InfoProv events.
-                        indexInfoProvEvents ipedb
-                      , -- Process the eventlog events.
-                        processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
-                          ~> M.liftTick (mapping D.singleton)
-                      ]
-                  , processInternalTelemetry fullConfig internalResource appScope internalTelemetryQueue
-                      ~> M.liftTick (mapping D.singleton)
-                  ]
-                  ~> M.liftTick asParts
-                  -- ...and export it.
-                  ~> exportTelemetry logger fullConfig exporters
+              , -- If no cost-centre database was provided, index the cost-centre events.
+                indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
+              , -- If no info-prov database was provided, index the info-prov events.
+                indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
+              , -- Process the eventlog events.
+                processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
+                  ~> M.liftTick (mapping D.singleton)
               ]
-            -- Process the statistics
-            -- TODO: windowSize should be the maximum of all aggregation and export intervals
-            ~> M.liftTick (asParts ~> processStats logger stats eventlogFlushIntervalS windowSizeX)
-            -- Validate the consistency of the tick
-            ~> M.validateTicks logger
-            ~> M.dropTick
+            ~> M.liftTick asParts
+            ~> enqueue exportRequestQueue
 
-    -- Open a connection to the OpenTelemetry Collector.
-    withExporters logger exporterOptions $ \exporters -> do
-      DB.withNewSession def $ \session -> do
-        withCostCentreTable maybeCCDBPath session $ \ccdb ->
-          withInfoProvTable maybeIpeDBPath session $ \ipedb ->
-            withEventlogSourceHandle
-              logger
-              eventlogSocketTimeoutS
-              eventlogSocketTimeoutExponent
-              eventlogSourceOptions
-              $ \eventlogSourceHandle -> do
-                -- Notify the control server of the connection status.
-                let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
-                let endConnection = controlServerApi.notifyEndConnection serviceName
-                bracket_ newConnection endConnection $
-                  -- Run the eventlog processor.
-                  runWithEventlogSourceHandle
-                    logger
-                    eventlogSourceHandle
-                    fullConfig.batchIntervalMs
-                    Nothing
-                    maybeEventlogLogFile
-                    (processAndExportTelemetry ccdb ipedb exporters)
+    -- Create thread to process eventlog into export requests.
+    eventlogProcessorFinished <- newEmptyMVar
+    let runEventlogProcessor = do
+          DB.withNewSession def $ \session -> do
+            withCostCentreTable maybeCCDBPath session $ \ccdb ->
+              withInfoProvTable maybeIpeDBPath session $ \ipedb ->
+                withEventlogSourceHandle
+                  logger
+                  eventlogSocketTimeoutS
+                  eventlogSocketTimeoutExponent
+                  eventlogSourceOptions
+                  $ \eventlogSourceHandle -> do
+                    -- Notify the control server of the connection status.
+                    let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
+                    let endConnection = controlServerApi.notifyEndConnection serviceName
+                    bracket_ newConnection endConnection $
+                      -- Run the eventlog processor.
+                      runWithEventlogSourceHandle
+                        logger
+                        eventlogSourceHandle
+                        fullConfig.batchIntervalMs
+                        Nothing
+                        maybeEventlogLogFile
+                        (processEventlog ccdb ipedb)
+          putMVar eventlogProcessorFinished ()
+    _eventlogProcessor <- forkIO runEventlogProcessor
 
+    -- Create machine to process export requests.
+    exportRequestProcessorFinished <- newEmptyMVar
+    let runExportRequestProcessor = do
+          withExporters logger exporterOptions $ \exporters ->
+            runT_ $
+              queueSource exportRequestQueue
+                ~> exportTelemetry logger fullConfig exporters
+          putMVar exportRequestProcessorFinished ()
+    _exportRequestProcessor <- forkIO runExportRequestProcessor
+
+    -- Wait for these threads to finish, then exit.
+    () <- takeMVar eventlogProcessorFinished
+    () <- takeMVar exportRequestProcessorFinished
+    pure ()
+
+-- A machine that enqueues values in a `TQueue`.
+enqueue :: TQueue a -> ProcessT IO a Void
+enqueue queue = repeatedly $ await >>= liftIO . atomically . writeTQueue queue
+
+-- Run an action with access to a cost-centre table.
 withCostCentreTable :: Maybe FilePath -> DB.Session -> (DB.Table CC.CostCentreId CC.CostCentre -> IO ()) -> IO ()
 withCostCentreTable maybeCCDBPath session =
   maybe
@@ -229,9 +215,33 @@ withCostCentreTable maybeCCDBPath session =
     (\ccDBPath -> DB.withTableFrom session ccDBPath def)
     maybeCCDBPath
 
+-- Run an action with access to an info-prov table.
 withInfoProvTable :: Maybe FilePath -> DB.Session -> (DB.Table IP.InfoProvId IP.InfoProv -> IO ()) -> IO ()
 withInfoProvTable maybeIpeDBPath session =
   maybe
     (DB.withNewTable session def)
     (\ipeDBPath -> DB.withTableFrom session ipeDBPath def)
     maybeIpeDBPath
+
+-- Create machine that indexes CostCentre data.
+indexCostCentreEvents ::
+  Maybe (DB.Table CC.CostCentreId CC.CostCentre) ->
+  ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+indexCostCentreEvents =
+  -- If a cost-centre database was not provided, don't index any new entries.
+  maybe stopped (\ccdb -> M.liftTick (DB.indexer (CC.toCostCentre . (.value)) def ccdb ~> mapping absurd))
+
+-- Create machine that indexes InfoProv data.
+indexInfoProvEvents ::
+  Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
+  ProcessT IO (Tick (M.WithStartTime Event)) (Tick x)
+indexInfoProvEvents =
+  -- If an IPE database was not provided, don't index any new entries.
+  maybe stopped (\ipedb -> M.liftTick (DB.indexer (IP.toInfoProv . (.value)) def ipedb ~> mapping absurd))
+
+--------------------------------------------------------------------------------
+-- Internal helpers
+--------------------------------------------------------------------------------
+
+onlyIf :: a -> Bool -> Maybe a
+onlyIf a b = if b then Just a else Nothing
