@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 import UplotReact from "uplot-react";
 import "uplot/dist/uPlot.min.css";
+import useWebSocket, { ReadyState } from "react-use-websocket";
 
 interface Options {
   url: string;
@@ -34,50 +35,35 @@ const addNumberDataPoint = (
 ];
 
 function Plot({ url, options }: Options) {
-  const wsRef = useRef<WebSocket | null>(null);
-  const [data, setData] = useState<uPlot.AlignedData>([[], []]);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<MessageEvent<any>[]>([]);
+
+  const { sendMessage, lastMessage, readyState } = useWebSocket(url, {
+    onOpen: () => {
+      console.log("opened");
+    },
+  });
 
   useEffect(() => {
-    const socket = new WebSocket(url);
-    wsRef.current = socket;
+    if (lastMessage !== null) {
+      setMessages((old) => old.concat(lastMessage));
+    }
+  }, [lastMessage]);
 
-    socket.onmessage = (event) => {
-      console.log(event);
-      setMessages((old) => [...old, event.data]);
-      // try {
-      //   const measure = JSON.parse(event.data);
-      //   if (isNumberDataPoint(measure)) {
-      //     console.debug(`Measure: ${JSON.stringify(measure)}`);
-      //     return setData((oldData) => addNumberDataPoint(oldData, measure));
-      //   } else {
-      //     console.error(`Malformed Message: ${measure}`);
-      //   }
-      // } catch (e) {
-      //   console.error(`Syntax Error: ${e}`);
-      // }
-    };
+  const connectionStatus = {
+    [ReadyState.CONNECTING]: "Connecting",
+    [ReadyState.OPEN]: "Open",
+    [ReadyState.CLOSING]: "Closing",
+    [ReadyState.CLOSED]: "Closed",
+    [ReadyState.UNINSTANTIATED]: "Uninstantiated",
+  }[readyState];
 
-    socket.onerror = (event) => {
-      console.error(`WebSocket Error: ${event}`);
-    };
-
-    return () => {
-      socket.close(1000, "Component unmounted.");
-    };
-  }, []);
-
-  // if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
-  //   return <UplotReact data={data} options={options} />;
-  // } else {
-  //   return <div>Not connected.</div>;
-  // }
   return (
     <div>
-      <h1>Messages</h1>
+      <h1>Message</h1>
+      <h2>Status: {connectionStatus}</h2>
       <ul>
-        {messages.map((message) => (
-          <li>{message}</li>
+        {messages.map((message, index) => (
+          <li key={index}>{message.data}</li>
         ))}
       </ul>
     </div>
