@@ -150,3 +150,4 @@ processInternalTelemetry fullConfig resource scope =
   getInternalLogRecord :: InternalTelemetry -> Maybe LogRecord
   getInternalLogRecord = \case
     InternalTelemetry'LogRecord logRecord -> Just logRecord
+    _otherwise -> Nothing

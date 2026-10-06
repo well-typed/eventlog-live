@@ -21,7 +21,7 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
 import Data.Default (Default (..))
-import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, traversing, (~>))
+import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, (~>))
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -192,7 +192,6 @@ main = do
     -- Create machine to process eventlog into export requests.
     let internalTelemetryProcessor =
           queueSource internalTelemetryQueue
-            ~> traversing (\case Tick -> pure Tick; Item x -> print x >> pure (Item x))
             ~> processInternalTelemetry fullConfig internalResource appScope
             -- NOTE: eventlogProcessor writes ticks to the exportRequestQueue,
             --       and we don't want to duplicate those.

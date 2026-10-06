@@ -2,9 +2,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module GHC.Eventlog.Live.App.Exporter.Otlp.Profiles (
-  -- * Profiles
-  ExportProfileResult (..),
-  RejectedProfilesError (..),
+  -- * Export
   exportResourceProfiles,
 
   -- * Conversion to OTLP
@@ -16,18 +14,17 @@ module GHC.Eventlog.Live.App.Exporter.Otlp.Profiles (
 )
 where
 
-import Control.Exception (Exception (..), SomeException (..), catch)
+import Control.Exception (SomeException (..), catch)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT (..))
 import Data.Bifunctor (Bifunctor (..))
 import Data.Functor.Identity (Identity (..))
 import Data.Int (Int64)
-import Data.Machine (ProcessT, await, construct, yield)
+import Data.Machine (ProcessT, traversing)
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Sum (..))
-import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -37,8 +34,7 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary (ProfilesDictionar
 import GHC.Eventlog.Live.App.Exporter.Otlp.ProfilesDictionary qualified as PD
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), Logger, logException, logMetric)
 import GHC.Eventlog.Live.Types.Attribute ((~=))
 import GHC.Eventlog.Live.Types.Profiles (KnownProfile (..), Location (..), Sample (..), SomeSamples (..), profileConfig)
 import GHC.IsList (IsList (..))
@@ -53,77 +49,32 @@ import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles qualified as OP
 import Proto.Opentelemetry.Proto.Profiles.V1development.Profiles_Fields qualified as OP
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
-import Text.Printf (printf)
-
-data ExportProfileResult
-  = ExportProfileResult
-  { exportedProfiles :: !Int64
-  , rejectedProfiles :: !Int64
-  , maybeSomeException :: Maybe SomeException
-  }
-  deriving (Show)
-
-pattern ExportProfileSuccess :: Int64 -> ExportProfileResult
-pattern ExportProfileSuccess exportedProfiles =
-  ExportProfileResult exportedProfiles 0 Nothing
-
-pattern ExportProfileError :: Int64 -> Int64 -> SomeException -> ExportProfileResult
-pattern ExportProfileError exportedProfiles rejectedProfiles someException =
-  ExportProfileResult exportedProfiles rejectedProfiles (Just someException)
-
-data RejectedProfilesError
-  = RejectedProfilesError
-  { rejectedProfiles :: !Int64
-  , errorMessage :: !Text
-  }
-  deriving (Show)
-
-instance Exception RejectedProfilesError where
-  displayException :: RejectedProfilesError -> String
-  displayException RejectedProfilesError{..} =
-    printf "Error: OpenTelemetry Collector rejectedProfiles %d data points with message: %s" rejectedProfiles errorMessage
 
 --------------------------------------------------------------------------------
--- OpenTelemetry gRPC Exporter for Profiles
+-- OpenTelemetry Exporter for Profiles
 
 exportResourceProfiles ::
   Logger IO ->
   Exporter ->
-  ProcessT IO (Tick OPS.ExportProfilesServiceRequest) (Tick ExportProfileResult)
+  ProcessT IO OPS.ExportProfilesServiceRequest ()
 exportResourceProfiles logger exporter =
-  construct $ go False
+  traversing sendResourceProfiles
  where
-  go exportedProfiles =
-    await >>= \case
-      Tick -> do
-        unless exportedProfiles $
-          yield (Item $ ExportProfileSuccess 0)
-        yield Tick
-        go False
-      Item exportProfilesServiceRequest -> do
-        exportTraceResult <- liftIO (sendResourceProfiles exportProfilesServiceRequest)
-        yield (Item exportTraceResult)
-        go True
-
-  sendResourceProfiles :: OPS.ExportProfilesServiceRequest -> IO ExportProfileResult
+  sendResourceProfiles :: OPS.ExportProfilesServiceRequest -> IO ()
   sendResourceProfiles exportProfilesServiceRequest =
     doExport `catch` handleSomeException
    where
-    !exportedProfiles = countSamplesInExportProfileServiceRequest exportProfilesServiceRequest
-
-    doExport :: IO ExportProfileResult
+    doExport :: IO ()
     doExport = do
       resp <- export @OPS.ProfilesService @"export" logger exporter exportProfilesServiceRequest
-      if resp ^. OPS.partialSuccess . OPS.rejectedProfiles == 0
-        then
-          pure $ ExportProfileSuccess exportedProfiles
-        else do
-          let !rejectedProfiles = resp ^. OPS.partialSuccess . OPS.rejectedProfiles
-          let !rejectedMetricsError = RejectedProfilesError{errorMessage = resp ^. OPS.partialSuccess . OPS.errorMessage, ..}
-          pure $ ExportProfileError exportedProfiles rejectedProfiles (SomeException rejectedMetricsError)
+      let !exported = countSamplesInExportProfileServiceRequest exportProfilesServiceRequest
+      let !rejected = resp ^. OPS.partialSuccess . OPS.rejectedProfiles
+      liftIO (logMetric logger ExportSamples ExportResult{..})
+      unless (rejected == 0) $
+        liftIO (logException logger $ ExportError $ resp ^. OPS.partialSuccess . OPS.errorMessage)
 
-    handleSomeException :: SomeException -> IO ExportProfileResult
-    handleSomeException someException = pure $ ExportProfileError 0 exportedProfiles someException
+    handleSomeException :: SomeException -> IO ()
+    handleSomeException = logException logger
 
 --------------------------------------------------------------------------------
 -- CanExportToConsole

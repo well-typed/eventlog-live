@@ -2,7 +2,6 @@ module GHC.Eventlog.Live.App.Exporter.Otlp (
   exportTelemetry,
 ) where
 
-import Data.DList (DList)
 import Data.DList qualified as D
 import Data.Machine (ProcessT, asParts, mapping, (~>))
 import Data.Maybe (catMaybes, mapMaybe)
@@ -14,7 +13,6 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Logs (exportResourceLogs, toExportLog
 import GHC.Eventlog.Live.App.Exporter.Otlp.Metrics (exportResourceMetrics, toExportMetricsServiceRequest, toMetric, toResourceMetrics, toScopeMetrics)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Profiles (exportResourceProfiles, toExportProfileServiceRequest, toProfiles, toProfilesData, toResourceProfiles, toScopeProfiles)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Traces (exportResourceSpans, toExportTracesServiceRequest, toResourceSpans, toScopeSpans, toSpans)
-import GHC.Eventlog.Live.App.Stats (Stat (..))
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger)
@@ -64,7 +62,7 @@ exportTelemetry ::
   Logger IO ->
   FullConfig ->
   PerSignal (Maybe Exporter) ->
-  ProcessT IO (Tick ExportRequest) (Tick (DList Stat))
+  ProcessT IO (Tick ExportRequest) (Tick ())
 exportTelemetry logger fullConfig exporters =
   M.liftTick (mapping (toResourceTelemetry fullConfig) ~> asParts)
     ~> M.fanoutTick
@@ -76,33 +74,39 @@ exportTelemetry logger fullConfig exporters =
               --       streams. However, it has the "unfortunate" side-effect of
               --       making it impossible to not batch once per interval.
               ~> M.batchByTick
-              ~> M.liftTick (mapping (toExportLogsServiceRequest . D.toList))
-              ~> exportResourceLogs logger logsExporter
-              ~> M.liftTick (mapping (D.singleton . ExportLogsResultStat))
+              ~> M.liftTick
+                ( mapping (toExportLogsServiceRequest . D.toList)
+                    ~> exportResourceLogs logger logsExporter
+                )
       , -- Export metrics.
         runIf (C.shouldExportMetrics fullConfig) $
           runWith (exporters `forSignal` METRICS) $ \metricsExporter ->
             M.liftTick (mapping getResourceMetrics ~> asParts ~> mapping D.singleton)
               -- NOTE: See note above.
               ~> M.batchByTick
-              ~> M.liftTick (mapping (toExportMetricsServiceRequest . D.toList))
-              ~> exportResourceMetrics logger metricsExporter
-              ~> M.liftTick (mapping (D.singleton . ExportMetricsResultStat))
+              ~> M.liftTick
+                ( mapping (toExportMetricsServiceRequest . D.toList)
+                    ~> exportResourceMetrics logger metricsExporter
+                )
       , -- Export spans.
         runIf (C.shouldExportTraces fullConfig) $
           runWith (exporters `forSignal` TRACES) $ \tracesExporter ->
             M.liftTick (mapping getResourceSpans ~> asParts ~> mapping D.singleton)
               -- NOTE: See note above.
               ~> M.batchByTick
-              ~> M.liftTick (mapping (toExportTracesServiceRequest . D.toList))
-              ~> exportResourceSpans logger tracesExporter
-              ~> M.liftTick (mapping (D.singleton . ExportTraceResultStat))
+              ~> M.liftTick
+                ( mapping (toExportTracesServiceRequest . D.toList)
+                    ~> exportResourceSpans logger tracesExporter
+                )
       , -- Export profiles.
         runIf (C.shouldExportProfiles fullConfig) $
           runWith (exporters `forSignal` PROFILES) $ \profilesExporter ->
-            M.liftTick (mapping getResourceProfiles ~> asParts ~> mapping toExportProfileServiceRequest)
-              ~> exportResourceProfiles logger profilesExporter
-              ~> M.liftTick (mapping (D.singleton . ExportProfileResultStat))
+            M.liftTick
+              ( mapping getResourceProfiles
+                  ~> asParts
+                  ~> mapping toExportProfileServiceRequest
+                  ~> exportResourceProfiles logger profilesExporter
+              )
       ]
 
 getResourceLogs :: ResourceTelemetry -> Maybe OL.ResourceLogs

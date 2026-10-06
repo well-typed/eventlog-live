@@ -10,6 +10,9 @@ Portability : portable
 module GHC.Eventlog.Live.Logger (
   Logger,
   InternalTelemetry (..),
+  InternalMetric (..),
+  ExportResult (..),
+  logMetric,
   logTick,
   logTrace,
   logDebug,
@@ -31,9 +34,12 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue (TQueue, readTQueue, writeTQueue)
 import Control.Exception (Exception (..), bracket_)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Functor.Const (Const (..))
+import Data.Functor.Identity (Identity (..))
+import Data.Int (Int64)
 import Data.Ix (Ix (..))
 import Data.Machine (SourceT, repeatedly, yield)
-import Data.Maybe (isNothing)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -43,6 +49,9 @@ import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Attribute qualified as A
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..))
+import GHC.Eventlog.Live.Types.Logs qualified as LogRecord
+import GHC.Eventlog.Live.Types.Metrics (Metric (..))
+import GHC.Eventlog.Live.Types.Metrics qualified as Metric
 import GHC.Eventlog.Live.Types.Severity (Severity (..), toSeverityString)
 import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Timestamp)
@@ -52,7 +61,6 @@ import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
 import System.Exit (exitFailure)
 import System.IO qualified as IO
-import Prelude hiding (log)
 
 newtype Logger m = Logger {unLogger :: CCA.LogAction m (Tick InternalTelemetry)}
   deriving newtype (Semigroup, Monoid)
@@ -62,6 +70,25 @@ The type of internal telemetry data.
 -}
 data InternalTelemetry
   = InternalTelemetry'LogRecord !LogRecord
+  | forall a. InternalTelemetry'Metric !(InternalMetric a) !(Metric a)
+
+{- |
+Tags for the known internal metrics.
+-}
+data InternalMetric a where
+  EventCount :: InternalMetric Word
+  ExportLogs :: InternalMetric ExportResult
+  ExportMetrics :: InternalMetric ExportResult
+  ExportSpans :: InternalMetric ExportResult
+  ExportSamples :: InternalMetric ExportResult
+
+{- |
+The result of an export.
+-}
+data ExportResult = ExportResult
+  { exported :: !Int64
+  , rejected :: !Int64
+  }
   deriving (Show)
 
 {- |
@@ -78,6 +105,21 @@ writeLog logger severity message =
       }
  where
   writeLogRecord = (logger.unLogger <&) . Item . InternalTelemetry'LogRecord
+
+{- |
+Use a `Logger` to log an internal metric.
+-}
+logMetric :: Logger m -> InternalMetric a -> a -> m ()
+logMetric logger internalMetric value =
+  writeMetric
+    Metric
+      { value = value
+      , maybeTimeUnixNano = Nothing
+      , maybeStartTimeUnixNano = Nothing
+      , attrs = mempty
+      }
+ where
+  writeMetric = (logger.unLogger <&) . Item . InternalTelemetry'Metric internalMetric
 
 {- |
 Internal helper.
@@ -160,10 +202,47 @@ handleLogger ::
 handleLogger handle = Logger . CCA.LogAction $ \case
   Tick ->
     pure ()
-  Item (InternalTelemetry'LogRecord logRecord) -> liftIO $ do
+  Item (toLogRecord -> logRecord) -> liftIO $ do
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush handle
+
+{- |
+Convert `InternalTelemetry` to a `LogRecord` for the `handleLogger`.
+-}
+toLogRecord :: InternalTelemetry -> LogRecord
+toLogRecord = \case
+  InternalTelemetry'LogRecord logRecord -> logRecord
+  InternalTelemetry'Metric internalMetric metric -> toLogRecord'Metric metric internalMetric
+ where
+  toLogRecord'Metric :: Metric a -> InternalMetric a -> LogRecord
+  toLogRecord'Metric metric = \case
+    EventCount ->
+      logRecord DEBUG $ "Received " <> T.show metric.value <> " events."
+    ExportLogs
+      | ExportResult{..} <- metric.value ->
+          if rejected > 0
+            then logRecord ERROR $ "Exported " <> T.show exported <> " logs (" <> T.show rejected <> " rejected)."
+            else logRecord DEBUG $ "Exported " <> T.show exported <> " logs."
+    ExportMetrics
+      | ExportResult{..} <- metric.value ->
+          if rejected > 0
+            then logRecord ERROR $ "Exported " <> T.show exported <> " metrics (" <> T.show rejected <> " rejected)."
+            else logRecord DEBUG $ "Exported " <> T.show exported <> " metrics."
+    ExportSpans
+      | ExportResult{..} <- metric.value ->
+          if rejected > 0
+            then logRecord ERROR $ "Exported " <> T.show exported <> " spans (" <> T.show rejected <> " rejected)."
+            else logRecord DEBUG $ "Exported " <> T.show exported <> " spans."
+    ExportSamples
+      | ExportResult{..} <- metric.value ->
+          if rejected > 0
+            then logRecord ERROR $ "Exported " <> T.show exported <> " samples (" <> T.show rejected <> " rejected)."
+            else logRecord DEBUG $ "Exported " <> T.show exported <> " samples."
+   where
+    logRecord :: Severity -> Text -> LogRecord
+    logRecord severity value =
+      LogRecord{maybeTimeUnixNano = metric.maybeTimeUnixNano, maybeSeverity = Just severity, attrs = metric.attrs, ..}
 
 {- |
 Filter a @`Logger` m@ by a `Severity`.
@@ -177,9 +256,9 @@ filterBySeverity severityThreshold =
   Logger . cfilter severityFilter . (.unLogger)
  where
   severityFilter = \case
-    Tick -> True
     Item (InternalTelemetry'LogRecord logRecord) ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
+    _otherwise -> True
 
 {- |
 Internal helper.
@@ -252,15 +331,9 @@ queueSource queue = repeatedly $ do
 Add the current Unix timestamp in nanoseconds to telemetry data.
 -}
 addTimeUnixNano :: InternalTelemetry -> IO InternalTelemetry
-addTimeUnixNano myTelemetry =
-  case myTelemetry of
-    InternalTelemetry'LogRecord LogRecord{..}
-      | isNothing maybeTimeUnixNano -> do
-          timeUnixNano <- getTimeUnixNano
-          pure $
-            InternalTelemetry'LogRecord
-              LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
-      | otherwise -> pure myTelemetry
+addTimeUnixNano i
+  | has maybeTimeUnixNano'InternalTelemetry i = pure i
+  | otherwise = set maybeTimeUnixNano'InternalTelemetry i . Just <$> getTimeUnixNano
 
 {- |
 Get the current Unix time in nanoseconds.
@@ -275,3 +348,39 @@ getTimeUnixNano = toNanos <$> getTime Realtime
   --       What's that like?
   toNanos :: TimeSpec -> Timestamp
   toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec
+
+--------------------------------------------------------------------------------
+-- Lenses for InternalTelemetry
+--
+-- NOTE: If you are tempted to export these, just replace them with lens-family2
+--------------------------------------------------------------------------------
+
+type Lens s a = forall f. (Functor f) => (a -> f a) -> s -> f s
+
+get :: Lens s a -> s -> a
+get l s = getConst $ l Const s
+{-# INLINE get #-}
+
+has :: Lens s (Maybe a) -> s -> Bool
+has l s = isJust (get l s)
+{-# INLINE has #-}
+
+set :: Lens s a -> s -> a -> s
+set l s a = runIdentity $ l (const $ Identity a) s
+{-# INLINE set #-}
+
+maybeTimeUnixNano'InternalTelemetry :: Lens InternalTelemetry (Maybe Timestamp)
+maybeTimeUnixNano'InternalTelemetry f = \case
+  InternalTelemetry'LogRecord l -> InternalTelemetry'LogRecord <$> maybeTimeUnixNano'LogRecord f l
+  InternalTelemetry'Metric t m -> InternalTelemetry'Metric t <$> maybeTimeUnixNano'Metric f m
+{-# INLINE maybeTimeUnixNano'InternalTelemetry #-}
+
+maybeTimeUnixNano'LogRecord :: Lens LogRecord (Maybe Timestamp)
+maybeTimeUnixNano'LogRecord f l =
+  fmap (\x -> l{LogRecord.maybeTimeUnixNano = x}) (f l.maybeTimeUnixNano)
+{-# INLINE maybeTimeUnixNano'LogRecord #-}
+
+maybeTimeUnixNano'Metric :: Lens (Metric a) (Maybe Timestamp)
+maybeTimeUnixNano'Metric f m =
+  fmap (\x -> m{Metric.maybeTimeUnixNano = x}) (f m.maybeTimeUnixNano)
+{-# INLINE maybeTimeUnixNano'Metric #-}
