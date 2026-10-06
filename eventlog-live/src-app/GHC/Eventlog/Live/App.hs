@@ -201,16 +201,8 @@ main = do
     -- Open a connection to the OpenTelemetry Collector.
     withExporters logger exporterOptions $ \exporters -> do
       DB.withNewSession def $ \session -> do
-        let withCostCentreTable =
-              case maybeCCDBPath of
-                Nothing -> DB.withNewTable session def
-                Just ccDBPath -> DB.withTableFrom session ccDBPath def
-        let withInfoProvTable =
-              case maybeIpeDBPath of
-                Nothing -> DB.withNewTable session def
-                Just ipeDBPath -> DB.withTableFrom session ipeDBPath def
-        withCostCentreTable $ \ccdb ->
-          withInfoProvTable $ \ipedb ->
+        withCostCentreTable maybeCCDBPath session $ \ccdb ->
+          withInfoProvTable maybeIpeDBPath session $ \ipedb ->
             withEventlogSourceHandle
               logger
               eventlogSocketTimeoutS
@@ -229,3 +221,17 @@ main = do
                     Nothing
                     maybeEventlogLogFile
                     (processAndExportTelemetry ccdb ipedb exporters)
+
+withCostCentreTable :: Maybe FilePath -> DB.Session -> (DB.Table CC.CostCentreId CC.CostCentre -> IO ()) -> IO ()
+withCostCentreTable maybeCCDBPath session =
+  maybe
+    (DB.withNewTable session def)
+    (\ccDBPath -> DB.withTableFrom session ccDBPath def)
+    maybeCCDBPath
+
+withInfoProvTable :: Maybe FilePath -> DB.Session -> (DB.Table IP.InfoProvId IP.InfoProv -> IO ()) -> IO ()
+withInfoProvTable maybeIpeDBPath session =
+  maybe
+    (DB.withNewTable session def)
+    (\ipeDBPath -> DB.withTableFrom session ipeDBPath def)
+    maybeIpeDBPath
