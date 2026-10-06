@@ -21,7 +21,7 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
 import Data.Default (Default (..))
-import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, (~>))
+import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, traversing, (~>))
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -35,11 +35,11 @@ import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (Logger, filterBySeverity, logDebug, logFatal, logTick, queueLogger, queueSource, stderrLogger)
-import GHC.Eventlog.Live.Machine.Core (Tick, dropTick, onlyTick)
+import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
 import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
-import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry)
+import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
@@ -134,7 +134,7 @@ main = do
             }
 
     -- Create machine to process eventlog into export requests.
-    let processEventlog ccdb ipedb =
+    let eventlogProcessor ccdb ipedb =
           M.liftTick M.withStartTime
             ~> M.fanoutTick
               [ -- Log a warning if no input has been received after 10 ticks.
@@ -175,13 +175,13 @@ main = do
                         fullConfig.batchIntervalMs
                         Nothing
                         maybeEventlogLogFile
-                        (processEventlog ccdb ipedb)
+                        (eventlogProcessor ccdb ipedb)
           putMVar eventlogProcessorFinished ()
     _eventlogProcessor <- forkIO runEventlogProcessor
 
     -- Create a resource to represent the eventlog-live process.
-    let _internalResource :: Resource
-        _internalResource =
+    let internalResource :: Resource
+        internalResource =
           Resource
             { attrs =
                 [ "service.name" ~= AttrText (appName <> "-for-" <> serviceName.serviceName)
@@ -190,10 +190,22 @@ main = do
             }
 
     -- Create machine to process eventlog into export requests.
-    -- let processInternalTelemetry =
-    --       runT_ @IO $
-    --         queueSource internalTelemetryQueue
-    --           ~>
+    let internalTelemetryProcessor =
+          queueSource internalTelemetryQueue
+            ~> traversing (\case Tick -> pure Tick; Item x -> print x >> pure (Item x))
+            ~> processInternalTelemetry fullConfig internalResource appScope
+            -- NOTE: eventlogProcessor writes ticks to the exportRequestQueue,
+            --       and we don't want to duplicate those.
+            ~> dropTick
+            ~> mapping Item
+            ~> enqueue exportRequestQueue
+
+    -- Create thread to process internal telemetry into export requests.
+    internalTelemetryProcessorFinished <- newEmptyMVar
+    let runInternalTelemetryProcessor = do
+          runT_ internalTelemetryProcessor
+          putMVar internalTelemetryProcessorFinished ()
+    _internalTelemetryProcessor <- forkIO runInternalTelemetryProcessor
 
     -- Create machine to process export requests.
     exportRequestProcessorFinished <- newEmptyMVar
@@ -207,6 +219,7 @@ main = do
 
     -- Wait for these threads to finish, then exit.
     () <- takeMVar eventlogProcessorFinished
+    () <- takeMVar internalTelemetryProcessorFinished
     () <- takeMVar exportRequestProcessorFinished
     pure ()
 
