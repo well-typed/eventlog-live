@@ -17,7 +17,7 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Logger (Logger, MyTelemetryData (..), chanSource)
+import GHC.Eventlog.Live.Logger (InternalTelemetry (..), Logger, chanSource)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime)
@@ -137,7 +137,7 @@ processInternalTelemetry ::
   FullConfig ->
   Resource ->
   InstrumentationScope ->
-  TChan MyTelemetryData ->
+  TChan InternalTelemetry ->
   ProcessT IO (Tick x) (Tick ExportRequest)
 processInternalTelemetry fullConfig resource scope myTelemetryDataChan =
   M.mergeWithTickCC (chanSource myTelemetryDataChan)
@@ -147,9 +147,9 @@ processInternalTelemetry fullConfig resource scope myTelemetryDataChan =
       ]
     ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
  where
-  processInternalLogRecords :: Process MyTelemetryData LogRecord
+  processInternalLogRecords :: Process InternalTelemetry LogRecord
   processInternalLogRecords = mapping getInternalLogRecord ~> asParts
 
-  getInternalLogRecord :: MyTelemetryData -> Maybe LogRecord
+  getInternalLogRecord :: InternalTelemetry -> Maybe LogRecord
   getInternalLogRecord = \case
-    MyTelemetryData'LogRecord{..} -> Just logRecord
+    InternalTelemetry'LogRecord{..} -> Just logRecord

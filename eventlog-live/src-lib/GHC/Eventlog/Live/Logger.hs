@@ -9,7 +9,7 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Logger (
   Logger,
-  MyTelemetryData (..),
+  InternalTelemetry (..),
   writeLog,
   writeException,
   filterBySeverity,
@@ -47,13 +47,13 @@ import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), 
 import System.IO qualified as IO
 import Prelude hiding (log)
 
-type Logger m = CCA.LogAction m MyTelemetryData
+type Logger m = CCA.LogAction m InternalTelemetry
 
 {- |
 The type of internal telemetry data.
 -}
-newtype MyTelemetryData
-  = MyTelemetryData'LogRecord {logRecord :: LogRecord}
+newtype InternalTelemetry
+  = InternalTelemetry'LogRecord {logRecord :: LogRecord}
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -62,7 +62,7 @@ writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity value =
   let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
    in logger
-        <& MyTelemetryData'LogRecord
+        <& InternalTelemetry'LogRecord
           { logRecord =
               LogRecord
                 { value
@@ -96,7 +96,7 @@ handleLogger ::
   IO.Handle ->
   Logger IO
 handleLogger handle = CCA.LogAction $ \case
-  MyTelemetryData'LogRecord logRecord -> liftIO $ do
+  InternalTelemetry'LogRecord logRecord -> liftIO $ do
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush handle
@@ -113,7 +113,7 @@ filterBySeverity severityThreshold =
   cfilter severityFilter
  where
   severityFilter = \case
-    MyTelemetryData'LogRecord{..} ->
+    InternalTelemetry'LogRecord{..} ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
 
 -- _otherwise -> True
@@ -171,7 +171,7 @@ withSeverityColor maybeSeverity handle action = do
 {- |
 A `Logger` that writes the internal telemetry data to a channel.
 -}
-chanLogger :: TChan MyTelemetryData -> Logger IO
+chanLogger :: TChan InternalTelemetry -> Logger IO
 chanLogger chan =
   CCA.LogAction $
     atomically . writeTChan chan <=< addTimeUnixNano
@@ -187,14 +187,14 @@ chanSource chan = repeatedly $ do
 {- |
 Add the current Unix timestamp in nanoseconds to telemetry data.
 -}
-addTimeUnixNano :: MyTelemetryData -> IO MyTelemetryData
+addTimeUnixNano :: InternalTelemetry -> IO InternalTelemetry
 addTimeUnixNano myTelemetryData =
   case myTelemetryData of
-    MyTelemetryData'LogRecord{logRecord = LogRecord{..}}
+    InternalTelemetry'LogRecord{logRecord = LogRecord{..}}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
           pure $
-            MyTelemetryData'LogRecord
+            InternalTelemetry'LogRecord
               LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
       | otherwise -> pure myTelemetryData
 
