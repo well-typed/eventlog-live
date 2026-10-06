@@ -12,7 +12,6 @@ module GHC.Eventlog.Live.Options (
   eventlogLogFileParser,
   eventlogFlushIntervalSParser,
   verbosityParser,
-  statsParser,
 ) where
 
 import Control.Applicative (asum)
@@ -180,15 +179,4 @@ verbosityParser =
         <> O.metavar "fatal|error|warning|info|debug|trace"
         <> O.help "The severity threshold for logging."
         <> O.value WARN
-    )
-
---------------------------------------------------------------------------------
--- Statistics
-
-statsParser :: O.Parser Bool
-statsParser =
-  O.flag False True $
-    ( O.short 's'
-        <> O.long "stats"
-        <> O.help "Display runtime statistics."
     )

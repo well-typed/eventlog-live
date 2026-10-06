@@ -292,7 +292,6 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.App.Exporter.Otlp.Traces
     GHC.Eventlog.Live.App.Options
     GHC.Eventlog.Live.App.Options.Raw
-    GHC.Eventlog.Live.App.Stats
 
   hs-source-dirs:
     src-app-internal
@@ -306,7 +305,6 @@ executable eventlog-live-otlp
 
   autogen-modules: Paths_eventlog_live
   build-depends:
-    ansi-terminal >=1.1 && <1.2,
     base >=4.16 && <5,
     bytestring >=0.11 && <0.13,
     case-insensitive >=1.2 && <1.3,
@@ -329,8 +327,6 @@ executable eventlog-live-otlp
     optparse-applicative >=0.17 && <0.20,
     proto-lens >=0.7.1 && <0.8,
     stm >=2.5 && <2.6,
-    strict-list >=0.1 && <0.2,
-    table-layout >=1.0 && <1.1,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,

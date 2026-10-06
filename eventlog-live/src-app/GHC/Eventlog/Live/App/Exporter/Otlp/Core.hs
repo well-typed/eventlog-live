@@ -7,6 +7,7 @@ module GHC.Eventlog.Live.App.Exporter.Otlp.Core (
   withExporter,
   withExporters,
   export,
+  ExportError (..),
 
   -- ** Export via gRPC
   CanExportToConsole,
@@ -392,6 +393,17 @@ httpCompression :: Maybe Compression -> ([HTTP.Header], ByteString -> ByteString
 httpCompression = \case
   Nothing -> ([], id)
   Just GZip -> ([(HTTP.hContentEncoding, "gzip")], BSL.toStrict . GZip.compress . BSL.fromStrict)
+
+--------------------------------------------------------------------------------
+-- Error Message
+--------------------------------------------------------------------------------
+
+newtype ExportError = ExportError {message :: Text}
+  deriving (Show)
+
+instance Exception ExportError where
+  displayException :: ExportError -> String
+  displayException = T.unpack . (.message)
 
 --------------------------------------------------------------------------------
 -- Conversion to OLTP

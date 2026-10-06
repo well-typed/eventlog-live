@@ -2,8 +2,6 @@
 
 module GHC.Eventlog.Live.App.Exporter.Otlp.Metrics (
   -- * Export
-  ExportMetricsResult (..),
-  RejectedMetricsError (..),
   exportResourceMetrics,
 
   -- * Conversion
@@ -13,22 +11,20 @@ module GHC.Eventlog.Live.App.Exporter.Otlp.Metrics (
   toMetric,
 ) where
 
-import Control.Exception (Exception (..), SomeException (..), catch)
+import Control.Exception (SomeException (..), catch)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32, Int64, Int8)
-import Data.Machine (ProcessT, await, construct, yield)
+import Data.Machine (ProcessT, traversing)
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Sum (..))
-import Data.Text (Text)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word64, Word8)
-import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
+import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), ExportError (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), Logger, logException, logMetric)
 import GHC.Eventlog.Live.Types.Metrics (KnownMetric (..), KnownMetricKind (..), KnownMetricType (..), KnownMetricUnit (..), Metric (..), SAggregationTemporality (..), SMetricKind (..), SMetricType (..), SMonotonicity (..), SomeMetrics (..), metricConfig, toUCUM)
 import Lens.Family2 ((.~), (^.))
 import Network.GRPC.Common qualified as G
@@ -39,83 +35,32 @@ import Proto.Opentelemetry.Proto.Common.V1.Common qualified as OC
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics qualified as OM
 import Proto.Opentelemetry.Proto.Metrics.V1.Metrics_Fields qualified as OM
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
-import Text.Printf (printf)
 
 --------------------------------------------------------------------------------
--- OpenTelemetry gRPC Exporters
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- OpenTelemetry Exporter Result for Metrics
-
-data ExportMetricsResult
-  = ExportMetricsResult
-  { exportedDataPoints :: !Int64
-  , rejectedDataPoints :: !Int64
-  , maybeSomeException :: Maybe SomeException
-  }
-  deriving (Show)
-
-pattern ExportMetricsSuccess :: Int64 -> ExportMetricsResult
-pattern ExportMetricsSuccess exportedDataPoints =
-  ExportMetricsResult exportedDataPoints 0 Nothing
-
-pattern ExportMetricsError :: Int64 -> Int64 -> SomeException -> ExportMetricsResult
-pattern ExportMetricsError exportedDataPoints rejectedDataPoints someException =
-  ExportMetricsResult exportedDataPoints rejectedDataPoints (Just someException)
-
-data RejectedMetricsError
-  = RejectedMetricsError
-  { rejectedDataPoints :: !Int64
-  , errorMessage :: !Text
-  }
-  deriving (Show)
-
-instance Exception RejectedMetricsError where
-  displayException :: RejectedMetricsError -> String
-  displayException RejectedMetricsError{..} =
-    printf "Error: OpenTelemetry Collector rejected %d data points with message: %s" rejectedDataPoints errorMessage
-
---------------------------------------------------------------------------------
--- OpenTelemetry gRPC Exporter for Metrics
+-- OpenTelemetry Exporter for Metrics
 
 exportResourceMetrics ::
   Logger IO ->
   Exporter ->
-  ProcessT IO (Tick OMS.ExportMetricsServiceRequest) (Tick ExportMetricsResult)
-exportResourceMetrics logger exporter = construct $ go False
+  ProcessT IO OMS.ExportMetricsServiceRequest ()
+exportResourceMetrics logger exporter =
+  traversing sendResourceMetrics
  where
-  go exportedResourceMetrics =
-    await >>= \case
-      Tick -> do
-        unless exportedResourceMetrics $
-          yield (Item $ ExportMetricsSuccess 0)
-        yield Tick
-        go False
-      Item exportMetricsServiceRequest -> do
-        exportMetricsResult <- liftIO (sendResourceMetrics exportMetricsServiceRequest)
-        yield (Item exportMetricsResult)
-        go True
-
-  sendResourceMetrics :: OMS.ExportMetricsServiceRequest -> IO ExportMetricsResult
+  sendResourceMetrics :: OMS.ExportMetricsServiceRequest -> IO ()
   sendResourceMetrics exportMetricsServiceRequest =
     doExport `catch` handleSomeException
    where
-    !exportedDataPoints = countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest
-
-    doExport :: IO ExportMetricsResult
+    doExport :: IO ()
     doExport = do
       resp <- export @OMS.MetricsService @"export" logger exporter exportMetricsServiceRequest
-      if resp ^. OMS.partialSuccess . OMS.rejectedDataPoints == 0
-        then
-          pure $ ExportMetricsSuccess exportedDataPoints
-        else do
-          let !rejectedDataPoints = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
-          let !rejectedMetricsError = RejectedMetricsError{errorMessage = resp ^. OMS.partialSuccess . OMS.errorMessage, ..}
-          pure $ ExportMetricsError exportedDataPoints rejectedDataPoints (SomeException rejectedMetricsError)
+      let !exported = countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest
+      let !rejected = resp ^. OMS.partialSuccess . OMS.rejectedDataPoints
+      liftIO (logMetric logger ExportMetrics ExportResult{..})
+      unless (rejected == 0) $
+        liftIO (logException logger $ ExportError $ resp ^. OMS.partialSuccess . OMS.errorMessage)
 
-    handleSomeException :: SomeException -> IO ExportMetricsResult
-    handleSomeException someException = pure $ ExportMetricsError 0 exportedDataPoints someException
+    handleSomeException :: SomeException -> IO ()
+    handleSomeException = logException logger
 
 --------------------------------------------------------------------------------
 -- CanExportToConsole
@@ -144,9 +89,7 @@ instance CanExportToOltpViaHttpProtobuf OMS.MetricsService "export" where
 Internal helper.
 Count the number of `OM.NumberDataPoint` values in an `OMS.ExportMetricsServiceRequest`.
 -}
-{-# SPECIALIZE countDataPointsInExportMetricsServiceRequest :: OMS.ExportMetricsServiceRequest -> Int64 #-}
-{-# SPECIALIZE countDataPointsInExportMetricsServiceRequest :: OMS.ExportMetricsServiceRequest -> Word #-}
-countDataPointsInExportMetricsServiceRequest :: (Integral i) => OMS.ExportMetricsServiceRequest -> i
+countDataPointsInExportMetricsServiceRequest :: OMS.ExportMetricsServiceRequest -> Int64
 countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest =
   getSum $ foldMap (Sum . countDataPointsInResourceMetrics) (exportMetricsServiceRequest ^. OMS.vec'resourceMetrics)
 
@@ -154,9 +97,7 @@ countDataPointsInExportMetricsServiceRequest exportMetricsServiceRequest =
 Internal helper.
 Count the number of `OM.NumberDataPoint` values in an `OM.ResourceMetrics`.
 -}
-{-# SPECIALIZE countDataPointsInResourceMetrics :: OM.ResourceMetrics -> Int64 #-}
-{-# SPECIALIZE countDataPointsInResourceMetrics :: OM.ResourceMetrics -> Word #-}
-countDataPointsInResourceMetrics :: (Integral i) => OM.ResourceMetrics -> i
+countDataPointsInResourceMetrics :: OM.ResourceMetrics -> Int64
 countDataPointsInResourceMetrics resourceMetrics =
   getSum $ foldMap (Sum . countDataPointsInScopeMetrics) (resourceMetrics ^. OM.vec'scopeMetrics)
 
@@ -164,9 +105,7 @@ countDataPointsInResourceMetrics resourceMetrics =
 Internal helper.
 Count the number of `OM.NumberDataPoint` values in an `OM.ScopeMetrics`.
 -}
-{-# SPECIALIZE countDataPointsInScopeMetrics :: OM.ScopeMetrics -> Int64 #-}
-{-# SPECIALIZE countDataPointsInScopeMetrics :: OM.ScopeMetrics -> Word #-}
-countDataPointsInScopeMetrics :: (Integral i) => OM.ScopeMetrics -> i
+countDataPointsInScopeMetrics :: OM.ScopeMetrics -> Int64
 countDataPointsInScopeMetrics scopeMetrics =
   getSum $ foldMap (Sum . countDataPointsInMetric) (scopeMetrics ^. OM.vec'metrics)
 
@@ -174,9 +113,7 @@ countDataPointsInScopeMetrics scopeMetrics =
 Internal helper.
 Count the number of `OM.NumberDataPoint` values in an `OM.Metric`.
 -}
-{-# SPECIALIZE countDataPointsInMetric :: OM.Metric -> Int64 #-}
-{-# SPECIALIZE countDataPointsInMetric :: OM.Metric -> Word #-}
-countDataPointsInMetric :: (Integral i) => OM.Metric -> i
+countDataPointsInMetric :: OM.Metric -> Int64
 countDataPointsInMetric metric =
   fromIntegral $
     case metric ^. OM.maybe'data' of

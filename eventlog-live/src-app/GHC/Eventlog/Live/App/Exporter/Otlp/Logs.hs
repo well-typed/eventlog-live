@@ -3,9 +3,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module GHC.Eventlog.Live.App.Exporter.Otlp.Logs (
-  -- * Logs
-  ExportLogsResult (..),
-  RejectedLogsError (..),
+  -- * Export
   exportResourceLogs,
 
   -- * Conversion to OTLP
@@ -15,21 +13,19 @@ module GHC.Eventlog.Live.App.Exporter.Otlp.Logs (
   toLogRecords,
 ) where
 
-import Control.Exception (Exception (..), SomeException (..), catch)
+import Control.Exception (SomeException (..), catch)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Data (Proxy (..))
 import Data.Int (Int64)
-import Data.Machine (ProcessT, await, construct, yield)
+import Data.Machine (ProcessT, traversing)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Sum (..))
-import Data.Text (Text)
 import Data.Vector qualified as V
-import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
+import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), ExportError (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
 import GHC.Eventlog.Live.Config (FullConfig)
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (Logger)
-import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), Logger, logException, logMetric)
 import GHC.Eventlog.Live.Types.Attribute ((~=))
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..), SomeLogs (..), logConfig)
 import GHC.Eventlog.Live.Types.Severity (Severity)
@@ -44,83 +40,32 @@ import Proto.Opentelemetry.Proto.Common.V1.Common_Fields qualified as OC
 import Proto.Opentelemetry.Proto.Logs.V1.Logs qualified as OL
 import Proto.Opentelemetry.Proto.Logs.V1.Logs_Fields qualified as OL
 import Proto.Opentelemetry.Proto.Resource.V1.Resource qualified as OR
-import Text.Printf (printf)
 
 --------------------------------------------------------------------------------
--- OpenTelemetry gRPC Exporters
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- OpenTelemetry Exporter Result for Logs
-
-data ExportLogsResult
-  = ExportLogsResult
-  { exportedLogRecords :: !Int64
-  , rejectedLogRecords :: !Int64
-  , maybeSomeException :: Maybe SomeException
-  }
-  deriving (Show)
-
-pattern ExportLogsSuccess :: Int64 -> ExportLogsResult
-pattern ExportLogsSuccess exportedLogRecords =
-  ExportLogsResult exportedLogRecords 0 Nothing
-
-pattern ExportLogsError :: Int64 -> Int64 -> SomeException -> ExportLogsResult
-pattern ExportLogsError exportedLogRecords rejectedLogRecords someException =
-  ExportLogsResult exportedLogRecords rejectedLogRecords (Just someException)
-
-data RejectedLogsError
-  = RejectedLogsError
-  { rejectedLogRecords :: !Int64
-  , errorMessage :: !Text
-  }
-  deriving (Show)
-
-instance Exception RejectedLogsError where
-  displayException :: RejectedLogsError -> String
-  displayException RejectedLogsError{..} =
-    printf "Error: OpenTelemetry Collector rejected %d log records with message: %s" rejectedLogRecords errorMessage
-
---------------------------------------------------------------------------------
--- OpenTelemetry gRPC Exporter for Logs
+-- OpenTelemetry Exporter for Logs
 
 exportResourceLogs ::
   Logger IO ->
   Exporter ->
-  ProcessT IO (Tick OLS.ExportLogsServiceRequest) (Tick ExportLogsResult)
-exportResourceLogs logger exporter = construct $ go False
+  ProcessT IO OLS.ExportLogsServiceRequest ()
+exportResourceLogs logger exporter =
+  traversing sendResourceLogs
  where
-  go exportedResourceLogs =
-    await >>= \case
-      Tick -> do
-        unless exportedResourceLogs $
-          yield (Item $ ExportLogsSuccess 0)
-        yield Tick
-        go False
-      Item exportLogsServiceRequest -> do
-        exportLogsResult <- liftIO (sendResourceLogs exportLogsServiceRequest)
-        yield (Item exportLogsResult)
-        go True
-
-  sendResourceLogs :: OLS.ExportLogsServiceRequest -> IO ExportLogsResult
+  sendResourceLogs :: OLS.ExportLogsServiceRequest -> IO ()
   sendResourceLogs exportLogsServiceRequest =
     doExport `catch` handleSomeException
    where
-    !exportedLogRecords = countLogRecordsInExportLogsServiceRequest exportLogsServiceRequest
-
-    doExport :: IO ExportLogsResult
+    doExport :: IO ()
     doExport = do
       resp <- export @OLS.LogsService @"export" logger exporter exportLogsServiceRequest
-      if resp ^. OLS.partialSuccess . OLS.rejectedLogRecords == 0
-        then
-          pure $ ExportLogsSuccess exportedLogRecords
-        else do
-          let !rejectedLogRecords = resp ^. OLS.partialSuccess . OLS.rejectedLogRecords
-          let !rejectedLogsError = RejectedLogsError{errorMessage = resp ^. OLS.partialSuccess . OLS.errorMessage, ..}
-          pure $ ExportLogsError exportedLogRecords rejectedLogRecords (SomeException rejectedLogsError)
+      let !exported = countLogRecordsInExportLogsServiceRequest exportLogsServiceRequest
+      let !rejected = resp ^. OLS.partialSuccess . OLS.rejectedLogRecords
+      liftIO (logMetric logger ExportLogs ExportResult{..})
+      unless (rejected == 0) $
+        liftIO (logException logger $ ExportError $ resp ^. OLS.partialSuccess . OLS.errorMessage)
 
-    handleSomeException :: SomeException -> IO ExportLogsResult
-    handleSomeException someException = pure $ ExportLogsError 0 exportedLogRecords someException
+    handleSomeException :: SomeException -> IO ()
+    handleSomeException = logException logger
 
 --------------------------------------------------------------------------------
 -- CanExportToConsole

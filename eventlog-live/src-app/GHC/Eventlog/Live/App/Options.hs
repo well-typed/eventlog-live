@@ -103,7 +103,6 @@ data Options = Options
   , maybeHeapProfBreakdown :: Maybe HeapProfBreakdown
   , maybeIpeDBPath :: Maybe FilePath
   , maybeCCDBPath :: Maybe FilePath
-  , stats :: Bool
   , maybeConfigFile :: Maybe FilePath
   , controlOptions :: ControlOptions
   , myDebugOptions :: MyDebugOptions
@@ -120,7 +119,6 @@ optionsParser =
     <*> O.optional heapProfBreakdownParser
     <*> O.optional ipeDBPathParser
     <*> O.optional ccDBPathParser
-    <*> statsParser
     <*> O.optional configFileParser
     <*> controlOptionsParser
     <*> myDebugOptionsParser
