@@ -69,7 +69,7 @@ test_oddball_HasHeapProfSample =
                 \"
           }
    in programTestFor "test_oddball_HasHeapProfSample" oddball options $ do
-        assertResourceTelemetryData $
+        assertResourceTelemetry $
           toResourceMetrics
             ~> withServiceName "oddball"
             ~> toScopeMetrics
@@ -98,7 +98,7 @@ test_oddball_HasUserMarker'Summing =
                 \"
           }
    in programTestFor "test_oddball_HasUserMarker'Summing" oddball options $ do
-        assertResourceTelemetryData $
+        assertResourceTelemetry $
           toResourceLogs
             ~> withServiceName "oddball"
             ~> toScopeLogs
@@ -127,7 +127,7 @@ test_jumpyJump_HasCostCentreProfile =
                 \"
           }
    in programTestFor "test_jumpyJump_HasCostCentreProfile" jumpyJump options $ do
-        assertResourceTelemetryData $
+        assertResourceTelemetry $
           toResourceProfiles
             ~> toScopeProfiles
             ~> toProfiles
@@ -155,7 +155,7 @@ test_jumpyJump_HasGhcStackProfilerProfile =
                 \"
           }
    in programTestFor "test_jumpyJump_HasGhcStackProfilerProfile" jumpyJump options $ do
-        assertResourceTelemetryData $
+        assertResourceTelemetry $
           toResourceProfiles
             ~> toScopeProfiles
             ~> toProfiles
