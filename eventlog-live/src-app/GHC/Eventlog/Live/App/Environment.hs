@@ -511,7 +511,7 @@ readEndpoint protocol maybeInsecure logger optionName = go True
         | otherwise ->
             throwE $ "Environment variable " <> optionName <> " specifies malformed URI '" <> endpoint <> "'."
       Just URI{uriAuthority = Nothing} -> do
-        throwE $ "Environment variable " <> optionName <> " specifies URI without autority '" <> endpoint <> "'."
+        throwE $ "Environment variable " <> optionName <> " specifies URI without authority '" <> endpoint <> "'."
       Just URI{uriScheme}
         | uriScheme `notElem` ["http:", "https:"] ->
             throwE $ "Environment variable " <> optionName <> " specifies URI with unsupported scheme '" <> endpoint <> "'. Use 'http' or 'https'."
