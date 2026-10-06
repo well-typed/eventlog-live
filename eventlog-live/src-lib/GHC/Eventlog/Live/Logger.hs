@@ -44,9 +44,9 @@ import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Attribute qualified as A
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..))
 import GHC.Eventlog.Live.Types.Severity (Severity (..), toSeverityString)
-import GHC.IsList qualified as IsList
+import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Timestamp)
-import GHC.Stack (CallStack, callStack, popCallStack, prettyCallStack)
+import GHC.Stack (CallStack, callStack, prettyCallStack)
 import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
 import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), SGR (..), hNowSupportsANSI, hSetSGR)
@@ -60,26 +60,37 @@ newtype Logger m = Logger {unLogger :: CCA.LogAction m (Tick InternalTelemetry)}
 {- |
 The type of internal telemetry data.
 -}
-newtype InternalTelemetry
-  = InternalTelemetry'LogsRecord {logRecord :: LogRecord}
+data InternalTelemetry
+  = InternalTelemetry'LogRecord !LogRecord
+  deriving (Show)
 
 {- |
 Use a `Logger` to log a message with a severity.
 -}
 writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
-writeLog logger severity value =
-  let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
-   in logger.unLogger
-        <& Item
-          InternalTelemetry'LogsRecord
-            { logRecord =
-                LogRecord
-                  { value
-                  , maybeSeverity = Just severity
-                  , maybeTimeUnixNano = Nothing
-                  , attrs = ["call-stack" ~= (prettyCallStack <$> maybeCallStack)]
-                  }
-            }
+writeLog logger severity message =
+  writeLogRecord
+    LogRecord
+      { value = message
+      , maybeSeverity = Just severity
+      , maybeTimeUnixNano = Nothing
+      , attrs = maybe mempty (\cs -> ["call-stack" ~= prettyCallStack cs]) (cleanCallStack callStack)
+      }
+ where
+  writeLogRecord = (logger.unLogger <&) . Item . InternalTelemetry'LogRecord
+
+{- |
+Internal helper.
+
+Remove all log functions from the `CallStack`.
+-}
+cleanCallStack :: CallStack -> Maybe CallStack
+cleanCallStack =
+  toMaybeCallStack . dropWhile ((`elem` logFunctions) . fst) . toList
+ where
+  toMaybeCallStack locations = if null locations then Nothing else Just (fromList locations)
+  logFunctions :: [String]
+  logFunctions = ["writeLog", "logTrace", "logDebug", "logInfo", "logWarn", "logError", "logFatal", "logException"]
 
 {- |
 Use a `Logger` to log a `Tick`.
@@ -149,7 +160,7 @@ handleLogger ::
 handleLogger handle = Logger . CCA.LogAction $ \case
   Tick ->
     pure ()
-  Item InternalTelemetry'LogsRecord{..} -> liftIO $ do
+  Item (InternalTelemetry'LogRecord logRecord) -> liftIO $ do
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush handle
@@ -167,7 +178,7 @@ filterBySeverity severityThreshold =
  where
   severityFilter = \case
     Tick -> True
-    Item InternalTelemetry'LogsRecord{..} ->
+    Item (InternalTelemetry'LogRecord logRecord) ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
 
 {- |
@@ -243,11 +254,11 @@ Add the current Unix timestamp in nanoseconds to telemetry data.
 addTimeUnixNano :: InternalTelemetry -> IO InternalTelemetry
 addTimeUnixNano myTelemetry =
   case myTelemetry of
-    InternalTelemetry'LogsRecord{logRecord = LogRecord{..}}
+    InternalTelemetry'LogRecord LogRecord{..}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
           pure $
-            InternalTelemetry'LogsRecord
+            InternalTelemetry'LogRecord
               LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
       | otherwise -> pure myTelemetry
 
@@ -264,19 +275,3 @@ getTimeUnixNano = toNanos <$> getTime Realtime
   --       What's that like?
   toNanos :: TimeSpec -> Timestamp
   toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec
-
-{- |
-Internal helper.
-
-Return the first argument only if the predicate holds.
--}
-onlyIf :: a -> (a -> Bool) -> Maybe a
-onlyIf a p = if p a then Just a else Nothing
-
-{- |
-Internal helper.
-
-Test if a `CallStack` is empty.
--}
-isEmptyCallStack :: CallStack -> Bool
-isEmptyCallStack = null . IsList.toList
