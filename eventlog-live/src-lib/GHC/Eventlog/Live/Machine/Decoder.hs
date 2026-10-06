@@ -14,9 +14,8 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.ByteString qualified as BS
 import Data.Machine (Is, PlanT, ProcessT, await, construct, yield)
 import Data.Text qualified as T
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logError)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), liftTick)
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events.Incremental (Decoder (..), decodeEventLog)
 
@@ -39,7 +38,7 @@ decodeEvent logger = construct $ loop decodeEventLog
   loop Done{} = pure ()
   loop (Consume k) = await >>= \chunk -> loop (k chunk)
   loop (Produce a d') = yield a >> loop d'
-  loop (Error _ err) = lift $ writeLog logger ERROR $ T.pack err
+  loop (Error _ err) = lift $ logError logger $ T.pack err
 
 {- |
 Parse 'Event's from a stream of 'BS.ByteString' chunks with ticks.

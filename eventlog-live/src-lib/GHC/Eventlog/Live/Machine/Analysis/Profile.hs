@@ -33,12 +33,11 @@ import Data.Traversable.Compat (mapAccumM)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word8)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logError, logWarn)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Types.Profiles (Location (..))
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Live.Types.Thread (ThreadId (..), fromThreadId)
 import GHC.RTS.Events (Event (..), Timestamp)
 import GHC.RTS.Events qualified as E
@@ -149,7 +148,7 @@ processGhcStackProfilerData logger infoProvTable =
           case GSP.deserializeEventlogMessage (BSL.fromStrict payload) of
             Left errMsg
               | st.warnOnDeserializeError -> do
-                  lift . writeLog logger WARN . T.unlines $
+                  lift . logWarn logger . T.unlines $
                     [ "Could not parse UserBinaryMessage as ghc-stack-profiler message:"
                     , T.pack errMsg
                     , "If other plugins are communicating via binary eventlog messages, this is expected."
@@ -186,7 +185,7 @@ processGhcStackProfilerData logger infoProvTable =
             Right (GSP.SourceLocationDef sourceLocation) ->
               case GSP.insertSourceLocationMessage sourceLocation st.symbolTable of
                 Left errMsg -> do
-                  lift . writeLog logger WARN . T.unlines $
+                  lift . logWarn logger . T.unlines $
                     [ "Could not decode source location from ghc-stack-profiler message:"
                     , T.pack (displayException errMsg)
                     ]
@@ -209,7 +208,7 @@ processGhcStackProfilerData logger infoProvTable =
           GSP.hydrateEventlogCallStackMessage symbolTableReader gspBinaryCallStack
     let !gspCallStack = GSP.callStack gspCallStackMessage
     unless (null decodeErrors) $
-      writeLog logger WARN . T.unlines $
+      logWarn logger . T.unlines $
         ["Encountered errors while decoding binary call-stack from ghc-stack-profiler message:"]
           <> [T.pack (displayException decodeError) | decodeError <- decodeErrors]
 
@@ -223,13 +222,13 @@ processGhcStackProfilerData logger infoProvTable =
     let toCallStackFrame :: [Maybe InfoProv] -> GSP.StackItem -> m ([Maybe InfoProv], Maybe CallStackFrame)
         toCallStackFrame (maybeInfoProv : acc) (GSP.IpeId iid) = do
           when (isNothing maybeInfoProv) $
-            writeLog logger WARN $
+            logWarn logger $
               "Could not resolve IPE ID " <> T.pack (show (toInfoProvId iid))
           pure (acc, Just $! CallStackFrame (toInfoProvId iid) maybeInfoProv)
         toCallStackFrame acc (GSP.UserAnnotation msg maybeSourceLocation) =
           pure (acc, Just $! CallStackMessage (T.pack msg) (toSrcLoc maybeSourceLocation))
         toCallStackFrame [] (GSP.IpeId _iid) = do
-          writeLog logger ERROR $
+          logError logger $
             "Did not receive enough IPEs to annotate each call-stack item. Please report this as a bug."
           pure ([], Nothing)
     callStack <-
@@ -323,7 +322,7 @@ processProfSampleCostCentreData logger costCentreTable =
           --       logs a warning if the cost centre was not resolved.
           let warnIfNotFound costCentreId maybeCostCentre = do
                 lift . when (isNothing maybeCostCentre) $ do
-                  writeLog logger WARN . T.pack $
+                  logWarn logger . T.pack $
                     "Could not resolve cost centre ID " <> show costCentreId
                 pure $ CostCentreStackFrame costCentreId maybeCostCentre
           costCentreStack <- V.zipWithM warnIfNotFound costCentreIds maybeCostCentres

@@ -54,13 +54,12 @@ import Data.Semigroup (Max (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (deltaToCumulative, liftRouter)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), evCapNo)
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Live.Types.Traces (duration)
 import GHC.Generics (Generic)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, Timestamp)
@@ -486,7 +485,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
                           capNo.value
                           (showEventInfo (getEventInfo i))
                           (showEventInfo (getEventInfo j))
-                lift $ writeLog logger WARN $ msg
+                lift $ logWarn logger $ msg
                 -- ...continue with the previous event.
                 go (Just i)
           -- If there was no previous event, then...
@@ -518,7 +517,7 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
                       capNo.value
                       (maybe "?" (showEventInfo . getEventInfo) mi)
                       (showEventInfo (getEventInfo j))
-            lift $ writeLog logger WARN $ msg
+            lift $ logWarn logger $ msg
             -- ...continue with the previous event.
             go mi
         -- If the next event is any other event, ignore it.

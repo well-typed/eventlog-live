@@ -34,14 +34,13 @@ import Data.Machine (Process, ProcessT, await, construct, repeatedly, yield)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
-import GHC.Eventlog.Live.Logger (Logger, writeLog)
+import GHC.Eventlog.Live.Logger (Logger, logTrace, logWarn)
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (evCapNo)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
 import GHC.Eventlog.Live.Types.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
 import GHC.Eventlog.Live.Types.Metrics (Metric (..))
-import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
 import IpeDB.Database (Table)
@@ -223,7 +222,7 @@ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleDat
         for_ maybeHeapProfSample $ \heapProfSample' ->
           -- If the two samples are not the same, this assumption is wrong - warn.
           when (heapProfSample'.value /= heapProfSample.value) $
-            writeLog logger WARN . T.pack $
+            logWarn logger . T.pack $
               printf
                 "Duplicate sample for %s within census (old: %d, new: %d)."
                 (T.unpack heapProfLabel)
@@ -289,7 +288,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
           let msg =
                 "Unexpected event HeapProfSampleBegin while previous garbage collection pass was left open.\n\
                 \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
-          lift $ writeLog logger WARN $ msg
+          lift $ logWarn logger $ msg
 
           -- Yield the previous sample data anyway.
           yield heapProfSampleData
@@ -312,7 +311,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                       printf
                         "Eventlog closed era %d, but there is no current era."
                         heapProfSampleEra
-              lift $ writeLog logger WARN $ msg
+              lift $ logWarn logger $ msg
               pure heapProfSampleEraStack
             Just (currentEra, heapProfSampleEraStack') -> do
               unless (currentEra == heapProfSampleEra) $ do
@@ -322,7 +321,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                           "Eventlog closed era %d, but the current era is era %d."
                           heapProfSampleEra
                           currentEra
-                lift $ writeLog logger WARN $ msg
+                lift $ logWarn logger $ msg
               pure heapProfSampleEraStack'
         go
           st
@@ -338,7 +337,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                   \         If your binary was compiled with a GHC version prior to 9.14,\n\
                   \         you must also pass the heap profile type to this executable.\n\
                   \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
-            lift $ writeLog logger WARN $ msg
+            lift $ logWarn logger $ msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If the heap profile breakdown is by info table, but the shared info
         -- prov table was not provided, issue a warning, then disable warnings.
@@ -348,14 +347,14 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                   "Heap profile breakdown is "
                     <> heapProfBreakdownShow HeapProfBreakdownInfoTable
                     <> ", but no shared InfoProv table was provided."
-            lift $ writeLog logger WARN $ T.pack msg
+            lift $ logWarn logger $ T.pack msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
         | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
             let msg =
                   "Unsupported heap profile breakdown "
                     <> heapProfBreakdownShow HeapProfBreakdownBiography
-            lift $ writeLog logger WARN $ T.pack msg
+            lift $ logWarn logger $ T.pack msg
             go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
         -- If there is a heap profile breakdown, handle it appropriately.
         | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
@@ -366,17 +365,17 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                 HeapProfBreakdownInfoTable | Just infoProvTable <- maybeInfoProvTable ->
                   case readMaybe (T.unpack heapProfLabel) of
                     Nothing -> do
-                      lift . writeLog logger WARN $
+                      lift . logWarn logger $
                         "Expected InfoProv ID, found '" <> heapProfLabel <> "' for HeapProfSampleString."
                       pure Nothing
                     Just infoProvPtr -> do
                       maybeInfoProv <- liftIO $ DB.lookup infoProvTable infoProvPtr
                       case maybeInfoProv of
                         Nothing ->
-                          when (infoProvPtr /= InfoProvId 0) . lift . writeLog logger WARN $
+                          when (infoProvPtr /= InfoProvId 0) . lift . logWarn logger $
                             "Could not resolve IPE for " <> T.pack (show infoProvPtr) <> "."
                         Just infoProv ->
-                          lift . writeLog logger TRACE $
+                          lift . logTrace logger $
                             "Resolved IPE for " <> T.pack (show infoProvPtr) <> " to " <> infoProv.ipName <> "."
                       pure maybeInfoProv
                 _otherwise -> pure Nothing
@@ -387,7 +386,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                   let msg =
                         "Unexpected event HeapProfSampleString out of scope of HeapProfSampleBegin and HeapProfSampleEnd.\n\
                         \This may indicate that the eventlog is not properly ordered or that its semantics have changed."
-                  lift $ writeLog logger WARN $ msg
+                  lift $ logWarn logger $ msg
                   pure mempty
                 Just heapProfSampleData ->
                   pure heapProfSampleData
