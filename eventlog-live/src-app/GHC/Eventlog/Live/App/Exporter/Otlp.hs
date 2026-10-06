@@ -51,9 +51,9 @@ toInstrumentationScope InstrumentationScope{..} =
     ]
 
 data ResourceTelemetry
-  = ResourceTelemetry'Log OL.ResourceLogs
-  | ResourceTelemetry'Metric OM.ResourceMetrics
-  | ResourceTelemetry'Span OT.ResourceSpans
+  = ResourceTelemetry'Logs OL.ResourceLogs
+  | ResourceTelemetry'Metrics OM.ResourceMetrics
+  | ResourceTelemetry'Spans OT.ResourceSpans
   | ResourceTelemetry'Profile OP.ProfilesData
 
 {- |
@@ -107,17 +107,17 @@ exportTelemetry logger fullConfig exporters =
 
 getResourceLogs :: ResourceTelemetry -> Maybe OL.ResourceLogs
 getResourceLogs = \case
-  (ResourceTelemetry'Log resourceLogs) -> Just resourceLogs
+  (ResourceTelemetry'Logs resourceLogs) -> Just resourceLogs
   _otherwise -> Nothing
 
 getResourceMetrics :: ResourceTelemetry -> Maybe OM.ResourceMetrics
 getResourceMetrics = \case
-  (ResourceTelemetry'Metric resourceMetrics) -> Just resourceMetrics
+  (ResourceTelemetry'Metrics resourceMetrics) -> Just resourceMetrics
   _otherwise -> Nothing
 
 getResourceSpans :: ResourceTelemetry -> Maybe OT.ResourceSpans
 getResourceSpans = \case
-  (ResourceTelemetry'Span resourceSpans) -> Just resourceSpans
+  (ResourceTelemetry'Spans resourceSpans) -> Just resourceSpans
   _otherwise -> Nothing
 
 getResourceProfiles :: ResourceTelemetry -> Maybe OP.ProfilesData
@@ -145,17 +145,17 @@ toResourceTelemetry fullConfig ExportRequest{..} =
     let logRecords = concatMap (toLogRecords fullConfig) someLogs
     scopeLogs <- toScopeLogs scope' logRecords
     resourceLogs <- toResourceLogs resource' [scopeLogs]
-    pure $ ResourceTelemetry'Log resourceLogs
+    pure $ ResourceTelemetry'Logs resourceLogs
   maybeResourceMetrics = do
     let metrics = mapMaybe (toMetric fullConfig) someMetrics
     scopeMetrics <- toScopeMetrics scope' metrics
     resourceMetrics <- toResourceMetrics resource' [scopeMetrics]
-    pure $ ResourceTelemetry'Metric resourceMetrics
+    pure $ ResourceTelemetry'Metrics resourceMetrics
   maybeResourceSpans = do
     let spans = concatMap (toSpans fullConfig) someSpans
     scopeSpans <- toScopeSpans scope' spans
     resourceSpans <- toResourceSpans resource' [scopeSpans]
-    pure $ ResourceTelemetry'Span resourceSpans
+    pure $ ResourceTelemetry'Spans resourceSpans
   maybeProfiles = do
     (profiles, dictionary) <- toProfiles fullConfig someSamples
     scopeProfiles <- toScopeProfiles scope' profiles
@@ -172,7 +172,7 @@ partitionTelemetry = go ([], [], [], [])
   go :: ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples]) -> [Telemetry] -> ([SomeLogs], [SomeMetrics], [SomeSpans], [SomeSamples])
   go (logsRev, metricsRev, spansRev, samplesRev) = \case
     [] -> (reverse logsRev, reverse metricsRev, reverse spansRev, reverse samplesRev)
-    (Telemetry'Log log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
-    (Telemetry'Metric metric : rest) -> go (logsRev, metric : metricsRev, spansRev, samplesRev) rest
-    (Telemetry'Span spans : rest) -> go (logsRev, metricsRev, spans : spansRev, samplesRev) rest
-    (Telemetry'Sample sample : rest) -> go (logsRev, metricsRev, spansRev, sample : samplesRev) rest
+    (Telemetry'Logs log_ : rest) -> go (log_ : logsRev, metricsRev, spansRev, samplesRev) rest
+    (Telemetry'Metrics metric : rest) -> go (logsRev, metric : metricsRev, spansRev, samplesRev) rest
+    (Telemetry'Spans spans : rest) -> go (logsRev, metricsRev, spans : spansRev, samplesRev) rest
+    (Telemetry'Samples sample : rest) -> go (logsRev, metricsRev, spansRev, sample : samplesRev) rest

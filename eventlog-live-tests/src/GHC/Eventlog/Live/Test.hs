@@ -207,7 +207,7 @@ toResourceLogs :: (Monad m) => ProcessT m ResourceTelemetry OL.ResourceLogs
 toResourceLogs =
   repeatedly $
     await >>= \case
-      ResourceTelemetry'Logs logs -> traverse_ yield logs
+      ResourceTelemetry'Logss logs -> traverse_ yield logs
       _otherwise -> pure ()
 
 {- |
@@ -217,7 +217,7 @@ toResourceMetrics :: (Monad m) => ProcessT m ResourceTelemetry OM.ResourceMetric
 toResourceMetrics =
   repeatedly $
     await >>= \case
-      ResourceTelemetry'Metrics metrics -> traverse_ yield metrics
+      ResourceTelemetry'Metricss metrics -> traverse_ yield metrics
       _otherwise -> pure ()
 
 {- |
@@ -238,7 +238,7 @@ toResourceSpans :: (Monad m) => ProcessT m ResourceTelemetry OT.ResourceSpans
 toResourceSpans =
   repeatedly $
     await >>= \case
-      ResourceTelemetry'Spans spans -> traverse_ yield spans
+      ResourceTelemetry'Spanss spans -> traverse_ yield spans
       _otherwise -> pure ()
 
 {- |
@@ -380,10 +380,10 @@ withTempConfigFile maybeConfigBody action =
 A batch of resource telemetry data.
 -}
 data ResourceTelemetry
-  = ResourceTelemetry'Logs !(Vector OL.ResourceLogs)
-  | ResourceTelemetry'Metrics !(Vector OM.ResourceMetrics)
+  = ResourceTelemetry'Logss !(Vector OL.ResourceLogs)
+  | ResourceTelemetry'Metricss !(Vector OM.ResourceMetrics)
   | ResourceTelemetry'Profiles !OP.ProfilesDictionary !(Vector OP.ResourceProfiles)
-  | ResourceTelemetry'Spans !(Vector OT.ResourceSpans)
+  | ResourceTelemetry'Spanss !(Vector OT.ResourceSpans)
   deriving (Show)
 
 {- |
@@ -431,13 +431,13 @@ withGrpcOtlpServer action = do
       logsServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let logs = req ^. OLS.vec'resourceLogs
         debugServerInfo $ "Received " <> show (V.length logs) <> " resource logs"
-        enqueue (ResourceTelemetry'Logs logs)
+        enqueue (ResourceTelemetry'Logss logs)
         pure G.defMessage
   let metricsServiceExportHandler :: G.ServerHandler IO (G.Protobuf OMS.MetricsService "export")
       metricsServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let metrics = req ^. OMS.vec'resourceMetrics
         debugServerInfo $ "Received " <> show (V.length metrics) <> " resource metrics"
-        enqueue (ResourceTelemetry'Metrics metrics)
+        enqueue (ResourceTelemetry'Metricss metrics)
         pure G.defMessage
   let profilesServiceExportHandler :: G.ServerHandler IO (G.Protobuf OPS.ProfilesService "export")
       profilesServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
@@ -450,7 +450,7 @@ withGrpcOtlpServer action = do
       tracesServiceExportHandler = G.mkNonStreaming . liftProto $ \req -> do
         let spans = req ^. OTS.vec'resourceSpans
         debugServerInfo $ "Received " <> show (V.length spans) <> " resource spans"
-        enqueue (ResourceTelemetry'Spans spans)
+        enqueue (ResourceTelemetry'Spanss spans)
         pure G.defMessage
 
   -- Create the server methods.

@@ -59,25 +59,25 @@ instrumentationScopeToKV s =
 {-# INLINE instrumentationScopeToKV #-}
 
 data Telemetry
-  = Telemetry'Log SomeLogs
-  | Telemetry'Metric SomeMetrics
-  | Telemetry'Span SomeSpans
-  | Telemetry'Sample SomeSamples
+  = Telemetry'Logs SomeLogs
+  | Telemetry'Metrics SomeMetrics
+  | Telemetry'Spans SomeSpans
+  | Telemetry'Samples SomeSamples
 
 instance ToJSON Telemetry where
   toJSON :: Telemetry -> Value
   toJSON = \case
-    Telemetry'Log x -> toJSON x
-    Telemetry'Metric x -> toJSON x
-    Telemetry'Span x -> toJSON x
-    Telemetry'Sample x -> toJSON x
+    Telemetry'Logs x -> toJSON x
+    Telemetry'Metrics x -> toJSON x
+    Telemetry'Spans x -> toJSON x
+    Telemetry'Samples x -> toJSON x
 
   toEncoding :: Telemetry -> Encoding
   toEncoding = \case
-    Telemetry'Log x -> toEncoding x
-    Telemetry'Metric x -> toEncoding x
-    Telemetry'Span x -> toEncoding x
-    Telemetry'Sample x -> toEncoding x
+    Telemetry'Logs x -> toEncoding x
+    Telemetry'Metrics x -> toEncoding x
+    Telemetry'Spans x -> toEncoding x
+    Telemetry'Samples x -> toEncoding x
 
 data ExportRequest = ExportRequest
   { resource :: !Resource
@@ -115,16 +115,16 @@ processEventlogTelemetry logger fullConfig resource scope maybeHeapProfBreakdown
   M.fanoutTick
     [ -- Process the heap events.
       processHeapEvents logger (Just ipedb) maybeHeapProfBreakdown fullConfig
-        ~> mapping (fmap (fmap Telemetry'Metric))
+        ~> mapping (fmap (fmap Telemetry'Metrics))
     , -- Process the log events.
       processLogEvents fullConfig
-        ~> mapping (fmap (fmap Telemetry'Log))
+        ~> mapping (fmap (fmap Telemetry'Logs))
     , -- Process the thread events.
       processThreadEvents logger fullConfig
-        ~> mapping (fmap (fmap (either Telemetry'Metric Telemetry'Span)))
+        ~> mapping (fmap (fmap (either Telemetry'Metrics Telemetry'Spans)))
     , -- Process the profile events.
       processProfileEvents logger ccdb ipedb fullConfig
-        ~> mapping (fmap (fmap Telemetry'Sample))
+        ~> mapping (fmap (fmap Telemetry'Samples))
     ]
     ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
 
@@ -143,7 +143,7 @@ processInternalTelemetry fullConfig resource scope myTelemetryChan =
   M.mergeWithTickCC (chanSource myTelemetryChan)
     ~> M.fanoutTick
       [ CL.process (Proxy @"internalLogMessage") processInternalLogRecords fullConfig
-          ~> M.liftTick (mapping (D.singleton . Telemetry'Log))
+          ~> M.liftTick (mapping (D.singleton . Telemetry'Logs))
       ]
     ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
  where
@@ -152,4 +152,4 @@ processInternalTelemetry fullConfig resource scope myTelemetryChan =
 
   getInternalLogRecord :: InternalTelemetry -> Maybe LogRecord
   getInternalLogRecord = \case
-    InternalTelemetry'LogRecord{..} -> Just logRecord
+    InternalTelemetry'LogsRecord{..} -> Just logRecord

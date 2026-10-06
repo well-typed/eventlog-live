@@ -53,7 +53,7 @@ type Logger m = CCA.LogAction m InternalTelemetry
 The type of internal telemetry data.
 -}
 newtype InternalTelemetry
-  = InternalTelemetry'LogRecord {logRecord :: LogRecord}
+  = InternalTelemetry'LogsRecord {logRecord :: LogRecord}
 
 {- |
 Use a `Logger` to log a message with a severity.
@@ -62,7 +62,7 @@ writeLog :: (HasCallStack) => Logger m -> Severity -> Text -> m ()
 writeLog logger severity value =
   let !maybeCallStack = popCallStack callStack `onlyIf` (not . isEmptyCallStack)
    in logger
-        <& InternalTelemetry'LogRecord
+        <& InternalTelemetry'LogsRecord
           { logRecord =
               LogRecord
                 { value
@@ -96,7 +96,7 @@ handleLogger ::
   IO.Handle ->
   Logger IO
 handleLogger handle = CCA.LogAction $ \case
-  InternalTelemetry'LogRecord logRecord -> liftIO $ do
+  InternalTelemetry'LogsRecord logRecord -> liftIO $ do
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush handle
@@ -113,7 +113,7 @@ filterBySeverity severityThreshold =
   cfilter severityFilter
  where
   severityFilter = \case
-    InternalTelemetry'LogRecord{..} ->
+    InternalTelemetry'LogsRecord{..} ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
 
 -- _otherwise -> True
@@ -190,11 +190,11 @@ Add the current Unix timestamp in nanoseconds to telemetry data.
 addTimeUnixNano :: InternalTelemetry -> IO InternalTelemetry
 addTimeUnixNano myTelemetry =
   case myTelemetry of
-    InternalTelemetry'LogRecord{logRecord = LogRecord{..}}
+    InternalTelemetry'LogsRecord{logRecord = LogRecord{..}}
       | isNothing maybeTimeUnixNano -> do
           timeUnixNano <- getTimeUnixNano
           pure $
-            InternalTelemetry'LogRecord
+            InternalTelemetry'LogsRecord
               LogRecord{maybeTimeUnixNano = Just timeUnixNano, ..}
       | otherwise -> pure myTelemetry
 
