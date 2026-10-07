@@ -11,8 +11,8 @@ module GHC.Eventlog.Live.App (
   main,
 ) where
 
-import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent (ThreadId, forkIO)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue)
 import Control.Exception (bracket_)
@@ -149,31 +149,28 @@ main = do
             ~> enqueue exportRequestQueue
 
     -- Create thread to process eventlog into export requests.
-    eventlogProcessorFinished <- newEmptyMVar
-    let runEventlogProcessor = do
-          DB.withNewSession def $ \session -> do
-            withCostCentreTable maybeCCDBPath session $ \ccdb ->
-              withInfoProvTable maybeIpeDBPath session $ \ipedb ->
-                withEventlogSourceHandle
-                  logger
-                  eventlogSocketTimeoutS
-                  eventlogSocketTimeoutExponent
-                  eventlogSourceOptions
-                  $ \eventlogSourceHandle -> do
-                    -- Notify the control server of the connection status.
-                    let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
-                    let endConnection = controlServerApi.notifyEndConnection serviceName
-                    bracket_ newConnection endConnection $
-                      -- Run the eventlog processor.
-                      runWithEventlogSourceHandle
-                        logger
-                        eventlogSourceHandle
-                        fullConfig.batchIntervalMs
-                        Nothing
-                        maybeEventlogLogFile
-                        (eventlogProcessor ccdb ipedb)
-          putMVar eventlogProcessorFinished ()
-    _eventlogProcessor <- forkIO runEventlogProcessor
+    eventlogProcessorHandle <- fork $ do
+      DB.withNewSession def $ \session -> do
+        withCostCentreTable maybeCCDBPath session $ \ccdb ->
+          withInfoProvTable maybeIpeDBPath session $ \ipedb ->
+            withEventlogSourceHandle
+              logger
+              eventlogSocketTimeoutS
+              eventlogSocketTimeoutExponent
+              eventlogSourceOptions
+              $ \eventlogSourceHandle -> do
+                -- Notify the control server of the connection status.
+                let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
+                let endConnection = controlServerApi.notifyEndConnection serviceName
+                bracket_ newConnection endConnection $
+                  -- Run the eventlog processor.
+                  runWithEventlogSourceHandle
+                    logger
+                    eventlogSourceHandle
+                    fullConfig.batchIntervalMs
+                    Nothing
+                    maybeEventlogLogFile
+                    (eventlogProcessor ccdb ipedb)
 
     -- Create a resource to represent the eventlog-live process.
     let internalResource :: Resource
@@ -196,26 +193,20 @@ main = do
             ~> enqueue exportRequestQueue
 
     -- Create thread to process internal telemetry into export requests.
-    internalTelemetryProcessorFinished <- newEmptyMVar
-    let runInternalTelemetryProcessor = do
-          runT_ internalTelemetryProcessor
-          putMVar internalTelemetryProcessorFinished ()
-    _internalTelemetryProcessor <- forkIO runInternalTelemetryProcessor
+    internalTelemetryProcessorHandle <- fork $ do
+      runT_ internalTelemetryProcessor
 
     -- Create machine to process export requests.
-    exportRequestProcessorFinished <- newEmptyMVar
-    let runExportRequestProcessor = do
-          withExporters logger exporterOptions $ \exporters ->
-            runT_ $
-              queueSource exportRequestQueue
-                ~> exportTelemetry logger fullConfig exporters
-          putMVar exportRequestProcessorFinished ()
-    _exportRequestProcessor <- forkIO runExportRequestProcessor
+    exportRequestProcessorHandle <- fork $ do
+      withExporters logger exporterOptions $ \exporters ->
+        runT_ $
+          queueSource exportRequestQueue
+            ~> exportTelemetry logger fullConfig exporters
 
     -- Wait for these threads to finish, then exit.
-    () <- takeMVar eventlogProcessorFinished
-    () <- takeMVar internalTelemetryProcessorFinished
-    () <- takeMVar exportRequestProcessorFinished
+    join eventlogProcessorHandle
+    join internalTelemetryProcessorHandle
+    join exportRequestProcessorHandle
     pure ()
 
 -- Log all ticks.
@@ -271,5 +262,20 @@ indexInfoProvEvents =
 enqueue :: TQueue a -> ProcessT IO a Void
 enqueue queue = repeatedly $ await >>= liftIO . atomically . writeTQueue queue
 
+data ThreadHandle = ThreadHandle {threadId :: ThreadId, finished :: MVar ()}
+
+fork :: IO () -> IO ThreadHandle
+fork action = do
+  finished <- newEmptyMVar
+  threadId <- forkIO $ do
+    action
+    putMVar finished ()
+  pure ThreadHandle{..}
+
+join :: ThreadHandle -> IO ()
+join ThreadHandle{..} =
+  readMVar finished
+
 onlyIf :: a -> Bool -> Maybe a
-onlyIf a b = if b then Just a else Nothing
+onlyIf a b =
+  if b then Just a else Nothing
