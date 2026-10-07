@@ -46,11 +46,12 @@ import Control.Exception (assert)
 import Control.Monad (when)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Char (isSpace)
+import Data.Coerce (coerce)
 import Data.Foldable (for_)
 import Data.Hashable (Hashable)
 import Data.Machine (Is (..), PlanT, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
-import Data.Semigroup (Max (..))
+import Data.Semigroup (Max (..), Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
@@ -202,7 +203,10 @@ processCapabilityUsageDuration'DeltaToCumulative ::
   (Monad m) =>
   ProcessT m (CapabilityUsageDuration Timestamp) (CapabilityUsageDuration Timestamp)
 processCapabilityUsageDuration'DeltaToCumulative =
-  liftRouter measure (const deltaToCumulative)
+  liftRouter measure . const $
+    mapping coerce
+      ~> deltaToCumulative @m @CapabilityUsageDuration @(Sum Timestamp)
+      ~> mapping coerce
  where
   -- This measure splits the input by capability _and_ usage category:
   --

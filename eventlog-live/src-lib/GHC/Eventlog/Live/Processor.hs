@@ -10,24 +10,28 @@ module GHC.Eventlog.Live.Processor (
 ) where
 
 import Data.Aeson.Types (Encoding, KeyValue (..), ToJSON (..), Value (..), pairs)
+import Data.Coerce (coerce)
 import Data.DList qualified as D
-import Data.Machine (Process, ProcessT, asParts, mapping, (~>))
+import Data.Machine (ProcessT, asParts, mapping, (~>))
+import Data.Monoid (Sum (..))
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Logger (InternalTelemetry (..), Logger)
-import GHC.Eventlog.Live.Machine.Core (Tick)
+import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), InternalTelemetry (..), Logger)
+import GHC.Eventlog.Live.Machine.Core (Tick, deltaToCumulative)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime)
 import GHC.Eventlog.Live.Processor.Core.Logs qualified as CL
+import GHC.Eventlog.Live.Processor.Core.Metrics (MetricProcessors (..), select)
+import GHC.Eventlog.Live.Processor.Core.Metrics qualified as CM
 import GHC.Eventlog.Live.Processor.Heap (processHeapEvents)
 import GHC.Eventlog.Live.Processor.Logs (processLogEvents)
 import GHC.Eventlog.Live.Processor.Profiles (processProfileEvents)
 import GHC.Eventlog.Live.Processor.Threads (processThreadEvents)
 import GHC.Eventlog.Live.Types.Attribute (Attrs, IsAttrValue (toAttrValue))
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..), SomeLogs)
-import GHC.Eventlog.Live.Types.Metrics (SomeMetrics)
+import GHC.Eventlog.Live.Types.Metrics (Metric, SomeMetrics)
 import GHC.Eventlog.Live.Types.Profiles (SomeSamples)
 import GHC.Eventlog.Live.Types.Traces (SomeSpans)
 import GHC.RTS.Events (Event (..), HeapProfBreakdown)
@@ -139,15 +143,74 @@ processInternalTelemetry ::
   ProcessT IO (Tick InternalTelemetry) (Tick ExportRequest)
 processInternalTelemetry fullConfig resource scope =
   M.fanoutTick
-    [ CL.process (Proxy @"internalLogMessage") processInternalLogRecords fullConfig
-        ~> M.liftTick (mapping (D.singleton . Telemetry'Logs))
+    [ -- Process internal log messages.
+      CL.process (Proxy @"internalLogMessage") processLogRecords fullConfig
+        ~> M.liftTick (mapping $ D.singleton . Telemetry'Logs)
+    , -- Process internal metrics.
+      M.fanoutTick
+        [ -- Process internal event counts.
+          CM.process (Proxy @"internalEventCount") processEventCount fullConfig
+            ~> M.liftTick (mapping D.singleton)
+        , -- Process internal exported log counts.
+          CM.processAllWith fullConfig processExportLogs $
+            select (Proxy @"internalExportedLogs") (.exported)
+              :&: select (Proxy @"internalRejectedLogs") (.rejected)
+              :&: End
+        , -- Process internal exported metric counts.
+          CM.processAllWith fullConfig processExportMetrics $
+            select (Proxy @"internalExportedMetrics") (.exported)
+              :&: select (Proxy @"internalRejectedMetrics") (.rejected)
+              :&: End
+        , -- Process internal exported sample counts.
+          CM.processAllWith fullConfig processExportSamples $
+            select (Proxy @"internalExportedSamples") (.exported)
+              :&: select (Proxy @"internalRejectedSamples") (.rejected)
+              :&: End
+        , -- Process internal exported span counts.
+          CM.processAllWith fullConfig processExportSpans $
+            select (Proxy @"internalExportedSpans") (.exported)
+              :&: select (Proxy @"internalRejectedSpans") (.rejected)
+              :&: End
+        ]
+        ~> M.liftTick (mapping (fmap Telemetry'Metrics))
     ]
     ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
  where
-  processInternalLogRecords :: Process InternalTelemetry LogRecord
-  processInternalLogRecords = mapping getInternalLogRecord ~> asParts
+  processLogRecords =
+    mapping getLogRecord ~> asParts
+   where
+    getLogRecord :: InternalTelemetry -> Maybe LogRecord
+    getLogRecord = \case InternalTelemetry'LogRecord l -> Just l; _ -> Nothing
 
-  getInternalLogRecord :: InternalTelemetry -> Maybe LogRecord
-  getInternalLogRecord = \case
-    InternalTelemetry'LogRecord logRecord -> Just logRecord
-    _otherwise -> Nothing
+  processEventCount =
+    mapping (coerce @_ @(Maybe (Metric (Sum Word))) . getEventCount)
+      ~> asParts
+      ~> deltaToCumulative @_ @Metric @(Sum Word)
+      ~> mapping (coerce @_ @(Metric Word))
+   where
+    getEventCount :: InternalTelemetry -> Maybe (Metric Word)
+    getEventCount = \case InternalTelemetry'Metric EventCount m -> Just m; _ -> Nothing
+
+  processExportLogs =
+    mapping getExportLogs ~> asParts ~> deltaToCumulative
+   where
+    getExportLogs :: InternalTelemetry -> Maybe (Metric ExportResult)
+    getExportLogs = \case InternalTelemetry'Metric ExportLogs m -> Just m; _ -> Nothing
+
+  processExportMetrics =
+    mapping getExportMetrics ~> asParts ~> deltaToCumulative
+   where
+    getExportMetrics :: InternalTelemetry -> Maybe (Metric ExportResult)
+    getExportMetrics = \case InternalTelemetry'Metric ExportMetrics m -> Just m; _ -> Nothing
+
+  processExportSpans =
+    mapping getExportSpans ~> asParts ~> deltaToCumulative
+   where
+    getExportSpans :: InternalTelemetry -> Maybe (Metric ExportResult)
+    getExportSpans = \case InternalTelemetry'Metric ExportSpans m -> Just m; _ -> Nothing
+
+  processExportSamples =
+    mapping getExportSamples ~> asParts ~> deltaToCumulative
+   where
+    getExportSamples :: InternalTelemetry -> Maybe (Metric ExportResult)
+    getExportSamples = \case InternalTelemetry'Metric ExportSamples m -> Just m; _ -> Nothing

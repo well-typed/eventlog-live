@@ -58,8 +58,6 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max (..))
 import Data.Traversable (for)
 import Data.Void (Void)
-import Data.Word (Word64)
-import GHC.Eventlog.Live.Types.Metrics (Metric)
 
 {- $setup
 >>> :set -XFlexibleContexts
@@ -615,21 +613,19 @@ sortByTicks key ticks =
 -- Aggregation
 -------------------------------------------------------------------------------
 
-deltaToCumulative :: forall f a. (Traversable f, Num a) => Process (f a) (f a)
-deltaToCumulative = construct $ go 0
+deltaToCumulative :: forall m f a. (Monad m, Traversable f, Monoid a) => ProcessT m (f a) (f a)
+deltaToCumulative = construct $ go mempty
  where
   go :: a -> Plan (Is (f a)) (f a) ()
   go acc =
     await >>= \fa -> do
       -- Add the cumulative sum to the value in the item.
       let (!fa', !acc') = flip runState acc . for fa $ \a -> do
-            a' <- (a +) <$> get; put a'; pure a'
+            a' <- (a <>) <$> get; put a'; pure a'
       -- Yield the updated item.
       yield fa'
       -- Continue with the new cumulative sum.
       go acc'
-{-# SPECIALIZE deltaToCumulative :: Process (Metric Double) (Metric Double) #-}
-{-# SPECIALIZE deltaToCumulative :: Process (Metric Word64) (Metric Word64) #-}
 
 -------------------------------------------------------------------------------
 -- Filtering semaphores

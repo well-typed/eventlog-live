@@ -91,6 +91,12 @@ data ExportResult = ExportResult
   }
   deriving (Show)
 
+instance Semigroup ExportResult where
+  r1 <> r2 = ExportResult{exported = r1.exported + r2.exported, rejected = r1.rejected + r2.rejected}
+
+instance Monoid ExportResult where
+  mempty = ExportResult{exported = 0, rejected = 0}
+
 {- |
 Use a `Logger` to log a message with a severity.
 -}

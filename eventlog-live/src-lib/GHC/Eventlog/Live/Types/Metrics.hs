@@ -195,7 +195,7 @@ instance KnownMetric "productivity" where
 
 instance KnownMetric "internalEventCount" where
   type GetMetricConf "internalEventCount" = InternalEventCountMetric
-  type GetMetricType "internalEventCount" = Int64
+  type GetMetricType "internalEventCount" = Word
   type GetMetricUnit "internalEventCount" = 'Arbitrary "event"
   type GetMetricKind "internalEventCount" = 'Sum 'Cumulative 'Monotonic
 
