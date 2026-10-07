@@ -61,7 +61,7 @@ import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
 import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import GHC.TypeLits (KnownSymbol (..), Symbol, symbolVal)
 
 --------------------------------------------------------------------------------
 -- Known Metrics
@@ -192,6 +192,60 @@ instance KnownMetric "productivity" where
   type GetMetricType "productivity" = Double
   type GetMetricUnit "productivity" = 'Percent
   type GetMetricKind "productivity" = 'Gauge
+
+instance KnownMetric "internalEventCount" where
+  type GetMetricConf "internalEventCount" = InternalEventCountMetric
+  type GetMetricType "internalEventCount" = Int64
+  type GetMetricUnit "internalEventCount" = 'Arbitrary "event"
+  type GetMetricKind "internalEventCount" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalExportedLogs" where
+  type GetMetricConf "internalExportedLogs" = InternalExportedLogsMetric
+  type GetMetricType "internalExportedLogs" = Int64
+  type GetMetricUnit "internalExportedLogs" = 'Arbitrary "log"
+  type GetMetricKind "internalExportedLogs" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalRejectedLogs" where
+  type GetMetricConf "internalRejectedLogs" = InternalRejectedLogsMetric
+  type GetMetricType "internalRejectedLogs" = Int64
+  type GetMetricUnit "internalRejectedLogs" = 'Arbitrary "log"
+  type GetMetricKind "internalRejectedLogs" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalExportedMetrics" where
+  type GetMetricConf "internalExportedMetrics" = InternalExportedMetricsMetric
+  type GetMetricType "internalExportedMetrics" = Int64
+  type GetMetricUnit "internalExportedMetrics" = 'Arbitrary "metric"
+  type GetMetricKind "internalExportedMetrics" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalRejectedMetrics" where
+  type GetMetricConf "internalRejectedMetrics" = InternalRejectedMetricsMetric
+  type GetMetricType "internalRejectedMetrics" = Int64
+  type GetMetricUnit "internalRejectedMetrics" = 'Arbitrary "metric"
+  type GetMetricKind "internalRejectedMetrics" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalExportedSamples" where
+  type GetMetricConf "internalExportedSamples" = InternalExportedSamplesMetric
+  type GetMetricType "internalExportedSamples" = Int64
+  type GetMetricUnit "internalExportedSamples" = 'Arbitrary "sample"
+  type GetMetricKind "internalExportedSamples" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalRejectedSamples" where
+  type GetMetricConf "internalRejectedSamples" = InternalRejectedSamplesMetric
+  type GetMetricType "internalRejectedSamples" = Int64
+  type GetMetricUnit "internalRejectedSamples" = 'Arbitrary "sample"
+  type GetMetricKind "internalRejectedSamples" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalExportedSpans" where
+  type GetMetricConf "internalExportedSpans" = InternalExportedSpansMetric
+  type GetMetricType "internalExportedSpans" = Int64
+  type GetMetricUnit "internalExportedSpans" = 'Arbitrary "span"
+  type GetMetricKind "internalExportedSpans" = 'Sum 'Cumulative 'Monotonic
+
+instance KnownMetric "internalRejectedSpans" where
+  type GetMetricConf "internalRejectedSpans" = InternalRejectedSpansMetric
+  type GetMetricType "internalRejectedSpans" = Int64
+  type GetMetricUnit "internalRejectedSpans" = 'Arbitrary "span"
+  type GetMetricKind "internalRejectedSpans" = 'Sum 'Cumulative 'Monotonic
 
 --------------------------------------------------------------------------------
 -- Superclass for metric types
@@ -353,20 +407,21 @@ data MetricUnit
   | MegaBlock
   | NanoSecond
   | Percent
+  | Arbitrary Symbol
 
 data SMetricUnit metricUnit where
   SByte :: SMetricUnit 'Byte
   SMegaBlock :: SMetricUnit 'MegaBlock
   SNanoSecond :: SMetricUnit 'NanoSecond
   SPercent :: SMetricUnit 'Percent
+  SArbitrary :: (KnownSymbol unit) => Proxy unit -> SMetricUnit ('Arbitrary unit)
 
 toUCUM :: SMetricUnit metricUnit -> Text
-toUCUM =
-  T.pack . \case
-    SByte -> "By"
-    SMegaBlock -> "{mblock}"
-    SNanoSecond -> "ns"
-    SPercent -> "%"
+toUCUM SByte = "By"
+toUCUM SMegaBlock = "{mblock}"
+toUCUM SNanoSecond = "ns"
+toUCUM SPercent = "%"
+toUCUM (SArbitrary unit) = "{" <> T.pack (symbolVal unit) <> "}"
 
 type KnownMetricUnit :: MetricUnit -> Constraint
 class KnownMetricUnit metricUnit where
@@ -386,6 +441,10 @@ instance KnownMetricUnit 'NanoSecond where
 
 instance KnownMetricUnit 'Percent where
   metricUnitSing _proxy = SPercent
+  {-# INLINE metricUnitSing #-}
+
+instance (KnownSymbol symbol) => KnownMetricUnit ('Arbitrary symbol) where
+  metricUnitSing _proxy = SArbitrary Proxy
   {-# INLINE metricUnitSing #-}
 
 --------------------------------------------------------------------------------

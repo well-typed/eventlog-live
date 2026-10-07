@@ -32,7 +32,16 @@
             "gc_copied": { "$ref": "#/definitions/metric" },
             "gc_slop": { "$ref": "#/definitions/metric" },
             "gc_fragmentation": { "$ref": "#/definitions/metric" },
-            "productivity": { "$ref": "#/definitions/metric" }
+            "productivity": { "$ref": "#/definitions/metric" },
+            "internal_event_count": { "$ref": "#/definitions/metric" },
+            "internal_exported_logs": { "$ref": "#/definitions/metric" },
+            "internal_rejected_logs": { "$ref": "#/definitions/metric" },
+            "internal_exported_metrics": { "$ref": "#/definitions/metric" },
+            "internal_rejected_metrics": { "$ref": "#/definitions/metric" },
+            "internal_exported_samples": { "$ref": "#/definitions/metric" },
+            "internal_rejected_samples": { "$ref": "#/definitions/metric" },
+            "internal_exported_spans": { "$ref": "#/definitions/metric" },
+            "internal_rejected_spans": { "$ref": "#/definitions/metric" }
           },
           "additionalProperties": false
         },

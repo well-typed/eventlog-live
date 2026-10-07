@@ -49,6 +49,15 @@ module GHC.Eventlog.Live.Config (
   HeapProfSampleMetric (..),
   CapabilityUsageMetric (..),
   ProductivityMetric (..),
+  InternalEventCountMetric (..),
+  InternalExportedLogsMetric (..),
+  InternalRejectedLogsMetric (..),
+  InternalExportedMetricsMetric (..),
+  InternalRejectedMetricsMetric (..),
+  InternalExportedSamplesMetric (..),
+  InternalRejectedSamplesMetric (..),
+  InternalExportedSpansMetric (..),
+  InternalRejectedSpansMetric (..),
 
   -- *** Trace processor configuration types
   Traces (..),
@@ -253,6 +262,42 @@ instance Default CapabilityUsageMetric where
 instance Default ProductivityMetric where
   def :: ProductivityMetric
   def = $(getDefault @'["processors", "metrics", "productivity"] defaultConfig)
+
+instance Default InternalEventCountMetric where
+  def :: InternalEventCountMetric
+  def = $(getDefault @'["processors", "metrics", "internalEventCount"] defaultConfig)
+
+instance Default InternalExportedLogsMetric where
+  def :: InternalExportedLogsMetric
+  def = $(getDefault @'["processors", "metrics", "internalExportedLogs"] defaultConfig)
+
+instance Default InternalRejectedLogsMetric where
+  def :: InternalRejectedLogsMetric
+  def = $(getDefault @'["processors", "metrics", "internalRejectedLogs"] defaultConfig)
+
+instance Default InternalExportedMetricsMetric where
+  def :: InternalExportedMetricsMetric
+  def = $(getDefault @'["processors", "metrics", "internalExportedMetrics"] defaultConfig)
+
+instance Default InternalRejectedMetricsMetric where
+  def :: InternalRejectedMetricsMetric
+  def = $(getDefault @'["processors", "metrics", "internalRejectedMetrics"] defaultConfig)
+
+instance Default InternalExportedSamplesMetric where
+  def :: InternalExportedSamplesMetric
+  def = $(getDefault @'["processors", "metrics", "internalExportedSamples"] defaultConfig)
+
+instance Default InternalRejectedSamplesMetric where
+  def :: InternalRejectedSamplesMetric
+  def = $(getDefault @'["processors", "metrics", "internalRejectedSamples"] defaultConfig)
+
+instance Default InternalExportedSpansMetric where
+  def :: InternalExportedSpansMetric
+  def = $(getDefault @'["processors", "metrics", "internalExportedSpans"] defaultConfig)
+
+instance Default InternalRejectedSpansMetric where
+  def :: InternalRejectedSpansMetric
+  def = $(getDefault @'["processors", "metrics", "internalRejectedSpans"] defaultConfig)
 
 -- NOTE: This should be kept in sync with the list of traces.
 --       Specifically, there should be a `Default` instance for every trace.
