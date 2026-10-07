@@ -147,6 +147,51 @@ processors:
       description: The ratio between GC and mutator usage.
       aggregate: 1s
       export: 30s
+    internal_event_count:
+      name: eventlog_live_InternalEventCount
+      description: The number of events received over the eventlog socket.
+      aggregate: 1s
+      export: 30s
+    internal_exported_logs:
+      name: eventlog_live_InternalExportedLogs
+      description: The number of exported logs.
+      aggregate: 1s
+      export: 30s
+    internal_rejected_logs:
+      name: eventlog_live_InternalRejectedLogs
+      description: The number of exported logs.
+      aggregate: 1s
+      export: 30s
+    internal_exported_metrics:
+      name: eventlog_live_InternalExportedMetrics
+      description: The number of exported metrics.
+      aggregate: 1s
+      export: 30s
+    internal_rejected_metrics:
+      name: eventlog_live_InternalRejectedMetrics
+      description: The number of exported metrics.
+      aggregate: 1s
+      export: 30s
+    internal_exported_samples:
+      name: eventlog_live_InternalExportedSamples
+      description: The number of exported samples.
+      aggregate: 1s
+      export: 30s
+    internal_rejected_samples:
+      name: eventlog_live_InternalRejectedSamples
+      description: The number of exported samples.
+      aggregate: 1s
+      export: 30s
+    internal_exported_spans:
+      name: eventlog_live_InternalExportedSpans
+      description: The number of exported spans.
+      aggregate: 1s
+      export: 30s
+    internal_rejected_spans:
+      name: eventlog_live_InternalRejectedSpans
+      description: The number of exported spans.
+      aggregate: 1s
+      export: 30s
   profiles:
     call_stack_profile:
       name: ghc_eventlog_CallStackProfile

@@ -39,6 +39,15 @@ module GHC.Eventlog.Live.Config.Types (
   GcFragmentationMetric (..),
   CapabilityUsageMetric (..),
   ProductivityMetric (..),
+  InternalEventCountMetric (..),
+  InternalExportedLogsMetric (..),
+  InternalRejectedLogsMetric (..),
+  InternalExportedMetricsMetric (..),
+  InternalRejectedMetricsMetric (..),
+  InternalExportedSamplesMetric (..),
+  InternalRejectedSamplesMetric (..),
+  InternalExportedSpansMetric (..),
+  InternalRejectedSpansMetric (..),
 
   -- *** Trace processor configuration types
   Traces (..),
@@ -94,13 +103,11 @@ newtype Config = Config
   deriving (Lift, Show)
 
 instance FromYAML Config where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Config
   parseYAML = YAML.withMap "Config" $ \m ->
     Config
       <$> m .:? "processors"
 
 instance ToYAML Config where
-  toYAML :: Config -> YAML.Node ()
   toYAML config =
     YAML.mapping
       [ "processors" .= config.processors
@@ -118,7 +125,6 @@ data Processors = Processors
   deriving (Lift, Show)
 
 instance FromYAML Processors where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Processors
   parseYAML = YAML.withMap "Processors" $ \m ->
     Processors
       <$> m .:? "logs"
@@ -127,7 +133,6 @@ instance FromYAML Processors where
       <*> m .:? "profiles"
 
 instance ToYAML Processors where
-  toYAML :: Processors -> YAML.Node ()
   toYAML processors =
     YAML.mapping
       [ "logs" .= processors.logs
@@ -155,7 +160,6 @@ data Logs = Logs
   deriving (Lift, Show)
 
 instance FromYAML Logs where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Logs
   parseYAML =
     -- NOTE: This should be kept in sync with the list of logs.
     YAML.withMap "Logs" $ \m ->
@@ -166,7 +170,6 @@ instance FromYAML Logs where
         <*> m .:? "internal_log_message"
 
 instance ToYAML Logs where
-  toYAML :: Logs -> YAML.Node ()
   toYAML logs =
     -- NOTE: This should be kept in sync with the list of logs.
     YAML.mapping
@@ -200,11 +203,19 @@ data Metrics = Metrics
   , heapProfSample :: Maybe HeapProfSampleMetric
   , capabilityUsage :: Maybe CapabilityUsageMetric
   , productivity :: Maybe ProductivityMetric
+  , internalEventCount :: Maybe InternalEventCountMetric
+  , internalExportedLogs :: Maybe InternalExportedLogsMetric
+  , internalRejectedLogs :: Maybe InternalRejectedLogsMetric
+  , internalExportedMetrics :: Maybe InternalExportedMetricsMetric
+  , internalRejectedMetrics :: Maybe InternalRejectedMetricsMetric
+  , internalExportedSamples :: Maybe InternalExportedSamplesMetric
+  , internalRejectedSamples :: Maybe InternalRejectedSamplesMetric
+  , internalExportedSpans :: Maybe InternalExportedSpansMetric
+  , internalRejectedSpans :: Maybe InternalRejectedSpansMetric
   }
   deriving (Lift, Show)
 
 instance FromYAML Metrics where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Metrics
   parseYAML =
     -- NOTE: This should be kept in sync with the list of metrics.
     YAML.withMap "Metrics" $ \m -> do
@@ -221,10 +232,18 @@ instance FromYAML Metrics where
       heapProfSample <- m .:? "heap_prof_sample"
       capabilityUsage <- m .:? "capability_usage"
       productivity <- m .:? "productivity"
+      internalEventCount <- m .:? "internal_event_count"
+      internalExportedLogs <- m .:? "internal_exported_logs"
+      internalRejectedLogs <- m .:? "internal_rejected_logs"
+      internalExportedMetrics <- m .:? "internal_exported_metrics"
+      internalRejectedMetrics <- m .:? "internal_rejected_metrics"
+      internalExportedSamples <- m .:? "internal_exported_samples"
+      internalRejectedSamples <- m .:? "internal_rejected_samples"
+      internalExportedSpans <- m .:? "internal_exported_spans"
+      internalRejectedSpans <- m .:? "internal_rejected_spans"
       pure Metrics{..}
 
 instance ToYAML Metrics where
-  toYAML :: Metrics -> YAML.Node ()
   toYAML metrics =
     -- NOTE: This should be kept in sync with the list of metrics.
     YAML.mapping
@@ -241,6 +260,15 @@ instance ToYAML Metrics where
       , "heap_prof_sample" .= metrics.heapProfSample
       , "capability_usage" .= metrics.capabilityUsage
       , "productivity" .= metrics.productivity
+      , "internal_event_count" .= metrics.internalEventCount
+      , "internal_exported_logs" .= metrics.internalExportedLogs
+      , "internal_rejected_logs" .= metrics.internalRejectedLogs
+      , "internal_exported_metrics" .= metrics.internalExportedMetrics
+      , "internal_rejected_metrics" .= metrics.internalRejectedMetrics
+      , "internal_exported_samples" .= metrics.internalExportedSamples
+      , "internal_rejected_samples" .= metrics.internalRejectedSamples
+      , "internal_exported_spans" .= metrics.internalExportedSpans
+      , "internal_rejected_spans" .= metrics.internalRejectedSpans
       ]
 
 {- |
@@ -260,7 +288,6 @@ data Traces = Traces
   deriving (Lift, Show)
 
 instance FromYAML Traces where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Traces
   parseYAML =
     -- NOTE: This should be kept in sync with the list of traces.
     YAML.withMap "Traces" $ \m ->
@@ -269,7 +296,6 @@ instance FromYAML Traces where
         <*> m .:? "thread_state"
 
 instance ToYAML Traces where
-  toYAML :: Traces -> YAML.Node ()
   toYAML traces =
     -- NOTE: This should be kept in sync with the list of traces.
     YAML.mapping
@@ -287,7 +313,6 @@ data Profiles = Profiles
   deriving (Lift, Show)
 
 instance FromYAML Profiles where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser Profiles
   parseYAML =
     -- NOTE: This should be kept in sync with the list of profiles.
     YAML.withMap "Profiles" $ \m ->
@@ -296,7 +321,6 @@ instance FromYAML Profiles where
         <*> m .:? "cost_centre_stack_profile"
 
 instance ToYAML Profiles where
-  toYAML :: Profiles -> YAML.Node ()
   toYAML profiles =
     -- NOTE: This should be kept in sync with the list of profiles.
     YAML.mapping
@@ -319,11 +343,9 @@ data ThreadLabelLog = ThreadLabelLog
   deriving (Lift, Show)
 
 instance FromYAML ThreadLabelLog where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadLabelLog
   parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabelLog" ThreadLabelLog
 
 instance ToYAML ThreadLabelLog where
-  toYAML :: ThreadLabelLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
@@ -337,11 +359,9 @@ data UserMessageLog = UserMessageLog
   deriving (Lift, Show)
 
 instance FromYAML UserMessageLog where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMessageLog
   parseYAML = genericParseYAMLLogProcessorConfig "UserMessageLog" UserMessageLog
 
 instance ToYAML UserMessageLog where
-  toYAML :: UserMessageLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
@@ -355,11 +375,9 @@ data UserMarkerLog = UserMarkerLog
   deriving (Lift, Show)
 
 instance FromYAML UserMarkerLog where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser UserMarkerLog
   parseYAML = genericParseYAMLLogProcessorConfig "UserMarkerLog" UserMarkerLog
 
 instance ToYAML UserMarkerLog where
-  toYAML :: UserMarkerLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 {- |
@@ -373,11 +391,9 @@ data InternalLogMessageLog = InternalLogMessageLog
   deriving (Lift, Show)
 
 instance FromYAML InternalLogMessageLog where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser InternalLogMessageLog
   parseYAML = genericParseYAMLLogProcessorConfig "InternalLogMessageLog" InternalLogMessageLog
 
 instance ToYAML InternalLogMessageLog where
-  toYAML :: InternalLogMessageLog -> YAML.Node ()
   toYAML = genericToYAMLLogProcessorConfig
 
 -------------------------------------------------------------------------------
@@ -396,11 +412,9 @@ data HeapAllocatedMetric = HeapAllocatedMetric
   deriving (Lift, Show)
 
 instance FromYAML HeapAllocatedMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapAllocatedMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "HeapAllocatedMetric" HeapAllocatedMetric
 
 instance ToYAML HeapAllocatedMetric where
-  toYAML :: HeapAllocatedMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -415,11 +429,9 @@ data HeapSizeMetric = HeapSizeMetric
   deriving (Lift, Show)
 
 instance FromYAML HeapSizeMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapSizeMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "HeapSizeMetric" HeapSizeMetric
 
 instance ToYAML HeapSizeMetric where
-  toYAML :: HeapSizeMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -434,11 +446,9 @@ data BlocksSizeMetric = BlocksSizeMetric
   deriving (Lift, Show)
 
 instance FromYAML BlocksSizeMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser BlocksSizeMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "BlocksSizeMetric" BlocksSizeMetric
 
 instance ToYAML BlocksSizeMetric where
-  toYAML :: BlocksSizeMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -453,11 +463,9 @@ data HeapLiveMetric = HeapLiveMetric
   deriving (Lift, Show)
 
 instance FromYAML HeapLiveMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapLiveMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "HeapLiveMetric" HeapLiveMetric
 
 instance ToYAML HeapLiveMetric where
-  toYAML :: HeapLiveMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -472,11 +480,9 @@ data MemCurrentMetric = MemCurrentMetric
   deriving (Lift, Show)
 
 instance FromYAML MemCurrentMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemCurrentMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "MemCurrentMetric" MemCurrentMetric
 
 instance ToYAML MemCurrentMetric where
-  toYAML :: MemCurrentMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -491,11 +497,9 @@ data MemNeededMetric = MemNeededMetric
   deriving (Lift, Show)
 
 instance FromYAML MemNeededMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemNeededMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "MemNeededMetric" MemNeededMetric
 
 instance ToYAML MemNeededMetric where
-  toYAML :: MemNeededMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -510,11 +514,9 @@ data MemReturnedMetric = MemReturnedMetric
   deriving (Lift, Show)
 
 instance FromYAML MemReturnedMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser MemReturnedMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "MemReturnedMetric" MemReturnedMetric
 
 instance ToYAML MemReturnedMetric where
-  toYAML :: MemReturnedMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -529,11 +531,9 @@ data HeapProfSampleMetric = HeapProfSampleMetric
   deriving (Lift, Show)
 
 instance FromYAML HeapProfSampleMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser HeapProfSampleMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "HeapProfSampleMetric" HeapProfSampleMetric
 
 instance ToYAML HeapProfSampleMetric where
-  toYAML :: HeapProfSampleMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -548,11 +548,9 @@ data GcCopiedMetric = GcCopiedMetric
   deriving (Lift, Show)
 
 instance FromYAML GcCopiedMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser GcCopiedMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "GcCopiedMetric" GcCopiedMetric
 
 instance ToYAML GcCopiedMetric where
-  toYAML :: GcCopiedMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -567,11 +565,9 @@ data GcSlopMetric = GcSlopMetric
   deriving (Lift, Show)
 
 instance FromYAML GcSlopMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser GcSlopMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "GcSlopMetric" GcSlopMetric
 
 instance ToYAML GcSlopMetric where
-  toYAML :: GcSlopMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -586,11 +582,9 @@ data GcFragmentationMetric = GcFragmentationMetric
   deriving (Lift, Show)
 
 instance FromYAML GcFragmentationMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser GcFragmentationMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "GcFragmentationMetric" GcFragmentationMetric
 
 instance ToYAML GcFragmentationMetric where
-  toYAML :: GcFragmentationMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -605,11 +599,9 @@ data CapabilityUsageMetric = CapabilityUsageMetric
   deriving (Lift, Show)
 
 instance FromYAML CapabilityUsageMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CapabilityUsageMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "CapabilityUsageMetric" CapabilityUsageMetric
 
 instance ToYAML CapabilityUsageMetric where
-  toYAML :: CapabilityUsageMetric -> YAML.Node ()
   toYAML = genericToYAMLMetricProcessorConfig
 
 {- |
@@ -624,11 +616,162 @@ data ProductivityMetric = ProductivityMetric
   deriving (Lift, Show)
 
 instance FromYAML ProductivityMetric where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ProductivityMetric
   parseYAML = genericParseYAMLMetricProcessorConfig "ProductivityMetric" ProductivityMetric
 
 instance ToYAML ProductivityMetric where
-  toYAML :: ProductivityMetric -> YAML.Node ()
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of received events.
+-}
+data InternalEventCountMetric = InternalEventCountMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalEventCountMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalEventCountMetric" InternalEventCountMetric
+
+instance ToYAML InternalEventCountMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of exported logs metric.
+-}
+data InternalExportedLogsMetric = InternalExportedLogsMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalExportedLogsMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedLogsMetric" InternalExportedLogsMetric
+
+instance ToYAML InternalExportedLogsMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of rejected logs.
+-}
+data InternalRejectedLogsMetric = InternalRejectedLogsMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalRejectedLogsMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedLogsMetric" InternalRejectedLogsMetric
+
+instance ToYAML InternalRejectedLogsMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of exported metrics metric.
+-}
+data InternalExportedMetricsMetric = InternalExportedMetricsMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalExportedMetricsMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedMetricsMetric" InternalExportedMetricsMetric
+
+instance ToYAML InternalExportedMetricsMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of rejected metrics.
+-}
+data InternalRejectedMetricsMetric = InternalRejectedMetricsMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalRejectedMetricsMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedMetricsMetric" InternalRejectedMetricsMetric
+
+instance ToYAML InternalRejectedMetricsMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of exported samples metric.
+-}
+data InternalExportedSamplesMetric = InternalExportedSamplesMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalExportedSamplesMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedSamplesMetric" InternalExportedSamplesMetric
+
+instance ToYAML InternalExportedSamplesMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of rejected samples.
+-}
+data InternalRejectedSamplesMetric = InternalRejectedSamplesMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalRejectedSamplesMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedSamplesMetric" InternalRejectedSamplesMetric
+
+instance ToYAML InternalRejectedSamplesMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of exported spans metric.
+-}
+data InternalExportedSpansMetric = InternalExportedSpansMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalExportedSpansMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedSpansMetric" InternalExportedSpansMetric
+
+instance ToYAML InternalExportedSpansMetric where
+  toYAML = genericToYAMLMetricProcessorConfig
+
+{- |
+The configuration options for the internal count of rejected spans.
+-}
+data InternalRejectedSpansMetric = InternalRejectedSpansMetric
+  { name :: Maybe Text
+  , description :: Maybe Text
+  , aggregate :: Maybe AggregationStrategy
+  , export :: Maybe ExportStrategy
+  }
+  deriving (Lift, Show)
+
+instance FromYAML InternalRejectedSpansMetric where
+  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedSpansMetric" InternalRejectedSpansMetric
+
+instance ToYAML InternalRejectedSpansMetric where
   toYAML = genericToYAMLMetricProcessorConfig
 
 -------------------------------------------------------------------------------
@@ -646,11 +789,9 @@ data CapabilityUsageSpan = CapabilityUsageSpan
   deriving (Lift, Show)
 
 instance FromYAML CapabilityUsageSpan where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CapabilityUsageSpan
   parseYAML = genericParseYAMLTraceProcessorConfig "CapabilityUsageSpan" CapabilityUsageSpan
 
 instance ToYAML CapabilityUsageSpan where
-  toYAML :: CapabilityUsageSpan -> YAML.Node ()
   toYAML = genericToYAMLTraceProcessorConfig
 
 {- |
@@ -664,11 +805,9 @@ data ThreadStateSpan = ThreadStateSpan
   deriving (Lift, Show)
 
 instance FromYAML ThreadStateSpan where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ThreadStateSpan
   parseYAML = genericParseYAMLTraceProcessorConfig "ThreadStateSpan" ThreadStateSpan
 
 instance ToYAML ThreadStateSpan where
-  toYAML :: ThreadStateSpan -> YAML.Node ()
   toYAML = genericToYAMLTraceProcessorConfig
 
 -------------------------------------------------------------------------------
@@ -686,11 +825,9 @@ data CallStackProfile = CallStackProfile
   deriving (Lift, Show)
 
 instance FromYAML CallStackProfile where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CallStackProfile
   parseYAML = genericParseYAMLProfilerProcessorConfig "CallStackProfile" CallStackProfile
 
 instance ToYAML CallStackProfile where
-  toYAML :: CallStackProfile -> YAML.Node ()
   toYAML = genericToYAMLProfilerProcessorConfig
 
 {- |
@@ -704,11 +841,9 @@ data CostCentreStackProfile = CostCentreStackProfile
   deriving (Lift, Show)
 
 instance FromYAML CostCentreStackProfile where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser CostCentreStackProfile
   parseYAML = genericParseYAMLProfilerProcessorConfig "CostCentreStackProfile" CostCentreStackProfile
 
 instance ToYAML CostCentreStackProfile where
-  toYAML :: CostCentreStackProfile -> YAML.Node ()
   toYAML = genericToYAMLProfilerProcessorConfig
 
 -------------------------------------------------------------------------------
@@ -825,7 +960,6 @@ toAggregationSeconds aggregationStrategy
   | otherwise = Nothing
 
 instance FromYAML AggregationStrategy where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser AggregationStrategy
   parseYAML node = YAML.withScalar "AggregationStrategy" parseYAMLScalar node
    where
     parseYAMLScalar = \case
@@ -836,7 +970,6 @@ instance FromYAML AggregationStrategy where
       _otherwise -> YAML.typeMismatch "AggregationStrategy" node
 
 instance ToYAML AggregationStrategy where
-  toYAML :: AggregationStrategy -> YAML.Node ()
   toYAML = \case
     AggregationStrategyBool{..} ->
       YAML.Scalar () (YAML.SBool isOn)
@@ -883,7 +1016,6 @@ toExportSeconds exportStrategy
   | otherwise = Nothing
 
 instance FromYAML ExportStrategy where
-  parseYAML :: YAML.Node YAML.Pos -> YAML.Parser ExportStrategy
   parseYAML node = YAML.withScalar "ExportStrategy" parseYAMLScalar node
    where
     parseYAMLScalar = \case
@@ -894,7 +1026,6 @@ instance FromYAML ExportStrategy where
       _otherwise -> YAML.typeMismatch "ExportStrategy" node
 
 instance ToYAML ExportStrategy where
-  toYAML :: ExportStrategy -> YAML.Node ()
   toYAML = \case
     ExportStrategyBool{..} ->
       YAML.Scalar () (YAML.SBool isOn)
