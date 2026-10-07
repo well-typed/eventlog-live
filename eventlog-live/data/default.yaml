@@ -65,10 +65,6 @@
 # default to the values in this file. Otherwise, the processor is _disabled_.
 processors:
   logs:
-    internal_log_message:
-      name: eventlog_live_InternalLogMessage
-      description: An internal eventlog-live log message.
-      export: 30s
     thread_label:
       name: ghc_eventlog_ThreadLabel
       description: A thread label.
@@ -80,6 +76,10 @@ processors:
     user_message:
       name: ghc_eventlog_UserMessage
       description: A user log message.
+      export: 30s
+    internal_log_message:
+      name: eventlog_live_InternalLogMessage
+      description: An internal eventlog-live log message.
       export: 30s
   metrics:
     blocks_size:
