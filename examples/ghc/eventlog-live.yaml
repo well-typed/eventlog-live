@@ -27,7 +27,7 @@
 #
 #   There are three ways to configure the `export` property:
 #
-#   - A duration in seconds, given as "Ns". For instance, if `export` is "30s"
+#   - A duration in seconds, given as "Ns". For instance, if `export` is "5s"
 #     then the processor exports a batch of telemetry data every 30 seconds.
 #
 #   - A duration in batches, given as "Nx". The length of one batch interval
@@ -65,10 +65,6 @@
 # default to the values in this file. Otherwise, the processor is _disabled_.
 processors:
   logs:
-    internal_log_message:
-      name: eventlog_live_InternalLogMessage
-      description: An internal eventlog-live log message.
-      export: 5s
     thread_label:
       name: ghc_eventlog_ThreadLabel
       description: A thread label.
@@ -80,6 +76,10 @@ processors:
     user_message:
       name: ghc_eventlog_UserMessage
       description: A user log message.
+      export: 5s
+    internal_log_message:
+      name: eventlog_live_InternalLogMessage
+      description: An internal eventlog-live log message.
       export: 5s
   metrics:
     blocks_size:
@@ -147,6 +147,51 @@ processors:
       description: The ratio between GC and mutator usage.
       aggregate: 1s
       export: 5s
+    internal_event_count:
+      name: eventlog_live_InternalEventCount
+      description: The number of events received over the eventlog socket.
+      aggregate: 1s
+      export: 5s
+    internal_exported_logs:
+      name: eventlog_live_InternalExportedLogs
+      description: The number of exported logs.
+      aggregate: 1s
+      export: 5s
+    internal_rejected_logs:
+      name: eventlog_live_InternalRejectedLogs
+      description: The number of exported logs.
+      aggregate: 1s
+      export: 5s
+    internal_exported_metrics:
+      name: eventlog_live_InternalExportedMetrics
+      description: The number of exported metrics.
+      aggregate: 1s
+      export: 5s
+    internal_rejected_metrics:
+      name: eventlog_live_InternalRejectedMetrics
+      description: The number of exported metrics.
+      aggregate: 1s
+      export: 5s
+    internal_exported_samples:
+      name: eventlog_live_InternalExportedSamples
+      description: The number of exported samples.
+      aggregate: 1s
+      export: 5s
+    internal_rejected_samples:
+      name: eventlog_live_InternalRejectedSamples
+      description: The number of exported samples.
+      aggregate: 1s
+      export: 5s
+    internal_exported_spans:
+      name: eventlog_live_InternalExportedSpans
+      description: The number of exported spans.
+      aggregate: 1s
+      export: 5s
+    internal_rejected_spans:
+      name: eventlog_live_InternalRejectedSpans
+      description: The number of exported spans.
+      aggregate: 1s
+      export: 5s
   profiles:
     call_stack_profile:
       name: ghc_eventlog_CallStackProfile
@@ -165,4 +210,3 @@ processors:
       name: ghc_eventlog_ThreadState
       description: A trace of thread state changes (either running or stopped).
       export: false # These spans easily overwhelm most OTLP receivers
-
