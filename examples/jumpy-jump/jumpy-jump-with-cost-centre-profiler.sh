@@ -3,6 +3,9 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Include helper functions
+. "${DIR}/../../scripts/functions.sh"
+
 # Set the eventlog socket
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
@@ -13,18 +16,11 @@ export OTEL_SERVICE_NAME="jumpy-jump"
 export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
-# Find project file
-PROJECT_FILE="$DIR/../../cabal.profiling.project"
-
 # Build jumpy-jump
-echo "Build jumpy-jump"
-cabal build jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling -v0 | head -n1)
+JUMPY_JUMP_BIN=$(cabal_build exe:jumpy-jump --project-dir="$DIR/../.." --project-file="cabal.profiling.project" -f-use-ghc-stack-profiler --constraint=eventlog-socket+control --enable-profiling)
 
 # Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -f+control -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -f+control -v0 | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

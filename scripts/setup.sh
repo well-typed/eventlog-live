@@ -165,8 +165,7 @@ else
 			# Clone source
 			git_clone_args="--branch cabal-docspec-${version} --depth 1 https://github.com/phadej/cabal-extras.git ${TMPDIR}/cabal-extras"
 			echo "git clone ${git_clone_args}"
-			# shellcheck disable=SC2086
-			if ! "${GIT}" clone -c advice.detachedHead=false -q ${git_clone_args}; then
+						if ! "${GIT}" clone -c advice.detachedHead=false -q ${git_clone_args}; then
 				echo "cabal-docspec">>"${WARNINGS}"
 				continue
 			fi
@@ -176,8 +175,7 @@ else
 				echo "cabal-docspec">>"${WARNINGS}"
 				continue
 			fi
-			# shellcheck disable=SC2086
-			if ! "${CABAL}" -v0 -w"${GHC}" install ${cabal_install_args}; then
+						if ! "${CABAL}" -v0 -w"${GHC}" install ${cabal_install_args}; then
 				echo "cabal-docspec">>"${WARNINGS}"
 				continue
 			fi
@@ -190,8 +188,7 @@ else
 			# Clone source
 			git_clone_args="--branch v${version} --depth 1 https://github.com/NixOS/nixfmt.git ${TMPDIR}/nixfmt"
 			echo "git clone ${git_clone_args}"
-			# shellcheck disable=SC2086
-			if ! "${GIT}" clone -c advice.detachedHead=false -q ${git_clone_args}; then
+						if ! "${GIT}" clone -c advice.detachedHead=false -q ${git_clone_args}; then
 				echo "nixfmt">>"${WARNINGS}"
 				continue
 			fi
@@ -201,8 +198,7 @@ else
 				echo "nixfmt">>"${WARNINGS}"
 				continue
 			fi
-			# shellcheck disable=SC2086
-			if ! "${CABAL}" -v0 -w"${GHC}" install ${cabal_install_args}; then
+						if ! "${CABAL}" -v0 -w"${GHC}" install ${cabal_install_args}; then
 				echo "nixfmt">>"${WARNINGS}"
 				continue
 			fi
@@ -213,8 +209,7 @@ else
 			;;
 		*)
 			echo "cabal install ${dependency}-${version} ${cabal_install_args}"
-			# shellcheck disable=SC2086
-			if ! "${CABAL}" -v0 -w"${GHC}" install "${dependency}-${version}" ${cabal_install_args}; then
+						if ! "${CABAL}" -v0 -w"${GHC}" install "${dependency}-${version}" ${cabal_install_args}; then
 				echo "${dependency}">>"${WARNINGS}"
 				continue
 			fi

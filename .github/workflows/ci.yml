@@ -76,7 +76,7 @@ jobs:
           key: ${{ steps.cache-cabal.outputs.cache-primary-key }}
 
       - name: 🏗️ Build
-        run: ./scripts/build-from-sdist.sh
+        run: . ./scripts/functions.sh && cabal_build all --enable-tests --constraint=eventlog-socket-tests+debug
 
       - name: 🚀 Testing
         run: ./scripts/test.sh
