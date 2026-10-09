@@ -66,7 +66,7 @@ jobs:
           restore-keys: ${{ env.key }}-
 
       - name: 🛠️ Build Cabal dependencies
-        run: cabal build all ${{ matrix.cabal-flags }} --only-dependencies
+        run: cabal build all --enable-tests ${{ matrix.cabal-flags }} --only-dependencies
 
       - name: 💾 Save Cabal dependencies
         uses: actions/cache/save@v6
@@ -76,10 +76,10 @@ jobs:
           key: ${{ steps.cache-cabal.outputs.cache-primary-key }}
 
       - name: 🏗️ Build
-        run: . ./scripts/functions.sh && cabal_build all --enable-tests --constraint=eventlog-socket-tests+debug
+        run: cabal build all --enable-tests ${{ matrix.cabal-flags }}
 
       - name: 🚀 Testing
-        run: ./scripts/test.sh
+        run: cabal run eventlog-live-tests:test:eventlog-live-tests --enable-tests -f+debug ${{ matrix.cabal-flags }} 2>eventlog-live-tests.err.log
 
       - name: 📦 Upload test logs
         if: ${{ always() }}
