@@ -3,6 +3,9 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Include helper functions
+. "${DIR}/../../scripts/functions.sh"
+
 # Eventlog Socket Configuration
 export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
 export GHC_EVENTLOG_WAIT="true"
@@ -13,21 +16,11 @@ export OTEL_SERVICE_NAME="oddball"
 export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
-# Find GHC version to build oddball
-if [ "$GHC" = "" ]; then
-	GHC="$(which ghc)"
-fi
-PROJECT_FILE="$DIR/../../cabal.ipe.project"
-
 # Build oddball
-echo "Build oddball"
-cabal build oddball --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --constraint=eventlog-socket+control -v0
-ODDBALL_BIN=$(cabal list-bin exe:oddball --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --constraint=eventlog-socket+control -v0 | head -n1)
+ODDBALL_BIN=$(cabal_build exe:oddball --project-dir="$DIR/../.." --project-file="cabal.ipe.project" --constraint=eventlog-socket+control)
 
 # Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -f+control -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -f+control -v0 | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

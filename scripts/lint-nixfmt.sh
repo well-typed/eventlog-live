@@ -28,5 +28,4 @@ fi
 
 # Lint Nix files
 echo "Lint Nix files with nixfmt version ${ACTUAL_VERSION}"
-# shellcheck disable=SC2086
 git ls-files --exclude-standard --no-deleted --deduplicate '*.nix' | xargs -L1 ${NIXFMT} --check --strict --verify

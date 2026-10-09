@@ -32,5 +32,4 @@ fi
 
 # Format Cabal files
 echo "Format Cabal files with cabal-gild version ${ACTUAL_VERSION}"
-# shellcheck disable=SC2086
 git ls-files --exclude-standard --no-deleted --deduplicate -z '*.cabal' | xargs -0 -L1 ${CABAL_GILD} --mode=format

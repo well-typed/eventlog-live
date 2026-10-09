@@ -3,6 +3,9 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Include helper functions
+. "${DIR}/../../scripts/functions.sh"
+
 # Set the eventlog socket
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/jumpy_jump_eventlog.sock"
@@ -13,21 +16,11 @@ export OTEL_SERVICE_NAME="jumpy-jump"
 export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
-# Find GHC version to build jumpy-jump
-if [ "$GHC" = "" ]; then
-	GHC="$(which ghc)"
-fi
-PROJECT_FILE="$DIR/../../cabal.ipe.project"
-
 # Build jumpy-jump
-echo "Build jumpy-jump"
-cabal build jumpy-jump --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --with-compiler="$GHC" --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-ghc-stack-profiler -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control -v0 | head -n1)
+JUMPY_JUMP_BIN=$(cabal_build exe:jumpy-jump --project-dir="$DIR/../.." --project-file="cabal.ipe.project" -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control)
 
 # Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -f+control -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -f+control -v0 | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

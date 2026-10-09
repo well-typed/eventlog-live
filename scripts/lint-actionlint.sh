@@ -32,5 +32,4 @@ fi
 
 # Lint GitHub Actions workflows
 echo "Lint GitHub Actions workflows with actionlint version ${ACTUAL_VERSION}"
-# shellcheck disable=SC2086
 git ls-files --exclude-standard --no-deleted --deduplicate '.github/workflows/*.yml' | xargs -L50 ${ACTIONLINT}

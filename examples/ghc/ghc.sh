@@ -3,6 +3,9 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Include helper functions
+. "${DIR}/../../scripts/functions.sh"
+
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="ghc"
@@ -23,9 +26,7 @@ TMPDIR=$(mktemp -d) || exit
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM HUP
 
 # Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -v0 | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control)
 
 # Find pre-built GHC binary.
 GHC="${GHC_DIR}/_build/stage1/bin/ghc"

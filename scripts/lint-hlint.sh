@@ -32,5 +32,4 @@ fi
 
 # Lint Haskell files
 echo "Lint Haskell files with HLint version ${ACTUAL_VERSION}"
-# shellcheck disable=SC2086
 git ls-files --exclude-standard --no-deleted --deduplicate '*.hs' | xargs -L50 ${HLINT}

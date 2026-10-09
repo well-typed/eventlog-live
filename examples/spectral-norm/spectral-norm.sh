@@ -5,6 +5,9 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
+# Include helper functions
+. "${DIR}/../../scripts/functions.sh"
+
 # Set the eventlog socket
 export GHC_EVENTLOG_WAIT="true"
 export GHC_EVENTLOG_UNIX_PATH="/tmp/spectral_norm_eventlog.sock"
@@ -16,14 +19,10 @@ export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build spectral-norm
-echo "Build spectral-norm"
-cabal build spectral-norm --constraint=eventlog-socket+control -v0
-SPECTRAL_NORM_BIN=$(cabal list-bin exe:spectral-norm --constraint=eventlog-socket+control -v0 | head -n1)
+SPECTRAL_NORM_BIN="$(cabal_build exe:spectral-norm --constraint=eventlog-socket+control)"
 
 # Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -v0 | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

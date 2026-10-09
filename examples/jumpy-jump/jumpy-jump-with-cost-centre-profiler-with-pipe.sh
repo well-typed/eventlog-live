@@ -3,8 +3,8 @@
 # Get the script directory
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
-# Find project file
-PROJECT_FILE="$DIR/../../cabal.profiling.project"
+# Include helper functions
+. "${DIR}/../../scripts/functions.sh"
 
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
@@ -13,14 +13,10 @@ export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build jumpy-jump
-echo "Build jumpy-jump"
-cabal build jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --enable-profiling -v0
-JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --project-file="${PROJECT_FILE}" --builddir=dist-newstyle/jumpy-jump-with-cost-centre-profiler -f-use-ghc-stack-profiler --enable-profiling -v0 | head -n1)
+JUMPY_JUMP_BIN=$(cabal_build exe:jumpy-jump --project-dir="$DIR/../.." --project-file="cabal.profiling.project" -f-use-ghc-stack-profiler --enable-profiling)
 
 # Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -v0 | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

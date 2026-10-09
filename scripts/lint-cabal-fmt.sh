@@ -32,5 +32,4 @@ fi
 
 # Lint Cabal files
 echo "Lint Cabal files with cabal-fmt version ${ACTUAL_VERSION}"
-# shellcheck disable=SC2086
 git ls-files --exclude-standard --no-deleted --deduplicate '*.cabal' | xargs -L1 ${CABAL_FMT} --check

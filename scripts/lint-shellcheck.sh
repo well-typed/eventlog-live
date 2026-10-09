@@ -32,7 +32,6 @@ fi
 
 # Lint shell scripts
 echo "Lint shell scripts with ShellCheck version ${ACTUAL_VERSION}"
-# shellcheck disable=SC2086
-if ! git ls-files --exclude-standard --no-deleted --deduplicate '*.sh' | xargs -L50 ${SHELLCHECK} -e SC2155; then
+if ! git ls-files --exclude-standard --no-deleted --deduplicate '*.sh' | xargs -L50 ${SHELLCHECK} -e SC1091,SC2086,SC2155; then
   exit 1
 fi
