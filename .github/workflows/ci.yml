@@ -101,8 +101,6 @@ jobs:
         include:
           - cabal-flags: ""
           - os: "ubuntu-latest"
-            ghc-version: "9.4.8"
-          - os: "ubuntu-latest"
             ghc-version: "9.6.7"
           - os: "ubuntu-latest"
             ghc-version: "9.10.2"
