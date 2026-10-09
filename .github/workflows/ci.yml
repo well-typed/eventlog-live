@@ -98,8 +98,9 @@ jobs:
           - "9.8.4"
           - "9.10.3"
           - "9.12.4"
+        cabal-flags:
+          - ""
         include:
-          - cabal-flags: ""
           - os: "ubuntu-latest"
             ghc-version: "9.6.7"
           - os: "ubuntu-latest"
