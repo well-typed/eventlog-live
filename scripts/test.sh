@@ -14,11 +14,11 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 . "${DIR}/functions.sh"
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build eventlog-live:exe:eventlog-live-otlp --enable-tests)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live:exe:eventlog-live-otlp --enable-tests)
 EVENTLOG_LIVE_OTLP_DIR=$(dirname "${EVENTLOG_LIVE_OTLP_BIN}")
 
 # Build eventlog-live-tests
-EVENTLOG_LIVE_TESTS_BIN=$(cabal_build eventlog-live-tests:test:eventlog-live-tests --enable-tests --constraint=eventlog-socket-tests+debug)
+EVENTLOG_LIVE_TESTS_BIN=$(cabal_list_bin eventlog-live-tests:test:eventlog-live-tests --enable-tests --constraint=eventlog-socket-tests+debug)
 
 # Log file for stderr.
 ERR_FILE="${DIR}/../eventlog-live-tests.err.log"

@@ -26,7 +26,7 @@ TMPDIR=$(mktemp -d) || exit
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM HUP
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp -f+control)
 
 # Find pre-built GHC binary.
 GHC="${GHC_DIR}/_build/stage1/bin/ghc"

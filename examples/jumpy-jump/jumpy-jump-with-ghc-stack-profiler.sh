@@ -17,10 +17,10 @@ export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build jumpy-jump
-JUMPY_JUMP_BIN=$(cabal_build exe:jumpy-jump --project-dir="$DIR/../.." --project-file="cabal.ipe.project" -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control)
+JUMPY_JUMP_BIN=$(cabal_list_bin jumpy-jump --project-dir="$DIR/../.." --project-file="cabal.ipe.project" -f+use-ghc-stack-profiler --constraint=eventlog-socket+control --constraint=ghc-stack-profiler+control)
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

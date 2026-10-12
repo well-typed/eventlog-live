@@ -16,10 +16,10 @@ export OTEL_LOG_LEVEL="debug"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build oddball
-ODDBALL_BIN="$(cabal_build exe:oddball --constraint=eventlog-socket+control)"
+ODDBALL_BIN="$(cabal_list_bin oddball --constraint=eventlog-socket+control)"
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+use-ghc-debug-stub -f+use-eventlog-socket)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp -f+use-ghc-debug-stub -f+use-eventlog-socket)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
