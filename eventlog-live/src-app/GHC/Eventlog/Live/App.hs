@@ -44,6 +44,7 @@ import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Event (..))
+import GHC.Stack.Profiler.Compat (withGhcStackProfiler)
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
 import IpeDB.Types.InfoProv qualified as IP
@@ -68,146 +69,147 @@ appScope = InstrumentationScope{name = appName, version = App.version}
 The main function for @eventlog-live-otlp@.
 -}
 main :: IO ()
-main = do
-  -- Parse the command-line options
-  Options{..} <- O.execParser options
+main =
+  withGhcStackProfiler $ do
+    -- Parse the command-line options
+    Options{..} <- O.execParser options
 
-  -- Create a queue for internal telemetry
-  internalTelemetryQueue <- newChan
+    -- Create a queue for internal telemetry
+    internalTelemetryQueue <- newChan
 
-  -- Create a queue for export requests
-  exportRequestQueue <- newChan
+    -- Create a queue for export requests
+    exportRequestQueue <- newChan
 
-  -- Construct a logger
-  logLevel <- either die pure =<< runExceptT lookupLogLevel
-  stderrLogger <- mkStderrLogger
-  let logger =
-        filterBySeverity logLevel $
-          stderrLogger <> chanLogger internalTelemetryQueue
+    -- Construct a logger
+    logLevel <- either die pure =<< runExceptT lookupLogLevel
+    stderrLogger <- mkStderrLogger
+    let logger =
+          filterBySeverity logLevel $
+            stderrLogger <> chanLogger internalTelemetryQueue
 
-  -- Lookup the OpenTelemetry SDK options
-  OpenTelemetrySdkOptions{..} <-
-    either die pure =<< runExceptT (lookupOpenTelemetrySdkOptions logger)
+    -- Lookup the OpenTelemetry SDK options
+    OpenTelemetrySdkOptions{..} <-
+      either die pure =<< runExceptT (lookupOpenTelemetrySdkOptions logger)
 
-  -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
-  let MyDebugOptions{..} = myDebugOptions
-  startMyEventlogSocket logger maybeMyEventlogSocket
-  withMyGhcDebug logger maybeMyGhcDebugSocket $ do
-    --
-    -- Start the control server.
-    controlServerApi <- startControlServer logger controlOptions
+    -- Instument THIS PROGRAM with eventlog-socket and/or ghc-debug.
+    let MyDebugOptions{..} = myDebugOptions
+    startMyEventlogSocket logger maybeMyEventlogSocket
+    withMyGhcDebug logger maybeMyGhcDebugSocket $ do
+      --
+      -- Start the control server.
+      controlServerApi <- startControlServer logger controlOptions
 
-    -- Read the configuration file.
-    let readConfigFile configFile = do
-          logDebug logger $ "Reading configuration file from " <> T.pack configFile
-          config <- either (logFatal logger . T.pack) pure =<< C.readConfigFile configFile
-          logDebug logger $ "Configuration file:\n" <> C.prettyConfig config
-          pure config
+      -- Read the configuration file.
+      let readConfigFile configFile = do
+            logDebug logger $ "Reading configuration file from " <> T.pack configFile
+            config <- either (logFatal logger . T.pack) pure =<< C.readConfigFile configFile
+            logDebug logger $ "Configuration file:\n" <> C.prettyConfig config
+            pure config
 
-    -- Read the configuration file and add derived settings.
-    fullConfig <-
-      C.toFullConfig eventlogFlushIntervalS
-        <$> maybe (pure def) readConfigFile maybeConfigFile
-    logDebug logger $
-      "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
-    logDebug logger $
-      "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
+      -- Read the configuration file and add derived settings.
+      fullConfig <-
+        C.toFullConfig eventlogFlushIntervalS
+          <$> maybe (pure def) readConfigFile maybeConfigFile
+      logDebug logger $
+        "Batch interval is " <> T.pack (show fullConfig.batchIntervalMs) <> "ms"
+      logDebug logger $
+        "Eventlog flush interval is " <> T.pack (show fullConfig.eventlogFlushIntervalX) <> "x"
 
-    -- Find the service name, if any:
-    let !serviceName =
-          fromMaybe (ServiceName "undefined") $
-            (.serviceName) =<< maybeResourceAttributes
+      -- Find the service name, if any:
+      let !serviceName =
+            fromMaybe (ServiceName "undefined") $
+              (.serviceName) =<< maybeResourceAttributes
 
-    -- Create a resource to represent the monitored process.
-    let eventlogResource :: Resource
-        eventlogResource =
-          Resource
-            { attrs =
-                fromList $
-                  uncurry (~=) <$> maybe [] (.attributes) maybeResourceAttributes
-            }
+      -- Create a resource to represent the monitored process.
+      let eventlogResource :: Resource
+          eventlogResource =
+            Resource
+              { attrs =
+                  fromList $
+                    uncurry (~=) <$> maybe [] (.attributes) maybeResourceAttributes
+              }
 
-    -- Create machine to process eventlog into export requests.
-    let eventlogProcessor ccdb ipedb =
-          M.liftTick M.withStartTime
-            ~> M.fanoutTick
-              [ -- Log a warning if no input has been received after 10 ticks.
-                validateInput logger 10
-              , -- Log event counts.
-                countEvents logger
-              , -- Log ticks.
-                logTicks logger
-              , -- If no cost-centre database was provided, index the cost-centre events.
-                indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
-              , -- If no info-prov database was provided, index the info-prov events.
-                indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
-              , -- Process the eventlog events.
-                processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
-                  ~> M.liftTick (mapping D.singleton)
-              ]
-            ~> M.liftTick asParts
-            ~> sending exportRequestQueue
-
-    -- Create thread to process eventlog into export requests.
-    eventlogProcessorHandle <- fork $ do
-      DB.withNewSession def $ \session -> do
-        withCostCentreTable maybeCCDBPath session $ \ccdb ->
-          withInfoProvTable maybeIpeDBPath session $ \ipedb ->
-            withEventlogSourceHandle
-              logger
-              eventlogSocketTimeoutS
-              eventlogSocketTimeoutExponent
-              eventlogSourceOptions
-              $ \eventlogSourceHandle -> do
-                -- Notify the control server of the connection status.
-                let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
-                let endConnection = controlServerApi.notifyEndConnection serviceName
-                bracket_ newConnection endConnection $
-                  -- Run the eventlog processor.
-                  runWithEventlogSourceHandle
-                    logger
-                    eventlogSourceHandle
-                    fullConfig.batchIntervalMs
-                    Nothing
-                    maybeEventlogLogFile
-                    (eventlogProcessor ccdb ipedb)
-
-    -- Create a resource to represent the eventlog-live process.
-    let internalResource :: Resource
-        internalResource =
-          Resource
-            { attrs =
-                [ "service.name" ~= AttrText (appName <> "-for-" <> serviceName.serviceName)
-                , "service.version" ~= App.version
+      -- Create machine to process eventlog into export requests.
+      let eventlogProcessor ccdb ipedb =
+            M.liftTick M.withStartTime
+              ~> M.fanoutTick
+                [ -- Log a warning if no input has been received after 10 ticks.
+                  validateInput logger 10
+                , -- Log event counts.
+                  countEvents logger
+                , -- Log ticks.
+                  logTicks logger
+                , -- If no cost-centre database was provided, index the cost-centre events.
+                  indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
+                , -- If no info-prov database was provided, index the info-prov events.
+                  indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
+                , -- Process the eventlog events.
+                  processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
+                    ~> M.liftTick (mapping D.singleton)
                 ]
-            }
+              ~> M.liftTick asParts
+              ~> sending exportRequestQueue
 
-    -- Create machine to process eventlog into export requests.
-    let internalTelemetryProcessor =
-          chanSource internalTelemetryQueue
-            ~> processInternalTelemetry fullConfig internalResource appScope
-            -- NOTE: eventlogProcessor writes ticks to the exportRequestQueue,
-            --       and we don't want to duplicate those.
-            ~> dropTick
-            ~> mapping Item
-            ~> sending exportRequestQueue
+      -- Create thread to process eventlog into export requests.
+      eventlogProcessorHandle <- fork $ do
+        DB.withNewSession def $ \session -> do
+          withCostCentreTable maybeCCDBPath session $ \ccdb ->
+            withInfoProvTable maybeIpeDBPath session $ \ipedb ->
+              withEventlogSourceHandle
+                logger
+                eventlogSocketTimeoutS
+                eventlogSocketTimeoutExponent
+                eventlogSourceOptions
+                $ \eventlogSourceHandle -> do
+                  -- Notify the control server of the connection status.
+                  let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
+                  let endConnection = controlServerApi.notifyEndConnection serviceName
+                  bracket_ newConnection endConnection $
+                    -- Run the eventlog processor.
+                    runWithEventlogSourceHandle
+                      logger
+                      eventlogSourceHandle
+                      fullConfig.batchIntervalMs
+                      Nothing
+                      maybeEventlogLogFile
+                      (eventlogProcessor ccdb ipedb)
 
-    -- Create thread to process internal telemetry into export requests.
-    internalTelemetryProcessorHandle <- fork $ do
-      runT_ internalTelemetryProcessor
+      -- Create a resource to represent the eventlog-live process.
+      let internalResource :: Resource
+          internalResource =
+            Resource
+              { attrs =
+                  [ "service.name" ~= AttrText (appName <> "-for-" <> serviceName.serviceName)
+                  , "service.version" ~= App.version
+                  ]
+              }
 
-    -- Create machine to process export requests.
-    exportRequestProcessorHandle <- fork $ do
-      withExporters logger exporterOptions $ \exporters ->
-        runT_ $
-          chanSource exportRequestQueue
-            ~> exportTelemetry logger fullConfig exporters
+      -- Create machine to process eventlog into export requests.
+      let internalTelemetryProcessor =
+            chanSource internalTelemetryQueue
+              ~> processInternalTelemetry fullConfig internalResource appScope
+              -- NOTE: eventlogProcessor writes ticks to the exportRequestQueue,
+              --       and we don't want to duplicate those.
+              ~> dropTick
+              ~> mapping Item
+              ~> sending exportRequestQueue
 
-    -- Wait for these threads to finish, then exit.
-    join eventlogProcessorHandle
-    join internalTelemetryProcessorHandle
-    join exportRequestProcessorHandle
-    pure ()
+      -- Create thread to process internal telemetry into export requests.
+      internalTelemetryProcessorHandle <- fork $ do
+        runT_ internalTelemetryProcessor
+
+      -- Create machine to process export requests.
+      exportRequestProcessorHandle <- fork $ do
+        withExporters logger exporterOptions $ \exporters ->
+          runT_ $
+            chanSource exportRequestQueue
+              ~> exportTelemetry logger fullConfig exporters
+
+      -- Wait for these threads to finish, then exit.
+      join eventlogProcessorHandle
+      join internalTelemetryProcessorHandle
+      join exportRequestProcessorHandle
+      pure ()
 
 -- Log all ticks.
 logTicks :: (Monad m) => Logger m -> ProcessT m (Tick x) y
