@@ -100,10 +100,15 @@ instance Semigroup Productivity where
     Productivity
       { gc = max x.gc y.gc
       , mutator = max x.mutator y.mutator
-      , maybeTimeUnixNano = getMax <$> (Max <$> x.maybeTimeUnixNano) <> (Max <$> y.maybeTimeUnixNano)
-      , maybeStartTimeUnixNano = getMax <$> (Max <$> x.maybeStartTimeUnixNano) <> (Max <$> y.maybeStartTimeUnixNano)
+      , maybeTimeUnixNano = forceMaybe $ getMax <$> (Max <$> x.maybeTimeUnixNano) <> (Max <$> y.maybeTimeUnixNano)
+      , maybeStartTimeUnixNano = forceMaybe $ getMax <$> (Max <$> x.maybeStartTimeUnixNano) <> (Max <$> y.maybeStartTimeUnixNano)
       , capNo = assert (x.capNo == y.capNo) x.capNo
       }
+   where
+    -- NOTE: Without this function, the `Max` semigroup creates a space leak.
+    forceMaybe :: Maybe a -> Maybe a
+    forceMaybe Nothing = Nothing
+    forceMaybe (Just a) = a `seq` Just a
 
 {- |
 Convert a t`CapabilityUsageDuration` to a partial t`Productivity` that only
