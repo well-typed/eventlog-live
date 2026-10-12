@@ -114,6 +114,9 @@ jobs:
             cabal-flags: "-f+use-ghc-debug-stub"
           - os: "ubuntu-latest"
             ghc-version: "9.10.3"
+            cabal-flags: "-f+use-ghc-stack-profiler"
+          - os: "ubuntu-latest"
+            ghc-version: "9.10.3"
             cabal-flags: "-f+use-template-haskell-lift"
 
   #############################################################################
