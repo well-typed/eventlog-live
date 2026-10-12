@@ -27,8 +27,6 @@ import Text.ParserCombinators.ReadP qualified as P
 
 #ifdef EVENTLOG_LIVE_FEATURE_CONTROL
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
 import Control.Exception (Exception (..), catches)
 import Control.Exception qualified as E (Handler (..))
 import Control.Monad.IO.Class (MonadIO (..))
@@ -39,6 +37,7 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isLower, isUpper, toLower)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
+import Data.IORef (newIORef, IORef, readIORef, atomicModifyIORef')
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -132,7 +131,7 @@ startControlServer logger controlOptions
     requestLogger <- mkLoggerMiddleware logger
 
     -- Create variable for storing sockets.
-    eventlogSourceHandleMap <- newTVarIO M.empty
+    connectionMapRef <- newIORef M.empty
 
     -- Create CORS resource policy.
     --
@@ -151,21 +150,23 @@ startControlServer logger controlOptions
           requestLogger $
             cors (const $ Just corsResourcePolicy) $
               serve (Proxy @(HealthApi :<|> ControlApi)) $
-                controlServer logger eventlogSourceHandleMap (corsIgnoreFailures corsResourcePolicy)
+                controlServer logger connectionMapRef (corsIgnoreFailures corsResourcePolicy)
 
-    -- When notified of a new connection, update the eventlogSourceHandleMap.
+    -- When notified of a new connection, update the connectionMapRef.
     let notifyNewConnection serviceName eventlogSourceHandle = do
           logDebug logger $
             "New connection for service " <> serviceName.serviceName <> "."
-          atomically $
-            modifyTVar' eventlogSourceHandleMap (M.insert serviceName eventlogSourceHandle)
+          atomicModifyIORef' connectionMapRef $ \connectionMap ->
+            let !connectionMap' = M.insert serviceName eventlogSourceHandle connectionMap
+            in (connectionMap', ())
 
-    -- When notified of the end of a connection, update the eventlogSourceHandleMap.
+    -- When notified of the end of a connection, update the connectionMapRef.
     let notifyEndConnection serviceName = do
           logDebug logger $
             "End connection for service " <> serviceName.serviceName <> "."
-          atomically $
-            modifyTVar' eventlogSourceHandleMap (M.delete serviceName)
+          atomicModifyIORef' connectionMapRef $ \connectionMap ->
+            let !connectionMap' = M.delete serviceName connectionMap
+            in (connectionMap', ())
 
     -- When requested to stop, kill the control server thread.
     let stop = killThread controlServerThreadId
@@ -223,8 +224,8 @@ mkCorsResourcePolicy ControlCors{..} =
 --------------------------------------------------------------------------------
 -- Control Server
 
-controlServer :: Logger IO -> TVar (HashMap ServiceName EventlogSourceHandle) -> Bool -> Server (HealthApi :<|> ControlApi)
-controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
+controlServer :: Logger IO -> IORef (HashMap ServiceName EventlogSourceHandle) -> Bool -> Server (HealthApi :<|> ControlApi)
+controlServer logger connectionMapRefVar corsIgnoreFailures =
   health :<|> controlApi
  where
   health :: Handler ()
@@ -325,8 +326,8 @@ controlServer logger eventlogSourceHandleMapVar corsIgnoreFailures =
 
     withSocketFor :: ServiceName -> (Socket -> Handler ()) -> Handler ()
     withSocketFor serviceName action = do
-      eventlogSourceHandleMap <- liftIO (readTVarIO eventlogSourceHandleMapVar)
-      case M.lookup serviceName eventlogSourceHandleMap of
+      connectionMapRef <- liftIO (readIORef connectionMapRefVar)
+      case M.lookup serviceName connectionMapRef of
         -- If the service is not known, return a 404.
         Nothing ->
           throwError
