@@ -23,6 +23,7 @@ module GHC.Eventlog.Live.Logger (
   logException,
   filterBySeverity,
   stderrLogger,
+  mkStderrLogger,
   handleLogger,
   queueLogger,
   queueSource,
@@ -30,9 +31,11 @@ module GHC.Eventlog.Live.Logger (
 
 import Colog.Core.Action (cfilter, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
+import Control.Concurrent (forkIO)
 import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TQueue (TQueue, readTQueue, writeTQueue)
+import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, readTQueue, writeTQueue)
 import Control.Exception (Exception (..), bracket_)
+import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
@@ -196,6 +199,26 @@ __TODO:__ Support the remaining telemetry data.
 -}
 stderrLogger :: Logger IO
 stderrLogger = handleLogger IO.stderr
+
+{- |
+A `Logger` that writes each `LogRecord` to a `IO.stderr` and ignores all other telemetry data.
+-}
+mkStderrLogger :: IO (Logger IO)
+mkStderrLogger = do
+  queue <- newTQueueIO
+
+  -- Create a thread that prints log records from the queue
+  _threadId <- forkIO $ forever $ do
+    logRecord <- atomically (readTQueue queue)
+    withSeverityColor logRecord.maybeSeverity IO.stderr $ \handleWithColor ->
+      TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
+    IO.hFlush IO.stderr
+
+  -- Create a log action that writes log records to the queue
+  pure . Logger . CCA.LogAction $ \case
+    Tick -> pure ()
+    Item (toLogRecord -> logRecord) -> liftIO $ do
+      atomically (writeTQueue queue logRecord)
 
 {- |
 A `Logger` that writes each `LogRecord` to a `IO.Handle` and ignores all other telemetry data.

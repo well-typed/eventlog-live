@@ -34,7 +34,7 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, filterBySeverity, logDebug, logFatal, logMetric, logTick, queueLogger, queueSource, stderrLogger)
+import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, filterBySeverity, logDebug, logFatal, logMetric, logTick, queueLogger, queueSource, mkStderrLogger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
@@ -81,6 +81,7 @@ main = do
 
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
+  stderrLogger <- mkStderrLogger
   let logger =
         filterBySeverity logLevel $
           stderrLogger <> queueLogger internalTelemetryQueue
