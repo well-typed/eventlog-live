@@ -19,10 +19,10 @@ export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build spectral-norm
-SPECTRAL_NORM_BIN="$(cabal_build exe:spectral-norm --constraint=eventlog-socket+control)"
+SPECTRAL_NORM_BIN="$(cabal_list_bin spectral-norm --constraint=eventlog-socket+control)"
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp -f+control | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

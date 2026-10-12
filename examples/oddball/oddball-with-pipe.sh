@@ -13,10 +13,10 @@ export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Build oddball
-ODDBALL_BIN="$(cabal_build exe:oddball)"
+ODDBALL_BIN="$(cabal_list_bin oddball)"
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

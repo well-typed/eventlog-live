@@ -19,10 +19,10 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 . "${DIR}/../../scripts/functions.sh"
 
 # Build oddball
-ODDBALL_BIN="$(cabal_build exe:oddball)"
+ODDBALL_BIN="$(cabal_list_bin oddball)"
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_build exe:eventlog-live-otlp | head -n1)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit

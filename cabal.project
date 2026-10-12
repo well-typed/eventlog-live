@@ -1,4 +1,4 @@
-import: cabal.project.config
+import: cabal.config.project
 
 packages: eventlog-live
 packages: eventlog-live-tests
