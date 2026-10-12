@@ -12,9 +12,8 @@ module GHC.Eventlog.Live.App (
 ) where
 
 import Control.Concurrent (ThreadId, forkIO)
+import Control.Concurrent.Chan (Chan, newChan, writeChan)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue)
 import Control.Exception (bracket_)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -34,7 +33,7 @@ import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
 import GHC.Eventlog.Live.App.Options
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, filterBySeverity, logDebug, logFatal, logMetric, logTick, queueLogger, queueSource, mkStderrLogger)
+import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, chanLogger, chanSource, filterBySeverity, logDebug, logFatal, logMetric, logTick, mkStderrLogger)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
@@ -74,17 +73,17 @@ main = do
   Options{..} <- O.execParser options
 
   -- Create a queue for internal telemetry
-  internalTelemetryQueue <- newTQueueIO
+  internalTelemetryQueue <- newChan
 
   -- Create a queue for export requests
-  exportRequestQueue <- newTQueueIO
+  exportRequestQueue <- newChan
 
   -- Construct a logger
   logLevel <- either die pure =<< runExceptT lookupLogLevel
   stderrLogger <- mkStderrLogger
   let logger =
         filterBySeverity logLevel $
-          stderrLogger <> queueLogger internalTelemetryQueue
+          stderrLogger <> chanLogger internalTelemetryQueue
 
   -- Lookup the OpenTelemetry SDK options
   OpenTelemetrySdkOptions{..} <-
@@ -147,7 +146,7 @@ main = do
                   ~> M.liftTick (mapping D.singleton)
               ]
             ~> M.liftTick asParts
-            ~> enqueue exportRequestQueue
+            ~> sending exportRequestQueue
 
     -- Create thread to process eventlog into export requests.
     eventlogProcessorHandle <- fork $ do
@@ -185,13 +184,13 @@ main = do
 
     -- Create machine to process eventlog into export requests.
     let internalTelemetryProcessor =
-          queueSource internalTelemetryQueue
+          chanSource internalTelemetryQueue
             ~> processInternalTelemetry fullConfig internalResource appScope
             -- NOTE: eventlogProcessor writes ticks to the exportRequestQueue,
             --       and we don't want to duplicate those.
             ~> dropTick
             ~> mapping Item
-            ~> enqueue exportRequestQueue
+            ~> sending exportRequestQueue
 
     -- Create thread to process internal telemetry into export requests.
     internalTelemetryProcessorHandle <- fork $ do
@@ -201,7 +200,7 @@ main = do
     exportRequestProcessorHandle <- fork $ do
       withExporters logger exporterOptions $ \exporters ->
         runT_ $
-          queueSource exportRequestQueue
+          chanSource exportRequestQueue
             ~> exportTelemetry logger fullConfig exporters
 
     -- Wait for these threads to finish, then exit.
@@ -259,9 +258,9 @@ indexInfoProvEvents =
 -- Internal helpers
 --------------------------------------------------------------------------------
 
--- A machine that enqueues values in a `TQueue`.
-enqueue :: TQueue a -> ProcessT IO a Void
-enqueue queue = repeatedly $ await >>= liftIO . atomically . writeTQueue queue
+-- A machine that sends values to a `Chan`.
+sending :: Chan a -> ProcessT IO a Void
+sending chan = repeatedly $ await >>= liftIO . writeChan chan
 
 data ThreadHandle = ThreadHandle {threadId :: ThreadId, finished :: MVar ()}
 

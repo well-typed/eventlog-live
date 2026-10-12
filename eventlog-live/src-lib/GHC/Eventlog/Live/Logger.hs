@@ -25,15 +25,14 @@ module GHC.Eventlog.Live.Logger (
   stderrLogger,
   mkStderrLogger,
   handleLogger,
-  queueLogger,
-  queueSource,
+  chanLogger,
+  chanSource,
 ) where
 
 import Colog.Core.Action (cfilter, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Concurrent (forkIO)
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, readTQueue, writeTQueue)
+import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Exception (Exception (..), bracket_)
 import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -205,20 +204,20 @@ A `Logger` that writes each `LogRecord` to a `IO.stderr` and ignores all other t
 -}
 mkStderrLogger :: IO (Logger IO)
 mkStderrLogger = do
-  queue <- newTQueueIO
+  chan <- newChan
 
-  -- Create a thread that prints log records from the queue
+  -- Create a thread that prints log records from the chan
   _threadId <- forkIO $ forever $ do
-    logRecord <- atomically (readTQueue queue)
+    logRecord <- readChan chan
     withSeverityColor logRecord.maybeSeverity IO.stderr $ \handleWithColor ->
       TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
     IO.hFlush IO.stderr
 
-  -- Create a log action that writes log records to the queue
+  -- Create a log action that writes log records to the chan
   pure . Logger . CCA.LogAction $ \case
     Tick -> pure ()
     Item (toLogRecord -> logRecord) -> liftIO $ do
-      atomically (writeTQueue queue logRecord)
+      writeChan chan logRecord
 
 {- |
 A `Logger` that writes each `LogRecord` to a `IO.Handle` and ignores all other telemetry data.
@@ -340,21 +339,20 @@ withSeverityColor maybeSeverity handle action = do
         bracket_ setVerbosityColor setDefaultColor $ action handle
 
 {- |
-A `Logger` that writes the internal telemetry data to a queue.
+A `Logger` that writes the internal telemetry data to a channel.
 -}
-queueLogger :: TQueue (Tick InternalTelemetry) -> Logger IO
-queueLogger queue =
+chanLogger :: Chan (Tick InternalTelemetry) -> Logger IO
+chanLogger chan =
   Logger . CCA.LogAction $ \x -> do
     traverse addTimeUnixNano x >>= \x' ->
-      atomically (writeTQueue queue x')
+      writeChan chan x'
 
 {- |
-A `Souce` that reads the data from a queue.
+A `Data.Machine.Souce` that reads the data from a channel.
 -}
-queueSource :: (MonadIO m) => TQueue a -> SourceT m a
-queueSource queue = repeatedly $ do
-  a <- liftIO (atomically $ readTQueue queue)
-  yield a
+chanSource :: (MonadIO m) => Chan a -> SourceT m a
+chanSource chan = repeatedly $ do
+  yield =<< liftIO (readChan chan)
 
 {- |
 Add the current Unix timestamp in nanoseconds to telemetry data.
