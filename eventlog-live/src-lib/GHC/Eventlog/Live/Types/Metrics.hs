@@ -85,7 +85,7 @@ someMetricsToKV :: (KeyValueOmit e kv, Monoid kv) => SomeMetrics -> kv
 someMetricsToKV (SomeMetrics (metric :: Proxy metric) metrics) =
   mconcat $
     [ "name" .= symbolVal metric
-    , "metrics" .?= coerce @_ @[Metric (KnownMetricValue (GetMetricType metric))] metrics
+    , "metrics" .?= coerce @_ @[Metric (KnownMetricTypeWrapper (GetMetricType metric))] metrics
     -- "metrics" is the unique property that identifies this type.
     ]
 {-# INLINE someMetricsToKV #-}
@@ -527,37 +527,37 @@ instance KnownMetricType Int64 where
   metricTypeSing _proxy = SMetricTypeInt64
   {-# INLINE metricTypeSing #-}
 
-newtype KnownMetricValue a = KnownMetricValue a
+newtype KnownMetricTypeWrapper a = KnownMetricTypeWrapper {metricValue :: a}
 
-instance (KnownMetricType a) => ToJSON (KnownMetricValue a) where
-  toJSON :: KnownMetricValue a -> Value
+instance (KnownMetricType a) => ToJSON (KnownMetricTypeWrapper a) where
+  toJSON :: KnownMetricTypeWrapper a -> Value
   toJSON =
     case metricTypeSing (Proxy @a) of
-      SMetricTypeFloat -> toJSON
-      SMetricTypeDouble -> toJSON
-      SMetricTypeWord -> toJSON
-      SMetricTypeWord8 -> toJSON
-      SMetricTypeWord16 -> toJSON
-      SMetricTypeWord32 -> toJSON
-      SMetricTypeWord64 -> toJSON
-      SMetricTypeInt -> toJSON
-      SMetricTypeInt8 -> toJSON
-      SMetricTypeInt16 -> toJSON
-      SMetricTypeInt32 -> toJSON
-      SMetricTypeInt64 -> toJSON
+      SMetricTypeFloat -> toJSON . (.metricValue)
+      SMetricTypeDouble -> toJSON . (.metricValue)
+      SMetricTypeWord -> toJSON . (.metricValue)
+      SMetricTypeWord8 -> toJSON . (.metricValue)
+      SMetricTypeWord16 -> toJSON . (.metricValue)
+      SMetricTypeWord32 -> toJSON . (.metricValue)
+      SMetricTypeWord64 -> toJSON . (.metricValue)
+      SMetricTypeInt -> toJSON . (.metricValue)
+      SMetricTypeInt8 -> toJSON . (.metricValue)
+      SMetricTypeInt16 -> toJSON . (.metricValue)
+      SMetricTypeInt32 -> toJSON . (.metricValue)
+      SMetricTypeInt64 -> toJSON . (.metricValue)
 
-  toEncoding :: KnownMetricValue a -> Encoding
+  toEncoding :: KnownMetricTypeWrapper a -> Encoding
   toEncoding =
     case metricTypeSing (Proxy @a) of
-      SMetricTypeFloat -> toEncoding
-      SMetricTypeDouble -> toEncoding
-      SMetricTypeWord -> toEncoding
-      SMetricTypeWord8 -> toEncoding
-      SMetricTypeWord16 -> toEncoding
-      SMetricTypeWord32 -> toEncoding
-      SMetricTypeWord64 -> toEncoding
-      SMetricTypeInt -> toEncoding
-      SMetricTypeInt8 -> toEncoding
-      SMetricTypeInt16 -> toEncoding
-      SMetricTypeInt32 -> toEncoding
-      SMetricTypeInt64 -> toEncoding
+      SMetricTypeFloat -> toEncoding . (.metricValue)
+      SMetricTypeDouble -> toEncoding . (.metricValue)
+      SMetricTypeWord -> toEncoding . (.metricValue)
+      SMetricTypeWord8 -> toEncoding . (.metricValue)
+      SMetricTypeWord16 -> toEncoding . (.metricValue)
+      SMetricTypeWord32 -> toEncoding . (.metricValue)
+      SMetricTypeWord64 -> toEncoding . (.metricValue)
+      SMetricTypeInt -> toEncoding . (.metricValue)
+      SMetricTypeInt8 -> toEncoding . (.metricValue)
+      SMetricTypeInt16 -> toEncoding . (.metricValue)
+      SMetricTypeInt32 -> toEncoding . (.metricValue)
+      SMetricTypeInt64 -> toEncoding . (.metricValue)
