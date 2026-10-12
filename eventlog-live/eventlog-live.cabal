@@ -69,6 +69,14 @@ flag use-ghc-debug-stub
   default: False
   manual: True
 
+-- 2026-10-12:
+-- This flag should enable switching the use of ghc-stack-profiler on
+-- and off, since it may cause issues with certain versions of GHC.
+flag use-ghc-stack-profiler
+  description: Use use-ghc-stack-profiler
+  default: False
+  manual: True
+
 -- 2025-11-06:
 -- This flag should enable switching between template-haskell and
 -- template-haskell-lift, because the latter is not on nixpkgs.
@@ -265,6 +273,7 @@ executable eventlog-live-otlp
   other-modules:
     GHC.Debug.Stub.Compat
     GHC.Eventlog.Socket.Compat
+    GHC.Stack.Profiler.Compat
     Options.Applicative.Compat
     Options.Applicative.Extra.Feature
     Paths_eventlog_live
@@ -322,6 +331,10 @@ executable eventlog-live-otlp
   if flag(use-ghc-debug-stub)
     build-depends: ghc-debug-stub >=0.1 && <1
     cpp-options: -DEVENTLOG_LIVE_USE_GHC_DEBUG_STUB
+
+  if flag(use-ghc-stack-profiler)
+    build-depends: ghc-stack-profiler ==0.5.0.0
+    cpp-options: -DEVENTLOG_LIVE_USE_GHC_STACK_PROFILER
 
   -- 2026-07-29:
   -- This configures the build requirements for the vendored copy of
