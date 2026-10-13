@@ -136,7 +136,7 @@ logRecordToKV :: (KeyValueOmit e kv, Monoid kv) => LogRecord -> kv
 logRecordToKV l =
   mconcat $
     [ "value" .= l.value
-    , "time_unix_nano" .?= l.maybeTimeUnixNano
+    , "timeUnixNano" .?= l.maybeTimeUnixNano
     , "severity" .?= l.maybeSeverity
     , "attrs" .?= l.attrs
     ]

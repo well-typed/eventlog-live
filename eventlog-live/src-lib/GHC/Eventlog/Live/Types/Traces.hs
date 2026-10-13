@@ -162,10 +162,10 @@ instance ToJSON Span where
 spanToKV :: (KeyValueOmit e kv, Monoid kv) => Span -> kv
 spanToKV s =
   mconcat $
-    [ "trace_id" .= s.traceIdBase64
-    , "span_id" .= s.spanIdBase64
-    , "start_time_unix_nano" .= s.startTimeUnixNano
-    , "end_time_unix_nano" .= s.endTimeUnixNano
+    [ "traceId" .= s.traceIdBase64
+    , "spanId" .= s.spanIdBase64
+    , "startTimeUnixNano" .= s.startTimeUnixNano
+    , "endTimeUnixNano" .= s.endTimeUnixNano
     , "attrs" .?= s.attrs
     ]
 {-# INLINE spanToKV #-}

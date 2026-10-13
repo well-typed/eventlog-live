@@ -159,7 +159,7 @@ sampleToKV s =
   mconcat
     [ "value" .= s.value
     , "stack" .?= s.stack
-    , "time_unix_nano" .?= s.maybeTimeUnixNano
+    , "timeUnixNano" .?= s.maybeTimeUnixNano
     , "attrs" .?= s.attrs
     ]
 {-# INLINE sampleToKV #-}
@@ -207,14 +207,14 @@ locationToKV l =
       mconcat
         [ "line" .= line
         , "column" .= column
-        , "end_column" .= endColumn
+        , "endColumn" .= endColumn
         ]
     Range'MultiLine{..} ->
       mconcat
         [ "line" .= line
         , "column" .= column
-        , "end_line" .= endLine
-        , "end_column" .= endColumn
+        , "endLine" .= endLine
+        , "endColumn" .= endColumn
         ]
 
   onlyIf :: a -> (a -> Bool) -> Maybe a
