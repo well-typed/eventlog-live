@@ -59,10 +59,12 @@ instance IsList Attrs where
 
 instance ToJSON Attrs where
   toJSON :: Attrs -> Value
-  toJSON Attrs{..} = toJSON attrMap
+  toJSON Attrs{..} =
+    toJSON $ M.filter (/= AttrNull) attrMap
 
   toEncoding :: Attrs -> Encoding
-  toEncoding Attrs{..} = toEncoding attrMap
+  toEncoding Attrs{..} =
+    toEncoding $ M.filter (/= AttrNull) attrMap
 
   omitField :: Attrs -> Bool
   omitField Attrs{..} = M.null attrMap
