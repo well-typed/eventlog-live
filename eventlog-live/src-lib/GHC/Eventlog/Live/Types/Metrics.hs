@@ -313,8 +313,8 @@ metricToKV :: (KeyValueOmit e kv, Monoid kv, ToJSON a) => Metric a -> kv
 metricToKV m =
   mconcat $
     [ "value" .= m.value
-    , "time_unix_nano" .?= m.maybeTimeUnixNano
-    , "start_time_unix_nano" .?= m.maybeStartTimeUnixNano
+    , "timeUnixNano" .?= m.maybeTimeUnixNano
+    , "startTimeUnixNano" .?= m.maybeStartTimeUnixNano
     , "attrs" .?= m.attrs
     ]
 {-# INLINE metricToKV #-}
