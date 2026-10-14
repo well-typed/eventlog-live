@@ -3,6 +3,8 @@
 module GHC.Eventlog.Live.App.Viewer.AlignedData (
   AlignedData (..),
   Series (..),
+  TimeUnix,
+  null,
   validate,
   toAlignedData,
 ) where
@@ -24,6 +26,7 @@ import Data.Vector.Unboxed qualified as U
 import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Metrics (Metric (..))
+import Prelude hiding (null)
 
 type TimeUnix = Int
 
@@ -34,6 +37,7 @@ data AlignedData a = AlignedData
   { xValues :: !(U.Vector TimeUnix)
   , series :: !(Vector (Series a))
   }
+  deriving (Show)
 
 alignedDataToKV :: (KeyValue e kv, Monoid kv, ToJSON a) => AlignedData a -> kv
 alignedDataToKV d = mconcat ["xValues" .= d.xValues, "series" .= d.series]
@@ -50,6 +54,7 @@ data Series a = Series
   { attrs :: !Attrs
   , yValues :: !(Vector (Maybe a))
   }
+  deriving (Show)
 
 seriesToKV :: (KeyValue e kv, Monoid kv, ToJSON a) => Series a -> kv
 seriesToKV s = mconcat ["attrs" .= s.attrs, "yValues" .= s.yValues]
@@ -61,6 +66,9 @@ instance (ToJSON a) => ToJSON (Series a) where
 
   toEncoding :: Series a -> Encoding
   toEncoding = pairs . seriesToKV
+
+null :: AlignedData a -> Bool
+null d = U.null d.xValues
 
 -- | Check the invariant for `AlignedData`.
 validate :: AlignedData a -> Bool
