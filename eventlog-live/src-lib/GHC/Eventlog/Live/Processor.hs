@@ -3,6 +3,10 @@
 module GHC.Eventlog.Live.Processor (
   Resource (..),
   Telemetry (..),
+  toSomeLogs,
+  toSomeMetrics,
+  toSomeSamples,
+  toSomeSpans,
   ExportRequest (..),
   InstrumentationScope (..),
   processEventlogTelemetry,
@@ -64,8 +68,20 @@ instrumentationScopeToKV s =
 data Telemetry
   = Telemetry'Logs SomeLogs
   | Telemetry'Metrics SomeMetrics
-  | Telemetry'Spans SomeSpans
   | Telemetry'Samples SomeSamples
+  | Telemetry'Spans SomeSpans
+
+toSomeLogs :: Telemetry -> Maybe SomeLogs
+toSomeLogs = \case Telemetry'Logs x -> Just x; _ -> Nothing
+
+toSomeMetrics :: Telemetry -> Maybe SomeMetrics
+toSomeMetrics = \case Telemetry'Metrics x -> Just x; _ -> Nothing
+
+toSomeSamples :: Telemetry -> Maybe SomeSamples
+toSomeSamples = \case Telemetry'Samples x -> Just x; _ -> Nothing
+
+toSomeSpans :: Telemetry -> Maybe SomeSpans
+toSomeSpans = \case Telemetry'Spans x -> Just x; _ -> Nothing
 
 instance ToJSON Telemetry where
   toJSON :: Telemetry -> Value
