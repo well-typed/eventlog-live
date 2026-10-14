@@ -10,6 +10,7 @@ module GHC.Eventlog.Live.Types.Metrics (
   -- * Known Metrics
   SomeMetrics (..),
   KnownMetric (..),
+  getMetrics,
   metricConfig,
 
   -- ** Monotonicity
@@ -50,18 +51,20 @@ import Data.Aeson (KeyValue (..))
 import Data.Aeson.Types (Encoding, KeyValueOmit (..), ToJSON (..), Value (..), pairs)
 import Data.Coerce (coerce)
 import Data.Default (Default)
+import Data.Functor ((<&>))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Config
 import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
 import GHC.Records (HasField (..))
-import GHC.TypeLits (KnownSymbol (..), Symbol, symbolVal)
+import GHC.TypeLits (KnownSymbol (..), Symbol, sameSymbol, symbolVal)
 
 --------------------------------------------------------------------------------
 -- Known Metrics
@@ -107,6 +110,12 @@ class
   type GetMetricType metric :: Type
   type GetMetricUnit metric :: MetricUnit
   type GetMetricKind metric :: MetricKind
+
+getMetrics ::
+  (KnownMetric metric) =>
+  Proxy metric -> SomeMetrics -> Maybe [Metric (GetMetricType metric)]
+getMetrics metric (SomeMetrics metric' metrics) =
+  sameSymbol metric metric' <&> \Refl -> metrics
 
 metricConfig :: forall metric. (KnownMetric metric) => Proxy metric -> Metrics -> Maybe (GetMetricConf metric)
 metricConfig (_metric :: Proxy metric) = getField @metric
