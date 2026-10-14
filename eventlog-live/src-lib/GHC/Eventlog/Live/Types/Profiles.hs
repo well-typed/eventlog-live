@@ -31,8 +31,8 @@ import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Word (Word8)
 import GHC.Eventlog.Live.Config (CallStackProfile (..), CostCentreStackProfile (..), IsProfileProcessorConfig, Profiles (..))
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
-import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import IpeDB.Types.SrcLoc (Range (..), SrcLoc (..))
@@ -113,7 +113,7 @@ instance KnownProfile "costCentreStackProfile" where
 type IsSample s v =
   ( HasField "value" s v
   , HasField "stack" s (Vector Location)
-  , HasField "maybeTimeUnixNano" s (Maybe Timestamp)
+  , HasField "maybeTimeUnixNano" s (Maybe TimeUnixNano)
   , HasField "attrs" s Attrs
   )
 
@@ -137,7 +137,7 @@ toSample s =
 data Sample v = Sample
   { value :: !v
   , stack :: !(Vector Location)
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
   -- ^ The time at which the sample was taken.
   , attrs :: Attrs
   -- ^ A set of attributes.

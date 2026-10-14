@@ -57,9 +57,9 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Config
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
-import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol (..), Symbol, symbolVal)
 
@@ -183,7 +183,7 @@ instance KnownMetric "heapProfSample" where
 
 instance KnownMetric "capabilityUsage" where
   type GetMetricConf "capabilityUsage" = CapabilityUsageMetric
-  type GetMetricType "capabilityUsage" = Timestamp
+  type GetMetricType "capabilityUsage" = TimeUnixNano
   type GetMetricUnit "capabilityUsage" = 'NanoSecond
   type GetMetricKind "capabilityUsage" = 'Sum 'Cumulative 'Monotonic
 
@@ -256,8 +256,8 @@ A metric is any type that has the fields of the generic metric type.
 -}
 type IsMetric ma a =
   ( HasField "value" ma a
-  , HasField "maybeTimeUnixNano" ma (Maybe Timestamp)
-  , HasField "maybeStartTimeUnixNano" ma (Maybe Timestamp)
+  , HasField "maybeTimeUnixNano" ma (Maybe TimeUnixNano)
+  , HasField "maybeStartTimeUnixNano" ma (Maybe TimeUnixNano)
   , HasField "attrs" ma Attrs
   )
 
@@ -282,9 +282,9 @@ a list of attributes.
 data Metric a = Metric
   { value :: !a
   -- ^ The measurement.
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
   -- ^ The time at which the measurement was taken.
-  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
   {- ^ The earliest time at which any measurement could have been taken.
   Usually, this represents the start time of a process.
   -}

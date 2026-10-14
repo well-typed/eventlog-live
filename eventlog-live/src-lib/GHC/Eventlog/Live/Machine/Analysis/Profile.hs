@@ -34,12 +34,12 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word8)
 import GHC.Eventlog.Live.Logger (Logger, logError, logWarn)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Types.Profiles (Location (..))
 import GHC.Eventlog.Live.Types.Thread (ThreadId (..), fromThreadId)
-import GHC.RTS.Events (Event (..), Timestamp)
+import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
 import GHC.Stack.Profiler.Core qualified as GSP
@@ -59,7 +59,7 @@ data CallStack = CallStack
   { capNo :: !CapNo
   , threadId :: !ThreadId
   , callStack :: !(Vector CallStackFrame)
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
   }
   deriving stock (Show)
 
@@ -109,7 +109,7 @@ The internal state for `processGhcStackProfilerData`.
 data GhcStackProfilerState = GhcStackProfilerState
   { warnOnDeserializeError :: !Bool
   , callStackChunksRev :: ![GSP.CallStackChunk]
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
   , symbolTable :: !GSP.IntMapTable
   }
 
@@ -195,7 +195,7 @@ processGhcStackProfilerData logger infoProvTable =
         _otherwise -> go st
 
   decodeCallStack ::
-    Maybe Timestamp ->
+    Maybe TimeUnixNano ->
     GSP.SymbolTableReader ->
     NonEmpty GSP.CallStackChunk ->
     m CallStack
@@ -269,7 +269,7 @@ A GHC cost-centre stack.
 data CostCentreStack = CostCentreStack
   { capNo :: !CapNo
   , costCentreStack :: !(Vector CostCentreStackFrame)
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
   }
   deriving stock (Show)
 

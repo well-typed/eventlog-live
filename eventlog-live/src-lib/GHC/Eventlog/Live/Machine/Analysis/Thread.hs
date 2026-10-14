@@ -33,12 +33,12 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
 import GHC.Eventlog.Live.Types.Traces (duration)
-import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), Timestamp, showThreadStopStatus)
+import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), showThreadStopStatus)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
 import Text.Printf (printf)
@@ -54,13 +54,13 @@ data ThreadLabel
   = ThreadLabel
   { thread :: !ThreadId
   , threadlabel :: !Text
-  , startTimeUnixNano :: !Timestamp
+  , startTimeUnixNano :: !TimeUnixNano
   }
 
 instance HasField "value" ThreadLabel Text where
   getField = (.threadlabel)
 
-instance HasField "maybeTimeUnixNano" ThreadLabel (Maybe Timestamp) where
+instance HasField "maybeTimeUnixNano" ThreadLabel (Maybe TimeUnixNano) where
   getField = Just . (.startTimeUnixNano)
 
 instance HasField "maybeSeverity" ThreadLabel (Maybe Severity) where
@@ -128,8 +128,8 @@ data ThreadStateSpan
   = ThreadStateSpan
   { thread :: !ThreadId
   , threadState :: !ThreadState
-  , startTimeUnixNano :: !Timestamp
-  , endTimeUnixNano :: !Timestamp
+  , startTimeUnixNano :: !TimeUnixNano
+  , endTimeUnixNano :: !TimeUnixNano
   }
   deriving (Show)
 
@@ -146,7 +146,7 @@ instance HasField "attrs" ThreadStateSpan Attrs where
     , "threadStopStatus" ~= (showThreadStopStatus <$> threadStopStatus s.threadState)
     ]
 
-{-# SPECIALIZE duration :: ThreadStateSpan -> Timestamp #-}
+{-# SPECIALIZE duration :: ThreadStateSpan -> TimeUnixNano #-}
 
 {- |
 This machine processes `E.RunThread` and `E.StopThread` events to produce
@@ -186,7 +186,7 @@ on arbitrary types using a getter and a lens.
 processThreadStateSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Maybe TimeUnixNano) ->
   (s -> Event) ->
   (s -> ThreadStateSpan -> t) ->
   Logger m ->
