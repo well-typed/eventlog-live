@@ -26,9 +26,9 @@ import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import GHC.Eventlog.Live.Config
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Severity (Severity)
-import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 
@@ -96,7 +96,7 @@ A log record is any type that has the fields of the generic `LogRecord` type.
 -}
 type IsLogRecord l =
   ( HasField "value" l Text
-  , HasField "maybeTimeUnixNano" l (Maybe Timestamp)
+  , HasField "maybeTimeUnixNano" l (Maybe TimeUnixNano)
   , HasField "maybeSeverity" l (Maybe Severity)
   , HasField "attrs" l Attrs
   )
@@ -116,7 +116,7 @@ LogRecords combine a timestamp, message and a severity.
 data LogRecord = LogRecord
   { value :: !Text
   -- ^ The log message.
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
   -- ^ The time at which the log was created.
   , maybeSeverity :: !(Maybe Severity)
   -- ^ The severity of the log.

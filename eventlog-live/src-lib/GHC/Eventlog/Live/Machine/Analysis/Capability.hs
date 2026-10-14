@@ -58,12 +58,12 @@ import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (deltaToCumulative, liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), evCapNo)
 import GHC.Eventlog.Live.Types.Traces (duration)
 import GHC.Generics (Generic)
-import GHC.RTS.Events (Event (..), EventInfo, ThreadId, Timestamp)
+import GHC.RTS.Events (Event (..), EventInfo, ThreadId)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
 import Text.Printf (printf)
@@ -77,10 +77,10 @@ The productivity measure.
 This holds the cumulative elapsed time for both GC and mutator threads.
 -}
 data Productivity = Productivity
-  { gc :: !Timestamp
-  , mutator :: !Timestamp
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
-  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  { gc :: !TimeUnixNano
+  , mutator :: !TimeUnixNano
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
   , capNo :: CapNo
   }
 
@@ -115,7 +115,7 @@ Convert a t`CapabilityUsageDuration` to a partial t`Productivity` that only
 represents the category corresponding to this t`CapabilityUsageDuration`'s
 usage category (GC or mutator).
 -}
-toProductivity :: CapabilityUsageDuration Timestamp -> Maybe Productivity
+toProductivity :: CapabilityUsageDuration TimeUnixNano -> Maybe Productivity
 toProductivity CapabilityUsageDuration{..} = do
   usage >>= \case
     GC -> pure Productivity{gc = value, mutator = 0, ..}
@@ -128,20 +128,20 @@ time for each category and produces metrics that contain productivity.
 processProductivity ::
   forall m.
   (Monad m) =>
-  ProcessT m (CapabilityUsageDuration Timestamp) Productivity
+  ProcessT m (CapabilityUsageDuration TimeUnixNano) Productivity
 processProductivity =
   liftRouter measure spawn
  where
   -- This measure splits the input by capability.
-  measure :: CapabilityUsageDuration Timestamp -> Maybe CapNo
+  measure :: CapabilityUsageDuration TimeUnixNano -> Maybe CapNo
   measure cud = Just cud.capNo
 
-  spawn :: CapNo -> ProcessT m (CapabilityUsageDuration Timestamp) Productivity
+  spawn :: CapNo -> ProcessT m (CapabilityUsageDuration TimeUnixNano) Productivity
   spawn _capNo = construct $ go Nothing
    where
     go ::
       Maybe Productivity ->
-      PlanT (Is (CapabilityUsageDuration Timestamp)) Productivity m Void
+      PlanT (Is (CapabilityUsageDuration TimeUnixNano)) Productivity m Void
     go maybeProductivity =
       await >>= \case
         cud
@@ -165,7 +165,7 @@ that contain the cumulative elapsed time for each category (idle, GC, mutator).
 processCapabilityUsageDuration ::
   forall m.
   (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
+  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
 processCapabilityUsageDuration =
   processCapabilityUsageDuration'Delta
     ~> processCapabilityUsageDuration'DeltaToCumulative
@@ -179,8 +179,8 @@ The delta capability usage duration.
 data CapabilityUsageDuration a
   = CapabilityUsageDuration
   { value :: !a
-  , maybeTimeUnixNano :: !(Maybe Timestamp)
-  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
   , capNo :: !CapNo
   , usage :: !(Maybe CapabilityUser)
   {- ^
@@ -206,11 +206,11 @@ time for each category (idle, GC, mutator).
 processCapabilityUsageDuration'DeltaToCumulative ::
   forall m.
   (Monad m) =>
-  ProcessT m (CapabilityUsageDuration Timestamp) (CapabilityUsageDuration Timestamp)
+  ProcessT m (CapabilityUsageDuration TimeUnixNano) (CapabilityUsageDuration TimeUnixNano)
 processCapabilityUsageDuration'DeltaToCumulative =
   liftRouter measure . const $
     mapping coerce
-      ~> deltaToCumulative @m @CapabilityUsageDuration @(Sum Timestamp)
+      ~> deltaToCumulative @m @CapabilityUsageDuration @(Sum TimeUnixNano)
       ~> mapping coerce
  where
   -- This measure splits the input by capability _and_ usage category:
@@ -218,7 +218,7 @@ processCapabilityUsageDuration'DeltaToCumulative =
   -- 1. The `Int` represents the capability.
   -- 2. The `Maybe CapabilityUser` represents the usage category.
   --
-  measure :: CapabilityUsageDuration Timestamp -> Maybe (CapNo, Maybe CapabilityUser)
+  measure :: CapabilityUsageDuration TimeUnixNano -> Maybe (CapNo, Maybe CapabilityUser)
   measure cud = Just (cud.capNo, cud.usage)
 
 {- |
@@ -229,19 +229,19 @@ between.
 processCapabilityUsageDuration'Delta ::
   forall m.
   (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
+  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
 processCapabilityUsageDuration'Delta =
   liftRouter measure spawn
  where
   measure :: WithStartTime CapabilityUsageSpan -> Maybe CapNo
   measure = Just . (.value.capNo)
 
-  spawn :: CapNo -> ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration Timestamp)
+  spawn :: CapNo -> ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
   spawn capNo = construct $ go Nothing
    where
     go ::
       Maybe CapabilityUsageSpan ->
-      PlanT (Is (WithStartTime CapabilityUsageSpan)) (CapabilityUsageDuration Timestamp) m Void
+      PlanT (Is (WithStartTime CapabilityUsageSpan)) (CapabilityUsageDuration TimeUnixNano) m Void
     go mi =
       await >>= \j -> do
         -- If there is a previous span, and...
@@ -312,12 +312,12 @@ A t`CapabilityUsageSpan` is either a t`GCSpan` or a t`MutatorSpan`.
 -}
 type CapabilityUsageSpan = Either GCSpan MutatorSpan
 
-instance HasField "startTimeUnixNano" CapabilityUsageSpan Timestamp where
-  getField :: CapabilityUsageSpan -> Timestamp
+instance HasField "startTimeUnixNano" CapabilityUsageSpan TimeUnixNano where
+  getField :: CapabilityUsageSpan -> TimeUnixNano
   getField = either (.startTimeUnixNano) (.startTimeUnixNano)
 
-instance HasField "endTimeUnixNano" CapabilityUsageSpan Timestamp where
-  getField :: CapabilityUsageSpan -> Timestamp
+instance HasField "endTimeUnixNano" CapabilityUsageSpan TimeUnixNano where
+  getField :: CapabilityUsageSpan -> TimeUnixNano
   getField = either (.endTimeUnixNano) (.endTimeUnixNano)
 
 instance HasField "capNo" CapabilityUsageSpan CapNo where
@@ -334,7 +334,7 @@ instance HasField "attrs" CapabilityUsageSpan Attrs where
     ["usage" ~= showCapabilityUser (capabilityUser s)]
       <> either (.attrs) (.attrs) s
 
-{-# SPECIALIZE duration :: CapabilityUsageSpan -> Timestamp #-}
+{-# SPECIALIZE duration :: CapabilityUsageSpan -> TimeUnixNano #-}
 
 {- |
 This machine runs `processGCSpans` and `processMutatorSpans` in parallel and
@@ -361,7 +361,7 @@ work on arbitrary types using a getter and a pair of lenses.
 processCapabilityUsageSpans' ::
   forall m s t1 t2.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Maybe TimeUnixNano) ->
   (s -> Event) ->
   (s -> GCSpan -> t1) ->
   (s -> MutatorSpan -> t2) ->
@@ -390,8 +390,8 @@ ran GC.
 -}
 data GCSpan = GCSpan
   { capNo :: !CapNo
-  , startTimeUnixNano :: !Timestamp
-  , endTimeUnixNano :: !Timestamp
+  , startTimeUnixNano :: !TimeUnixNano
+  , endTimeUnixNano :: !TimeUnixNano
   }
   deriving (Show)
 
@@ -405,7 +405,7 @@ instance HasField "attrs" GCSpan Attrs where
     [ "capNo" ~= s.capNo
     ]
 
-{-# SPECIALIZE duration :: GCSpan -> Timestamp #-}
+{-# SPECIALIZE duration :: GCSpan -> TimeUnixNano #-}
 
 {- |
 This machine processes `E.StartGC` and `E.EndGC` events to produce t`GCSpan`
@@ -442,7 +442,7 @@ arbitrary types using a getter and a lens.
 processGCSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Maybe TimeUnixNano) ->
   (s -> Event) ->
   (s -> GCSpan -> t) ->
   Logger m ->
@@ -542,8 +542,8 @@ capability ran the specified mutator thread.
 data MutatorSpan = MutatorSpan
   { capNo :: !CapNo
   , thread :: !ThreadId
-  , startTimeUnixNano :: !Timestamp
-  , endTimeUnixNano :: !Timestamp
+  , startTimeUnixNano :: !TimeUnixNano
+  , endTimeUnixNano :: !TimeUnixNano
   }
   deriving (Show)
 
@@ -558,7 +558,7 @@ instance HasField "attrs" MutatorSpan Attrs where
     , "thread" ~= s.thread
     ]
 
-{-# SPECIALIZE duration :: MutatorSpan -> Timestamp #-}
+{-# SPECIALIZE duration :: MutatorSpan -> TimeUnixNano #-}
 
 {- |
 This machine processes `E.RunThread` and `E.StopThread` events to produce
@@ -606,7 +606,7 @@ arbitrary types using a getter and a lens.
 processMutatorSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe Timestamp) ->
+  (s -> Maybe TimeUnixNano) ->
   (s -> Event) ->
   (s -> MutatorSpan -> t) ->
   Logger m ->

@@ -48,6 +48,7 @@ import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Attribute qualified as A
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..))
@@ -56,7 +57,6 @@ import GHC.Eventlog.Live.Types.Metrics (Metric (..))
 import GHC.Eventlog.Live.Types.Metrics qualified as Metric
 import GHC.Eventlog.Live.Types.Severity (Severity (..), toSeverityString)
 import GHC.IsList (IsList (..))
-import GHC.RTS.Events (Timestamp)
 import GHC.Stack (CallStack, callStack, prettyCallStack)
 import GHC.Stack.Types (HasCallStack)
 import System.Clock (Clock (..), TimeSpec (..), getTime)
@@ -367,13 +367,13 @@ Get the current Unix time in nanoseconds.
 
 __Warning:__ This will start overflowing in the year 2554.
 -}
-getTimeUnixNano :: IO Timestamp
+getTimeUnixNano :: IO TimeUnixNano
 getTimeUnixNano = toNanos <$> getTime Realtime
  where
   -- NOTE: This will overflow if @t.sec > (2^64 - 1) `div` 10^9@,
   --       which means you're running this code in the year 2554.
   --       What's that like?
-  toNanos :: TimeSpec -> Timestamp
+  toNanos :: TimeSpec -> TimeUnixNano
   toNanos t = 1_000_000_000 * fromIntegral t.sec + fromIntegral t.nsec
 
 --------------------------------------------------------------------------------
@@ -396,18 +396,18 @@ set :: Lens s a -> s -> a -> s
 set l s a = runIdentity $ l (const $ Identity a) s
 {-# INLINE set #-}
 
-maybeTimeUnixNano'InternalTelemetry :: Lens InternalTelemetry (Maybe Timestamp)
+maybeTimeUnixNano'InternalTelemetry :: Lens InternalTelemetry (Maybe TimeUnixNano)
 maybeTimeUnixNano'InternalTelemetry f = \case
   InternalTelemetry'LogRecord l -> InternalTelemetry'LogRecord <$> maybeTimeUnixNano'LogRecord f l
   InternalTelemetry'Metric t m -> InternalTelemetry'Metric t <$> maybeTimeUnixNano'Metric f m
 {-# INLINE maybeTimeUnixNano'InternalTelemetry #-}
 
-maybeTimeUnixNano'LogRecord :: Lens LogRecord (Maybe Timestamp)
+maybeTimeUnixNano'LogRecord :: Lens LogRecord (Maybe TimeUnixNano)
 maybeTimeUnixNano'LogRecord f l =
   fmap (\x -> l{LogRecord.maybeTimeUnixNano = x}) (f l.maybeTimeUnixNano)
 {-# INLINE maybeTimeUnixNano'LogRecord #-}
 
-maybeTimeUnixNano'Metric :: Lens (Metric a) (Maybe Timestamp)
+maybeTimeUnixNano'Metric :: Lens (Metric a) (Maybe TimeUnixNano)
 maybeTimeUnixNano'Metric f m =
   fmap (\x -> m{Metric.maybeTimeUnixNano = x}) (f m.maybeTimeUnixNano)
 {-# INLINE maybeTimeUnixNano'Metric #-}

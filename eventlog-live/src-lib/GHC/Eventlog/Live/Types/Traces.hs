@@ -39,8 +39,8 @@ import Data.Machine (ProcessT, await, construct, yield)
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import GHC.Eventlog.Live.Config (CapabilityUsageSpan (..), IsTraceProcessorConfig, ThreadStateSpan (..), Traces (..))
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
-import GHC.RTS.Events (Timestamp)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import System.Random (StdGen, initStdGen)
@@ -108,8 +108,8 @@ A span is any type with a start and end time.
 -}
 type IsSpan s k =
   ( HasField "traceId" s k
-  , HasField "startTimeUnixNano" s Timestamp
-  , HasField "endTimeUnixNano" s Timestamp
+  , HasField "startTimeUnixNano" s TimeUnixNano
+  , HasField "endTimeUnixNano" s TimeUnixNano
   , HasField "attrs" s Attrs
   , Hashable k
   )
@@ -118,10 +118,10 @@ type IsSpan s k =
 Determine the duration of a span.
 -}
 duration ::
-  ( HasField "startTimeUnixNano" s Timestamp
-  , HasField "endTimeUnixNano" s Timestamp
+  ( HasField "startTimeUnixNano" s TimeUnixNano
+  , HasField "endTimeUnixNano" s TimeUnixNano
   ) =>
-  s -> Timestamp
+  s -> TimeUnixNano
 duration s
   | s.startTimeUnixNano < s.endTimeUnixNano = s.endTimeUnixNano - s.startTimeUnixNano
   | otherwise = 0
@@ -139,8 +139,8 @@ duration s
 data Span = Span
   { traceId :: !ByteString
   , spanId :: !ByteString
-  , startTimeUnixNano :: !Timestamp
-  , endTimeUnixNano :: !Timestamp
+  , startTimeUnixNano :: !TimeUnixNano
+  , endTimeUnixNano :: !TimeUnixNano
   , attrs :: Attrs
   }
 

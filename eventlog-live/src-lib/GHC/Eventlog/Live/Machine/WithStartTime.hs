@@ -5,6 +5,7 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.WithStartTime (
+  TimeUnixNano,
   WithStartTime (..),
   setWithStartTime'value,
   tryGetTimeUnixNano,
@@ -15,18 +16,24 @@ module GHC.Eventlog.Live.Machine.WithStartTime (
 
 import Control.Monad (forever)
 import Data.Machine (Is (..), PlanT, Process, await, construct, mapping, yield)
-import GHC.RTS.Events (Event (..), EventInfo, Timestamp)
+import Data.Word (Word64)
+import GHC.RTS.Events (Event (..), EventInfo)
 import GHC.RTS.Events qualified as E
 
 -------------------------------------------------------------------------------
 -- Start time
 
 {- |
+Time in nanoseconds since the Unix epoch.
+-}
+type TimeUnixNano = Word64
+
+{- |
 Data decorated with a start time in nanoseconds since the Unix epoch.
 -}
 data WithStartTime a = WithStartTime
   { value :: !a
-  , maybeStartTimeUnixNano :: !(Maybe Timestamp)
+  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
   }
   deriving (Functor, Show)
 
@@ -40,7 +47,7 @@ setWithStartTime'value (WithStartTime _a t) b = WithStartTime b t
 If the event has a start time, return `Just` the time of the event in
 nanoseconds since the Unix epoch. Otherwise, return `Nothing`.
 -}
-tryGetTimeUnixNano :: WithStartTime Event -> Maybe Timestamp
+tryGetTimeUnixNano :: WithStartTime Event -> Maybe TimeUnixNano
 tryGetTimeUnixNano i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
 
 {- |
@@ -56,7 +63,7 @@ withStartTime = withStartTime' E.evSpec WithStartTime
 Generalised version of `withStartTime` that can be adapted to work on arbitrary
 types using a getter and a setter.
 -}
-withStartTime' :: (a -> EventInfo) -> (a -> Maybe Timestamp -> b) -> Process a b
+withStartTime' :: (a -> EventInfo) -> (a -> Maybe TimeUnixNano -> b) -> Process a b
 withStartTime' getEventInfo setStartTime = construct start
  where
   start =
