@@ -34,7 +34,7 @@ import Prelude hiding (lookup)
 A set of attributes is a t`HashMap`
 -}
 newtype Attrs = Attrs {attrMap :: HashMap AttrKey AttrValue}
-  deriving (Eq, Generic, Show)
+  deriving (Eq, Ord, Generic, Show)
 
 lookup :: AttrKey -> Attrs -> Maybe AttrValue
 lookup attrKey attrs = M.lookup attrKey attrs.attrMap
@@ -109,7 +109,7 @@ data AttrValue
   | AttrDouble !Double
   | AttrText !Text
   | AttrNull
-  deriving (Eq, Generic, Show)
+  deriving (Eq, Ord, Generic, Show)
 
 instance Hashable AttrValue
 
