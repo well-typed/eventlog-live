@@ -267,6 +267,7 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.App.Options
     GHC.Eventlog.Live.App.Options.Raw
     GHC.Eventlog.Live.App.Viewer
+    GHC.Eventlog.Live.App.Viewer.AlignedData
 
   hs-source-dirs:
     src-app-internal
