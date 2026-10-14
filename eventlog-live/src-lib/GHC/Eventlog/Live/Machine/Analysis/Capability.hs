@@ -51,7 +51,7 @@ import Data.Foldable (for_)
 import Data.Hashable (Hashable)
 import Data.Machine (Is (..), PlanT, ProcessT, asParts, await, construct, mapping, repeatedly, yield, (~>))
 import Data.Machine.Fanout (fanout)
-import Data.Semigroup (Max (..), Sum (..))
+import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
@@ -100,12 +100,12 @@ instance Semigroup Productivity where
     Productivity
       { gc = max x.gc y.gc
       , mutator = max x.mutator y.mutator
-      , maybeTimeUnixNano = forceMaybe $ getMax <$> (Max <$> x.maybeTimeUnixNano) <> (Max <$> y.maybeTimeUnixNano)
-      , maybeStartTimeUnixNano = forceMaybe $ getMax <$> (Max <$> x.maybeStartTimeUnixNano) <> (Max <$> y.maybeStartTimeUnixNano)
+      , maybeTimeUnixNano = forceMaybe $ x.maybeTimeUnixNano `max` y.maybeTimeUnixNano
+      , maybeStartTimeUnixNano = forceMaybe $ x.maybeStartTimeUnixNano `max` y.maybeStartTimeUnixNano
       , capNo = assert (x.capNo == y.capNo) x.capNo
       }
    where
-    -- NOTE: Without this function, the `Max` semigroup creates a space leak.
+    -- NOTE: Without this function, `max` creates a space leak.
     forceMaybe :: Maybe a -> Maybe a
     forceMaybe Nothing = Nothing
     forceMaybe (Just a) = a `seq` Just a
