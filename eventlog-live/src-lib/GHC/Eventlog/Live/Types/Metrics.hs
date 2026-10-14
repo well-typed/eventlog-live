@@ -321,10 +321,15 @@ instance (Semigroup a) => Semigroup (Metric a) where
     assert (x.attrs == y.attrs) $
       Metric
         { value = x.value <> y.value
-        , maybeTimeUnixNano = x.maybeTimeUnixNano `max` y.maybeTimeUnixNano
-        , maybeStartTimeUnixNano = x.maybeStartTimeUnixNano `min` y.maybeStartTimeUnixNano
+        , maybeTimeUnixNano = forceMaybe $ x.maybeTimeUnixNano `max` y.maybeTimeUnixNano
+        , maybeStartTimeUnixNano = forceMaybe $ x.maybeStartTimeUnixNano `min` y.maybeStartTimeUnixNano
         , attrs = x.attrs
         }
+   where
+    -- NOTE: Without this function, `max` creates a space leak.
+    forceMaybe :: Maybe b -> Maybe b
+    forceMaybe Nothing = Nothing
+    forceMaybe (Just b) = b `seq` Just b
 
 --------------------------------------------------------------------------------
 -- Type-Level Information for Metrics
