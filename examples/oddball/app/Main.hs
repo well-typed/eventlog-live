@@ -2,7 +2,7 @@ module Main where
 
 import Control.Concurrent
 import Control.Monad
-import Data.Foldable (traverse_)
+import Data.Foldable (traverse_, for_)
 import Data.Maybe
 import Debug.Trace
 import GHC.Eventlog.Socket
@@ -12,8 +12,12 @@ import System.Random
 main :: IO ()
 main = do
   startFromEnv
-  _ <- forever $ threadDelay 3000000 >> doRandom
-  return ()
+  n <- getNumCapabilities
+  for_ [0..n-1] $ \_i -> do
+    forkIO . forever $
+      threadDelay 3000000 >> doRandom
+  forever $
+    threadDelay 3000000 >> doRandom
 
 -- | Generate a random length stream of random numbers and sum them (poorly)
 doRandom :: IO ()

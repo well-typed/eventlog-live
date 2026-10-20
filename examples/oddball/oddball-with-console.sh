@@ -43,6 +43,7 @@ ODDBALL_CMD="
 echo 'Start oddball' && \
 	${ODDBALL_BIN} \
 		+RTS \
+		-N2 \
 		-l \
 		-ol'${ODDBALL_EVENTLOG_FIFO}' \
 		-hT \

@@ -2,7 +2,7 @@
 
 import WebSocketProvider from "@/components/WebSocketProvider";
 import ExportRequestProvider from "@/components/ExportRequestProvider";
-import Plot from "@/components/Plot";
+import Plot, { PlotOptions, SeriesIndex, SeriesLabel } from "@/components/Plot";
 import RefreshProvider from "@/components/RefreshProvider";
 import RefreshInput from "@/components/RefreshInput";
 import Grid from "@mui/material/Grid";
@@ -12,9 +12,37 @@ import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Box from "@mui/material/Box";
 import { styled } from "@mui/material";
+import * as z from "../util/z";
 
-const width = 600;
-const height = 400;
+/* Color Cycle */
+
+const colorCycle = [
+  "blue",
+  "red",
+  "green",
+  "purple",
+  "maroon",
+  "olive",
+  "navy",
+  "fuchsia",
+  "lime",
+  "aqua",
+  "teal",
+];
+
+/* HeapSize Attributes */
+
+const heapSizeAttrs = z.catchall(
+  z.strictObject({ name: z.string(), capNo: z.number() }),
+  z.any(),
+);
+
+/* GC Stats Attributes */
+
+const gcStatsAttrs = z.catchall(
+  z.strictObject({ name: z.string(), capNo: z.number(), gen: z.number() }),
+  z.any(),
+);
 
 const Offset = styled("div")(({ theme }) => theme.mixins.toolbar);
 
@@ -38,129 +66,97 @@ export default function App() {
               columns={{ xs: 1, md: 2, lg: 3, xl: 4 }}
               sx={{ justifyContent: "center", alignItems: "center" }}
             >
+              {/* Heap Size */}
               <Grid size={1}>
                 <Plot
                   name="heapSize"
-                  legend={["heapSize", "blocksSize", "heapLive"]}
+                  validate={(attrs) => z.validate(heapSizeAttrs, attrs)}
+                  labelFor={(attrs) =>
+                    `${attrs.name} / cap ${attrs.capNo}`
+                  }
+                  seriesFor={(label, index) => ({
+                    label,
+                    stroke: colorCycle[index],
+                    spanGaps: true,
+                  })}
                   options={{
                     title: "Heap Size",
-                    id: "heapSizePlot",
-                    width,
-                    height,
+                    width: 600,
+                    height: 400,
                     scales: {
-                      x: {
-                        time: true,
-                      },
-                      y: {
-                        time: false,
-                      },
+                      x: { time: true },
+                      y: { time: false },
                     },
-                    axes: [{}],
-                    series: [
-                      {},
-                      {
-                        label: "HeapSize",
-                        stroke: "red",
-                        spanGaps: true,
-                      },
-                      {
-                        label: "BlocksSize",
-                        stroke: "orange",
-                        spanGaps: true,
-                      },
-                      {
-                        label: "HeapLive",
-                        stroke: "blue",
-                        spanGaps: true,
-                      },
-                    ],
                   }}
                 />
               </Grid>
+              {/* GC Stats */}
               <Grid size={1}>
                 <Plot
                   name="gcCopied"
-                  legend={["gcCopied"]}
+                  validate={(attrs) => z.validate(gcStatsAttrs, attrs)}
+                  labelFor={(attrs) =>
+                    `cap ${attrs.capNo} / gen ${attrs.gen}`
+                  }
+                  seriesFor={(label, index) => ({
+                    label,
+                    stroke: colorCycle[index],
+                    spanGaps: true,
+                  })}
                   options={{
                     title: "GC Copied",
-                    id: "gcCopiedPlot",
-                    width,
-                    height,
+                    width: 600,
+                    height: 400,
                     scales: {
-                      x: {
-                        time: true,
-                      },
-                      y: {
-                        time: false,
-                      },
+                      x: { time: true },
+                      y: { time: false },
                     },
-                    axes: [{}],
-                    series: [
-                      {},
-                      {
-                        label: "GC Copied",
-                        stroke: "red",
-                        spanGaps: true,
-                      },
-                    ],
                   }}
                 />
               </Grid>
               <Grid size={1}>
                 <Plot
                   name="gcSlop"
-                  legend={["gcSlop"]}
+                  validate={(attrs) => z.validate(gcStatsAttrs, attrs)}
+                  labelFor={(attrs) =>
+                    `cap ${attrs.capNo} / gen ${attrs.gen}`
+                  }
+                  seriesFor={(label, index) => ({
+                    label,
+                    stroke: colorCycle[index],
+                    spanGaps: true,
+                  })}
                   options={{
                     title: "GC Slop",
-                    id: "gcSlopPlot",
-                    width,
-                    height,
+                    width: 600,
+                    height: 400,
                     scales: {
-                      x: {
-                        time: true,
-                      },
-                      y: {
-                        time: false,
-                      },
+                      x: { time: true },
+                      y: { time: false },
                     },
-                    axes: [{}],
-                    series: [
-                      {},
-                      {
-                        label: "GC Slop",
-                        stroke: "red",
-                        spanGaps: true,
-                      },
-                    ],
                   }}
                 />
               </Grid>
               <Grid size={1}>
                 <Plot
                   name="gcFragmentation"
-                  legend={["gcFragmentation"]}
+                  validate={(attrs) => z.validate(gcStatsAttrs, attrs)}
+                  labelFor={(attrs) =>
+                    `cap ${attrs.capNo} / gen ${attrs.gen}`
+                  }
+                  seriesFor={(label, index) => ({
+                    label,
+                    stroke: colorCycle[index],
+                    spanGaps: true,
+                  })}
                   options={{
                     title: "GC Fragmentation",
-                    id: "gcFragmentationPlot",
-                    width,
-                    height,
+                    width: 600,
+                    height: 400,
                     scales: {
-                      x: {
-                        time: true,
-                      },
-                      y: {
-                        time: false,
-                      },
+                      x: { time: true },
+                      y: { time: false },
                     },
-                    axes: [{}],
-                    series: [
-                      {},
-                      {
-                        label: "GC Fragmentation",
-                        stroke: "red",
-                        spanGaps: true,
-                      },
-                    ],
                   }}
                 />
               </Grid>

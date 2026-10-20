@@ -3,66 +3,125 @@
 import { useContext, useEffect, useState } from "react";
 import { ExportRequestContext } from "./ExportRequestProvider";
 import UplotReact from "uplot-react";
-import { AlignedData, ViewerTelemetry } from "@/util/z";
+import * as z from "@/util/z";
 import { RefreshContext } from "./RefreshProvider";
-import { Breakpoint } from "@mui/material/styles";
-import { Box, useMediaQuery } from "@mui/material";
-
-export type Dimension =
-  | number
-  | ({ xs: number } & { [breakpoint in Breakpoint]?: number });
-
-export interface PlotProps {
-  name: keyof ViewerTelemetry;
-  legend: Array<string>;
-  options: uPlot.Options;
-}
-
-export type SeriesData = Array<number | null>;
+import { Box, Typography } from "@mui/material";
+import assert from "assert";
 
 export type PlotData = [xValues: Array<number>, ...yValues: Array<SeriesData>];
 
-export default function Plot(props: PlotProps) {
-  const { name: plotName, legend, options } = props;
-  const telemetryContext = useContext(ExportRequestContext);
+export type PlotOptions = Omit<uPlot.Options, "series">;
+
+export type SeriesData = Array<number | null>;
+
+export type SeriesLabel = string;
+
+export type SeriesIndex = number;
+
+export type SeriesIndices = Partial<Record<SeriesLabel, SeriesIndex>>;
+
+export interface PlotState {
+  data: PlotData;
+  options: uPlot.Options;
+  indices: SeriesIndices;
+}
+
+export interface PlotProps<PlotAttrs extends z.Attrs> {
+  name: keyof z.ViewerTelemetry;
+  validate: (attrs: any) => attrs is PlotAttrs;
+  labelFor: (attrs: PlotAttrs) => SeriesLabel;
+  seriesFor: (
+    label: SeriesLabel,
+    index: number,
+    attrs: PlotAttrs,
+  ) => uPlot.Series;
+  options: PlotOptions;
+}
+
+export default function Plot<PlotAttrs extends z.Attrs>(
+  props: PlotProps<PlotAttrs>,
+) {
+  const {
+    name,
+    validate,
+    labelFor,
+    seriesFor,
+    options: partOfInitialOptions,
+  } = props;
+  const exportRequestContext = useContext(ExportRequestContext);
   const refreshContext = useContext(RefreshContext);
-  const initialData: PlotData = [
-    [],
-    ...new Array<SeriesData>(legend.length).fill([]),
-  ];
+
+  const initialData: PlotData = [[]];
+  const initialOptions: uPlot.Options = {
+    ...partOfInitialOptions,
+    series: [{}],
+  };
+  const [cache, setCache] = useState<PlotState>({
+    data: initialData,
+    options: initialOptions,
+    indices: {},
+  });
   const [data, setData] = useState<PlotData>(initialData);
-  const [live, setLive] = useState<PlotData>(data);
+  const [options, setOptions] = useState<uPlot.Options>(initialOptions);
 
   useEffect(() => {
-    const lastExportRequest = telemetryContext.lastExportRequest;
-    if (lastExportRequest !== null) {
-      const alignedData: AlignedData | null | undefined =
-        lastExportRequest.telemetry[plotName];
-      if (alignedData !== null && alignedData !== undefined) {
-        const newYValues = new Array(legend.length).fill(null);
-        alignedData.series.forEach((s) => {
-          const seriesIndex = legend.indexOf(s.attrs.name);
-          if (seriesIndex !== -1) {
-            newYValues[seriesIndex] = s.yValues;
-          } else {
-            console.error(`Unexpected series ${plotName}:${s.attrs.name}`, s);
-          }
-        });
-        setData(
-          ([oldXValues, ...oldSeries]: PlotData): PlotData => [
-            [...oldXValues, ...alignedData.xValues],
-            ...oldSeries.map((oldYValues, i) => [
-              ...oldYValues,
-              ...newYValues[i],
-            ]),
-          ],
-        );
+    const lastExportRequest = exportRequestContext.lastExportRequest;
+    if (lastExportRequest === null) return;
+    const alignedData = lastExportRequest.telemetry[name];
+    if (alignedData === null || alignedData === undefined) return;
+
+    // Initialise the next cache value.
+    const newXValues = alignedData.xValues;
+    const newSeriesData: SeriesData[] = [];
+    const options = { ...cache.options, series: [...cache.options.series] };
+    const indices = { ...cache.indices };
+
+    // Process each series data.
+    alignedData.series.forEach((series: z.Series) => {
+      if (validate(series.attrs)) {
+        const label = labelFor(series.attrs);
+        let index = indices[label];
+        if (index === undefined) {
+          // NOTE: The first object in options.series represents the x-values,
+          //       so we must subtract one to get an index into the y-values.
+          index = options.series.length - 1;
+          indices[label] = index;
+          options.series[index + 1] = seriesFor(label, index, series.attrs);
+        }
+        newSeriesData[index] = series.yValues;
+      } else {
+        console.warn("Unexpected series with attrs ", series.attrs);
       }
+    });
+
+    // Compute the new data.
+    const [oldXValues, ...oldSeriesData] = cache.data;
+    const xValues = [...oldXValues, ...alignedData.xValues];
+    const seriesData = [];
+    for (let i = 0; i < options.series.length; ++i) {
+      const oldYValues =
+        i in oldSeriesData
+          ? oldSeriesData[i]
+          : new Array(oldXValues.length).fill(null);
+      const newYValues =
+        i in newSeriesData
+          ? newSeriesData[i]
+          : new Array(newXValues.length).fill(null);
+      seriesData[i] = [...oldYValues, ...newYValues];
     }
+    const data: PlotData = [xValues, ...seriesData];
+    if (!seriesData.every((yValues) => xValues.length === yValues.length)) {
+      console.error(`Plot ${name}: data corrupted`);
+    }
+    // Update the state.
+    setCache({ data, options, indices });
+
+    // Update the live state.
     if (refreshContext.refresh) {
-      setLive(data);
+      setData(data);
+      setOptions(options);
     }
-  }, [refreshContext.refresh, telemetryContext.lastExportRequest]);
+  }, [refreshContext.refresh, exportRequestContext.lastExportRequest]);
 
   return (
     <Box
@@ -73,12 +132,23 @@ export default function Plot(props: PlotProps) {
         marginBottom: "1rem",
       }}
     >
-      <UplotReact
-        key={plotName}
-        options={options}
-        data={live}
-        resetScales={true}
-      />
+      {data.length > 1 ? (
+        <UplotReact
+          key={name}
+          options={options}
+          data={data}
+          resetScales={true}
+        />
+      ) : (
+        <Box
+          sx={{
+            width: options.width,
+            height: options.height,
+          }}
+        >
+          <div className="u-title">{options.title}</div>
+        </Box>
+      )}
     </Box>
   );
 }
