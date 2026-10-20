@@ -7,6 +7,15 @@ export type Resource = z.infer<typeof resource>;
 
 export const resource = z.partialRecord(z.string(), z.any());
 
+/* Resource */
+
+export type Service = z.infer<typeof service>;
+
+export const service = z.looseObject({
+  "service.name": z.optional(z.string()),
+  "service.instance.id": z.optional(z.string()),
+});
+
 /* Instrumentation Scope */
 
 export type InstrumentationScope = z.infer<typeof instrumentationScope>;

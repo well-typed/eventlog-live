@@ -1,7 +1,7 @@
 "use client";
 
 import WebSocketProvider from "@/components/WebSocketProvider";
-import TelemetryProvider from "@/components/TelemetryProvider";
+import ExportRequestProvider from "@/components/ExportRequestProvider";
 import Plot from "@/components/Plot";
 import RefreshProvider from "@/components/RefreshProvider";
 import RefreshInput from "@/components/RefreshInput";
@@ -21,7 +21,7 @@ const Offset = styled("div")(({ theme }) => theme.mixins.toolbar);
 export default function App() {
   return (
     <WebSocketProvider url="ws://127.0.0.1:30180">
-      <TelemetryProvider>
+      <ExportRequestProvider>
         <RefreshProvider>
           <Container maxWidth="xl">
             <AppBar color="default" position="fixed">
@@ -167,7 +167,7 @@ export default function App() {
             </Grid>
           </Container>
         </RefreshProvider>
-      </TelemetryProvider>
+      </ExportRequestProvider>
     </WebSocketProvider>
   );
 }

@@ -11,11 +11,11 @@ import {
 import { WebSocketContext } from "./WebSocketProvider";
 import * as z from "../util/z";
 
-export interface TelemetryContext {
+export interface ExportRequestContext {
   lastExportRequest: ViewerExportRequest | null;
 }
 
-export const TelemetryContext = createContext<TelemetryContext>({
+export const ExportRequestContext = createContext<ExportRequestContext>({
   lastExportRequest: null,
 });
 
@@ -41,8 +41,8 @@ export default function TelemetryProvider({
   }, [ws.lastMessage]);
 
   return (
-    <TelemetryContext.Provider value={{ lastExportRequest }}>
+    <ExportRequestContext.Provider value={{ lastExportRequest }}>
       {children}
-    </TelemetryContext.Provider>
+    </ExportRequestContext.Provider>
   );
 }

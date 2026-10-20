@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, useEffect, useState } from "react";
-import { TelemetryContext } from "./TelemetryProvider";
+import { ExportRequestContext } from "./ExportRequestProvider";
 import UplotReact from "uplot-react";
 import { AlignedData, ViewerTelemetry } from "@/util/z";
 import { RefreshContext } from "./RefreshProvider";
@@ -24,7 +24,7 @@ export type PlotData = [xValues: Array<number>, ...yValues: Array<SeriesData>];
 
 export default function Plot(props: PlotProps) {
   const { name: plotName, legend, options } = props;
-  const telemetryContext = useContext(TelemetryContext);
+  const telemetryContext = useContext(ExportRequestContext);
   const refreshContext = useContext(RefreshContext);
   const initialData: PlotData = [
     [],
