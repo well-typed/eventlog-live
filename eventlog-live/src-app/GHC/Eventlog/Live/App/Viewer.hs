@@ -104,6 +104,7 @@ instance ToJSON ViewerExportRequest where
 
 data ViewerTelemetry = ViewerTelemetry
   { heapSize :: Maybe (AlignedData Word64)
+  , heapProfSample :: Maybe (AlignedData Word64)
   , gcCopied :: Maybe (AlignedData Word64)
   , gcSlop :: Maybe (AlignedData Word64)
   , gcFragmentation :: Maybe (AlignedData Word64)
@@ -113,6 +114,7 @@ viewerTelemetryToKV :: (KeyValueOmit e kv, Monoid kv) => ViewerTelemetry -> kv
 viewerTelemetryToKV vt =
   mconcat
     [ "heapSize" .?= vt.heapSize
+    , "heapProfSample" .?= vt.heapProfSample
     , "gcCopied" .?= vt.gcCopied
     , "gcSlop" .?= vt.gcSlop
     , "gcFragmentation" .?= vt.gcFragmentation
@@ -134,6 +136,7 @@ toViewerExportRequest r =
     , telemetry =
         ViewerTelemetry
           { heapSize = heapSize
+          , heapProfSample = heapProfSample
           , gcCopied = gcCopied
           , gcSlop = gcSlop
           , gcFragmentation = gcFragmentation
@@ -143,11 +146,12 @@ toViewerExportRequest r =
   someMetrics :: [SomeMetrics]
   someMetrics = mapMaybe toSomeMetrics r.telemetry
 
-  heapSize, gcCopied, gcSlop, gcFragmentation :: Maybe (AlignedData Word64)
+  heapProfSample, heapSize, gcCopied, gcSlop, gcFragmentation :: Maybe (AlignedData Word64)
+  heapProfSample = alignKnownMetric (Proxy @"heapProfSample") someMetrics
+  heapSize = alignKnownMetrics (Proxy @"heapSize" :&: Proxy @"blocksSize" :&: Proxy @"heapLive" :&: End) someMetrics
   gcCopied = alignKnownMetric (Proxy @"gcCopied") someMetrics
   gcSlop = alignKnownMetric (Proxy @"gcSlop") someMetrics
   gcFragmentation = alignKnownMetric (Proxy @"gcFragmentation") someMetrics
-  heapSize = alignKnownMetrics (Proxy @"heapSize" :&: Proxy @"blocksSize" :&: Proxy @"heapLive" :&: End) someMetrics
 
 infixr 0 :&:
 
