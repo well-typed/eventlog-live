@@ -36,7 +36,7 @@ find_project_root() {
 # Determine the builddir based on the arguments.
 #
 cabal_builddir() {
-	echo "test $*" | sed 's/ /-/g'
+	echo "test $*" | sed 's/[ /]/-/g'
 }
 
 cabal_build() {
