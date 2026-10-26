@@ -25,12 +25,14 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
+import Data.Coerce (coerce)
 import Data.Either (isLeft)
 import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.List qualified as L
 import Data.Machine (Process, ProcessT, await, construct, repeatedly, yield)
+import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
@@ -40,7 +42,7 @@ import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (evCapNo)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
 import GHC.Eventlog.Live.Types.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
-import GHC.Eventlog.Live.Types.Metrics (Metric (..))
+import GHC.Eventlog.Live.Types.Metrics (Metric (..), (<+>))
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
 import IpeDB.Database (Table)
@@ -215,22 +217,16 @@ insertHeapProfSampleString ::
   Metric Word64 ->
   HeapProfSample ->
   m HeapProfSample
-insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData = do
-  let insert :: Maybe (Metric Word64) -> m (Maybe (Metric Word64))
-      insert maybeHeapProfSample = do
-        -- When using -hT profiling, GHC appears to emit the same sample multiple times.
-        for_ maybeHeapProfSample $ \heapProfSample' ->
-          -- If the two samples are not the same, this assumption is wrong - warn.
-          when (heapProfSample'.value /= heapProfSample.value) $
-            logWarn logger . T.pack $
-              printf
-                "Duplicate sample for %s within census (old: %d, new: %d)."
-                (T.unpack heapProfLabel)
-                heapProfSample'.value
-                heapProfSample.value
+insertHeapProfSampleString _logger heapProfLabel heapProfSample heapProfSampleData = do
+  -- NOTE: When using -fdistinct-constructor-tables, GHC creates a distinct
+  --       info table for each usage site. When using heap profiling by closure
+  --       type, GHC uses the address of the StgInfoTable->con_desc as its
+  --       identifier. When using both flags, this causes GHC to emit multiple
+  --       samples with the same label.
+  let insert :: Maybe (Metric Word64) -> Maybe (Metric Word64)
+      insert = Just . maybe heapProfSample (<+> heapProfSample)
 
-        pure (Just heapProfSample)
-  heapProfSampleMap' <- M.alterF insert heapProfLabel heapProfSampleData.heapProfSampleMap
+  let heapProfSampleMap' = M.alter insert heapProfLabel heapProfSampleData.heapProfSampleMap
   pure HeapProfSample{heapProfSampleMap = heapProfSampleMap'}
 
 {- |
