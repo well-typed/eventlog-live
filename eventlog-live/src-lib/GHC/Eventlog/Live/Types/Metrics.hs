@@ -44,6 +44,7 @@ module GHC.Eventlog.Live.Types.Metrics (
 
   -- * Generic metric type
   Metric (..),
+  (<+>),
 ) where
 
 import Control.Exception (assert)
@@ -55,6 +56,7 @@ import Data.Functor ((<&>))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy (..))
+import Data.Semigroup qualified as Semigroup
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Type.Equality (type (:~:) (Refl))
@@ -339,6 +341,13 @@ instance (Semigroup a) => Semigroup (Metric a) where
     forceMaybe :: Maybe b -> Maybe b
     forceMaybe Nothing = Nothing
     forceMaybe (Just b) = b `seq` Just b
+
+(<+>) :: forall a. (Semigroup (Semigroup.Sum a)) => Metric a -> Metric a -> Metric a
+x <+> y = unSum (toSum x <> toSum y)
+ where
+  toSum = coerce @(Metric a) @(Metric (Semigroup.Sum a))
+  unSum = coerce @(Metric (Semigroup.Sum a)) @(Metric a)
+{-# INLINE (<+>) #-}
 
 --------------------------------------------------------------------------------
 -- Type-Level Information for Metrics
