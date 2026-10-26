@@ -40,7 +40,11 @@ cabal_builddir() {
 }
 
 cabal_build() {
-	${CABAL} build "$@" --builddir="dist-newstyle/$(cabal_builddir "$@")" 1>&2
+	# Find the GHC version
+	if [ "${GHC}" = "" ]; then
+		GHC="ghc"
+	fi
+	${CABAL} build "$@" --with-compiler="${GHC}" --builddir="dist-newstyle/$(cabal_builddir "$@")" 1>&2
 }
 
 cabal_list_bin() {
