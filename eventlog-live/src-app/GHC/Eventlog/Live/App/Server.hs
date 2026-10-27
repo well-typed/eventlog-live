@@ -19,7 +19,7 @@ import Data.Proxy (Proxy (..))
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import GHC.Eventlog.Live.App.Server.Control (ControlApi, ControlHooks (..), control, newControlServer, newDisabledControlServer)
-import GHC.Eventlog.Live.App.Server.Viewer (mkViewerWebsocketServer)
+import GHC.Eventlog.Live.App.Server.Viewer (ViewerApi, viewerServer, viewerWsServerApp)
 import GHC.Eventlog.Live.Logger (Logger, logDebug, logInfo, logTrace)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Processor (ExportRequest)
@@ -53,11 +53,8 @@ startServer ::
   Chan (Tick ExportRequest) ->
   IO ServerHandle
 startServer logger ServerOptions{..} exportRequestChan = do
-  -- Determine the server port
-  let port = maybe 30179 (.port) serverPort
-
   -- Announce the server
-  logInfo logger $ "Starting server on " <> T.pack (show port)
+  logInfo logger $ "Starting server on " <> T.show serverPort.port
 
   -- Create middleware that logs all incoming requests.
   requestLogger <- mkLoggerMiddleware logger
@@ -81,7 +78,7 @@ startServer logger ServerOptions{..} exportRequestChan = do
   -- Create the viewer websocket server.
   let viewerWebsocketOr app
         | viewerEnabled =
-            let server = mkViewerWebsocketServer logger exportRequestChan
+            let server = viewerWsServerApp logger exportRequestChan
                 options = defaultConnectionOptions
              in websocketsOr options server app
         | otherwise = app
@@ -89,12 +86,12 @@ startServer logger ServerOptions{..} exportRequestChan = do
   -- Start the server.
   serverThreadId <-
     forkIO $
-      Warp.run port $
+      Warp.run serverPort.port $
         requestLogger $
           cors (const $ Just corsResourcePolicy) $
             viewerWebsocketOr $
-              serve (Proxy @(HealthApi :<|> ControlApi)) $
-                health logger :<|> controlServer
+              serve (Proxy @ServerApi) $
+                controlServer :<|> health logger :<|> viewerServer
 
   -- Create the stop function.
   let stop = killThread serverThreadId
@@ -102,11 +99,20 @@ startServer logger ServerOptions{..} exportRequestChan = do
   pure ServerHandle{..}
 
 --------------------------------------------------------------------------------
+-- Server API
+--------------------------------------------------------------------------------
+
+type ServerApi =
+  ("control" :> ControlApi)
+    :<|> ("health" :> HealthApi)
+    :<|> ViewerApi
+
+--------------------------------------------------------------------------------
 -- Health API
 --------------------------------------------------------------------------------
 
 type HealthApi =
-  "health" :> Get '[JSON] ()
+  Get '[JSON] ()
 
 health :: Logger IO -> Handler ()
 health logger = do
@@ -130,51 +136,13 @@ mkLoggerMiddleware logger =
       }
 
 --------------------------------------------------------------------------------
--- CORS Resource Policy
---------------------------------------------------------------------------------
-
-mkCorsResourcePolicy :: ServerCors -> CorsResourcePolicy
-mkCorsResourcePolicy ServerCors{..} =
-  CorsResourcePolicy
-    { corsOrigins = corsOrigins
-    , corsMethods = ["GET", "POST"]
-    , corsRequestHeaders = ["Content-Type", "Origin"]
-    , corsExposedHeaders = Nothing
-    , corsMaxAge = serverCorsMaxAgeS
-    , corsVaryOrigin = corsVaryOrigin
-    , corsRequireOrigin = serverCorsRequireOrigin
-    , corsIgnoreFailures = serverCorsIgnoreFailures
-    }
- where
-  -- TODO: If we add authentication, this flag needs to be set.
-  corsCredentials :: Bool
-  corsCredentials = False
-
-  -- The @wai-cors@ package represents wildcard as @Nothing@ and otherwise
-  -- accepts a list of origins and a boolean that determines whether or not
-  -- credentials are used to access the resource.
-  corsOrigins :: Maybe ([Origin], Bool)
-  corsOrigins =
-    case serverCorsAllowOrigin of
-      Just (ServerCorsAllowOriginList origins) -> Just (origins, corsCredentials)
-      _otherwise -> Nothing
-
-  -- The @Vary: Origin@ header must be added if @Access-Control-Allow-Origin@
-  -- is not set to wildcard and there are multiple origins.
-  corsVaryOrigin :: Bool
-  corsVaryOrigin =
-    case serverCorsAllowOrigin of
-      Just (ServerCorsAllowOriginList origins) -> length origins >= 2
-      _otherwise -> False
-
---------------------------------------------------------------------------------
 -- Server Options
 --------------------------------------------------------------------------------
 
 data ServerOptions = ServerOptions
   { viewerEnabled :: !Bool
   , controlEnabled :: !Bool
-  , serverPort :: !(Maybe ServerPort)
+  , serverPort :: !ServerPort
   , serverCors :: !ServerCors
   }
 
@@ -212,11 +180,13 @@ controlEnabledParser =
 newtype ServerPort = ServerPort {port :: Int}
   deriving (Eq, Show)
 
-serverPortParser :: O.Parser (Maybe ServerPort)
+serverPortParser :: O.Parser ServerPort
 serverPortParser =
-  O.option (Just . ServerPort <$> O.auto) . mconcat $
+  O.option (ServerPort <$> O.auto) . mconcat $
     [ O.metavar "PORT"
+    , O.long "port"
     , O.help "The port number for the server."
+    , O.value (ServerPort 30179)
     ]
 
 --------------------------------------------------------------------------------
@@ -239,7 +209,7 @@ serverCorsParser =
 
 serverCorsMaxAgeSParser :: O.Parser (Maybe Int)
 serverCorsMaxAgeSParser =
-  O.option (Just <$> O.auto) . mconcat $
+  O.optional . O.option O.auto . mconcat $
     [ O.metavar "SECONDS"
     , O.long "server-cors-max-age"
     , O.help "Set the maximum age of a cached CORS preflight request for the server CORS policy."
@@ -267,8 +237,8 @@ data ServerCorsAllowOrigin
 
 serverCorsAllowOriginParser :: O.Parser (Maybe ServerCorsAllowOrigin)
 serverCorsAllowOriginParser =
-  O.option (Just <$> readPReader pServerCorsAllowOrigin) . mconcat $
-    [ O.long "control-cors-allow-origin"
+  O.optional . O.option (readPReader pServerCorsAllowOrigin) . mconcat $
+    [ O.long "server-cors-allow-origin"
     , O.metavar "ORIGIN"
     , O.help "Set the allowed origins for the control server CORS policy."
     ]
@@ -300,3 +270,37 @@ pServerCorsAllowOrigin =
   --
   pOrigin :: ReadP ServerCorsOrigin
   pOrigin = BSC.pack <$> P.munch1 (\c -> not (c == ',' || isSpace c)) <* P.skipSpaces
+
+mkCorsResourcePolicy :: ServerCors -> CorsResourcePolicy
+mkCorsResourcePolicy ServerCors{..} =
+  CorsResourcePolicy
+    { corsOrigins = corsOrigins
+    , corsMethods = ["GET", "POST"]
+    , corsRequestHeaders = ["Content-Type", "Origin"]
+    , corsExposedHeaders = Nothing
+    , corsMaxAge = serverCorsMaxAgeS
+    , corsVaryOrigin = corsVaryOrigin
+    , corsRequireOrigin = serverCorsRequireOrigin
+    , corsIgnoreFailures = serverCorsIgnoreFailures
+    }
+ where
+  -- TODO: If we add authentication, this flag needs to be set.
+  corsCredentials :: Bool
+  corsCredentials = False
+
+  -- The @wai-cors@ package represents wildcard as @Nothing@ and otherwise
+  -- accepts a list of origins and a boolean that determines whether or not
+  -- credentials are used to access the resource.
+  corsOrigins :: Maybe ([Origin], Bool)
+  corsOrigins =
+    case serverCorsAllowOrigin of
+      Just (ServerCorsAllowOriginList origins) -> Just (origins, corsCredentials)
+      _otherwise -> Nothing
+
+  -- The @Vary: Origin@ header must be added if @Access-Control-Allow-Origin@
+  -- is not set to wildcard and there are multiple origins.
+  corsVaryOrigin :: Bool
+  corsVaryOrigin =
+    case serverCorsAllowOrigin of
+      Just (ServerCorsAllowOriginList origins) -> length origins >= 2
+      _otherwise -> False
