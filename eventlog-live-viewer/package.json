@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "tsx scripts/build.ts",
-    "watch": "tsx scripts/build.ts -- --watch"
+    "watch": "npm run build -- --watch",
+    "build:export": "npm run build -- --outdir=../eventlog-live/data/viewer/"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
