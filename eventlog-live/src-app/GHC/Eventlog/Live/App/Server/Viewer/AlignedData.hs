@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module GHC.Eventlog.Live.App.Viewer.AlignedData (
+module GHC.Eventlog.Live.App.Server.Viewer.AlignedData (
   AlignedData (..),
   Series (..),
   TimeUnix,

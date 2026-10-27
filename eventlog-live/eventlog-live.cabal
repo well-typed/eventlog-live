@@ -254,7 +254,6 @@ executable eventlog-live-otlp
 
   other-modules:
     GHC.Eventlog.Live.App
-    GHC.Eventlog.Live.App.Control
     GHC.Eventlog.Live.App.Environment
     GHC.Eventlog.Live.App.Exporter.Otlp
     GHC.Eventlog.Live.App.Exporter.Otlp.Core
@@ -266,8 +265,10 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.App.Exporter.Otlp.Traces
     GHC.Eventlog.Live.App.Options
     GHC.Eventlog.Live.App.Options.Raw
-    GHC.Eventlog.Live.App.Viewer
-    GHC.Eventlog.Live.App.Viewer.AlignedData
+    GHC.Eventlog.Live.App.Server
+    GHC.Eventlog.Live.App.Server.Control
+    GHC.Eventlog.Live.App.Server.Viewer
+    GHC.Eventlog.Live.App.Server.Viewer.AlignedData
 
   hs-source-dirs:
     src-app-internal
@@ -290,11 +291,13 @@ executable eventlog-live-otlp
     data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
     eventlog-live,
+    fast-logger >=3.0 && <3.3,
     file-embed >=0.0.16 && <0.1,
     ghc-events >=0.20 && <0.21,
     grapesy >=1.0.0 && <1.2,
     hashable >=1.4 && <1.6,
     hs-opentelemetry-otlp >=0.2.0 && <0.3,
+    http-api-data >=0.6 && <0.7,
     http-client >=0.7 && <0.8,
     http-client-tls >=0.3.5 && <0.4,
     http-types >=0.12 && <0.13,
@@ -304,10 +307,17 @@ executable eventlog-live-otlp
     network-uri >=2.6 && <2.8,
     optparse-applicative >=0.17 && <0.20,
     proto-lens >=0.7.1 && <0.8,
+    servant >=0.20 && <0.21,
+    servant-server >=0.20 && <0.21,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
+    wai >=3.2 && <3.3,
+    wai-cors >=0.2 && <0.3,
+    wai-extra >=3.1 && <3.2,
+    wai-websockets >=3 && <3.1,
+    warp >=3.4 && <3.5,
     websockets >=0.13 && <0.14,
     zlib >=0.2 && <0.8,
 
@@ -315,15 +325,7 @@ executable eventlog-live-otlp
     build-depends:
       binary >=0.8 && <0.9,
       eventlog-socket-control >=0.1.1 && <0.2,
-      fast-logger >=3.0 && <3.3,
-      http-api-data >=0.6 && <0.7,
       network >=3.2.7 && <3.3,
-      servant >=0.20 && <0.21,
-      servant-server >=0.20 && <0.21,
-      wai >=3.2 && <3.3,
-      wai-cors >=0.2 && <0.3,
-      wai-extra >=3.1 && <3.2,
-      warp >=3.4 && <3.5,
 
     cpp-options: -DEVENTLOG_LIVE_FEATURE_CONTROL
 
