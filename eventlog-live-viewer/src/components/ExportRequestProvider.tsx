@@ -1,5 +1,3 @@
-"use client";
-
 import type { ViewerExportRequest } from "@/util/z";
 import {
   createContext,

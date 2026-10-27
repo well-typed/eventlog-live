@@ -1,5 +1,3 @@
-"use client";
-
 import Plot from "@/components/plots/Plot";
 import * as z from "@/util/z";
 import { useTheme } from "@mui/material";

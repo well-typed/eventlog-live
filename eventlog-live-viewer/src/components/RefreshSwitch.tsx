@@ -1,5 +1,3 @@
-"use client";
-
 import { useContext } from "react";
 import { RefreshContext } from "./RefreshProvider";
 import Switch, { SwitchProps } from "@mui/material/Switch";
