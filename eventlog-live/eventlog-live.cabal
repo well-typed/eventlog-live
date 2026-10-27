@@ -280,6 +280,7 @@ executable eventlog-live-otlp
     GHC.Eventlog.Live.App.Server.Control
     GHC.Eventlog.Live.App.Server.Viewer
     GHC.Eventlog.Live.App.Server.Viewer.AlignedData
+    GHC.Eventlog.Live.App.Server.Viewer.Embedded
 
   hs-source-dirs:
     src-app-internal
@@ -296,9 +297,11 @@ executable eventlog-live-otlp
   build-depends:
     aeson >=2.2 && <2.3,
     base >=4.16 && <5,
+    base64 >=1.0 && <1.1,
     bytestring >=0.11 && <0.13,
     case-insensitive >=1.2 && <1.3,
     containers >=0.6 && <0.9,
+    cryptohash-md5 >=0.11 && <0.12,
     data-default >=0.2 && <0.9,
     dlist >=1.0 && <1.1,
     eventlog-live,
@@ -325,7 +328,7 @@ executable eventlog-live-otlp
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
     wai >=3.2 && <3.3,
-    wai-app-static,
+    wai-app-static >=3 && <3.3,
     wai-cors >=0.2 && <0.3,
     wai-extra >=3.1 && <3.2,
     wai-websockets >=3 && <3.1,
@@ -362,3 +365,18 @@ executable eventlog-live-otlp
     build-depends: template-haskell
     hs-source-dirs: vendor/hs-opentelemetry-api-1.0.0.0/src
     other-modules: OpenTelemetry.Baggage
+
+  hs-source-dirs:
+    src-compat
+
+  -- 2025-11-06:
+  -- This configures the build requirements for using either template-haskell
+  -- or template-haskell-lift.
+  if flag(use-template-haskell-lift)
+    build-depends: template-haskell-lift >=0.1 && <0.2
+    cpp-options: -DEVENTLOG_LIVE_USE_TEMPLATE_HASKELL_LIFT
+  else
+    build-depends: template-haskell >=2.2 && <3
+
+  other-modules:
+    Language.Haskell.TH.Lift.Compat
