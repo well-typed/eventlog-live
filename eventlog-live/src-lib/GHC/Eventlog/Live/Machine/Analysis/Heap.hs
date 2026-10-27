@@ -25,14 +25,12 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Data.Coerce (coerce)
 import Data.Either (isLeft)
 import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.List qualified as L
 import Data.Machine (Process, ProcessT, await, construct, repeatedly, yield)
-import Data.Semigroup (Sum (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
