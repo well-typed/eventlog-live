@@ -294,7 +294,7 @@ toCustomCommandError = CustomCommandError . displayException
 --------------------------------------------------------------------------------
 
 type ControlApi =
-  "control" :> (EventlogSocketApi :<|> CustomCommandApi)
+  (EventlogSocketApi :<|> CustomCommandApi)
 
 --------------------------------------------------------------------------------
 -- Custom Command API

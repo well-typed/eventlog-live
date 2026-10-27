@@ -1,8 +1,11 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GHC.Eventlog.Live.App.Server.Viewer (
-  mkViewerWebsocketServer,
+  ViewerApi,
+  viewerServer,
+  viewerWsServerApp,
 ) where
 
 import Control.Concurrent.Chan (Chan, dupChan, readChan)
@@ -20,6 +23,7 @@ import Data.Text qualified as T
 import Data.Word (Word64)
 import GHC.Eventlog.Live.App.Server.Viewer.AlignedData (AlignedData, toAlignedData)
 import GHC.Eventlog.Live.App.Server.Viewer.AlignedData qualified as AD
+import GHC.Eventlog.Live.App.Server.Viewer.Embedded (mkEmbedded)
 import GHC.Eventlog.Live.Logger (Logger, logException, logInfo, logTrace)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope, Resource, toSomeMetrics)
@@ -27,16 +31,40 @@ import GHC.Eventlog.Live.Types.Attribute ((~=))
 import GHC.Eventlog.Live.Types.Metrics (KnownMetric (..), Metric, SomeMetrics, getMetrics)
 import GHC.Eventlog.Live.Types.Metrics qualified as M
 import GHC.TypeLits (symbolVal)
+import Network.Wai (Application)
+import Network.Wai.Application.Static (staticApp)
 import Network.WebSockets qualified as WS
+import Servant.API (Raw)
+import Servant.Server (HasServer (..), Tagged (..))
+import WaiAppStatic.Storage.Embedded (mkSettings)
+import WaiAppStatic.Types qualified as WAS
 import Prelude hiding (null)
+
+--------------------------------------------------------------------------------
+-- Viewer App Server
+--------------------------------------------------------------------------------
+
+type ViewerApi = Raw
+
+viewerServer :: ServerT Raw m
+viewerServer = Tagged viewerApp
+
+viewerApp :: Application
+viewerApp =
+  staticApp
+    $(mkSettings mkEmbedded)
+      { WAS.ssIndices = WAS.unsafeToPiece <$> ["index.html"]
+      , WAS.ssRedirectToIndex = True
+      , WAS.ssAddTrailingSlash = True
+      }
 
 --------------------------------------------------------------------------------
 -- Viewer Websocket Server
 --------------------------------------------------------------------------------
 
-mkViewerWebsocketServer ::
+viewerWsServerApp ::
   Logger IO -> Chan (Tick ExportRequest) -> WS.ServerApp
-mkViewerWebsocketServer logger exportRequestChan pending = do
+viewerWsServerApp logger exportRequestChan pending = do
   conn <- WS.acceptRequest pending
   chan <- dupChan exportRequestChan
 
