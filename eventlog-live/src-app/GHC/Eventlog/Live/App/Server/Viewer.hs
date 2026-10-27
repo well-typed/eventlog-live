@@ -1,14 +1,12 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module GHC.Eventlog.Live.App.Viewer (
-  ViewerServerApi (..),
-  startViewerServer,
+module GHC.Eventlog.Live.App.Server.Viewer (
+  mkViewerWebsocketServer,
 ) where
 
-import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (Chan, dupChan, readChan)
-import Control.Exception (SomeException, handle)
+import Control.Exception (handle)
 import Control.Monad (forever)
 import Data.Aeson qualified as JSON
 import Data.Aeson.Types (KeyValue (..), KeyValueOmit (..), ToJSON, Value (..), pairs)
@@ -20,8 +18,8 @@ import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as T
 import Data.Word (Word64)
-import GHC.Eventlog.Live.App.Viewer.AlignedData (AlignedData, toAlignedData)
-import GHC.Eventlog.Live.App.Viewer.AlignedData qualified as AD
+import GHC.Eventlog.Live.App.Server.Viewer.AlignedData (AlignedData, toAlignedData)
+import GHC.Eventlog.Live.App.Server.Viewer.AlignedData qualified as AD
 import GHC.Eventlog.Live.Logger (Logger, logException, logInfo, logTrace)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope, Resource, toSomeMetrics)
@@ -32,28 +30,13 @@ import GHC.TypeLits (symbolVal)
 import Network.WebSockets qualified as WS
 import Prelude hiding (null)
 
-newtype ViewerServerApi = ViewerServerApi
-  { stop :: IO ()
-  }
+--------------------------------------------------------------------------------
+-- Viewer Websocket Server
+--------------------------------------------------------------------------------
 
-startViewerServer :: Logger IO -> Chan (Tick ExportRequest) -> IO ViewerServerApi
-startViewerServer logger exportRequestChan = do
-  logInfo logger $ "Starting viewer server"
-
-  threadId <-
-    forkIO $
-      handle (logException @SomeException logger) $
-        WS.runServer "127.0.0.1" 30180 $
-          viewerApp logger exportRequestChan
-
-  let stop :: IO ()
-      stop = killThread threadId
-
-  pure ViewerServerApi{..}
-
-viewerApp ::
+mkViewerWebsocketServer ::
   Logger IO -> Chan (Tick ExportRequest) -> WS.ServerApp
-viewerApp logger exportRequestChan pending = do
+mkViewerWebsocketServer logger exportRequestChan pending = do
   conn <- WS.acceptRequest pending
   chan <- dupChan exportRequestChan
 
