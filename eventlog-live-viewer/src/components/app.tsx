@@ -1,5 +1,3 @@
-"use client";
-
 import WebSocketProvider from "@/components/WebSocketProvider";
 import ExportRequestProvider from "@/components/ExportRequestProvider";
 import RefreshProvider from "@/components/RefreshProvider";
@@ -20,10 +18,12 @@ import {
 import { Offset } from "@/components/Offset";
 import EventlogLiveIcon from "@/components/EventlogLiveIcon";
 import Typography from "@mui/material/Typography";
+import "uplot/dist/uPlot.min.css";
 
 export default function App() {
+  const url = `ws://${URL.parse(window.location.href)?.host ?? "localhost:30179"}`;
   return (
-    <WebSocketProvider url="ws://127.0.0.1:30180">
+    <WebSocketProvider url={url}>
       <ExportRequestProvider>
         <RefreshProvider>
           <Container maxWidth="xl">
