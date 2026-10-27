@@ -1,5 +1,3 @@
-"use client";
-
 import { WebSocketContext } from "./WebSocketProvider";
 import { useContext, useEffect, useState } from "react";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";

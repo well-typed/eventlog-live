@@ -1,5 +1,3 @@
-"use client";
-
 import { createContext, PropsWithChildren, useState } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
