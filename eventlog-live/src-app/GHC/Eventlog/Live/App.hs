@@ -26,12 +26,11 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void, absurd)
 import GHC.Debug.Stub.Compat (withMyGhcDebug)
-import GHC.Eventlog.Live.App.Control (ControlServerApi (..), startControlServer)
 import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceName (..), lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.App.Exporter.Otlp (exportToOtlp)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
-import GHC.Eventlog.Live.App.Options
-import GHC.Eventlog.Live.App.Viewer (ViewerServerApi (..), startViewerServer)
+import GHC.Eventlog.Live.App.Options (MyDebugOptions (..), Options (..), options)
+import GHC.Eventlog.Live.App.Server (ControlHooks (..), ServerHandle (..), startServer)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, chanLogger, chanSource, filterBySeverity, logDebug, logFatal, logMetric, logTick, mkStderrLogger)
@@ -97,11 +96,8 @@ main =
     startMyEventlogSocket logger maybeMyEventlogSocket
     withMyGhcDebug logger maybeMyGhcDebugSocket $ do
       --
-      -- Start the control server.
-      controlServerApi <- startControlServer logger controlOptions
-
-      -- Start the viewer server.
-      viewerServerApi <- startViewerServer logger exportRequestQueue
+      -- Start the server.
+      server <- startServer logger serverOptions exportRequestQueue
 
       -- Read the configuration file.
       let readConfigFile configFile = do
@@ -166,8 +162,8 @@ main =
                 eventlogSourceOptions
                 $ \eventlogSourceHandle -> do
                   -- Notify the control server of the connection status.
-                  let newConnection = controlServerApi.notifyNewConnection serviceName eventlogSourceHandle
-                  let endConnection = controlServerApi.notifyEndConnection serviceName
+                  let newConnection = server.controlHooks.notifyNewConnection serviceName eventlogSourceHandle
+                  let endConnection = server.controlHooks.notifyEndConnection serviceName
                   bracket_ newConnection endConnection $
                     -- Run the eventlog processor.
                     runWithEventlogSourceHandle
@@ -213,8 +209,7 @@ main =
       join eventlogProcessorHandle
       join internalTelemetryProcessorHandle
       join exportRequestProcessorHandle
-      controlServerApi.stop
-      viewerServerApi.stop
+      server.stop
 
 -- Log all ticks.
 logTicks :: (Monad m) => Logger m -> ProcessT m (Tick x) y

@@ -10,8 +10,8 @@ import Data.List qualified as L
 import Data.Text qualified as T
 import Data.Version (showVersion)
 import GHC.Debug.Stub.Compat (MyGhcDebugSocket, maybeMyGhcDebugSocketParser)
-import GHC.Eventlog.Live.App.Control (ControlOptions, controlOptionsParser)
 import GHC.Eventlog.Live.App.Options.Raw (footerString, headerString, progDescString)
+import GHC.Eventlog.Live.App.Server (ServerOptions, serverOptionsParser)
 import GHC.Eventlog.Live.Config (Config)
 import GHC.Eventlog.Live.Config qualified as C
 import GHC.Eventlog.Live.Options
@@ -104,7 +104,7 @@ data Options = Options
   , maybeIpeDBPath :: Maybe FilePath
   , maybeCCDBPath :: Maybe FilePath
   , maybeConfigFile :: Maybe FilePath
-  , controlOptions :: ControlOptions
+  , serverOptions :: ServerOptions
   , myDebugOptions :: MyDebugOptions
   }
 
@@ -120,7 +120,7 @@ optionsParser =
     <*> O.optional ipeDBPathParser
     <*> O.optional ccDBPathParser
     <*> O.optional configFileParser
-    <*> controlOptionsParser
+    <*> serverOptionsParser
     <*> myDebugOptionsParser
 
 --------------------------------------------------------------------------------
