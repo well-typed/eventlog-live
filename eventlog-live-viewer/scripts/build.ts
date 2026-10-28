@@ -13,6 +13,10 @@ const program = new Command()
       entryPoints: ["src/index.tsx"],
       bundle: true,
       outdir: outdir,
+      alias: {
+        react: "preact/compat",
+        "react-dom": "preact/compat",
+      },
       plugins: [
         svgr({
           svgoConfig: {
