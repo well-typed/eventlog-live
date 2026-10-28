@@ -1,7 +1,7 @@
 export default function resolveWebSocketUrl(): string {
-  if (typeof EVENTLOG_LIVE_VIEWER_WEBSOCKET_URL === "string") {
-    return EVENTLOG_LIVE_VIEWER_WEBSOCKET_URL;
+  if (typeof IS_DEVELOPMENT === "boolean" && IS_DEVELOPMENT) {
+    return "ws://localhost:30179";
   } else {
-    return `ws://${URL.parse(window.location.href)?.host ?? "localhost:30179"}`;
+    return `ws://${window.location.host}`;
   }
 }
