@@ -2,7 +2,6 @@ import { Command } from "@commander-js/extra-typings";
 import * as esbuild from "esbuild";
 import svgr from "esbuild-plugin-svgr";
 import copyStaticFiles from "esbuild-copy-static-files";
-import browserSync from "@rbnlffl/esbuild-plugin-browser-sync";
 
 const program = new Command()
   .name("build")
@@ -41,6 +40,9 @@ const program = new Command()
       const context = await esbuild.context({
         ...config,
         sourcemap: true,
+        define: {
+          EVENTLOG_LIVE_VIEWER_WEBSOCKET_URL: "'ws://localhost:30179'",
+        },
       });
       context.watch();
       const { hosts, port } = await context.serve({
