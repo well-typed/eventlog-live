@@ -5,13 +5,13 @@ import copyStaticFiles from "esbuild-copy-static-files";
 
 const program = new Command()
   .name("build")
+  .option("--analyze")
   .option("--watch")
   .option("--outdir <directory>")
-  .action(async ({ watch, outdir = "dist" }) => {
+  .action(async ({ analyze, watch, outdir = "dist" }) => {
     const config = {
       entryPoints: ["src/index.tsx"],
       bundle: true,
-      minify: true,
       outdir: outdir,
       plugins: [
         svgr({
@@ -36,15 +36,28 @@ const program = new Command()
         }),
       ],
     };
-    if (watch) {
+    if (!watch) {
+      /************************************************************************/
+      /* Build for Production                                                 */
+      /************************************************************************/
+      const result = await esbuild.build({
+        ...config,
+        metafile: analyze,
+        minify: true,
+      });
+      if (result.metafile !== undefined) {
+        console.log(await esbuild.analyzeMetafile(result.metafile));
+      }
+    } else {
+      /************************************************************************/
+      /* Serve with Live Reload                                               */
+      /************************************************************************/
       const context = await esbuild.context({
         ...config,
         sourcemap: true,
-        define: {
-          EVENTLOG_LIVE_VIEWER_WEBSOCKET_URL: "'ws://localhost:30179'",
-        },
+        define: { IS_DEVELOPMENT: "true" },
       });
-      context.watch();
+      await context.watch();
       const { hosts, port } = await context.serve({
         servedir: "dist",
       });
@@ -55,8 +68,6 @@ const program = new Command()
         console.log(`  ${p} http://${host}:${port}`);
       }
       console.log("----------------------------------------");
-    } else {
-      await esbuild.build(config);
     }
   });
 
