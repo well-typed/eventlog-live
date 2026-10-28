@@ -212,7 +212,7 @@ library
   -- 2026-09-29:
   -- This includes a backport of uniformByteString.
   hs-source-dirs:
-    src-lib-internal
+    src-compat
 
   other-modules:
     System.Random.Compat
