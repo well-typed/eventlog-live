@@ -26,3 +26,10 @@ root.render(
     <App />
   </ThemeProvider>,
 );
+
+// Enable hot-reload for esbuild.
+if (typeof IS_DEVELOPMENT === "boolean" && IS_DEVELOPMENT) {
+  new EventSource("/esbuild").addEventListener("change", () =>
+    location.reload(),
+  );
+}
