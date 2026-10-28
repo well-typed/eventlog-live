@@ -22,7 +22,7 @@
     }
   },
   "include": [
-    "src/types.d.ts",
+    "src/*.d.ts",
     "src/index.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
