@@ -20,6 +20,17 @@ extra-source-files:
   data/help.footer.txt
   data/help.header.txt
   data/help.progDesc.txt
+  data/viewer/apple-touch-icon.png
+  data/viewer/favicon.ico
+  data/viewer/icon-192.png
+  data/viewer/icon-512.png
+  data/viewer/icon-mask.png
+  data/viewer/icon.svg
+  data/viewer/index.css
+  data/viewer/index.html
+  data/viewer/index.js
+  data/viewer/index.js.map
+  data/viewer/manifest.json
 
 tested-with:
   ghc ==9.6.7 || ==9.8.4 || ==9.10.3 || ==9.12.4
@@ -314,6 +325,7 @@ executable eventlog-live-otlp
     unordered-containers >=0.2.20 && <0.3,
     vector >=0.11 && <0.14,
     wai >=3.2 && <3.3,
+    wai-app-static,
     wai-cors >=0.2 && <0.3,
     wai-extra >=3.1 && <3.2,
     wai-websockets >=3 && <3.1,
