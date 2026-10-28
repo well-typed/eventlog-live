@@ -10,20 +10,16 @@ import Toolbar from "@mui/material/Toolbar";
 import Box from "@mui/material/Box";
 import { HeapProfSamplePlot } from "@/components/plots/HeapProfSample";
 import { HeapSizePlot } from "@/components/plots/HeapSize";
-import {
-  GcCopiedPlot,
-  GcSlopPlot,
-  GcFragmentationPlot,
-} from "@/components/plots/GcStats";
+import * as GcStats from "@/components/plots/GcStats";
 import { Offset } from "@/components/Offset";
 import EventlogLiveIcon from "@/components/EventlogLiveIcon";
 import Typography from "@mui/material/Typography";
 import "uplot/dist/uPlot.min.css";
+import resolveWebSocketUrl from "@/util/resolveWebSocketUrl";
 
 export default function App() {
-  const url = `ws://${URL.parse(window.location.href)?.host ?? "localhost:30179"}`;
   return (
-    <WebSocketProvider url={url}>
+    <WebSocketProvider url={resolveWebSocketUrl()}>
       <ExportRequestProvider>
         <RefreshProvider>
           <Container maxWidth="xl">
@@ -71,13 +67,13 @@ export default function App() {
                 </Grid>
                 {/* GC Stats */}
                 <Grid size={1}>
-                  <GcCopiedPlot />
+                  <GcStats.GcCopiedPlot />
                 </Grid>
                 <Grid size={1}>
-                  <GcSlopPlot />
+                  <GcStats.GcSlopPlot />
                 </Grid>
                 <Grid size={1}>
-                  <GcFragmentationPlot />
+                  <GcStats.GcFragmentationPlot />
                 </Grid>
               </Grid>
             </Grid>
