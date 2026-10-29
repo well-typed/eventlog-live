@@ -4,9 +4,9 @@ import Switch, { SwitchProps } from "@mui/material/Switch";
 import Typography from "@mui/material/Typography";
 import Tooltip from "@mui/material/Tooltip";
 
-type RefreshSwitchProps = Omit<SwitchProps, "checked" | "onChange">;
+export type RefreshSwitchProps = Omit<SwitchProps, "checked" | "onChange">;
 
-function RefreshSwitch(props: RefreshSwitchProps) {
+export default function RefreshSwitch(props: RefreshSwitchProps) {
   const refreshContext = useContext(RefreshContext);
   return (
     <>
@@ -18,12 +18,10 @@ function RefreshSwitch(props: RefreshSwitchProps) {
         />
       </Tooltip>
       <Typography
-        sx={{ display: { xs: "none", sm: "inline" }, marginRight: 1 }}
+        sx={{ display: { xs: "none", sm: "inherit" }, marginRight: 1 }}
       >
         Refresh
       </Typography>
     </>
   );
 }
-
-export default RefreshSwitch;

@@ -1,4 +1,4 @@
-import Plot from "@/components/plots/Plot";
+import Plot, { Props } from "@/components/plots/Plot";
 import * as z from "@/util/z";
 import { useTheme } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -14,18 +14,26 @@ const heapProfSampleByClosureTypeAttrs = z.strictObject({
 
 const heapProfSampleAttrs = z.union([heapProfSampleByClosureTypeAttrs]);
 
-const getSize = (lg: boolean, xl: boolean): [number, number] =>
+type HeapProfSampleAttrs = z.infer<typeof heapProfSampleAttrs>;
+
+export interface HeapProfSampleProps {
+  seriesLimit?: Props<HeapProfSampleAttrs>["seriesLimit"];
+  options?: Omit<Props<HeapProfSampleAttrs>["options"], "width" | "height">;
+  size?: (lg: boolean, xl: boolean) => [number, number];
+}
+
+const defaultSize = (lg: boolean, xl: boolean): [number, number] =>
   xl ? [1200, 800] : lg ? [900, 600] : [600, 400];
 
-export const HeapProfSamplePlot = () => {
+export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
   const theme = useTheme();
   const lg = useMediaQuery(theme.breakpoints.up("lg"));
   const xl = useMediaQuery(theme.breakpoints.up("xl"));
+  const getSize = props.size ?? defaultSize;
   const [size, setSize] = useState<[number, number]>(getSize(lg, xl));
 
-  useEffect(() => {
-    setSize(getSize(lg, xl));
-  }, [lg, xl]);
+  // Handle changes in the viewport size.
+  useEffect(() => setSize(getSize(lg, xl)), [lg, xl]);
 
   return (
     <Plot
@@ -37,17 +45,14 @@ export const HeapProfSamplePlot = () => {
         spanGaps: true,
       })}
       unit="By"
-      seriesLimit={10}
+      seriesLimit={props.seriesLimit ?? 10}
       totalSeries={{ label: "Total" }}
       otherSeries={{ label: "Other" }}
       options={{
         title: "Heap Profile",
         width: size[0],
         height: size[1],
-        scales: {
-          x: { time: true },
-          y: { time: false },
-        },
+        ...(props.options ?? {}),
       }}
     />
   );

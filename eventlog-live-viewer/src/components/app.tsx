@@ -1,7 +1,7 @@
 import WebSocketProvider from "@/components/WebSocketProvider";
 import ExportRequestProvider from "@/components/ExportRequestProvider";
-import RefreshProvider from "@/components/RefreshProvider";
-import RefreshSwitch from "@/components/RefreshSwitch";
+import RefreshProvider from "@/components/refresh/RefreshProvider";
+import RefreshSwitch from "@/components/refresh/RefreshSwitch";
 import Grid from "@mui/material/Grid";
 import Container from "@mui/material/Container";
 import ConnectionStatus from "@/components/ConnectionStatus";
@@ -14,70 +14,89 @@ import * as GcStats from "@/components/plots/GcStats";
 import { Offset } from "@/components/Offset";
 import EventlogLiveIcon from "@/components/EventlogLiveIcon";
 import Typography from "@mui/material/Typography";
-import "uplot/dist/uPlot.min.css";
 import resolveWebSocketUrl from "@/util/resolveWebSocketUrl";
+import uPlot from "uplot";
+import "uplot/dist/uPlot.min.css";
+import "@/style/uPlot.css";
+import CursorSyncProvider from "./cursorSync/CursorSyncProvider";
+import CursorSyncSwitch from "./cursorSync/CursorSyncSwitch";
 
 export default function App() {
+  // Right-Stacked Legend:
+  const hooks: uPlot["hooks"] = {
+    init: [
+      (self: uPlot) => {
+        self.root.classList.add("u-stacked-legend");
+      },
+    ],
+  };
+
   return (
     <WebSocketProvider url={resolveWebSocketUrl()}>
       <ExportRequestProvider>
         <RefreshProvider>
-          <Container maxWidth="xl">
-            <AppBar color="default" position="fixed">
-              <Toolbar variant="dense">
-                <Typography variant="h4">
+          <CursorSyncProvider>
+            <Container maxWidth="xl">
+              <AppBar color="default" position="fixed">
+                <Toolbar variant="dense">
                   <EventlogLiveIcon
                     sx={[
                       {
-                        fontSize: "1em",
+                        fontSize: "2.35em",
                         marginRight: 1,
-                        verticalAlign: "-10%",
+                        marginBottom: "0.22em",
                       },
                     ]}
                   />
-                  Eventlog Live
-                </Typography>
-                <Box sx={{ flexGrow: 1 }} />
-                <RefreshSwitch />
-                <ConnectionStatus />
-              </Toolbar>
-            </AppBar>
-            <Offset />
-            <Grid
-              container
-              spacing={0}
-              columns={{ xs: 1, md: 2 }}
-              sx={{ justifyContent: "center", alignItems: "start" }}
-            >
-              {/* Heap Profile */}
-              <Grid size={1}>
-                <HeapProfSamplePlot />
-              </Grid>
-
+                  <Typography
+                    variant="h4"
+                    sx={{ display: { xs: "none", sm: "inherit" } }}
+                  >
+                    Eventlog&nbsp;Live
+                  </Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <CursorSyncSwitch />
+                  <RefreshSwitch />
+                  <ConnectionStatus />
+                </Toolbar>
+              </AppBar>
+              <Offset />
               <Grid
-                size={1}
                 container
                 spacing={0}
-                columns={{ xs: 1, xl: 2 }}
+                columns={{ xs: 1, md: 2 }}
                 sx={{ justifyContent: "center", alignItems: "start" }}
               >
-                {/* Heap Size */}
+                {/* Heap Profile */}
                 <Grid size={1}>
-                  <HeapSizePlot />
+                  <HeapProfSamplePlot options={{ hooks }} />
                 </Grid>
-                {/* GC Stats */}
-                <Grid size={1}>
-                  <GcStats.GcCopiedPlot />
-                </Grid>
-                <Grid size={1}>
-                  <GcStats.GcSlopPlot />
-                </Grid>
-                <Grid size={1}>
-                  <GcStats.GcFragmentationPlot />
+
+                <Grid
+                  size={1}
+                  container
+                  spacing={0}
+                  columns={{ xs: 1, xl: 2 }}
+                  sx={{ justifyContent: "center", alignItems: "start" }}
+                >
+                  {/* Heap Size */}
+                  <Grid size={1}>
+                    <HeapSizePlot options={{ hooks }} />
+                  </Grid>
+                  {/* GC Stats */}
+                  <Grid size={1}>
+                    <GcStats.GcCopiedPlot options={{ hooks }} />
+                  </Grid>
+                  <Grid size={1}>
+                    <GcStats.GcSlopPlot options={{ hooks }} />
+                  </Grid>
+                  <Grid size={1}>
+                    <GcStats.GcFragmentationPlot options={{ hooks }} />
+                  </Grid>
                 </Grid>
               </Grid>
-            </Grid>
-          </Container>
+            </Container>
+          </CursorSyncProvider>
         </RefreshProvider>
       </ExportRequestProvider>
     </WebSocketProvider>
