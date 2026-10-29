@@ -12,6 +12,7 @@ where
 import Control.Applicative (asum)
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (Chan)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Char8 qualified as BSC
 import Data.Char (isSpace)
@@ -20,7 +21,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import GHC.Eventlog.Live.App.Server.Control (ControlApi, ControlHooks (..), control, newControlServer, newDisabledControlServer)
 import GHC.Eventlog.Live.App.Server.Viewer (ViewerApi, viewerServer, viewerWsServerApp)
-import GHC.Eventlog.Live.Logger (Logger, logDebug, logInfo, logTrace)
+import GHC.Eventlog.Live.Logger (Logger, logDebug, logInfo, logTrace, logWarn)
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Processor (ExportRequest)
 import Network.Wai (Middleware)
@@ -37,6 +38,7 @@ import Servant.Server (Handler, serve)
 import System.Log.FastLogger (fromLogStr)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
+import Web.Browser (openBrowser)
 
 --------------------------------------------------------------------------------
 -- Server
@@ -77,13 +79,15 @@ startServer logger ServerOptions{..} exportRequestChan = do
 
   -- Create the viewer websocket server.
   let viewerWebsocketOr app
-        | viewerEnabled =
+        | viewerEnabled || viewerOpen =
             let server = viewerWsServerApp logger exportRequestChan
                 options = defaultConnectionOptions
              in websocketsOr options server app
         | otherwise = app
 
   -- Start the server.
+  --
+  -- TODO: only start server when needed
   serverThreadId <-
     forkIO $
       Warp.run serverPort.port $
@@ -92,6 +96,13 @@ startServer logger ServerOptions{..} exportRequestChan = do
             viewerWebsocketOr $
               serve (Proxy @ServerApi) $
                 controlServer :<|> health logger :<|> viewerServer
+
+  -- Announce the viewer and open the browser:
+  let serverUrl = "http://localhost:" <> show serverPort.port
+  logInfo logger ("Server URL:\n  " <> T.pack serverUrl)
+  when viewerOpen $ do
+    success <- openBrowser serverUrl
+    unless success $ logWarn logger "Could not open browser."
 
   -- Create the stop function.
   let stop = killThread serverThreadId
@@ -141,6 +152,7 @@ mkLoggerMiddleware logger =
 
 data ServerOptions = ServerOptions
   { viewerEnabled :: !Bool
+  , viewerOpen :: !Bool
   , controlEnabled :: !Bool
   , serverPort :: !ServerPort
   , serverCors :: !ServerCors
@@ -151,6 +163,7 @@ serverOptionsParser =
   OC.parserOptionGroup "Server options:" $
     ServerOptions
       <$> viewerEnabledParser
+      <*> viewerOpenParser
       <*> controlEnabledParser
       <*> serverPortParser
       <*> serverCorsParser
@@ -163,6 +176,13 @@ viewerEnabledParser =
   O.flag False True . mconcat $
     [ O.long "viewer"
     , O.help "Enable the viewer server."
+    ]
+
+viewerOpenParser :: O.Parser Bool
+viewerOpenParser =
+  O.flag False True . mconcat $
+    [ O.long "viewer-open"
+    , O.help "Open the viewer server."
     ]
 
 --------------------------------------------------------------------------------
