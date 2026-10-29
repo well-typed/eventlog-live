@@ -20,6 +20,7 @@ import "uplot/dist/uPlot.min.css";
 import "@/style/uPlot.css";
 import CursorSyncProvider from "./cursorSync/CursorSyncProvider";
 import CursorSyncSwitch from "./cursorSync/CursorSyncSwitch";
+import ServiceTabs from "./ServiceTabs";
 
 export default function App() {
   // Right-Stacked Legend:
@@ -61,40 +62,42 @@ export default function App() {
                 </Toolbar>
               </AppBar>
               <Offset />
-              <Grid
-                container
-                spacing={0}
-                columns={{ xs: 1, md: 2 }}
-                sx={{ justifyContent: "center", alignItems: "start" }}
-              >
-                {/* Heap Profile */}
-                <Grid size={1}>
-                  <HeapProfSamplePlot options={{ hooks }} />
-                </Grid>
-
+              <ServiceTabs>
                 <Grid
-                  size={1}
                   container
                   spacing={0}
-                  columns={{ xs: 1, xl: 2 }}
+                  columns={{ xs: 1, md: 2 }}
                   sx={{ justifyContent: "center", alignItems: "start" }}
                 >
-                  {/* Heap Size */}
+                  {/* Heap Profile */}
                   <Grid size={1}>
-                    <HeapSizePlot options={{ hooks }} />
+                    <HeapProfSamplePlot options={{ hooks }} />
                   </Grid>
-                  {/* GC Stats */}
-                  <Grid size={1}>
-                    <GcStats.GcCopiedPlot options={{ hooks }} />
-                  </Grid>
-                  <Grid size={1}>
-                    <GcStats.GcSlopPlot options={{ hooks }} />
-                  </Grid>
-                  <Grid size={1}>
-                    <GcStats.GcFragmentationPlot options={{ hooks }} />
+
+                  <Grid
+                    size={1}
+                    container
+                    spacing={0}
+                    columns={{ xs: 1, xl: 2 }}
+                    sx={{ justifyContent: "center", alignItems: "start" }}
+                  >
+                    {/* Heap Size */}
+                    <Grid size={1}>
+                      <HeapSizePlot options={{ hooks }} />
+                    </Grid>
+                    {/* GC Stats */}
+                    <Grid size={1}>
+                      <GcStats.GcCopiedPlot options={{ hooks }} />
+                    </Grid>
+                    <Grid size={1}>
+                      <GcStats.GcSlopPlot options={{ hooks }} />
+                    </Grid>
+                    <Grid size={1}>
+                      <GcStats.GcFragmentationPlot options={{ hooks }} />
+                    </Grid>
                   </Grid>
                 </Grid>
-              </Grid>
+              </ServiceTabs>
             </Container>
           </CursorSyncProvider>
         </RefreshProvider>

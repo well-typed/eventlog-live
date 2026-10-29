@@ -11,6 +11,23 @@ export const resource = z.partialRecord(z.string(), z.any());
 
 export type Service = z.infer<typeof service>;
 
+export namespace Service {
+  export type Name = string;
+  export type InstanceId = string;
+
+  export const UNKNOWN_SERVICE_NAME = "unknown";
+
+  export function name(service: Service): Service.Name {
+    return service["service.name"] ?? UNKNOWN_SERVICE_NAME;
+  }
+
+  export const UNKNOWN_SERVICE_INSTANCE_ID = "unknown";
+
+  export function instanceId(service: Service): Service.Name {
+    return service["service.instance.id"] ?? UNKNOWN_SERVICE_INSTANCE_ID;
+  }
+}
+
 export const service = z.looseObject({
   "service.name": z.optional(z.string()),
   "service.instance.id": z.optional(z.string()),
