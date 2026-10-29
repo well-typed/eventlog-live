@@ -1,4 +1,4 @@
-import Plot from "@/components/plots/Plot";
+import Plot, { Props } from "@/components/plots/Plot";
 import * as z from "@/util/z";
 
 /* GC Copied */
@@ -9,21 +9,26 @@ const gcCopiedAttrs = z.strictObject({
   gen: z.number(),
 });
 
-export const GcCopiedPlot = () => (
+type GcCopiedAttrs = z.infer<typeof gcCopiedAttrs>;
+
+export interface GcCopiedProps {
+  options?: Partial<Props<GcCopiedAttrs>["options"]>;
+}
+
+export const GcCopiedPlot = (props: GcCopiedProps) => (
   <Plot
     name="gcCopied"
     validateAttrs={(attrs) => z.validate(gcCopiedAttrs, attrs)}
-    getSeriesLabel={(attrs) => `cap ${attrs.capNo}, gen ${attrs.gen}`}
+    getSeriesLabel={(attrs) =>
+      `GC Copied (cap ${attrs.capNo}, gen ${attrs.gen})`
+    }
     getSeriesOptions={(label) => ({ label, spanGaps: true })}
     unit="By"
     options={{
       title: "GC Copied",
       width: 600,
       height: 400,
-      scales: {
-        x: { time: true },
-        y: { time: false },
-      },
+      ...(props.options ?? {}),
     }}
   />
 );
@@ -36,21 +41,24 @@ const gcSlopAttrs = z.strictObject({
   gen: z.number(),
 });
 
-export const GcSlopPlot = () => (
+type GcSlopAttrs = z.infer<typeof gcSlopAttrs>;
+
+export interface GcSlopProps {
+  options?: Partial<Props<GcSlopAttrs>["options"]>;
+}
+
+export const GcSlopPlot = (props: GcSlopProps) => (
   <Plot
     name="gcSlop"
     validateAttrs={(attrs) => z.validate(gcSlopAttrs, attrs)}
-    getSeriesLabel={(attrs) => `cap ${attrs.capNo}, gen ${attrs.gen}`}
+    getSeriesLabel={(attrs) => `GC Slop (cap ${attrs.capNo}, gen ${attrs.gen})`}
     getSeriesOptions={(label) => ({ label, spanGaps: true })}
     unit="By"
     options={{
       title: "GC Slop",
       width: 600,
       height: 400,
-      scales: {
-        x: { time: true },
-        y: { time: false },
-      },
+      ...(props.options ?? {}),
     }}
   />
 );
@@ -63,20 +71,26 @@ const gcFragmentationAttrs = z.strictObject({
   gen: z.number(),
 });
 
-export const GcFragmentationPlot = () => (
+type GcFragmentationAttrs = z.infer<typeof gcFragmentationAttrs>;
+
+export interface GcFragmentationProps {
+  options?: Partial<Props<GcFragmentationAttrs>["options"]>;
+}
+
+export const GcFragmentationPlot = (props: GcFragmentationProps) => (
   <Plot
     name="gcFragmentation"
     validateAttrs={(attrs) => z.validate(gcFragmentationAttrs, attrs)}
-    getSeriesLabel={(attrs) => `cap ${attrs.capNo}, gen ${attrs.gen}`}
+    getSeriesLabel={(attrs) =>
+      `GC Fragmentation (cap ${attrs.capNo}, gen ${attrs.gen})`
+    }
     getSeriesOptions={(label) => ({ label, spanGaps: true })}
+    unit="By"
     options={{
       title: "GC Fragmentation",
       width: 600,
       height: 400,
-      scales: {
-        x: { time: true },
-        y: { time: false },
-      },
+      ...(props.options ?? {}),
     }}
   />
 );
