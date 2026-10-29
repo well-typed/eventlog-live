@@ -1,0 +1,13 @@
+/*
+ * Support various custom styles.
+ *
+ * See: https://github.com/leeoniya/uPlot/issues/704
+ */
+
+/* Stacked Legend */
+.uplot.u-stacked-legend .u-legend {
+  text-align: left;
+}
+.uplot.u-stacked-legend .u-legend.u-inline tr {
+  display: block;
+}

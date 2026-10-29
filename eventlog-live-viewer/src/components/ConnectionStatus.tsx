@@ -28,17 +28,27 @@ export default function ConnectionStatus() {
     ReadyState.UNINSTANTIATED,
   );
   const label =
-    readyState === ReadyState.CONNECTING
-      ? "Connecting"
-      : readyState === ReadyState.OPEN
-        ? "Connected"
-        : "Not Connected";
+    readyState === ReadyState.CONNECTING ? (
+      "Connecting"
+    ) : readyState === ReadyState.OPEN ? (
+      "Connected"
+    ) : (
+      <>Not&nbsp;Connected</>
+    );
   useEffect(() => {
     setReadyState(ws.readyState);
   }, [ws.readyState]);
   return (
     <>
-      <Tooltip title={label}>
+      <Tooltip
+        title={
+          readyState === ReadyState.CONNECTING
+            ? "Connecting"
+            : readyState === ReadyState.OPEN
+              ? "Connected"
+              : "Not Connected"
+        }
+      >
         <IconButton
           disabled={
             readyState === ReadyState.CONNECTING ||
@@ -54,8 +64,14 @@ export default function ConnectionStatus() {
           )}
         </IconButton>
       </Tooltip>
-      <Typography sx={{ display: { xs: "none", sm: "inline" } }}>
-        {label}
+      <Typography sx={{ display: { xs: "none", sm: "inherit" } }}>
+        {readyState === ReadyState.CONNECTING ? (
+          <>Connecting</>
+        ) : readyState === ReadyState.OPEN ? (
+          <>Connected</>
+        ) : (
+          <>Not&nbsp;Connected</>
+        )}
       </Typography>
     </>
   );

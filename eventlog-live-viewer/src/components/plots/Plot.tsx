@@ -1,53 +1,196 @@
 import { useCallback, useContext, useEffect, useId, useRef } from "react";
 import { ExportRequestContext } from "../ExportRequestProvider";
 import * as z from "@/util/z";
-import { RefreshContext } from "../RefreshProvider";
-import { Box, Typography, useMediaQuery } from "@mui/material";
+import { RefreshContext } from "../refresh/RefreshProvider";
+import { Box, Typography } from "@mui/material";
 import uPlot from "uplot";
 import unzip from "@/util/unzip";
 import defaultSeriesStyle, { SeriesStyle } from "@/util/seriesStyle";
 import { useColorScheme } from "@mui/material/styles";
+import zipWith from "@/util/zipWith";
+import sum from "@/util/sum";
+import { getMode } from "../../util/getMode";
+import byteFormatter from "@/util/formatter/byte";
+import { CursorSyncContext } from "../cursorSync/CursorSyncProvider";
 
-export type PlotData = [xValues: Array<number>, ...yValues: Array<SeriesData>];
-
-export type PlotUnit = "By";
-
-export type PlotOptions = Omit<uPlot.Options, "series" | "axes"> & {
-  axes?: PlotAxis[];
-};
-
-export type PlotSeries = [xSeries: uPlot.Series, ...ySeries: uPlot.Series[]];
-
-export type PlotAxisStroke =
-  | uPlot.Axis.Stroke
-  | { light: uPlot.Axis.Stroke; dark: uPlot.Axis.Stroke };
-
-export type PlotAxis = Omit<uPlot.Axis, "stroke"> & { stroke?: PlotAxisStroke };
-
-export type SeriesOptions = Omit<uPlot.Series, "stroke" | "dash">;
-
-export type SeriesData = Array<number | null>;
-
-export type SeriesIndices = Partial<Record<string, number>>;
-
-export interface PlotProps<PlotAttrs extends z.Attrs> {
+/**
+ * The properies for the plot component.
+ */
+export interface Props<PlotAttrs extends z.Attrs> {
+  /**
+   * The name of the telemetry signal that is visualised by this plot.
+   */
   readonly name: keyof z.ViewerTelemetry;
+
+  /**
+   * A predicate that validates that the received attributes have the expected fields.
+   */
   readonly validateAttrs: (attrs: any) => attrs is PlotAttrs;
+
+  /**
+   * A function that computes the series label from its attributes.
+   */
   readonly getSeriesLabel: (attrs: PlotAttrs) => string;
-  readonly getSeriesOptions: (label: string, index: number) => SeriesOptions;
-  readonly unit?: PlotUnit;
+
+  /**
+   * A function that computes the series options from its label.
+   */
+  readonly getSeriesOptions: (label: string) => Series.Options;
+
+  /**
+   * The unit for the y-values of all series in this plot.
+   */
+  readonly unit?: Unit;
+
+  /**
+   * The maximum number of series to visualise in this plot.
+   *
+   * If otherSeries is defined, any the values of all remaining series
+   * will be summarised under that series.
+   */
   readonly seriesLimit?: number;
-  readonly totalSeries?: SeriesOptions;
-  readonly otherSeries?: SeriesOptions;
-  readonly seriesPriority?: SeriesPriority;
+
+  /**
+   * If totalSeris is defined, the plot will include a series that shows
+   * the total y-value of all series.
+   */
+  readonly totalSeries?: Series.Options;
+
+  /**
+   * If seriesLimit and otherSeries are both defined, the plot will include
+   * a series that shows the total y-value of all omitted series.
+   */
+  readonly otherSeries?: Series.Options;
+
+  /**
+   * If seriesLimit is defined, the plot will use this predicate to select
+   * which series are visualised. By default, the series with the highest
+   * maximum values are selected.
+   */
+  readonly seriesPriority?: Series.Priority;
+
+  /**
+   * This value is used to assign styles to the visualised series.
+   */
   readonly seriesStyle?: SeriesStyle[];
-  readonly options: PlotOptions;
+
+  /**
+   * The options for the plot.
+   *
+   * These are the uPlot options, omitting the options that are computed
+   * internally by this plot. This plot has responsive support for the
+   * width and height options.
+   */
+  readonly options: Options;
 }
 
-type SeriesPriority = ([series, data]: [SeriesOptions, SeriesData]) => number;
+/**
+ * The type of aligned data used by the plot.
+ */
+export type AlignedData = [
+  xValues: Array<number>,
+  ...yValues: Array<Series.Data>,
+];
 
-const defaultSeriesPriority: SeriesPriority = ([_series, data]) =>
+/**
+ * The type of units supported by this plot.
+ *
+ * The elements of this enumeration are UCUM units.
+ */
+export type Unit = "By";
+
+/**
+ * The type of plot options.
+ */
+export type Options = Omit<
+  uPlot.Options,
+  "scales" | "series" | "axes" | "cursor"
+> & {
+  axes?: Axis[];
+  cursor?: Omit<uPlot.Cursor, "sync">;
+};
+
+export type Series = [xSeries: uPlot.Series, ...ySeries: uPlot.Series[]];
+
+export namespace Series {
+  export type Options = Omit<uPlot.Series, "stroke" | "dash">;
+
+  export type Data = Array<number | null>;
+
+  export type Indices = Partial<Record<string, number>>;
+
+  export type Priority = ([series, data]: [
+    Series.Options,
+    Series.Data,
+  ]) => number;
+
+  export type Formatter = Pick<uPlot.Series, "value">;
+}
+
+export type Axis = Omit<uPlot.Axis, "stroke"> & {
+  stroke?: Axis.Stroke;
+};
+
+export namespace Axis {
+  export type Stroke =
+    | uPlot.Axis.Stroke
+    | { light: uPlot.Axis.Stroke; dark: uPlot.Axis.Stroke };
+
+  export type Formatter = Pick<uPlot.Axis, "size" | "values">;
+}
+
+/**
+ * Get the formatter for a specific unit.
+ */
+const getFormatter = (_unit: Unit) => byteFormatter;
+
+/**
+ * The default series priority, which picks the series with the highest
+ * maximum values.
+ */
+const defaultSeriesPriority: Series.Priority = ([_series, data]) =>
   Math.max(...data.filter((y) => y !== null && y !== undefined));
+
+/**
+ * A helper function that computes the pointwise sum of series data.
+ */
+const pointwiseSum = (seriesData: Series.Data[]): Series.Data =>
+  zipWith((xs) => sum(xs.filter((x) => x !== null)), seriesData);
+
+/**
+ * Convert an optional value to a list to support unpacking.
+ */
+function maybeToArray<X>(x?: X): X[] {
+  return x === undefined ? [] : [x];
+}
+
+/**
+ * The default scales used by this plot.
+ */
+const defaultScales: uPlot.Scales = {
+  x: { time: true },
+  y: { time: false },
+};
+
+/**
+ * The default cursor sync matches.
+ */
+const cursorSyncMatch: uPlot.Cursor.Sync.ScaleKeyMatcher = (x, y) => x === y;
+
+/**
+ * Create an uPlot cursor sync configuration from a key.
+ */
+const asCursorSync = (
+  cursorSyncPubSub: uPlot.SyncPubSub | null,
+): Pick<uPlot.Cursor, "sync"> =>
+  cursorSyncPubSub !== null
+    ? {
+        sync: {
+          key: cursorSyncPubSub.key,
+          match: [cursorSyncMatch, cursorSyncMatch],
+        },
+      }
+    : {};
 
 export default function Plot<PlotAttrs extends z.Attrs>({
   name,
@@ -61,42 +204,60 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   totalSeries,
   otherSeries,
   options,
-}: PlotProps<PlotAttrs>) {
-  // The color scheme.
+}: Props<PlotAttrs>) {
+  // The current color scheme and a reference to the previous color scheme.
   const { mode, systemMode } = useColorScheme();
   const propModeRef = useRef(getMode(mode, systemMode));
 
-  // The references to various properties.
+  // A reference to the previous options.
   const propOptionsRef = useRef(options);
 
-  // The formatter.
+  // The formatter for the current unit.
   const formatter = unit && getFormatter(unit);
-  const yAxisValues: Pick<uPlot.Axis, "size" | "values"> = formatter
+  const yAxisValues: Axis.Formatter = formatter
     ? {
         size: 75,
         values: (_self, values) => values.map((value) => formatter(value)),
       }
     : {};
-  const seriesValue: Pick<uPlot.Series, "value"> = formatter
+  const seriesValue: Series.Formatter = formatter
     ? {
         value: (_self, value) => formatter(value, 2),
       }
     : {};
 
-  // The external contexts that provide us with our data.
-  const exportRequestContext = useContext(ExportRequestContext);
-  const refreshContext = useContext(RefreshContext);
+  // The context that provides us with export requests.
+  const { lastExportRequest } = useContext(ExportRequestContext);
 
-  // The data references.
-  const dataRef = useRef<PlotData>([[]]);
-  const seriesRef = useRef<PlotSeries>([{}]);
-  const indicesRef = useRef<SeriesIndices>({});
+  // The context that provides us with the state of the refresh switch.
+  const { refresh } = useContext(RefreshContext);
+
+  // The context that provides us with our cursor sync group.
+  const { cursorSync, cursorSyncPubSub } = useContext(CursorSyncContext);
+
+  // Handle changes in cursorSync.
+  useEffect(() => {
+    if (plotRef.current === null) return;
+    if (cursorSyncPubSub === null) return;
+    if (cursorSync) {
+      cursorSyncPubSub.sub(plotRef.current);
+    } else {
+      cursorSyncPubSub.unsub(plotRef.current);
+    }
+  }, [cursorSync]);
+
+  // A reference to the remaining series styles.
   const seriesStyleRef = useRef<SeriesStyle[]>([...seriesStyle]);
 
-  // Compute the live plot view from the cached plot data.
-  const getLiveView = useCallback((): [PlotSeries, PlotData] => {
-    const [cachedXSeries, ...cachedSeries] = seriesRef.current;
-    const [cachedXValues, ...cachedSeriesData] = dataRef.current;
+  // References to the cached data.
+  const cachedDataRef = useRef<AlignedData>([[]]);
+  const cachedSeriesRef = useRef<Series>([{}]);
+  const cachedIndicesRef = useRef<Series.Indices>({});
+
+  // Compute the live data from the cached data.
+  const getLiveView = useCallback((): [Series, AlignedData] => {
+    const [cachedXSeries, ...cachedSeries] = cachedSeriesRef.current;
+    const [cachedXValues, ...cachedSeriesData] = cachedDataRef.current;
     if (seriesLimit !== undefined && cachedSeries.length > seriesLimit) {
       // Sort the series and data by the priority...
       const [sortedYSeries, sortedSeriesData] = unzip(
@@ -104,7 +265,10 @@ export default function Plot<PlotAttrs extends z.Attrs>({
         cachedSeries
           // ...with the series data...
           .entries()
-          .map(([i, a]): [uPlot.Series, SeriesData] => [a, cachedSeriesData[i]])
+          .map(([i, a]): [uPlot.Series, Series.Data] => [
+            a,
+            cachedSeriesData[i],
+          ])
           .toArray()
           // ...sorted according to the series priority in descending order...
           .toSorted((a, b) => seriesPriority(b) - seriesPriority(a)),
@@ -116,12 +280,12 @@ export default function Plot<PlotAttrs extends z.Attrs>({
 
       // Compute the other series data...
       const otherSeriesData =
-        otherSeries && sumSeriesData(sortedSeriesData.slice(seriesLimit + 1));
+        otherSeries && pointwiseSum(sortedSeriesData.slice(seriesLimit + 1));
 
       // Compute the total series data...
       const totalSeriesData =
         totalSeries &&
-        sumSeriesData(
+        pointwiseSum(
           // If we computed the other series, we can compute the total faster:
           otherSeriesData
             ? [otherSeriesData, ...liveSeriesData]
@@ -144,8 +308,7 @@ export default function Plot<PlotAttrs extends z.Attrs>({
       ];
     } else {
       // Compute the total series data...
-      const totalSeriesData = totalSeries && sumSeriesData(cachedSeriesData);
-
+      const totalSeriesData = totalSeries && pointwiseSum(cachedSeriesData);
       return [
         [cachedXSeries, ...maybeToArray(totalSeries), ...cachedSeries],
         [cachedXValues, ...maybeToArray(totalSeriesData), ...cachedSeriesData],
@@ -153,19 +316,22 @@ export default function Plot<PlotAttrs extends z.Attrs>({
     }
   }, [seriesLimit]);
 
-  // Add a series.
+  // Add a new series to the cached data and return its index.
   const addSeries = useCallback(
-    (label: string, options?: SeriesOptions): number => {
-      const index = seriesRef.current.length;
-      indicesRef.current[label] = index;
-      seriesRef.current[index] = options ?? getSeriesOptions(label, index);
-      dataRef.current[index] = new Array(dataRef.current[0].length).fill(null);
+    (label: string, options?: Series.Options): number => {
+      const index = cachedSeriesRef.current.length;
+      cachedIndicesRef.current[label] = index;
+      cachedSeriesRef.current[index] = options ?? getSeriesOptions(label);
+      cachedDataRef.current[index] = new Array(
+        cachedDataRef.current[0].length,
+      ).fill(null);
       return index;
     },
     [],
   );
 
-  // Ensure that a series has a style.
+  // If the given uPlot series does not have a stroke colour,
+  // assign it the next style from the series styles.
   const asSeries = useCallback((series: uPlot.Series): uPlot.Series => {
     const seriesStyle =
       series.stroke === undefined ? seriesStyleRef.current.shift() : {};
@@ -174,7 +340,7 @@ export default function Plot<PlotAttrs extends z.Attrs>({
 
   // Resolve an axis stroke.
   const getStroke = useCallback(
-    (stroke?: PlotAxisStroke): uPlot.Axis.Stroke | undefined => {
+    (stroke?: Axis.Stroke): uPlot.Axis.Stroke | undefined => {
       if (
         typeof stroke === "string" ||
         typeof stroke === "function" ||
@@ -192,7 +358,7 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   );
 
   const asAxis = useCallback(
-    (axis: PlotAxis, k: number): uPlot.Axis => ({
+    (axis: Axis, k: number): uPlot.Axis => ({
       // NOTE: This check avoids overwriting the x-axis formatter.
       ...(k > 0 ? yAxisValues : {}),
       ...axis,
@@ -208,85 +374,107 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   // The placeholder element ID.
   const placeholderId = useId();
 
-  // Create the plot.
+  // Create a new uPlot instance, if one does not exist.
   const create = useCallback(
-    ([[xSeries, ...ySeries], data]: [PlotSeries, PlotData]) => {
+    ([[xSeries, ...ySeries], data]: [Series, AlignedData]) => {
+      if (plotRef.current !== null) return;
+
       // Remove the placeholder element.
       document.getElementById(placeholderId)?.remove();
 
       // Prepare the plot options.
       const series = [xSeries, ...ySeries.map(asSeries)];
-      const plotAxes: PlotAxis[] = options.axes ?? new Array(2).fill({});
-      const axes: uPlot.Axis[] = plotAxes.map(asAxis);
+      const pAxes: Axis[] = options.axes ?? new Array(2).fill({});
+      const uAxes: uPlot.Axis[] = pAxes.map(asAxis);
 
       // Create the plot.
       plotRef.current = new uPlot(
-        { ...options, series, axes },
+        {
+          ...options,
+          cursor: asCursorSync(cursorSyncPubSub),
+          scales: defaultScales,
+          series,
+          axes: uAxes,
+        },
         data,
         elemRef.current as HTMLDivElement,
       );
     },
-    [getStroke, asSeries],
+    [asAxis, asSeries],
   );
 
-  // Create the plot.
+  // Destroy the current uPlot instance.
   const destroy = useCallback(() => {
-    if (plotRef.current !== null) {
-      plotRef.current.destroy();
-      plotRef.current = null;
-    }
+    if (plotRef.current === null) return;
+    plotRef.current.destroy();
+    plotRef.current = null;
   }, []);
 
-  // Commit the latest data to the plot.
-  const update = useCallback(() => {
-    const newView = getLiveView();
-    if (plotRef.current === null) {
-      create(newView);
-    } else {
-      const [[_newXSeries, ...newSeries], newData] = newView;
-      const [_oldXSeries, ...oldSeries] = plotRef.current.series;
-      // Find the first series that has a different label from the
-      // corresponding series in the current plot...
-      const firstChange = newSeries.find(
-        (a, i) => a.label !== oldSeries.at(i)?.label,
-      );
-      // If the old and new series are the same...
-      if (firstChange === undefined) {
-        // ...set the new data.
-        plotRef.current.setData(newData);
-      }
-      // If the old series are a prefix of the new series...
-      else if (firstChange === oldSeries.length - 1) {
-        // ...add the new series...
-        for (let i = oldSeries.length; i < newSeries.length; ++i) {
-          plotRef.current.addSeries(asSeries(newSeries[i]), i + 1);
-        }
-        // ...and set the new data.
-        plotRef.current.setData(newData);
-      }
-      // Otherwise, recreate the plot...
-      else {
-        // NOTE: We could try deleting the old series after firstChange and
-        //       then adding the new series. This may or may not be faster.
-        destroy();
-        create(newView);
-      }
-    }
-  }, [create, destroy]);
+  // Update the uPlot instance with the latest data.
+  const update = useCallback(
+    (shouldCreate?: boolean) => {
+      // Compute the live view.
+      const newView = getLiveView();
 
-  // Handle changes in the options.
-  useEffect(() => {
-    if (plotRef.current !== null) {
-      const { width: oldWidth, height: oldHeight } = propOptionsRef.current;
-      const { width, height } = options;
-      if (width !== oldWidth || height !== oldHeight) {
-        plotRef.current.setSize({ width, height });
-        propOptionsRef.current = options;
+      // If there is no instance...
+      if (plotRef.current === null) {
+        // ...create one.
+        if (shouldCreate) create(newView);
       }
+
+      // Otherwise, update the data for the current instance...
+      else {
+        const [[_newXSeries, ...newSeries], newData] = newView;
+        const [_oldXSeries, ...oldSeries] = plotRef.current.series;
+
+        // Find the first series that has a different label from the
+        // corresponding series in the current plot...
+        const firstChange = newSeries.find(
+          (a, i) => a.label !== oldSeries.at(i)?.label,
+        );
+
+        // If the old and new series are the same...
+        if (firstChange === undefined) {
+          // ...set the new data.
+          plotRef.current.setData(newData);
+        }
+
+        // If the old series are a prefix of the new series...
+        else if (firstChange === oldSeries.length - 1) {
+          // ...add the new series...
+          for (let i = oldSeries.length; i < newSeries.length; ++i) {
+            plotRef.current.addSeries(asSeries(newSeries[i]), i + 1);
+          }
+          // ...and set the new data.
+          plotRef.current.setData(newData);
+        }
+
+        // Otherwise, recreate the plot...
+        else {
+          // NOTE: We could try deleting the old series after firstChange and
+          //       then adding the new series. This may or may not be faster.
+          destroy();
+          create(newView);
+        }
+      }
+    },
+    [getLiveView, asSeries, create, destroy],
+  );
+
+  // Handle changes in the plot options.
+  //
+  // The current implementation handles changes in the width and height.
+  useEffect(() => {
+    if (plotRef.current === null) return;
+    const { width: oldWidth, height: oldHeight } = propOptionsRef.current;
+    const { width, height } = options;
+    if (width !== oldWidth || height !== oldHeight) {
+      plotRef.current.setSize({ width, height });
+      propOptionsRef.current = options;
     }
   }, [options.width, options.height]);
 
-  // Handle changes in the color scheme.
+  // Handle changes in the browser color scheme.
   useEffect(() => {
     const oldMode = propModeRef.current;
     const newMode = getMode(mode, systemMode);
@@ -297,36 +485,35 @@ export default function Plot<PlotAttrs extends z.Attrs>({
     }
   }, [update, destroy, mode, systemMode]);
 
-  // Handle new export requests.
+  // Handle incoming export requests.
   useEffect(() => {
-    const lastExportRequest = exportRequestContext.lastExportRequest;
     if (lastExportRequest === null) return;
     const alignedData = lastExportRequest.telemetry[name];
     if (alignedData === null || alignedData === undefined) return;
 
-    // Gather the new series data.
+    // Gather the new data.
     const newXValues = alignedData.xValues;
-    const newSeriesData: SeriesData[] = [];
-
-    // Process each series data.
+    const newSeriesData: Series.Data[] = [];
     alignedData.series.forEach(({ attrs, yValues }) => {
       if (validateAttrs(attrs)) {
         // Ensure the series has an index.
         const label = getSeriesLabel(attrs);
-        const index = indicesRef.current[label] ?? addSeries(label);
+        const index = cachedIndicesRef.current[label] ?? addSeries(label);
 
         // Add the new series data to the list.
+        //
+        // NOTE: Use `index - 1` as newSeriesData only holds yValues.
         newSeriesData[index - 1] = yValues;
       } else {
         console.warn(`Unexpected attrs for series ${name} `, attrs);
       }
     });
 
-    // Commit the new series data to our dataRef.
-    const [oldXValues, ...oldSeriesData] = dataRef.current;
+    // Merge the new and the old data.
+    const [oldXValues, ...oldSeriesData] = cachedDataRef.current;
     const xValues = [...oldXValues, ...alignedData.xValues];
-    const seriesData: SeriesData[] = [];
-    for (let i = 0; i < seriesRef.current.length - 1; ++i) {
+    const seriesData: Series.Data[] = [];
+    for (let i = 0; i < cachedSeriesRef.current.length - 1; ++i) {
       const oldYValues =
         i in oldSeriesData
           ? oldSeriesData[i]
@@ -337,18 +524,13 @@ export default function Plot<PlotAttrs extends z.Attrs>({
           : new Array(newXValues.length).fill(null);
       seriesData[i] = [...oldYValues, ...newYValues];
     }
-    dataRef.current = [xValues, ...seriesData];
 
-    // Commit our new series and data to our plot.
-    if (refreshContext.refresh) update();
-  }, [
-    exportRequestContext.lastExportRequest,
-    refreshContext.refresh,
-    addSeries,
-    asSeries,
-    create,
-    destroy,
-  ]);
+    // Commit the merged data to the cache.
+    cachedDataRef.current = [xValues, ...seriesData];
+
+    // Update the live view of the cached data.
+    if (refresh) update(true);
+  }, [lastExportRequest, refresh, addSeries, create, destroy]);
 
   return (
     <Box
@@ -360,6 +542,7 @@ export default function Plot<PlotAttrs extends z.Attrs>({
       }}
     >
       <div ref={elemRef}>
+        {/* The placeholder element */}
         <Box id={placeholderId}>
           {options.title && <div className="u-title">{options.title}</div>}
           <Box sx={{ width: options.width, height: options.height }}>
@@ -371,70 +554,4 @@ export default function Plot<PlotAttrs extends z.Attrs>({
       </div>
     </Box>
   );
-}
-
-const getFormatter = (_unit: PlotUnit) => byteFormatter;
-
-const byteBaseAndUnit = [
-  "B",
-  "KB",
-  "MB",
-  "GB",
-  "TB",
-  "PB",
-  "EB",
-  "ZB",
-  "YB",
-  "RB",
-  "QB",
-]
-  .entries()
-  .map(([exponent, unit]): [number, string] => [1000 ** exponent, unit])
-  .toArray()
-  .reverse();
-
-export const byteFormatter = (
-  bytes: number | null,
-  precision?: number,
-): string => {
-  if (bytes === null) {
-    return "--";
-  } else {
-    const absBytes = Math.abs(bytes);
-    for (const [base, unit] of byteBaseAndUnit) {
-      if (absBytes >= base)
-        return `${(bytes / base).toFixed(precision ?? 0)} ${unit}`;
-    }
-    return `${bytes} B`;
-  }
-};
-
-/**
- * Compute the pointwise sum of a series of data.
- */
-function sumSeriesData(seriesData: SeriesData[]): SeriesData {
-  return Array.apply(null, new Array(seriesData.at(0)?.length ?? 0)).map(
-    (_, k) =>
-      seriesData
-        .map((yValues) => yValues[k])
-        .filter((x) => x !== null)
-        .reduce((acc, x) => acc + x),
-  );
-}
-
-/**
- * Convert an optional value to a list to support unpacking.
- */
-function maybeToArray<X>(x?: X): X[] {
-  return x === undefined ? [] : [x];
-}
-
-/**
- * Get the effective mode from the mode and systemMode.
- */
-function getMode(
-  mode?: "light" | "dark" | "system",
-  systemMode?: "light" | "dark",
-): "light" | "dark" | undefined {
-  return mode === "system" ? systemMode : mode;
 }
