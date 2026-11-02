@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsx scripts/build.ts",
     "watch": "npm run build -- --watch",
-    "build:export": "npm run build -- --outdir=../eventlog-live/data/viewer/"
+    "build:export": "npm run build -- --outdir=../eventlog-live/data/viewer/",
+    "test": "jest"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@commander-js/extra-typings": "^15.0.0",
+    "@jest/globals": "^30.5.2",
     "@types/esbuild-copy-static-files": "^0.1.4",
     "@types/node": "^20.19.43",
     "@types/react": "^19.3.0",
@@ -31,7 +33,15 @@
     "commander": "^15.0.0",
     "esbuild-copy-static-files": "^0.1.0",
     "esbuild-plugin-svgr": "^3.1.1",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.15",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.tsx?$": "ts-jest"
+    },
+    "testRegex": "\\.test\\.tsx?$"
   }
 }
