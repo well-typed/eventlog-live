@@ -407,6 +407,8 @@ export default function Plot<PlotAttrs extends z.Attrs>({
     if (plotRef.current === null) return;
     plotRef.current.destroy();
     plotRef.current = null;
+    // Reset the series styles.
+    seriesStyleRef.current = [...seriesStyle];
   }, []);
 
   // Update the uPlot instance with the latest data.
