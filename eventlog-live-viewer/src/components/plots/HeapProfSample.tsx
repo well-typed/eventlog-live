@@ -4,6 +4,9 @@ import { Box, Toolbar, useTheme } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useEffect, useState } from "react";
 
+/**
+ * The zod type for the attributes for an -hT heap profile sample.
+ */
 const heapProfSampleByClosureTypeAttrs = z.strictObject({
   name: z.literal("heapProfSample"),
   heapProfBreakdown: z.literal("-hT"),
@@ -12,6 +15,9 @@ const heapProfSampleByClosureTypeAttrs = z.strictObject({
   heapProfSampleEra: z.number(),
 });
 
+/**
+ * The zod type for the attributes for an -hi heap profile sample.
+ */
 const heapProfSampleByInfoProvAttrs = z.strictObject({
   name: z.literal("heapProfSample"),
   heapProfBreakdown: z.literal("-hi"),
@@ -26,24 +32,39 @@ const heapProfSampleByInfoProvAttrs = z.strictObject({
   ipTyDesc: z.string(),
 });
 
+/**
+ * The zod type for the attributes for a heap profile sample.
+ */
 const heapProfSampleAttrs = z.union([
   heapProfSampleByClosureTypeAttrs,
   heapProfSampleByInfoProvAttrs,
 ]);
 
+/**
+ * The type of the attributes for a heap profile sample.
+ */
 type HeapProfSampleAttrs = z.infer<typeof heapProfSampleAttrs>;
 
+/**
+ * The properties for the HeapProfSamplePlot component.
+ */
 export interface HeapProfSampleProps {
   seriesLimit?: Props<HeapProfSampleAttrs>["seriesLimit"];
   options?: Omit<Props<HeapProfSampleAttrs>["options"], "width" | "height">;
   size?: (lg: boolean, xl: boolean) => [number, number];
 }
 
+/**
+ * Get the series label from the heap profile sample attributes.
+ */
 const getSeriesLabel = (attrs: HeapProfSampleAttrs): string =>
   attrs.heapProfBreakdown === "-hT"
     ? attrs.heapProfLabel
     : `${attrs.ipModule}:${attrs.ipLabel}`;
 
+/**
+ * Get the series options from the heap profile sample label and attributes.
+ */
 const getSeriesOptions = (
   label: string,
   attrs: HeapProfSampleAttrs,
@@ -59,6 +80,9 @@ const getSeriesOptions = (
   }
 };
 
+/**
+ * The plot for heap profile samples.
+ */
 export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
   const theme = useTheme();
   const lg = useMediaQuery(theme.breakpoints.up("lg"));
