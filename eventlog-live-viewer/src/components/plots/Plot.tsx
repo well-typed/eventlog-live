@@ -589,6 +589,7 @@ export function SeriesLimitInput(props: SeriesLimitInputProps) {
       setSeriesLimit(seriesLimit);
     }
   };
+  const inputId = useId();
   return (
     <>
       <Tooltip title={seriesLimitInputTooltip(otherLabel)}>
@@ -599,6 +600,7 @@ export function SeriesLimitInput(props: SeriesLimitInputProps) {
           margin="dense"
           sx={{ width: "2.5em" }}
           onChange={handleChange}
+          id={inputId}
         />
       </Tooltip>
       <Typography>Series&nbsp;Limit</Typography>
