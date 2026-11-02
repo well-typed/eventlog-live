@@ -1,6 +1,6 @@
-import Plot, { Props } from "@/components/plots/Plot";
+import Plot, { Props, SeriesLimitInput } from "@/components/plots/Plot";
 import * as z from "@/util/z";
-import { useTheme } from "@mui/material";
+import { Box, Toolbar, useTheme } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useEffect, useState } from "react";
 
@@ -31,29 +31,42 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
   const xl = useMediaQuery(theme.breakpoints.up("xl"));
   const getSize = props.size ?? defaultSize;
   const [size, setSize] = useState<[number, number]>(getSize(lg, xl));
+  const totalSeries = { label: "Total" };
+  const otherSeries = { label: "Other" };
+  const [seriesLimit, setSeriesLimit] = useState(props.seriesLimit ?? 10);
 
   // Handle changes in the viewport size.
   useEffect(() => setSize(getSize(lg, xl)), [lg, xl]);
 
   return (
-    <Plot
-      name="heapProfSample"
-      validateAttrs={(attrs) => z.validate(heapProfSampleAttrs, attrs)}
-      getSeriesLabel={(attrs) => attrs.heapProfLabel}
-      getSeriesOptions={(label) => ({
-        label,
-        spanGaps: true,
-      })}
-      unit="By"
-      seriesLimit={props.seriesLimit ?? 10}
-      totalSeries={{ label: "Total" }}
-      otherSeries={{ label: "Other" }}
-      options={{
-        title: "Heap Profile",
-        width: size[0],
-        height: size[1],
-        ...(props.options ?? {}),
-      }}
-    />
+    <>
+      <Toolbar>
+        <Box sx={{ flexGrow: 1 }} />
+        <SeriesLimitInput
+          defaultValue={seriesLimit}
+          otherLabel={otherSeries.label}
+          setSeriesLimit={setSeriesLimit}
+        />
+      </Toolbar>
+      <Plot
+        name="heapProfSample"
+        validateAttrs={(attrs) => z.validate(heapProfSampleAttrs, attrs)}
+        getSeriesLabel={(attrs) => attrs.heapProfLabel}
+        getSeriesOptions={(label) => ({
+          label,
+          spanGaps: true,
+        })}
+        unit="By"
+        seriesLimit={seriesLimit}
+        totalSeries={totalSeries}
+        otherSeries={otherSeries}
+        options={{
+          title: "Heap Profile",
+          width: size[0],
+          height: size[1],
+          ...(props.options ?? {}),
+        }}
+      />
+    </>
   );
 };
