@@ -1,8 +1,14 @@
-import Plot, { Props, Series, SeriesLimitInput } from "@/components/plots/Plot";
+import Plot, { Props, Series } from "@/components/plots/Plot";
 import * as z from "@/util/z";
-import { Box, Toolbar, useTheme } from "@mui/material";
+import Box from "@mui/material/Box";
+import { useTheme } from "@mui/material/styles";
+import Toolbar from "@mui/material/Toolbar";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useEffect, useState } from "react";
+import ControlButton from "../ControlButton";
+import SeriesLimitInput from "./SeriesLimitInput";
+import Typography from "@mui/material/Typography";
+import Grid from "@mui/material/Grid";
 
 /**
  * The zod type for the attributes for an -hT heap profile sample.
@@ -83,7 +89,7 @@ const getSeriesOptions = (
 /**
  * The plot for heap profile samples.
  */
-export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
+export function HeapProfSamplePlot(props: HeapProfSampleProps) {
   const theme = useTheme();
   const lg = useMediaQuery(theme.breakpoints.up("lg"));
   const xl = useMediaQuery(theme.breakpoints.up("xl"));
@@ -98,13 +104,81 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
 
   return (
     <>
-      <Toolbar disableGutters variant="dense">
-        <Box sx={{ flexGrow: 1 }} />
-        <SeriesLimitInput
-          defaultValue={seriesLimit}
-          otherLabel={otherSeries.label}
-          setSeriesLimit={setSeriesLimit}
-        />
+      <Toolbar
+        disableGutters
+        variant="dense"
+        sx={{
+          flexGrow: 1,
+          justifyContent: "center",
+        }}
+      >
+        <Grid
+          container
+          columns={10}
+          sx={{
+            width: size[0],
+            alignItems: "center",
+          }}
+        >
+          <Grid
+            key={0}
+            size={4}
+            sx={{ display: "flex", justifyContent: "left" }}
+          >
+            <SeriesLimitInput
+              defaultValue={seriesLimit}
+              otherLabel={otherSeries.label}
+              setSeriesLimit={setSeriesLimit}
+            />
+          </Grid>
+          <Grid key={2} size={2} sx={{ textAlign: "center" }}>
+            <div className="u-title">Heap&nbsp;Profile</div>
+          </Grid>
+          <Grid
+            key={3}
+            size={4}
+            container
+            columns={3}
+            sx={{ display: "flex", justifyContent: "right" }}
+          >
+            <Grid
+              key={31}
+              size={1}
+              sx={{ display: "flex", justifyContent: "center" }}
+            >
+              <ControlButton
+                label="Start"
+                title="Start heap profiling."
+                namespace="eventlog-socket"
+                commandId="start-heap-profiling"
+              />
+            </Grid>
+            <Grid
+              key={32}
+              size={1}
+              sx={{ display: "flex", justifyContent: "center" }}
+            >
+              <ControlButton
+                label="Stop"
+                title="Stop heap profiling."
+                namespace="eventlog-socket"
+                commandId="stop-heap-profiling"
+              />
+            </Grid>
+            <Grid
+              key={33}
+              size={1}
+              sx={{ display: "flex", justifyContent: "center" }}
+            >
+              <ControlButton
+                label="Census"
+                title="Request a single heap census."
+                namespace="eventlog-socket"
+                commandId="request-heap-census"
+              />
+            </Grid>
+          </Grid>
+        </Grid>
       </Toolbar>
       <Plot
         name="heapProfSample"
@@ -116,7 +190,6 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
         totalSeries={totalSeries}
         otherSeries={otherSeries}
         options={{
-          title: "Heap Profile",
           width: size[0],
           height: size[1],
           ...(props.options ?? {}),
@@ -124,4 +197,4 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
       />
     </>
   );
-};
+}
