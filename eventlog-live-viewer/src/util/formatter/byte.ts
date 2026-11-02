@@ -1,5 +1,15 @@
 import { Formatter } from "../formatter";
 
+/**
+ * Format a number to a given number of digits.
+ */
+function format(n: number, digits: number): string {
+  const ndigits = Math.floor(Math.max(0, Math.log10(Math.abs(n)))) + 1;
+  const precision = Math.max(0, digits - ndigits);
+  const nstring = n.toFixed(precision);
+  return precision <= 0 ? nstring : nstring.replace(/\.?0+$/, "");
+}
+
 const byteBaseAndUnit = [
   "B",
   "KB",
@@ -18,14 +28,13 @@ const byteBaseAndUnit = [
   .toArray()
   .reverse();
 
-const byteFormatter: Formatter = (value, precision) => {
+const byteFormatter: Formatter = (value) => {
   if (value === null) {
     return "--";
   } else {
     const absBytes = Math.abs(value);
     for (const [base, unit] of byteBaseAndUnit) {
-      if (absBytes >= base)
-        return `${(value / base).toFixed(precision ?? 0)} ${unit}`;
+      if (absBytes >= base) return `${format(value / base, 3)} ${unit}`;
     }
     return `${value} B`;
   }

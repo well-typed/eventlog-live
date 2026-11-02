@@ -216,7 +216,7 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   const formatter = unit && getFormatter(unit);
   const seriesFormatter: Series.Formatter = formatter
     ? {
-        value: (_self, value) => formatter(value, 2),
+        value: (_self, value) => formatter(value),
       }
     : {};
   const axisFormatter: Axis.Formatter = formatter
