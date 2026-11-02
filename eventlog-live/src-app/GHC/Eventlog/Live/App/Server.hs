@@ -98,10 +98,10 @@ startServer logger ServerOptions{..} exportRequestChan = do
                 controlServer :<|> health logger :<|> viewerServer
 
   -- Announce the viewer and open the browser:
-  let serverUrl = "http://localhost:" <> show serverPort.port
-  logInfo logger ("Server URL:\n  " <> T.pack serverUrl)
+  let viewerUrl = "http://localhost:" <> show serverPort.port <> "/viewer/"
+  logInfo logger ("Viewer URL:\n  " <> T.pack viewerUrl)
   when viewerOpen $ do
-    success <- openBrowser serverUrl
+    success <- openBrowser viewerUrl
     unless success $ logWarn logger "Could not open browser."
 
   -- Create the stop function.

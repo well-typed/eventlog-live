@@ -34,8 +34,8 @@ import GHC.TypeLits (symbolVal)
 import Network.Wai (Application)
 import Network.Wai.Application.Static (staticApp)
 import Network.WebSockets qualified as WS
-import Servant.API (Raw)
-import Servant.Server (HasServer (..), Tagged (..))
+import Servant.API (Raw, (:>))
+import Servant.Server (Server, Tagged (..))
 import WaiAppStatic.Storage.Embedded (mkSettings)
 import WaiAppStatic.Types qualified as WAS
 import Prelude hiding (null)
@@ -44,9 +44,9 @@ import Prelude hiding (null)
 -- Viewer App Server
 --------------------------------------------------------------------------------
 
-type ViewerApi = Raw
+type ViewerApi = "viewer" :> Raw
 
-viewerServer :: ServerT Raw m
+viewerServer :: Server ViewerApi
 viewerServer = Tagged viewerApp
 
 viewerApp :: Application
