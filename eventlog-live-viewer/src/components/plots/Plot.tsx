@@ -390,7 +390,10 @@ export default function Plot<PlotAttrs extends z.Attrs>({
       plotRef.current = new uPlot(
         {
           ...options,
-          cursor: asCursorSync(cursorSyncPubSub),
+          cursor: {
+            ...(options.cursor ?? {}),
+            ...asCursorSync(cursorSyncPubSub),
+          },
           scales: defaultScales,
           series,
           axes: uAxes,
