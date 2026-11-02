@@ -212,17 +212,17 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   // A reference to the previous options.
   const propOptionsRef = useRef(options);
 
-  // The formatter for the current unit.
+  // The formatters.
   const formatter = unit && getFormatter(unit);
-  const yAxisValues: Axis.Formatter = formatter
+  const seriesFormatter: Series.Formatter = formatter
+    ? {
+        value: (_self, value) => formatter(value, 2),
+      }
+    : {};
+  const axisFormatter: Axis.Formatter = formatter
     ? {
         size: 75,
         values: (_self, values) => values.map((value) => formatter(value)),
-      }
-    : {};
-  const seriesValue: Series.Formatter = formatter
-    ? {
-        value: (_self, value) => formatter(value, 2),
       }
     : {};
 
@@ -335,7 +335,7 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   const asSeries = useCallback((series: uPlot.Series): uPlot.Series => {
     const seriesStyle =
       series.stroke === undefined ? seriesStyleRef.current.shift() : {};
-    return { ...series, ...seriesStyle, ...seriesValue };
+    return { ...series, ...seriesStyle, ...seriesFormatter };
   }, []);
 
   // Resolve an axis stroke.
@@ -357,15 +357,14 @@ export default function Plot<PlotAttrs extends z.Attrs>({
     [],
   );
 
-  const asAxis = useCallback(
-    (axis: Axis, k: number): uPlot.Axis => ({
+  const asAxis = useCallback((axis: Axis, k: number): uPlot.Axis => {
+    return {
       // NOTE: This check avoids overwriting the x-axis formatter.
-      ...(k > 0 ? yAxisValues : {}),
+      ...(k > 0 ? axisFormatter : {}),
       ...axis,
       stroke: getStroke(axis.stroke),
-    }),
-    [],
-  );
+    };
+  }, []);
 
   // The plot and target element.
   const plotRef = useRef<uPlot | null>(null);
