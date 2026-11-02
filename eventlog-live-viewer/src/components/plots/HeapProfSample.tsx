@@ -40,7 +40,7 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
 
   return (
     <>
-      <Toolbar>
+      <Toolbar disableGutters variant="dense">
         <Box sx={{ flexGrow: 1 }} />
         <SeriesLimitInput
           defaultValue={seriesLimit}
