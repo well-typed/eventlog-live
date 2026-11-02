@@ -92,6 +92,8 @@ type ServiceExportRequests = Record<
   z.ViewerExportRequest | null
 >;
 
+const eventlogLiveServiceNamePrefix = "eventlog-live-otlp-for-";
+
 interface ServiceTabsProps {}
 
 export default function ServiceTabs({
@@ -115,6 +117,9 @@ export default function ServiceTabs({
     const { resource } = lastExportRequest;
     if (z.validate(z.service, resource)) {
       const name = z.Service.name(resource);
+
+      // Filter out Eventlog Live services, as these don't send standard data:
+      if (name.startsWith(eventlogLiveServiceNamePrefix)) return;
 
       // Update the export request for this service...
       setServices((old) => ({ ...old, [name]: lastExportRequest }));
