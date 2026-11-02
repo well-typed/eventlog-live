@@ -1,4 +1,4 @@
-import Plot, { Props, SeriesLimitInput } from "@/components/plots/Plot";
+import Plot, { Props, Series, SeriesLimitInput } from "@/components/plots/Plot";
 import * as z from "@/util/z";
 import { Box, Toolbar, useTheme } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -12,7 +12,24 @@ const heapProfSampleByClosureTypeAttrs = z.strictObject({
   heapProfSampleEra: z.number(),
 });
 
-const heapProfSampleAttrs = z.union([heapProfSampleByClosureTypeAttrs]);
+const heapProfSampleByInfoProvAttrs = z.strictObject({
+  name: z.literal("heapProfSample"),
+  heapProfBreakdown: z.literal("-hi"),
+  heapProfId: z.literal(0),
+  heapProfLabel: z.string(),
+  heapProfSampleEra: z.number(),
+  ipClosureDesc: z.number(),
+  ipLabel: z.string(),
+  ipModule: z.string(),
+  ipName: z.string(),
+  ipSrcLoc: z.string(),
+  ipTyDesc: z.string(),
+});
+
+const heapProfSampleAttrs = z.union([
+  heapProfSampleByClosureTypeAttrs,
+  heapProfSampleByInfoProvAttrs,
+]);
 
 type HeapProfSampleAttrs = z.infer<typeof heapProfSampleAttrs>;
 
@@ -24,6 +41,26 @@ export interface HeapProfSampleProps {
 
 const defaultSize = (lg: boolean, xl: boolean): [number, number] =>
   xl ? [1200, 800] : lg ? [900, 600] : [600, 400];
+
+const getSeriesLabel = (attrs: HeapProfSampleAttrs): string =>
+  attrs.heapProfBreakdown === "-hT"
+    ? attrs.heapProfLabel
+    : `${attrs.ipModule}:${attrs.ipLabel}`;
+
+const getSeriesOptions = (
+  label: string,
+  attrs: HeapProfSampleAttrs,
+): Series.Options => {
+  const spanGaps = true;
+  if (attrs.heapProfBreakdown === `-hT`) {
+    return { label, spanGaps };
+  } else {
+    const labelElement = document.createElement("span");
+    labelElement.innerText = label;
+    labelElement.title = attrs.ipSrcLoc;
+    return { label: labelElement, spanGaps };
+  }
+};
 
 export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
   const theme = useTheme();
@@ -51,11 +88,8 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
       <Plot
         name="heapProfSample"
         validateAttrs={(attrs) => z.validate(heapProfSampleAttrs, attrs)}
-        getSeriesLabel={(attrs) => attrs.heapProfLabel}
-        getSeriesOptions={(label) => ({
-          label,
-          spanGaps: true,
-        })}
+        getSeriesLabel={getSeriesLabel}
+        getSeriesOptions={getSeriesOptions}
         unit="By"
         seriesLimit={seriesLimit}
         totalSeries={totalSeries}
