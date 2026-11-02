@@ -1,1 +1,1 @@
-export type Formatter = (value: number | null, precision?: number) => string;
+export type Formatter = (value: number | null) => string;
