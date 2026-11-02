@@ -35,7 +35,10 @@ export interface Props<PlotAttrs extends z.Attrs> {
   /**
    * A function that computes the series options from its label.
    */
-  readonly getSeriesOptions: (label: string) => Series.Options;
+  readonly getSeriesOptions: (
+    label: string,
+    attrs: PlotAttrs,
+  ) => Series.Options;
 
   /**
    * The unit for the y-values of all series in this plot.
@@ -317,18 +320,15 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   }, [seriesLimit]);
 
   // Add a new series to the cached data and return its index.
-  const addSeries = useCallback(
-    (label: string, options?: Series.Options): number => {
-      const index = cachedSeriesRef.current.length;
-      cachedIndicesRef.current[label] = index;
-      cachedSeriesRef.current[index] = options ?? getSeriesOptions(label);
-      cachedDataRef.current[index] = new Array(
-        cachedDataRef.current[0].length,
-      ).fill(null);
-      return index;
-    },
-    [],
-  );
+  const addSeries = useCallback((label: string, attrs: PlotAttrs): number => {
+    const index = cachedSeriesRef.current.length;
+    cachedIndicesRef.current[label] = index;
+    cachedSeriesRef.current[index] = getSeriesOptions(label, attrs);
+    cachedDataRef.current[index] = new Array(
+      cachedDataRef.current[0].length,
+    ).fill(null);
+    return index;
+  }, []);
 
   // If the given uPlot series does not have a stroke colour,
   // assign it the next style from the series styles.
@@ -499,7 +499,8 @@ export default function Plot<PlotAttrs extends z.Attrs>({
       if (validateAttrs(attrs)) {
         // Ensure the series has an index.
         const label = getSeriesLabel(attrs);
-        const index = cachedIndicesRef.current[label] ?? addSeries(label);
+        const index =
+          cachedIndicesRef.current[label] ?? addSeries(label, attrs);
 
         // Add the new series data to the list.
         //
