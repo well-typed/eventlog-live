@@ -2,7 +2,6 @@ import { useCallback, useContext, useEffect, useId, useRef } from "react";
 import { ExportRequestContext } from "../ExportRequestProvider";
 import * as z from "@/util/z";
 import { RefreshContext } from "../refresh/RefreshProvider";
-import { Box, Input, Tooltip, Typography } from "@mui/material";
 import uPlot from "uplot";
 import unzip from "@/util/unzip";
 import defaultSeriesStyle, { SeriesStyle } from "@/util/seriesStyle";
@@ -12,6 +11,8 @@ import sum from "@/util/sum";
 import { getMode } from "../../util/getMode";
 import byteFormatter from "@/util/formatter/byte";
 import { CursorSyncContext } from "../cursorSync/CursorSyncProvider";
+import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
 
 /**
  * The properies for the plot component.
@@ -565,51 +566,5 @@ export default function Plot<PlotAttrs extends z.Attrs>({
         </Box>
       </div>
     </Box>
-  );
-}
-
-export interface SeriesLimitInputProps {
-  defaultValue: number;
-  otherLabel?: string;
-  setSeriesLimit: (seriesLimit: number) => void;
-}
-
-const seriesLimitInputTooltip = (otherLabel?: string): string => {
-  const basic = "The maximum number of series to display in this plot.";
-  const other =
-    otherLabel && ` Additional series are summarised under ${otherLabel}.`;
-  return basic + (other ?? "");
-};
-
-/**
- * An input field that can be used for the seriesLimit property.
- */
-export function SeriesLimitInput(props: SeriesLimitInputProps) {
-  const { defaultValue, otherLabel, setSeriesLimit } = props;
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const { value } = event.target;
-    const seriesLimit = parseInt(value);
-    if (Number.isNaN(seriesLimit)) {
-      console.log("Invalid value for series limit: ", value);
-    } else {
-      setSeriesLimit(seriesLimit);
-    }
-  };
-  const inputId = useId();
-  return (
-    <>
-      <Tooltip title={seriesLimitInputTooltip(otherLabel)}>
-        <Input
-          defaultValue={defaultValue}
-          disableUnderline
-          type="number"
-          margin="dense"
-          sx={{ width: "2.5em" }}
-          onChange={handleChange}
-          id={inputId}
-        />
-      </Tooltip>
-      <Typography>Series&nbsp;Limit</Typography>
-    </>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  createContext,
   PropsWithChildren,
   SyntheticEvent,
   useContext,
@@ -12,6 +13,24 @@ import TabContext from "@mui/lab/TabContext";
 import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import { Typography } from "@mui/material";
+
+/******************************************************************************/
+/* Service Context                                                            */
+/******************************************************************************/
+
+export interface ServiceContext {
+  name: z.Service.Name;
+  instanceId: z.Service.InstanceId;
+}
+
+export const ServiceContext = createContext<ServiceContext>({
+  name: z.Service.UNKNOWN_SERVICE_NAME,
+  instanceId: z.Service.UNKNOWN_SERVICE_INSTANCE_ID,
+});
+
+/******************************************************************************/
+/* Service Instance Tabs                                                      */
+/******************************************************************************/
 
 type ServiceInstanceExportRequests = Record<
   z.Service.InstanceId,
@@ -78,14 +97,20 @@ function ServiceInstanceTabs({
           keepMounted={true}
           sx={{ paddingLeft: 0, paddingRight: 0 }}
         >
-          <ExportRequestContext.Provider value={{ lastExportRequest }}>
-            {children}
-          </ExportRequestContext.Provider>
+          <ServiceContext.Provider value={{ name, instanceId }}>
+            <ExportRequestContext.Provider value={{ lastExportRequest }}>
+              {children}
+            </ExportRequestContext.Provider>
+          </ServiceContext.Provider>
         </TabPanel>
       ))}
     </TabContext>
   );
 }
+
+/******************************************************************************/
+/* Service Tabs                                                               */
+/******************************************************************************/
 
 type ServiceExportRequests = Record<
   z.Service.Name,
