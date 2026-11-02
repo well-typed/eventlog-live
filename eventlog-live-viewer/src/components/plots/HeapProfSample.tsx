@@ -39,9 +39,6 @@ export interface HeapProfSampleProps {
   size?: (lg: boolean, xl: boolean) => [number, number];
 }
 
-const defaultSize = (lg: boolean, xl: boolean): [number, number] =>
-  xl ? [1200, 800] : lg ? [900, 600] : [600, 400];
-
 const getSeriesLabel = (attrs: HeapProfSampleAttrs): string =>
   attrs.heapProfBreakdown === "-hT"
     ? attrs.heapProfLabel
@@ -66,7 +63,7 @@ export const HeapProfSamplePlot = (props: HeapProfSampleProps) => {
   const theme = useTheme();
   const lg = useMediaQuery(theme.breakpoints.up("lg"));
   const xl = useMediaQuery(theme.breakpoints.up("xl"));
-  const getSize = props.size ?? defaultSize;
+  const getSize = props.size ?? (() => [600, 400]);
   const [size, setSize] = useState<[number, number]>(getSize(lg, xl));
   const totalSeries = { label: "Total" };
   const otherSeries = { label: "Other" };

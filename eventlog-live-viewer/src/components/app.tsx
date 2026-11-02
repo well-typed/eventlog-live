@@ -22,6 +22,11 @@ import CursorSyncProvider from "./cursorSync/CursorSyncProvider";
 import CursorSyncSwitch from "./cursorSync/CursorSyncSwitch";
 import ServiceTabs from "./ServiceTabs";
 
+const sizeOfHeapProfSamplePlot = (
+  lg: boolean,
+  xl: boolean,
+): [number, number] => (xl ? [1200, 800] : lg ? [900, 600] : [600, 400]);
+
 export default function App() {
   // Right-Stacked Legend:
   const hooks: uPlot["hooks"] = {
@@ -71,7 +76,10 @@ export default function App() {
                 >
                   {/* Heap Profile */}
                   <Grid size={1}>
-                    <HeapProfSamplePlot options={{ hooks }} />
+                    <HeapProfSamplePlot
+                      size={sizeOfHeapProfSamplePlot}
+                      options={{ hooks }}
+                    />
                   </Grid>
 
                   <Grid
