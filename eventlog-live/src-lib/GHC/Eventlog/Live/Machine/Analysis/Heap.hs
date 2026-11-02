@@ -46,6 +46,7 @@ import GHC.RTS.Events qualified as E
 import IpeDB.Database (Table)
 import IpeDB.Database qualified as DB
 import IpeDB.Types.InfoProv (InfoProv (..), InfoProvId (..))
+import IpeDB.Types.SrcLoc (ppSrcLoc)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
@@ -396,7 +397,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
                     , "ipTyDesc" ~= fmap (.ipTyDesc) maybeInfoProv
                     , "ipLabel" ~= fmap (.ipLabel) maybeInfoProv
                     , "ipModule" ~= fmap (.ipModule) maybeInfoProv
-                    , "ipSrcLoc" ~= fmap (show . (.ipSrcLoc)) maybeInfoProv
+                    , "ipSrcLoc" ~= fmap (flip (ppSrcLoc . (.ipSrcLoc)) "") maybeInfoProv
                     ]
             heapProfSampleData' <-
               lift $ insertHeapProfSampleString logger heapProfLabel heapProfSample heapProfSampleData
