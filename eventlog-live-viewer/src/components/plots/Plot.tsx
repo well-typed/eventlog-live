@@ -531,6 +531,13 @@ export default function Plot<PlotAttrs extends z.Attrs>({
     if (refresh) update(true);
   }, [lastExportRequest, refresh, addSeries, create, destroy]);
 
+  // Destroy plot when component unmounts.
+  useEffect(() => {
+    return () => {
+      destroy();
+    };
+  }, []);
+
   return (
     <Box
       sx={{
