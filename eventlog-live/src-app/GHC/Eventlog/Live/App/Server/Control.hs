@@ -23,7 +23,7 @@ import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
 import GHC.Generics (Generic)
 import Options.Applicative.Extra.Feature (Feature (..))
 import Servant (PlainText, throwError)
-import Servant.API (Capture, FormUrlEncoded, Header, Headers, JSON, NoContent (..), PostAccepted, ReqBody, StdMethod (..), UVerb, Union, WithStatus (..), addHeader, (:>), type (:<|>) (..))
+import Servant.API (Capture, FormUrlEncoded, Header, Headers, JSON, NoContent (..), ReqBody, StdMethod (..), UVerb, Union, WithStatus (..), addHeader, (:>), type (:<|>) (..))
 import Servant.Server (Handler, Server, ServerError (..), respond)
 import Web.FormUrlEncoded (Form, FormOptions, FromForm (..), genericFromForm)
 import Web.FormUrlEncoded qualified as Form (FormOptions (fieldLabelModifier), defaultFormOptions)
@@ -39,6 +39,7 @@ import Data.Text qualified as T
 import GHC.Eventlog.Socket.Control qualified as C
 import Network.Socket (Socket)
 import Network.Socket.ByteString.Lazy qualified as SBSL
+import Text.Read (readMaybe)
 #endif
 
 --------------------------------------------------------------------------------
@@ -87,40 +88,13 @@ newDisabledControlServer logger corsIgnoreFailures = do
       }
 
   server :: Server ControlApi
-  server =
-    eventlogSocket :<|> customCommand
+  server _namespaceText _commandText = handleCommand :<|> badCORSPreflight
    where
     badCORSPreflight :: Handler (Union '[BadCORSPreflightAccept, BadCORSPreflightReject])
     badCORSPreflight = badCORSPreflightHandler logger corsIgnoreFailures
 
-    eventlogSocket :: Server EventlogSocketApi
-    eventlogSocket =
-      (startProfiling :<|> badCORSPreflight)
-        :<|> (stopProfiling :<|> badCORSPreflight)
-        :<|> (startHeapProfiling :<|> badCORSPreflight)
-        :<|> (stopHeapProfiling :<|> badCORSPreflight)
-        :<|> (requestHeapCensus :<|> badCORSPreflight)
-     where
-      startProfiling :: StartProfilingReq -> Handler ()
-      startProfiling _req = disabled
-
-      stopProfiling :: StopProfilingReq -> Handler ()
-      stopProfiling _req = disabled
-
-      startHeapProfiling :: StartHeapProfilingReq -> Handler ()
-      startHeapProfiling _req = disabled
-
-      stopHeapProfiling :: StopHeapProfilingReq -> Handler ()
-      stopHeapProfiling _req = disabled
-
-      requestHeapCensus :: RequestHeapCensusReq -> Handler ()
-      requestHeapCensus _req = disabled
-
-    customCommand :: Server CustomCommandApi
-    customCommand _namespaceText _commandId = callCustomCommand :<|> badCORSPreflight
-     where
-      callCustomCommand :: CustomCommandReq -> Handler (Union '[CustomCommandAccept, CustomCommandReject])
-      callCustomCommand _req = disabled
+    handleCommand :: CommandReq -> Handler (Union '[CommandAccept, CommandReject])
+    handleCommand _req = disabled
 
     disabled :: Handler a
     disabled =
@@ -163,84 +137,51 @@ newEnabledControlServer logger corsIgnoreFailures = do
          in (connectionMap', ())
 
   server :: IORef (HashMap ServiceName EventlogSourceHandle) -> Server ControlApi
-  server connectionMapRef =
-    eventlogSocket :<|> customCommand
+  server connectionMapRef namespaceText commandText = handleCommand :<|> badCORSPreflight
    where
     badCORSPreflight :: Handler (Union '[BadCORSPreflightAccept, BadCORSPreflightReject])
     badCORSPreflight = badCORSPreflightHandler logger corsIgnoreFailures
 
-    eventlogSocket :: Server EventlogSocketApi
-    eventlogSocket =
-      (startProfiling :<|> badCORSPreflight)
-        :<|> (stopProfiling :<|> badCORSPreflight)
-        :<|> (startHeapProfiling :<|> badCORSPreflight)
-        :<|> (stopHeapProfiling :<|> badCORSPreflight)
-        :<|> (requestHeapCensus :<|> badCORSPreflight)
-     where
-      startProfiling :: StartProfilingReq -> Handler ()
-      startProfiling req = do
-        liftIO . logDebug logger $
-          "Received request on /control/eventlog-socket/start-profiling for " <> req.serviceName <> "."
-        -- Send the control command over the socket.
-        withSocketFor (ServiceName req.serviceName) $ \socket -> do
+    handleCommand :: CommandReq -> Handler (Union '[CommandAccept, CommandReject])
+    handleCommand req
+      | namespaceText == "eventlog-socket" && commandText == "start-profiling" = do
+        withSocketFor (ServiceName req.serviceName) $ \socket ->
           liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
-
-      stopProfiling :: StopProfilingReq -> Handler ()
-      stopProfiling req = do
-        liftIO . logDebug logger $
-          "Received request on /control/eventlog-socket/stop-profiling for " <> req.serviceName <> "."
-        -- Send the control command over the socket.
-        withSocketFor (ServiceName req.serviceName) $ \socket -> do
-          liftIO (SBSL.sendAll socket $ B.encode C.stopProfiling)
-
-      startHeapProfiling :: StartHeapProfilingReq -> Handler ()
-      startHeapProfiling req = do
-        liftIO . logDebug logger $
-          "Received request on /control/eventlog-socket/start-heap-profiling for " <> req.serviceName <> "."
-        -- Send the control command over the socket.
-        withSocketFor (ServiceName req.serviceName) $ \socket -> do
-          liftIO (SBSL.sendAll socket $ B.encode C.startHeapProfiling)
-
-      stopHeapProfiling :: StopHeapProfilingReq -> Handler ()
-      stopHeapProfiling req = do
-        liftIO . logDebug logger $
-          "Received request on /control/eventlog-socket/stop-heap-profiling for " <> req.serviceName <> "."
-        -- Send the control command over the socket.
-        withSocketFor (ServiceName req.serviceName) $ \socket -> do
-          liftIO (SBSL.sendAll socket $ B.encode C.stopHeapProfiling)
-
-      requestHeapCensus :: RequestHeapCensusReq -> Handler ()
-      requestHeapCensus req = do
-        liftIO . logDebug logger $
-          "Received request on /control/eventlog-socket/request-heap-census for " <> req.serviceName <> "."
-        -- Send the control command over the socket.
-        withSocketFor (ServiceName req.serviceName) $ \socket -> do
-          liftIO (SBSL.sendAll socket $ B.encode C.requestHeapCensus)
-
-    customCommand :: Server CustomCommandApi
-    customCommand namespaceText commandId = callCustomCommand :<|> badCORSPreflight
-     where
-      callCustomCommand :: CustomCommandReq -> Handler (Union '[CustomCommandAccept, CustomCommandReject])
-      callCustomCommand req = do
-        liftIO . logDebug logger $
-          "Received request on /control/" <> namespaceText <> " with command ID " <> T.pack (show commandId) <> " for " <> req.serviceName <> "."
-        -- Construct the user namespace.
-        liftIO (eitherUserNamespace namespaceText) >>= \case
-          -- If userNamespace throws an exception, then...
-          Left customCommandError ->
-            -- ...respond with a custom command error.
-            respond . WithStatus @404 $
-              customCommandError
-          -- Otherwise, ...
-          Right namespace -> do
-            -- ...construct the user command...
-            let command = C.userCommand namespace (C.CommandId commandId)
-            -- ...send the user command...
-            withSocketFor (ServiceName req.serviceName) $ \socket -> do
-              liftIO (SBSL.sendAll socket $ B.encode command)
-            -- ...respond with a success status.
-            respond . WithStatus @204 $
-              NoContent
+        respond $ WithStatus @204 NoContent
+      | namespaceText == "eventlog-socket" && commandText == "stop-profiling" = do
+        withSocketFor (ServiceName req.serviceName) $ \socket ->
+          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
+        respond $ WithStatus @204 NoContent
+      | namespaceText == "eventlog-socket" && commandText == "start-heap-profiling" = do
+        withSocketFor (ServiceName req.serviceName) $ \socket ->
+          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
+        respond $ WithStatus @204 NoContent
+      | namespaceText == "eventlog-socket" && commandText == "stop-heap-profiling" = do
+        withSocketFor (ServiceName req.serviceName) $ \socket ->
+          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
+        respond $ WithStatus @204 NoContent
+      | namespaceText == "eventlog-socket" && commandText == "request-heap-census" = do
+        withSocketFor (ServiceName req.serviceName) $ \socket ->
+          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
+        respond $ WithStatus @204 NoContent
+      | Just commandId <- readMaybe @Word8 (T.unpack commandText) = do
+            -- Construct the user namespace.
+            liftIO (eitherUserNamespace namespaceText) >>= \case
+              -- If userNamespace throws an exception, then...
+              Left customCommandError ->
+                -- ...respond with a custom command error.
+                respond $ WithStatus @404 customCommandError
+              -- Otherwise, ...
+              Right namespace -> do
+                -- ...construct the user command...
+                let command = C.userCommand namespace (C.CommandId commandId)
+                -- ...send the user command...
+                withSocketFor (ServiceName req.serviceName) $ \socket -> do
+                  liftIO (SBSL.sendAll socket $ B.encode command)
+                -- ...respond with a success status.
+                respond $ WithStatus @204 NoContent
+      | otherwise =
+        respond $ WithStatus @404 CustomCommandError{errorMessage="Unknown command "<>T.unpack commandText}
 
     withSocketFor :: ServiceName -> (Socket -> Handler ()) -> Handler ()
     withSocketFor serviceName action = do
@@ -294,23 +235,17 @@ toCustomCommandError = CustomCommandError . displayException
 --------------------------------------------------------------------------------
 
 type ControlApi =
-  (EventlogSocketApi :<|> CustomCommandApi)
-
---------------------------------------------------------------------------------
--- Custom Command API
-
-type CustomCommandApi =
   Capture "namespace" Text
-    :> Capture "commandId" Word8
-    :> ( ( ReqBody '[FormUrlEncoded, JSON] CustomCommandReq
-             :> UVerb 'POST '[JSON] '[CustomCommandAccept, CustomCommandReject]
+    :> Capture "commandId" Text
+    :> ( ( ReqBody '[FormUrlEncoded, JSON] CommandReq
+             :> UVerb 'POST '[JSON] '[CommandAccept, CommandReject]
          )
            :<|> BadCORSPreflight
        )
 
-type CustomCommandAccept = WithStatus 204 NoContent
+type CommandAccept = WithStatus 204 NoContent
 
-type CustomCommandReject = WithStatus 404 CustomCommandError
+type CommandReject = WithStatus 404 CustomCommandError
 
 newtype CustomCommandError = CustomCommandError
   { errorMessage :: String
@@ -322,61 +257,23 @@ instance ToJSON CustomCommandError where
   toJSON = genericToJSON myJSONOptions
 
 --------------------------------------------------------------------------------
--- CustomCommandReq
+-- CommandReq
 
-newtype CustomCommandReq = CustomCommandReq
+newtype CommandReq = CommandReq
   { serviceName :: Text
   }
   deriving (Generic, Show)
 
-instance FromForm CustomCommandReq where
-  fromForm :: Form -> Either Text CustomCommandReq
+instance FromForm CommandReq where
+  fromForm :: Form -> Either Text CommandReq
   fromForm = genericFromForm myFormOptions
 
-instance FromJSON CustomCommandReq where
-  parseJSON :: Value -> Parser CustomCommandReq
+instance FromJSON CommandReq where
+  parseJSON :: Value -> Parser CommandReq
   parseJSON = genericParseJSON myJSONOptions
 
 --------------------------------------------------------------------------------
--- Eventlog Socket API
-
--- 2025-12-11:
--- Ideally, the /heap-profiling API would attach the semantics of /start and
--- /stop to a PUT and DELETE request on /heap-profiling with 204 No Content
--- responses. This would give us exactly the right caching semantics.
--- However, I have not been able to find any Grafana plugins that support
--- sending PUT and DELETE requests, and servant appears to have trouble adding
--- headers to 204 No Content responses, so I'm using POST requests on separate
--- /start and /stop endpoints.
-
-type EventlogSocketApi =
-  "eventlog-socket"
-    :> ( "start-profiling" :> (StartProfilingApi :<|> BadCORSPreflight)
-           :<|> "stop-profiling" :> (StopProfilingApi :<|> BadCORSPreflight)
-           :<|> "start-heap-profiling" :> (StartHeapProfilingApi :<|> BadCORSPreflight)
-           :<|> "stop-heap-profiling" :> (StopHeapProfilingApi :<|> BadCORSPreflight)
-           :<|> "request-heap-census" :> (RequestHeapCensusApi :<|> BadCORSPreflight)
-       )
-
-type StartProfilingApi =
-  ReqBody '[FormUrlEncoded, JSON] StartProfilingReq
-    :> PostAccepted '[JSON] ()
-
-type StopProfilingApi =
-  ReqBody '[FormUrlEncoded, JSON] StopProfilingReq
-    :> PostAccepted '[JSON] ()
-
-type StartHeapProfilingApi =
-  ReqBody '[FormUrlEncoded, JSON] StartHeapProfilingReq
-    :> PostAccepted '[JSON] ()
-
-type StopHeapProfilingApi =
-  ReqBody '[FormUrlEncoded, JSON] StopHeapProfilingReq
-    :> PostAccepted '[JSON] ()
-
-type RequestHeapCensusApi =
-  ReqBody '[FormUrlEncoded, JSON] RequestHeapCensusReq
-    :> PostAccepted '[JSON] ()
+-- Bad CORS preflight requests
 
 type BadCORSPreflight =
   UVerb 'OPTIONS '[PlainText] '[BadCORSPreflightAccept, BadCORSPreflightReject]
