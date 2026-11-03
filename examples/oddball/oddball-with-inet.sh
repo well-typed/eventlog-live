@@ -50,21 +50,21 @@ echo 'Start oddball' && \
 # Create the command to start eventlog-live-otlp
 # shellcheck disable=SC2089
 EVENTLOG_LIVE_OTLP_CMD="
-echo 'Start eventlog-live-otlp (for oddball)' && \
-	${EVENTLOG_LIVE_OTLP_BIN} \
-		--config='$DIR/eventlog-live.yaml' \
+echo 'Start eventlog-live-otlp (for oddball)' &&         \
+	${EVENTLOG_LIVE_OTLP_BIN}                            \
+		--config='$DIR/eventlog-live.yaml'               \
 	    --eventlog-socket-host '$GHC_EVENTLOG_INET_HOST' \
 		--eventlog-socket-port '$GHC_EVENTLOG_INET_PORT' \
-	    -hT \
+	    -hT                                              \
 		--eventlog-flush-interval=1 \
 		--control \
-		--control-port 30719 \
-		--control-cors-ignore-failure
+		--server-port 30179 \
+		--server-cors-ignore-failure
 "
 
 # Create the screen conf file
 SCREEN_CONF="$TMPDIR/screen.conf"
-cat > "$SCREEN_CONF" << 'EOF' || exit
+cat >"$SCREEN_CONF" <<'EOF' || exit
 split
 split -v
 focus right
