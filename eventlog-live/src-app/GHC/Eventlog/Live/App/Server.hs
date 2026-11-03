@@ -204,7 +204,7 @@ serverPortParser :: O.Parser ServerPort
 serverPortParser =
   O.option (ServerPort <$> O.auto) . mconcat $
     [ O.metavar "PORT"
-    , O.long "port"
+    , O.long "server-port"
     , O.help "The port number for the server."
     , O.value (ServerPort 30179)
     ]
