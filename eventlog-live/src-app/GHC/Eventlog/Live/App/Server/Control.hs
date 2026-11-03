@@ -16,7 +16,6 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isLower, isUpper, toLower)
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
-import Data.Word (Word8)
 import GHC.Eventlog.Live.App.Environment (ServiceName (..))
 import GHC.Eventlog.Live.Logger (Logger, logDebug)
 import GHC.Eventlog.Live.Source.Core (EventlogSourceHandle (..))
@@ -36,6 +35,7 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Text qualified as T
+import Data.Word (Word8)
 import GHC.Eventlog.Socket.Control qualified as C
 import Network.Socket (Socket)
 import Network.Socket.ByteString.Lazy qualified as SBSL
@@ -100,9 +100,9 @@ newDisabledControlServer logger corsIgnoreFailures = do
     disabled =
       throwError
         ServerError
-          { errHTTPCode = 404
-          , errReasonPhrase = "Not Found"
-          , errBody = BSL.fromStrict (TE.encodeUtf8 "The control server is disabled.")
+          { errHTTPCode = 400
+          , errReasonPhrase = "Bad Request"
+          , errBody = BSL.fromStrict . TE.encodeUtf8 $ "The control server is disabled."
           , errHeaders = []
           }
 
@@ -144,27 +144,14 @@ newEnabledControlServer logger corsIgnoreFailures = do
 
     handleCommand :: CommandReq -> Handler (Union '[CommandAccept, CommandReject])
     handleCommand req
-      | namespaceText == "eventlog-socket" && commandText == "start-profiling" = do
-        withSocketFor (ServiceName req.serviceName) $ \socket ->
-          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
-        respond $ WithStatus @204 NoContent
-      | namespaceText == "eventlog-socket" && commandText == "stop-profiling" = do
-        withSocketFor (ServiceName req.serviceName) $ \socket ->
-          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
-        respond $ WithStatus @204 NoContent
-      | namespaceText == "eventlog-socket" && commandText == "start-heap-profiling" = do
-        withSocketFor (ServiceName req.serviceName) $ \socket ->
-          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
-        respond $ WithStatus @204 NoContent
-      | namespaceText == "eventlog-socket" && commandText == "stop-heap-profiling" = do
-        withSocketFor (ServiceName req.serviceName) $ \socket ->
-          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
-        respond $ WithStatus @204 NoContent
-      | namespaceText == "eventlog-socket" && commandText == "request-heap-census" = do
-        withSocketFor (ServiceName req.serviceName) $ \socket ->
-          liftIO (SBSL.sendAll socket $ B.encode C.startProfiling)
-        respond $ WithStatus @204 NoContent
-      | Just commandId <- readMaybe @Word8 (T.unpack commandText) = do
+        | -- Handle the builtin eventlog-socket commands by name.
+          namespaceText == "eventlog-socket"
+        , Just command <- eventlogSocketCommandId commandText = do
+            withSocketFor (ServiceName req.serviceName) $ \socket ->
+              liftIO (SBSL.sendAll socket $ B.encode command)
+            respond $ WithStatus @204 NoContent
+        -- Handle custom commands.
+        | Just commandId <- readMaybe @Word8 (T.unpack commandText) = do
             -- Construct the user namespace.
             liftIO (eitherUserNamespace namespaceText) >>= \case
               -- If userNamespace throws an exception, then...
@@ -180,8 +167,9 @@ newEnabledControlServer logger corsIgnoreFailures = do
                   liftIO (SBSL.sendAll socket $ B.encode command)
                 -- ...respond with a success status.
                 respond $ WithStatus @204 NoContent
-      | otherwise =
-        respond $ WithStatus @404 CustomCommandError{errorMessage="Unknown command "<>T.unpack commandText}
+        | otherwise = do
+          let errorMessage="Unknown command "<>T.unpack commandText
+          respond $ WithStatus @404 CustomCommandError{..}
 
     withSocketFor :: ServiceName -> (Socket -> Handler ()) -> Handler ()
     withSocketFor serviceName action = do
@@ -215,6 +203,16 @@ newEnabledControlServer logger corsIgnoreFailures = do
               }
         -- If the service telemetry is streamed from a socket, continue.
         Just (EventlogSourceHandleSocket s) -> action s
+
+
+eventlogSocketCommandId :: Text -> Maybe C.Command
+eventlogSocketCommandId commandText
+  | commandText == "start-profiling" = Just C.startProfiling
+  | commandText == "stop-profiling" = Just C.stopProfiling
+  | commandText == "start-heap-profiling" = Just C.startHeapProfiling
+  | commandText == "stop-heap-profiling" = Just C.stopHeapProfiling
+  | commandText == "request-heap-census" = Just C.requestHeapCensus
+  | otherwise = Nothing
 
 eitherUserNamespace :: Text -> IO (Either CustomCommandError C.Namespace)
 eitherUserNamespace namespace =
