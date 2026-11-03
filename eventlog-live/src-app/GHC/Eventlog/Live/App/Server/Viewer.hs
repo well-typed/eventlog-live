@@ -34,6 +34,7 @@ import GHC.TypeLits (symbolVal)
 import Network.Wai (Application)
 import Network.Wai.Application.Static (staticApp)
 import Network.WebSockets qualified as WS
+import Network.WebSockets.Connection.PingPong qualified as WS (PongTimeout (..))
 import Servant.API (Raw, (:>))
 import Servant.Server (Server, Tagged (..))
 import WaiAppStatic.Storage.Embedded (mkSettings)
@@ -64,32 +65,44 @@ viewerApp =
 
 viewerWsServerApp ::
   Logger IO -> Chan (Tick ExportRequest) -> WS.ServerApp
-viewerWsServerApp logger exportRequestChan pending = do
-  conn <- WS.acceptRequest pending
-  chan <- dupChan exportRequestChan
+viewerWsServerApp logger exportRequestChan pending =
+  handle handlePongTimeout $
+    handle handleConnectionException $
+      acceptRequestWithPingPong $ \conn ->
+        dupChan exportRequestChan >>= \chan ->
+          viewer chan conn
+ where
+  pingPongOptions :: WS.PingPongOptions
+  pingPongOptions = WS.defaultPingPongOptions
 
-  let handleConnectionException :: WS.ConnectionException -> IO ()
-      handleConnectionException = \case
-        WS.CloseRequest{} ->
-          logInfo logger $ "Viewer requested to close the connection."
-        WS.ConnectionClosed{} ->
-          logInfo logger $ "Viewer closed the connection."
-        wsErr -> logException logger wsErr
+  acceptRequestWithPingPong :: (WS.Connection -> IO ()) -> IO ()
+  acceptRequestWithPingPong action =
+    WS.acceptRequest pending >>= flip (WS.withPingPong pingPongOptions) action
 
-  let viewer :: IO ()
-      viewer =
-        forever $
-          readChan chan >>= \case
-            Tick ->
-              pure ()
-            Item er -> do
-              let ver = toViewerExportRequest er
-              let verBytes = JSON.encode ver
-              let verByteSize = BSL.length verBytes
-              logTrace logger $ "Send " <> T.show verByteSize <> " bytes to viewer."
-              WS.sendTextData conn verBytes
+  handlePongTimeout :: WS.PongTimeout -> IO ()
+  handlePongTimeout WS.PongTimeout =
+    logInfo logger $ "Viewer timed out."
 
-  handle handleConnectionException viewer
+  handleConnectionException :: WS.ConnectionException -> IO ()
+  handleConnectionException = \case
+    WS.CloseRequest{} ->
+      logInfo logger $ "Viewer requested to close the connection."
+    WS.ConnectionClosed{} ->
+      logInfo logger $ "Viewer closed the connection."
+    wsErr -> logException logger wsErr
+
+  viewer :: Chan (Tick ExportRequest) -> WS.Connection -> IO ()
+  viewer chan conn =
+    forever $
+      readChan chan >>= \case
+        Tick ->
+          pure ()
+        Item er -> do
+          let ver = toViewerExportRequest er
+          let verBytes = JSON.encode ver
+          let verByteSize = BSL.length verBytes
+          logTrace logger $ "Send " <> T.show verByteSize <> " bytes to viewer."
+          WS.sendTextData conn verBytes
 
 data ViewerExportRequest = ViewerExportRequest
   { resource :: !Resource
