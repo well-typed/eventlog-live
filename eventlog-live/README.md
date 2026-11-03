@@ -328,8 +328,8 @@ eventlog-live-otlp                              \
   -hT                                           \
   --eventlog-flush-interval=1                   \
   --control                                     \
-  --control-port=30719                          \
-  --control-cors-ignore-failure
+  --server-port=30179                           \
+  --server-cors-ignore-failure
 
 # See: examples/oddball/oddball-with-hT.sh
 ```
@@ -344,9 +344,9 @@ Let's briefly discuss what the new parts of this script do:
 
 - The `GHC_EVENTLOG_UNIX_PATH` and `GHC_EVENTLOG_WAIT` environment variables configure Eventlog Socket, see above.
 
-- The `--control` and `--control-port=30719` flags passed to Eventlog Live tells it to start the control server on port 30719, which is the port used in the Grafana dashboards included in the demo.
+- The `--control` and `--server-port=30179` flags passed to Eventlog Live tells it to start the control server on port 30179, which is the port used in the Grafana dashboards included in the demo.
 
-- The `--control-cors-ignore-failure` flag passed to Eventlog Live tells it to ignore and accept malformed [CORS preflight requests](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing).
+- The `--server-cors-ignore-failure` flag passed to Eventlog Live tells it to ignore and accept malformed [CORS preflight requests](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing).
   This is a workaround for Safari's broken CORS preflight requests for localhost.
   You should not pass this flag in production.
 
@@ -417,8 +417,8 @@ eventlog-live-otlp                              \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   --eventlog-flush-interval=1                   \
   --control                                     \
-  --control-port=30719                          \
-  --control-cors-ignore-failure
+  --server-port=30179                           \
+  --server-cors-ignore-failure
 
 # See: examples/jumpy-jump/jumpy-jump-with-cost-centre-profiler.sh
 ```
@@ -512,8 +512,8 @@ eventlog-live-otlp                              \
   -hi                                           \
   --eventlog-flush-interval=1                   \
   --control                                     \
-  --control-port=30719                          \
-  --control-cors-ignore-failure
+  --server-port=30179                           \
+  --server-cors-ignore-failure
 
 # See: examples/oddball/oddball-with-hi.sh
 ```
@@ -601,8 +601,8 @@ eventlog-live-otlp                              \
   -hi                                           \
   --eventlog-flush-interval=1                   \
   --control                                     \
-  --control-port=30719                          \
-  --control-cors-ignore-failure
+  --server-port=30179                           \
+  --server-cors-ignore-failure
 
 # See: examples/jumpy-jump/jumpy-jump-with-ghc-stack-profiler.sh
 ```
