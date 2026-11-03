@@ -6,6 +6,10 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 # Include helper functions
 . "${DIR}/../../scripts/functions.sh"
 
+# Eventlog Socket Configuration
+export GHC_EVENTLOG_UNIX_PATH="/tmp/oddball_eventlog.sock"
+export GHC_EVENTLOG_WAIT="true"
+
 # Configure OpenTelemetry exporter
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="oddball"
@@ -16,18 +20,14 @@ export OTEL_PROFILES_EXPORTER="none"
 export OTEL_TRACES_EXPORTER="none"
 
 # Build oddball
-ODDBALL_BIN="$(cabal_list_bin oddball)"
+ODDBALL_BIN=$(cabal_list_bin oddball --constraint=eventlog-socket+control)
 
 # Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp)
+EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM HUP
-
-# Create the eventlog pipe
-ODDBALL_EVENTLOG_FIFO="$TMPDIR/oddball-eventlog.fifo"
-mkfifo "${ODDBALL_EVENTLOG_FIFO}" || exit
 
 # Create the screen pipe for oddball
 ODDBALL_SCREEN_FIFO="$TMPDIR/oddball-screen.fifo"
@@ -45,7 +45,6 @@ echo 'Start oddball' && \
 		+RTS \
 		-N2 \
 		-l \
-		-ol'${ODDBALL_EVENTLOG_FIFO}' \
 		-hT \
 		--eventlog-flush-interval=1 \
 		-RTS
@@ -57,10 +56,12 @@ EVENTLOG_LIVE_OTLP_CMD="
 echo 'Start eventlog-live-otlp (for oddball)' && \
 	${EVENTLOG_LIVE_OTLP_BIN} \
 		--config='$DIR/eventlog-live.yaml' \
-		--eventlog-file='${ODDBALL_EVENTLOG_FIFO}' \
+		--eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
 		--eventlog-flush-interval=1 \
 		--viewer \
+		--control \
+		--server-cors-ignore-failure \
 "
 
 # Create the screen conf file
