@@ -8,9 +8,10 @@ module GHC.Eventlog.Live.App.Server.Viewer (
   viewerWsServerApp,
 ) where
 
+import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Concurrent.Chan (Chan, dupChan, readChan)
-import Control.Exception (handle)
-import Control.Monad (forever)
+import Control.Exception (bracket, handle)
+import Control.Monad (forever, void)
 import Data.Aeson qualified as JSON
 import Data.Aeson.Types (KeyValue (..), KeyValueOmit (..), ToJSON, Value (..), pairs)
 import Data.ByteString.Lazy qualified as BSL
@@ -65,19 +66,17 @@ viewerApp =
 
 viewerWsServerApp ::
   Logger IO -> Chan (Tick ExportRequest) -> WS.ServerApp
-viewerWsServerApp logger exportRequestChan pending =
+viewerWsServerApp logger exportRequestChan pending = do
+  conn <- WS.acceptRequest pending
   handle handlePongTimeout $
     handle handleConnectionException $
-      acceptRequestWithPingPong $ \conn ->
-        dupChan exportRequestChan >>= \chan ->
-          viewer chan conn
+      withMessageDiscarder conn $
+        WS.withPingPong pingPongOptions conn $ \conn' ->
+          dupChan exportRequestChan >>= \chan ->
+            viewer chan conn'
  where
   pingPongOptions :: WS.PingPongOptions
   pingPongOptions = WS.defaultPingPongOptions
-
-  acceptRequestWithPingPong :: (WS.Connection -> IO ()) -> IO ()
-  acceptRequestWithPingPong action =
-    WS.acceptRequest pending >>= flip (WS.withPingPong pingPongOptions) action
 
   handlePongTimeout :: WS.PongTimeout -> IO ()
   handlePongTimeout WS.PongTimeout =
@@ -103,6 +102,19 @@ viewerWsServerApp logger exportRequestChan pending =
           let verByteSize = BSL.length verBytes
           logTrace logger $ "Send " <> T.show verByteSize <> " bytes to viewer."
           WS.sendTextData conn verBytes
+
+{- |
+This function spawns a thread that receives all incoming data messages on
+the websocket connection and discards them. This is needed, because, with the
+current @websockets@ library, the user must call `WS.receiveDataMessage` for
+the library to handle control messages.
+-}
+withMessageDiscarder :: WS.Connection -> IO () -> IO ()
+withMessageDiscarder conn action =
+  bracket (forkMessageDiscarder conn) killThread (const action)
+ where
+  forkMessageDiscarder :: WS.Connection -> IO ThreadId
+  forkMessageDiscarder = forkIO . forever . void . WS.receiveDataMessage
 
 data ViewerExportRequest = ViewerExportRequest
   { resource :: !Resource
