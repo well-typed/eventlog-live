@@ -198,7 +198,7 @@
                         "api": {
                           "contentType": "application/x-www-form-urlencoded",
                           "data": "service-name=${service_name}",
-                          "endpoint": "http://localhost:30719/control/eventlog-socket/stop-profiling",
+                          "endpoint": "http://localhost:30179/control/eventlog-socket/stop-profiling",
                           "headerParams": [],
                           "method": "POST",
                           "queryParams": [],
@@ -246,7 +246,7 @@
                         "api": {
                           "contentType": "application/x-www-form-urlencoded",
                           "data": "service-name=${service_name}",
-                          "endpoint": "http://localhost:30719/control/eventlog-socket/start-profiling",
+                          "endpoint": "http://localhost:30179/control/eventlog-socket/start-profiling",
                           "headerParams": [],
                           "method": "POST",
                           "queryParams": [],
