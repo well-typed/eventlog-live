@@ -56,8 +56,7 @@ echo 'Start eventlog-live-otlp (for oddball)' && \
 	    -hi \
 		--eventlog-flush-interval=1 \
 		--control \
-		--control-port 30719 \
-		--control-cors-ignore-failure
+		--server-cors-ignore-failure
 "
 
 # Create the screen conf file
