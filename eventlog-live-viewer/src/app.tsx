@@ -17,9 +17,9 @@ import resolveWebSocketUrl from "@/util/resolveWebSocketUrl";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import "@/style/uPlot.css";
-import CursorSyncProvider from "./cursorSync/CursorSyncProvider";
-import CursorSyncSwitch from "./cursorSync/CursorSyncSwitch";
-import ServiceTabs from "./ServiceTabs";
+import CursorSyncProvider from "./components/cursorSync/CursorSyncProvider";
+import CursorSyncSwitch from "./components/cursorSync/CursorSyncSwitch";
+import ServiceTabs from "./components/ServiceTabs";
 import { styled } from "@mui/material/styles";
 
 const sizeOfHeapProfSamplePlot = (
