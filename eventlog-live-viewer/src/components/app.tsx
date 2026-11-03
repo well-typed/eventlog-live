@@ -11,7 +11,6 @@ import Box from "@mui/material/Box";
 import { HeapProfSamplePlot } from "@/components/plots/HeapProfSample";
 import { HeapSizePlot } from "@/components/plots/HeapSize";
 import * as GcStats from "@/components/plots/GcStats";
-import { Offset } from "@/components/Offset";
 import EventlogLiveIcon from "@/components/EventlogLiveIcon";
 import Typography from "@mui/material/Typography";
 import resolveWebSocketUrl from "@/util/resolveWebSocketUrl";
@@ -21,11 +20,14 @@ import "@/style/uPlot.css";
 import CursorSyncProvider from "./cursorSync/CursorSyncProvider";
 import CursorSyncSwitch from "./cursorSync/CursorSyncSwitch";
 import ServiceTabs from "./ServiceTabs";
+import { styled } from "@mui/material/styles";
 
 const sizeOfHeapProfSamplePlot = (
   lg: boolean,
   xl: boolean,
 ): [number, number] => (xl ? [1200, 800] : lg ? [900, 600] : [600, 400]);
+
+export const Offset = styled("div")(({ theme }) => theme.mixins.toolbar);
 
 export default function App() {
   // Right-Stacked Legend:
