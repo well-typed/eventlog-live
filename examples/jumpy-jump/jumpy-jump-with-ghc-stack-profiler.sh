@@ -55,8 +55,7 @@ echo 'Start eventlog-live-otlp (for jumpy-jump)' && \
 	    --eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
 		--control \
-		--control-port 30719 \
-		--control-cors-ignore-failure
+		--server-cors-ignore-failure
 "
 
 # Create the screen conf file
