@@ -191,7 +191,7 @@
                         "api": {
                           "contentType": "application/x-www-form-urlencoded",
                           "data": "service-name=${service_name}",
-                          "endpoint": "http://localhost:30719/control/ghc-stack-profiler/2",
+                          "endpoint": "http://localhost:30179/control/ghc-stack-profiler/2",
                           "headerParams": [],
                           "method": "POST",
                           "queryParams": [],
@@ -239,7 +239,7 @@
                         "api": {
                           "contentType": "application/x-www-form-urlencoded",
                           "data": "service-name=${service_name}",
-                          "endpoint": "http://localhost:30719/control/ghc-stack-profiler/1",
+                          "endpoint": "http://localhost:30179/control/ghc-stack-profiler/1",
                           "headerParams": [],
                           "method": "POST",
                           "queryParams": [],
