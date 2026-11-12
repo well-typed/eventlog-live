@@ -13,6 +13,7 @@ import byteFormatter from "@/util/formatter/byte";
 import { CursorSyncContext } from "../cursorSync/CursorSyncProvider";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
+import { Formatter } from "@/util/formatter";
 
 /**
  * The properies for the plot component.
@@ -128,7 +129,7 @@ export namespace Series {
     Series.Data,
   ]) => number;
 
-  export type Formatter = Pick<uPlot.Series, "value">;
+  export type Formatter = Pick<uPlot.Series, "value" | "values">;
 }
 
 export type Axis = Omit<uPlot.Axis, "stroke"> & {
@@ -147,6 +148,41 @@ export namespace Axis {
  * Get the formatter for a specific unit.
  */
 const getFormatter = (_unit: Unit) => byteFormatter;
+
+/**
+ * Construct a Series.Formatter from a Formatter.
+ */
+const asSeriesFormatter = (formatter: Formatter): Series.Formatter => ({
+  value: (
+    self: uPlot,
+    value: number | null,
+    seriesIdx: number,
+    idx: number | null,
+  ): string => {
+    // If the value is non-null, format it...
+    if (value !== null) return formatter(value);
+
+    // Get the series data...
+    const seriesData = self.data[seriesIdx];
+
+    // If the idx is null, start from the latest idx...
+    if (idx === null) idx = seriesData.length - 1;
+
+    // Format the nearest preceding non-null value...
+    const initTime = self.data[0][idx];
+    for (; idx >= 0; --idx) {
+      const value = seriesData[idx] ?? null;
+
+      // If this idx has a value, format it...
+      if (value !== null) return formatter(value);
+
+      // If this idx is more than 1s older, give up...
+      const currTime = self.data[0][idx];
+      if (initTime - currTime > 1) break;
+    }
+    return "--";
+  },
+});
 
 /**
  * The default series priority, which picks the series with the highest
@@ -219,10 +255,20 @@ export default function Plot<PlotAttrs extends z.Attrs>({
   // The formatters.
   const formatter = unit && getFormatter(unit);
   const seriesFormatter: Series.Formatter = formatter
-    ? {
-        value: (_self, value) => formatter(value),
-      }
+    ? asSeriesFormatter(formatter)
     : {};
+  // ? {
+  //     value: (self, value, seriesIdx) => {
+  //       if (value !== null) {
+  //         // Format the given value...
+  //         return formatter(value);
+  //       } else {
+  //         // Format the latest value...
+  //         return formatter(self.data[seriesIdx].slice(-1)[0] ?? null);
+  //       }
+  //     },
+  //   }
+  // : {};
   const axisFormatter: Axis.Formatter = formatter
     ? {
         size: 75,
