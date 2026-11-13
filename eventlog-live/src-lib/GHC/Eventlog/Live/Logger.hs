@@ -27,12 +27,14 @@ module GHC.Eventlog.Live.Logger (
   handleLogger,
   chanLogger,
   chanSource,
+  lossyChanSource,
 ) where
 
 import Colog.Core.Action (cfilter, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
+import Control.Concurrent.LossyChan qualified as LC
 import Control.Exception (Exception (..), bracket_)
 import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -353,6 +355,13 @@ A `Data.Machine.Souce` that reads the data from a channel.
 chanSource :: (MonadIO m) => Chan a -> SourceT m a
 chanSource chan = repeatedly $ do
   yield =<< liftIO (readChan chan)
+
+{- |
+A `Data.Machine.Souce` that reads the data from a channel.
+-}
+lossyChanSource :: (MonadIO m) => LC.OutChan a -> SourceT m a
+lossyChanSource chan = repeatedly $ do
+  yield =<< liftIO (LC.receive chan)
 
 {- |
 Add the current Unix timestamp in nanoseconds to telemetry data.
