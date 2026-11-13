@@ -11,6 +11,7 @@ where
 
 import Control.Applicative (asum)
 import Control.Concurrent (forkIO, killThread)
+import Control.Concurrent.LossyChan (InChan)
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Char8 qualified as BSC
@@ -18,7 +19,7 @@ import Data.Char (isSpace)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import GHC.Eventlog.Live.App.Server.Control (ControlApi, ControlHooks (..), control, newControlServer, newDisabledControlServer)
+import GHC.Eventlog.Live.App.Server.Control (ControlApi, ControlHooks (..), control, newControlServer, newDisabledControlServer, noopControlHooks)
 import GHC.Eventlog.Live.App.Server.Viewer (ViewerApi, viewerServer, viewerWsServerApp)
 import GHC.Eventlog.Live.Logger (Logger, logDebug, logInfo, logTrace, logWarn)
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -38,7 +39,6 @@ import System.Log.FastLogger (fromLogStr)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 import Web.Browser (openBrowser)
-import Control.Concurrent.LossyChan (InChan)
 
 --------------------------------------------------------------------------------
 -- Server
@@ -49,65 +49,72 @@ data ServerHandle = ServerHandle
   , stop :: IO ()
   }
 
+noopServerHandle :: ServerHandle
+noopServerHandle =
+  ServerHandle
+    { controlHooks = noopControlHooks
+    , stop = pure ()
+    }
+
 startServer ::
   Logger IO ->
   ServerOptions ->
   InChan (Tick ExportRequest) ->
   IO ServerHandle
-startServer logger ServerOptions{..} exportRequestChan = do
-  -- Announce the server
-  logInfo logger $ "Starting server on " <> T.show serverPort.port
+startServer logger ServerOptions{..} exportRequestChan
+  | not viewerEnabled && not controlEnabled =
+      pure noopServerHandle
+  | otherwise = do
+      -- Announce the server
+      logInfo logger $ "Starting server on " <> T.show serverPort.port
 
-  -- Create middleware that logs all incoming requests.
-  requestLogger <- mkLoggerMiddleware logger
+      -- Create middleware that logs all incoming requests.
+      requestLogger <- mkLoggerMiddleware logger
 
-  -- Create CORS resource policy.
-  --
-  -- NOTE: The @wai-cors@ package lets the resource policy depend dynamically
-  -- on the received request. However, it is difficult to expose this freedom
-  -- via command-line arguments.
-  --
-  -- TODO: We might have to manually find the origin in the request, check it
-  -- against the allow-list, and set the @corsOrigins@ field.
-  let !corsResourcePolicy = mkCorsResourcePolicy serverCors
+      -- Create CORS resource policy.
+      --
+      -- NOTE: The @wai-cors@ package lets the resource policy depend dynamically
+      -- on the received request. However, it is difficult to expose this freedom
+      -- via command-line arguments.
+      --
+      -- TODO: We might have to manually find the origin in the request, check it
+      -- against the allow-list, and set the @corsOrigins@ field.
+      let !corsResourcePolicy = mkCorsResourcePolicy serverCors
 
-  -- Create the control server.
-  (controlHooks, controlServer) <-
-    (if controlEnabled then newControlServer else newDisabledControlServer)
-      logger
-      corsResourcePolicy.corsIgnoreFailures
+      -- Create the control server.
+      (controlHooks, controlServer) <-
+        (if controlEnabled then newControlServer else newDisabledControlServer)
+          logger
+          corsResourcePolicy.corsIgnoreFailures
 
-  -- Create the viewer websocket server.
-  let viewerWebsocketOr app
-        | viewerEnabled || viewerOpen =
-            let server = viewerWsServerApp logger exportRequestChan
-                options = defaultConnectionOptions
-             in websocketsOr options server app
-        | otherwise = app
+      -- Create the viewer websocket server.
+      let viewerWebsocketOr app
+            | viewerEnabled || viewerOpen =
+                let server = viewerWsServerApp logger exportRequestChan
+                    options = defaultConnectionOptions
+                 in websocketsOr options server app
+            | otherwise = app
 
-  -- Start the server.
-  --
-  -- TODO: only start server when needed
-  serverThreadId <-
-    forkIO $
-      Warp.run serverPort.port $
-        requestLogger $
-          cors (const $ Just corsResourcePolicy) $
-            viewerWebsocketOr $
-              serve (Proxy @ServerApi) $
-                controlServer :<|> health logger :<|> viewerServer
+      -- Start the server.
+      serverThreadId <-
+        forkIO $
+          Warp.run serverPort.port $
+            requestLogger $
+              cors (const $ Just corsResourcePolicy) $
+                viewerWebsocketOr $
+                  serve (Proxy @ServerApi) $
+                    controlServer :<|> health logger :<|> viewerServer
 
-  -- Announce the viewer and open the browser:
-  let viewerUrl = "http://localhost:" <> show serverPort.port <> "/viewer/"
-  logInfo logger ("Viewer URL:\n  " <> T.pack viewerUrl)
-  when viewerOpen $ do
-    success <- openBrowser viewerUrl
-    unless success $ logWarn logger "Could not open browser."
+      -- Announce the viewer and open the browser:
+      let viewerUrl = "http://localhost:" <> show serverPort.port <> "/viewer/"
+      logInfo logger ("Viewer URL:\n  " <> T.pack viewerUrl)
+      when viewerOpen $ do
+        success <- openBrowser viewerUrl
+        unless success $ logWarn logger "Could not open browser."
 
-  -- Create the stop function.
-  let stop = killThread serverThreadId
-
-  pure ServerHandle{..}
+      -- Create the stop function.
+      let stop = killThread serverThreadId
+      pure ServerHandle{..}
 
 --------------------------------------------------------------------------------
 -- Server API

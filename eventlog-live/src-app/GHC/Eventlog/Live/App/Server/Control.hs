@@ -3,6 +3,7 @@
 
 module GHC.Eventlog.Live.App.Server.Control (
   ControlHooks (..),
+  noopControlHooks,
   ControlApi,
   newControlServer,
   newDisabledControlServer,
@@ -65,6 +66,13 @@ data ControlHooks = ControlHooks
   , notifyEndConnection :: ServiceName -> IO ()
   }
 
+noopControlHooks :: ControlHooks
+noopControlHooks =
+  ControlHooks
+    { notifyNewConnection = \_serviceName _eventlogSourceHandle -> pure ()
+    , notifyEndConnection = \_serviceName -> pure ()
+    }
+
 newControlServer :: Logger IO -> Bool -> IO (ControlHooks, Server ControlApi)
 #ifdef EVENTLOG_LIVE_FEATURE_CONTROL
 newControlServer = newEnabledControlServer
@@ -78,15 +86,8 @@ newControlServer = newDisabledControlServer
 
 newDisabledControlServer :: Logger IO -> Bool -> IO (ControlHooks, Server ControlApi)
 newDisabledControlServer logger corsIgnoreFailures = do
-  pure (api, server)
+  pure (noopControlHooks, server)
  where
-  api :: ControlHooks
-  api =
-    ControlHooks
-      { notifyNewConnection = \_serviceName _eventlogSourceHandle -> pure ()
-      , notifyEndConnection = \_serviceName -> pure ()
-      }
-
   server :: Server ControlApi
   server _namespaceText _commandText = handleCommand :<|> badCORSPreflight
    where
