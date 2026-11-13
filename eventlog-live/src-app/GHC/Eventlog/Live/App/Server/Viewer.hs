@@ -8,10 +8,10 @@ module GHC.Eventlog.Live.App.Server.Viewer (
   viewerWsServerApp,
 ) where
 
-import Control.Concurrent (ThreadId, forkIO, killThread)
+import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.LossyChan qualified as LC
 import Control.Exception (bracket, handle)
-import Control.Monad (forever, void)
+import Control.Monad (void)
 import Data.Aeson qualified as JSON
 import Data.Aeson.Types (KeyValue (..), KeyValueOmit (..), ToJSON, Value (..), pairs)
 import Data.ByteString.Lazy qualified as BSL
@@ -25,7 +25,7 @@ import Data.Word (Word64)
 import GHC.Eventlog.Live.App.Server.Viewer.AlignedData (AlignedData, toAlignedData)
 import GHC.Eventlog.Live.App.Server.Viewer.AlignedData qualified as AD
 import GHC.Eventlog.Live.App.Server.Viewer.Embedded (mkEmbedded)
-import GHC.Eventlog.Live.Logger (Logger, logException, logInfo, logTrace)
+import GHC.Eventlog.Live.Logger (Logger, logException, logInfo, logTrace, logDebug)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope, Resource, toSomeMetrics)
 import GHC.Eventlog.Live.Types.Attribute ((~=))
@@ -68,12 +68,12 @@ viewerWsServerApp ::
   Logger IO -> LC.InChan (Tick ExportRequest) -> WS.ServerApp
 viewerWsServerApp logger exportRequestChan pending = do
   conn <- WS.acceptRequest pending
+  logInfo logger $ "Accepted new viewer connection."
   handle handlePongTimeout $
-    handle handleConnectionException $
-      withMessageDiscarder conn $
-        WS.withPingPong pingPongOptions conn $ \conn' ->
-          LC.out exportRequestChan >>= \chan ->
-            viewer chan conn'
+    withMessageDiscarder logger conn $
+      WS.withPingPong pingPongOptions conn $ \conn' ->
+        LC.out exportRequestChan >>= \chan ->
+          viewer chan conn'
  where
   pingPongOptions :: WS.PingPongOptions
   pingPongOptions = WS.defaultPingPongOptions
@@ -82,26 +82,29 @@ viewerWsServerApp logger exportRequestChan pending = do
   handlePongTimeout WS.PongTimeout =
     logInfo logger $ "Viewer timed out."
 
-  handleConnectionException :: WS.ConnectionException -> IO ()
-  handleConnectionException = \case
-    WS.CloseRequest{} ->
-      logInfo logger $ "Viewer requested to close the connection."
-    WS.ConnectionClosed{} ->
-      logInfo logger $ "Viewer closed the connection."
-    wsErr -> logException logger wsErr
-
   viewer :: LC.OutChan (Tick ExportRequest) -> WS.Connection -> IO ()
   viewer chan conn =
-    forever $
+    handle handleConnectionException viewerLoop
+   where
+    viewerLoop =
       LC.receive chan >>= \case
         Tick ->
-          pure ()
+          viewerLoop
         Item er -> do
           let ver = toViewerExportRequest er
           let verBytes = JSON.encode ver
           let verByteSize = BSL.length verBytes
           logTrace logger $ "Send " <> T.show verByteSize <> " bytes to viewer."
           WS.sendTextData conn verBytes
+          viewerLoop
+
+    handleConnectionException :: WS.ConnectionException -> IO ()
+    handleConnectionException = \case
+      WS.ConnectionClosed{} -> do
+        logInfo logger $ "Viewer closed the connection."
+      _wsErr ->
+        -- NOTE: Using viewerLoop would uninstall the handler.
+        viewer chan conn
 
 {- |
 This function spawns a thread that receives all incoming data messages on
@@ -109,12 +112,26 @@ the websocket connection and discards them. This is needed, because, with the
 current @websockets@ library, the user must call `WS.receiveDataMessage` for
 the library to handle control messages.
 -}
-withMessageDiscarder :: WS.Connection -> IO () -> IO ()
-withMessageDiscarder conn action =
-  bracket (forkMessageDiscarder conn) killThread (const action)
+withMessageDiscarder :: Logger IO -> WS.Connection -> IO () -> IO ()
+withMessageDiscarder logger conn action =
+  bracket (forkIO messageDiscarder) killThread (const action)
  where
-  forkMessageDiscarder :: WS.Connection -> IO ThreadId
-  forkMessageDiscarder = forkIO . forever . void . WS.receiveDataMessage
+  messageDiscarder :: IO ()
+  messageDiscarder = handle handleConnectionException mesageDiscarderLoop
+
+  mesageDiscarderLoop :: IO ()
+  mesageDiscarderLoop = void (WS.receiveDataMessage conn) >> mesageDiscarderLoop
+
+  handleConnectionException :: WS.ConnectionException -> IO ()
+  handleConnectionException = \case
+    WS.CloseRequest{} -> do
+      logInfo logger $ "Viewer requested to close the connection."
+      -- NOTE: Using mesageDiscarderLoop would uninstall the handler.
+      messageDiscarder
+    WS.ConnectionClosed{} ->
+      logDebug logger $ "Viewer closed the connection; stopping message discarder."
+    wsErr ->
+      logException logger wsErr
 
 data ViewerExportRequest = ViewerExportRequest
   { resource :: !Resource
