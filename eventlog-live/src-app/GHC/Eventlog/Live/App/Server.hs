@@ -11,7 +11,6 @@ where
 
 import Control.Applicative (asum)
 import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.Chan (Chan)
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Char8 qualified as BSC
@@ -39,6 +38,7 @@ import System.Log.FastLogger (fromLogStr)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 import Web.Browser (openBrowser)
+import Control.Concurrent.LossyChan (InChan)
 
 --------------------------------------------------------------------------------
 -- Server
@@ -52,7 +52,7 @@ data ServerHandle = ServerHandle
 startServer ::
   Logger IO ->
   ServerOptions ->
-  Chan (Tick ExportRequest) ->
+  InChan (Tick ExportRequest) ->
   IO ServerHandle
 startServer logger ServerOptions{..} exportRequestChan = do
   -- Announce the server

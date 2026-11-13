@@ -9,7 +9,7 @@ module GHC.Eventlog.Live.App.Server.Viewer (
 ) where
 
 import Control.Concurrent (ThreadId, forkIO, killThread)
-import Control.Concurrent.Chan (Chan, dupChan, readChan)
+import Control.Concurrent.LossyChan qualified as LC
 import Control.Exception (bracket, handle)
 import Control.Monad (forever, void)
 import Data.Aeson qualified as JSON
@@ -65,14 +65,14 @@ viewerApp =
 --------------------------------------------------------------------------------
 
 viewerWsServerApp ::
-  Logger IO -> Chan (Tick ExportRequest) -> WS.ServerApp
+  Logger IO -> LC.InChan (Tick ExportRequest) -> WS.ServerApp
 viewerWsServerApp logger exportRequestChan pending = do
   conn <- WS.acceptRequest pending
   handle handlePongTimeout $
     handle handleConnectionException $
       withMessageDiscarder conn $
         WS.withPingPong pingPongOptions conn $ \conn' ->
-          dupChan exportRequestChan >>= \chan ->
+          LC.out exportRequestChan >>= \chan ->
             viewer chan conn'
  where
   pingPongOptions :: WS.PingPongOptions
@@ -90,10 +90,10 @@ viewerWsServerApp logger exportRequestChan pending = do
       logInfo logger $ "Viewer closed the connection."
     wsErr -> logException logger wsErr
 
-  viewer :: Chan (Tick ExportRequest) -> WS.Connection -> IO ()
+  viewer :: LC.OutChan (Tick ExportRequest) -> WS.Connection -> IO ()
   viewer chan conn =
     forever $
-      readChan chan >>= \case
+      LC.receive chan >>= \case
         Tick ->
           pure ()
         Item er -> do
