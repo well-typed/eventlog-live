@@ -1,8 +1,6 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/well-typed/eventlog-live/ci.yml?style=for-the-badge) ![Hackage Version](https://img.shields.io/hackage/v/eventlog-live?style=for-the-badge) ![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=for-the-badge) ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-yellow?style=for-the-badge)
 
-_Real-time monitoring for any Haskell application with little to no instrumentation!_
-
-# ![The Eventlog Live logo. A magnifying glass held over the Haskell logo. Under the lens of the magnifying glass, the Haskell logo is opaque, but outside it fades into translucency.](assets/logo.svg) Eventlog Live
+# ![Eventlog Live](assets/social-preview.svg)
 
 > ⚠️ **Warning:**
 > This package is experimental.
