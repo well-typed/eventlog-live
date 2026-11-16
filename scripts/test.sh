@@ -13,9 +13,9 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 # Include helper functions
 . "${DIR}/functions.sh"
 
-# Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live:exe:eventlog-live-otlp --enable-tests)
-EVENTLOG_LIVE_OTLP_DIR=$(dirname "${EVENTLOG_LIVE_OTLP_BIN}")
+# Build eventlog-live
+EVENTLOG_LIVE_BIN=$(cabal_list_bin eventlog-live:exe:eventlog-live --enable-tests)
+EVENTLOG_LIVE_DIR=$(dirname "${EVENTLOG_LIVE_BIN}")
 
 # Build eventlog-live-tests
 EVENTLOG_LIVE_TESTS_BIN=$(cabal_list_bin eventlog-live-tests:test:eventlog-live-tests --enable-tests --constraint=eventlog-socket-tests+debug)
@@ -35,7 +35,7 @@ if [ -n "${DEBUG+x}" ]; then
 	tee "${ERR_FILE}" <"${ERR_FIFO}" >&2 &
 
 	# Run test suite and log debug information.
-	PATH="${EVENTLOG_LIVE_OTLP_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} -- "$@" >"${OUT_FILE}" 2>"${ERR_FIFO}"
+	PATH="${EVENTLOG_LIVE_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} -- "$@" >"${OUT_FILE}" 2>"${ERR_FIFO}"
 else
-	PATH="${EVENTLOG_LIVE_OTLP_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} -- "$@" 2>"${ERR_FILE}"
+	PATH="${EVENTLOG_LIVE_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} -- "$@" 2>"${ERR_FILE}"
 fi

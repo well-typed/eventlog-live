@@ -598,8 +598,8 @@
         "spec": {
           "name": "service_name",
           "current": {
-            "text": ["eventlog-live-otlp-for-oddball"],
-            "value": ["eventlog-live-otlp-for-oddball"]
+            "text": ["eventlog-live-for-oddball"],
+            "value": ["eventlog-live-for-oddball"]
           },
           "label": "Service Name",
           "hide": "dontHide",

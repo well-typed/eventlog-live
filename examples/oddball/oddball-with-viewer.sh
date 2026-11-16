@@ -22,8 +22,8 @@ export OTEL_TRACES_EXPORTER="none"
 # Build oddball
 ODDBALL_BIN=$(cabal_list_bin oddball --constraint=eventlog-socket+control)
 
-# Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp -f+control)
+# Build eventlog-live
+EVENTLOG_LIVE_BIN=$(cabal_list_bin eventlog-live -f+control)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -33,9 +33,9 @@ trap 'rm -rf "$TMPDIR"' EXIT INT TERM HUP
 ODDBALL_SCREEN_FIFO="$TMPDIR/oddball-screen.fifo"
 mkfifo "$ODDBALL_SCREEN_FIFO" || exit
 
-# Create the screen pipe for eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_SCREEN_FIFO=$TMPDIR/eventlog-live-otlp-screen.fifo
-mkfifo "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO" || exit
+# Create the screen pipe for eventlog-live
+EVENTLOG_LIVE_SCREEN_FIFO=$TMPDIR/eventlog-live-screen.fifo
+mkfifo "$EVENTLOG_LIVE_SCREEN_FIFO" || exit
 
 # Create the command to start oddball
 # shellcheck disable=SC2089
@@ -50,11 +50,11 @@ echo 'Start oddball' && \
 		-RTS
 "
 
-# Create the command to start eventlog-live-otlp
+# Create the command to start eventlog-live
 # shellcheck disable=SC2089
-EVENTLOG_LIVE_OTLP_CMD="
-echo 'Start eventlog-live-otlp (for oddball)' && \
-	${EVENTLOG_LIVE_OTLP_BIN} \
+EVENTLOG_LIVE_CMD="
+echo 'Start eventlog-live (for oddball)' && \
+	${EVENTLOG_LIVE_BIN} \
 		--config='$DIR/eventlog-live.yaml' \
 		--eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hT \
@@ -76,9 +76,9 @@ screen -t 'oddball/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$ODDBAL
 focus down
 split -v
 focus right
-screen -t 'eventlog-live-otlp/stderr' sh -c 'tty > "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO"; read done < "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO"'
+screen -t 'eventlog-live/stderr' sh -c 'tty > "$EVENTLOG_LIVE_SCREEN_FIFO"; read done < "$EVENTLOG_LIVE_SCREEN_FIFO"'
 focus left
-screen -t 'eventlog-live-otlp/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO"; eval "$EVENTLOG_LIVE_OTLP_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_OTLP_FOR_ODDBALL_SCREEN_FIFO"'
+screen -t 'eventlog-live/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_SCREEN_FIFO"; eval "$EVENTLOG_LIVE_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_FOR_ODDBALL_SCREEN_FIFO"'
 EOF
 
 # Start screen
@@ -86,6 +86,6 @@ EOF
 export \
 	ODDBALL_SCREEN_FIFO \
 	ODDBALL_CMD \
-	EVENTLOG_LIVE_OTLP_SCREEN_FIFO \
-	EVENTLOG_LIVE_OTLP_CMD
+	EVENTLOG_LIVE_SCREEN_FIFO \
+	EVENTLOG_LIVE_CMD
 screen -mc "$SCREEN_CONF"

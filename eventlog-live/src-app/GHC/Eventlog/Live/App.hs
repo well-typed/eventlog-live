@@ -3,7 +3,7 @@
 
 {- |
 Module      : GHC.Eventlog.Live.App
-Description : The implementation of @eventlog-live-otlp@.
+Description : The implementation of @eventlog-live@.
 Stability   : experimental
 Portability : portable
 -}
@@ -61,13 +61,13 @@ import System.Exit (die)
 -- Once `cabal2nix` supports Cabal 3.12, this can once again use the value from:
 -- `PackageInfo_eventlog_live.name`.
 appName :: Text
-appName = "eventlog-live-otlp"
+appName = "eventlog-live"
 
 appScope :: InstrumentationScope
 appScope = InstrumentationScope{name = appName, version = App.version}
 
 {- |
-The main function for @eventlog-live-otlp@.
+The main function for @eventlog-live@.
 -}
 main :: IO ()
 main =

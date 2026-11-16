@@ -1,6 +1,6 @@
 # NixOS VM
 
-This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to an older version of the [demo](demo/), which sets up `eventlog-live-otlp`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
+This directory contains a NixOS configuration that builds a QEMU virtual machine corresponding to an older version of the [demo](demo/), which sets up `eventlog-live`, the `oddball` example program, the OpenTelemetry Collector, the Prometheus metric processor and database, the Tempo span processor and database, and Grafana.
 
 ## Building the packages
 
@@ -20,7 +20,7 @@ nix build .#oddball
 ```
 
 The `eventlog-live` and `oddball` packages should build on any supported platform.
-Unfortunately, `eventlog-live-otlp` depends on the `crc32c` package, which does not have Nix derivations for `arm64` architectures.
+Unfortunately, `eventlog-live` depends on the `crc32c` package, which does not have Nix derivations for `arm64` architectures.
 
 > [!NOTE]
 > These Nix commands use the `nix-command` and `flakes` features.
@@ -120,12 +120,12 @@ If any services fail to start, you can check the logs by running the following c
 ```bash
 # Check the service status (from within the VM)
 systemctl status oddball
-systemctl status eventlog-live-otlp
+systemctl status eventlog-live
 systemctl status opentelemetry-collector
 
 # Check the service logs (from within the VM)
 journalctl -u oddball -f
-journalctl -u eventlog-live-otlp -f
+journalctl -u eventlog-live -f
 ```
 
 ## Customization

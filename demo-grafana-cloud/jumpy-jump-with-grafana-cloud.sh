@@ -41,10 +41,10 @@ echo "Build jumpy-jump"
 cabal build jumpy-jump --project-file="${PROJECT_FILE}" --builddir="${BUILDDIR}" -f-use-ghc-stack-profiler --enable-profiling -v0
 JUMPY_JUMP_BIN=$(cabal list-bin exe:jumpy-jump --project-file="${PROJECT_FILE}" --builddir="${BUILDDIR}" -f-use-ghc-stack-profiler --enable-profiling -v0 | head -n1)
 
-# Build eventlog-live-otlp
-echo "Build eventlog-live-otlp"
-cabal build eventlog-live-otlp -v0
-EVENTLOG_LIVE_OTLP_BIN=$(cabal list-bin exe:eventlog-live-otlp -v0 | head -n1)
+# Build eventlog-live
+echo "Build eventlog-live"
+cabal build eventlog-live -v0
+EVENTLOG_LIVE_BIN=$(cabal list-bin exe:eventlog-live -v0 | head -n1)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -64,10 +64,10 @@ ${JUMPY_JUMP_BIN} \
 	-RTS \
 	>/dev/null &
 
-# Start eventlog-live-otlp
-# Create the command to start eventlog-live-otlp
-echo 'Start eventlog-live-otlp (for jumpy-jump)'
-${EVENTLOG_LIVE_OTLP_BIN} \
+# Start eventlog-live
+# Create the command to start eventlog-live
+echo 'Start eventlog-live (for jumpy-jump)'
+${EVENTLOG_LIVE_BIN} \
 	--config="${DIR}/eventlog-live.yaml" \
 	--eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
 	-hT \

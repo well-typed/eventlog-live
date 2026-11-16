@@ -3,7 +3,7 @@
 
 {- |
 Module      : GHC.Debug.Stub.Compat
-Description : The implementation of @eventlog-live-otlp@.
+Description : The implementation of @eventlog-live@.
 Stability   : experimental
 Portability : portable
 -}

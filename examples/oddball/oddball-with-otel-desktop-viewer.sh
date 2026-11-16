@@ -21,8 +21,8 @@ DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 # Build oddball
 ODDBALL_BIN="$(cabal_list_bin oddball)"
 
-# Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp)
+# Build eventlog-live
+EVENTLOG_LIVE_BIN=$(cabal_list_bin eventlog-live)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -46,16 +46,16 @@ trap 'screen -X quit' EXIT INT &&   \
       -RTS
 "
 
-# Create the command to start eventlog-live-otlp
+# Create the command to start eventlog-live
 # shellcheck disable=SC2089
-EVENTLOG_LIVE_OTLP_CMD="
+EVENTLOG_LIVE_CMD="
 trap 'screen -X quit' EXIT INT &&                        \
-  echo 'Start eventlog-live-otlp (for oddball)' &&       \
+  echo 'Start eventlog-live (for oddball)' &&       \
     OTEL_LOG_LEVEL='debug'                               \
     OTEL_SERVICE_NAME='oddball'                          \
     OTEL_EXPORTER_OTLP_PROTOCOL='http/protobuf'          \
     OTEL_EXPORTER_OTLP_ENDPOINT='http://localhost:54318' \
-    ${EVENTLOG_LIVE_OTLP_BIN}                            \
+    ${EVENTLOG_LIVE_BIN}                            \
       --config='${DIR}/eventlog-live.yaml'               \
       --eventlog-file='${ODDBALL_EVENTLOG_FIFO}'         \
       -hT                                                \
@@ -87,7 +87,7 @@ focus right
 focus up
 screen -t 'oddball' sh -c 'eval "${ODDBALL_CMD}"'
 focus down
-screen -t 'eventlog-live-otlp' sh -c 'eval "${EVENTLOG_LIVE_OTLP_CMD}"'
+screen -t 'eventlog-live' sh -c 'eval "${EVENTLOG_LIVE_CMD}"'
 focus left
 EOF
 
@@ -95,6 +95,6 @@ EOF
 # shellcheck disable=SC2090
 export \
 	ODDBALL_CMD \
-	EVENTLOG_LIVE_OTLP_CMD \
+	EVENTLOG_LIVE_CMD \
 	OTEL_DESKTOP_VIEWER_CMD
 screen -mc "$SCREEN_CONF"

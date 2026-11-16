@@ -69,7 +69,7 @@ We'll start by getting the basic version of Evenlog Live working and progressive
 
 For the barebones version, you need three things:
 
-1.  You need Eventlog Live, specifically the `eventlog-live-otlp` executable.
+1.  You need Eventlog Live, specifically the `eventlog-live` executable.
 
     To build Eventlog Live from source, you'll need:
     - GHC version 9.4 up to 9.12 (inclusive).
@@ -79,7 +79,7 @@ For the barebones version, you need three things:
     Run:
 
     ```sh
-    cabal install eventlog-live:eventlog-live-otlp \
+    cabal install eventlog-live:eventlog-live \
       --constraint='blockio +serialblockio'        \
       --constraint='grpc-spec -snappy'
     ```
@@ -141,8 +141,8 @@ your-application                     \
   --eventlog-flush-interval=1        \
   -RTS                               &
 
-# Start eventlog-live-otlp
-eventlog-live-otlp                   \
+# Start eventlog-live
+eventlog-live                   \
   --eventlog-file="${EVENTLOG_PIPE}" \
   -hT                                \
   --eventlog-flush-interval=1
@@ -166,9 +166,9 @@ If you run these commands, you should start seeing telemetry show up on your das
 
   ![A screen capture of the Grafana Logs dashboard for the oddball example program.](assets/oddball-with-pipe-logs-2026-09-21.gif)
 
-  This dashboard will include a separate tab that shows the logs for `eventlog-live-otlp`:
+  This dashboard will include a separate tab that shows the logs for `eventlog-live`:
 
-  ![A screen capture of the Grafana Logs dashboard for the eventlog-live-otlp program for oddball.](assets/eventlog-live-otlp-for-oddball-with-pipe-logs-2026-07-31.png)
+  ![A screen capture of the Grafana Logs dashboard for the eventlog-live program for oddball.](assets/eventlog-live-for-oddball-with-pipe-logs-2026-07-31.png)
 
 Let's briefly discuss what this script does:
 
@@ -290,10 +290,10 @@ To instrument your application with Eventlog Socket, you need to make four small
 
 4.  Build Eventlog Live with support for the control server.
 
-    You must ensure that `eventlog-live-otlp` is built with the `+control` feature flag.
+    You must ensure that `eventlog-live` is built with the `+control` feature flag.
 
     ```sh
-    cabal install eventlog-live:eventlog-live-otlp \
+    cabal install eventlog-live:eventlog-live \
       -f+control                                   \
       --constraint='blockio +serialblockio'        \
       --constraint='grpc-spec -snappy'
@@ -322,8 +322,8 @@ your-application                                \
   --eventlog-flush-interval=1                   \
   -RTS                                          &
 
-# Start eventlog-live-otlp
-eventlog-live-otlp                              \
+# Start eventlog-live
+eventlog-live                              \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   -hT                                           \
   --eventlog-flush-interval=1                   \
@@ -412,8 +412,8 @@ your-application                                \
   --eventlog-flush-interval=1                   \
   -RTS                                          &
 
-# Start eventlog-live-otlp
-eventlog-live-otlp                              \
+# Start eventlog-live
+eventlog-live                              \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   --eventlog-flush-interval=1                   \
   --control                                     \
@@ -506,8 +506,8 @@ your-application                                \
   --eventlog-flush-interval=1                   \
   -RTS                                          &
 
-# Start eventlog-live-otlp
-eventlog-live-otlp                              \
+# Start eventlog-live
+eventlog-live                              \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   -hi                                           \
   --eventlog-flush-interval=1                   \
@@ -547,7 +547,7 @@ To instrument your application with GHC Stack Profiler, you need to make three c
     +     , ghc-stack-profiler ==0.5.0.0
     ```
 
-    > ⚠️ **Warning:** If you're using `ghc-stack-profiler-speedscope`, `eventlog-live-otlp`, or any other program that processes the eventlog produced by `ghc-stack-profiler`, it is important that both are built with the same version of `ghc-stack-profiler-core`.
+    > ⚠️ **Warning:** If you're using `ghc-stack-profiler-speedscope`, `eventlog-live`, or any other program that processes the eventlog produced by `ghc-stack-profiler`, it is important that both are built with the same version of `ghc-stack-profiler-core`.
 
 2.  Instrument your main function:
 
@@ -595,8 +595,8 @@ your-application                                \
   --eventlog-flush-interval=1                   \
   -RTS                                          &
 
-# Start eventlog-live-otlp
-eventlog-live-otlp                              \
+# Start eventlog-live
+eventlog-live                              \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   -hi                                           \
   --eventlog-flush-interval=1                   \
@@ -634,24 +634,24 @@ If your application is instrumented with Eventlog Socket, the Start and Stop but
 
 The telemetry data produced by Eventlog Live can be configured in great detail via configuration files.
 These let you enable/disable each individual telemetry stream and control their aggregation and export intervals.
-The [default configuration](eventlog-live-otlp/data/default.yaml) file contains comments that explain what each option means.
+The [default configuration](eventlog-live/data/default.yaml) file contains comments that explain what each option means.
 To get started, you can write the default configuration to a file using the following command:
 
 ```sh
-eventlog-live-otlp --print-defaults > eventlog-live.yaml
+eventlog-live --print-defaults > eventlog-live.yaml
 ```
 
 To pass a configuration file to Eventlog Lie, use the `--config` flag:
 
 ```sh
-eventlog-live-otlp --config=eventlog-live.yaml ...
+eventlog-live --config=eventlog-live.yaml ...
 ```
 
 For validation and editor support, Eventlog Live ships with a JSON Schema for the configuration file format.
-To print the [JSON Schema](eventlog-live-otlp/data/config.schema.json), run the following command:
+To print the [JSON Schema](eventlog-live/data/config.schema.json), run the following command:
 
 ```sh
-eventlog-live-otlp --print-config-json-schema
+eventlog-live --print-config-json-schema
 ```
 
 > ℹ️ **Tip:**

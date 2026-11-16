@@ -28,7 +28,7 @@ module GHC.Eventlog.Live.Test (
   -- * Running `ProgramTest`
   programTestFor,
 
-  -- * Running @eventlog-live-otlp@
+  -- * Running @eventlog-live@
   EventlogLiveOtlpOptions (extraArgs, extraEnv, maybeConfigBody),
   defaultOptions,
   HasEventlogLiveOtlpInfo,
@@ -276,9 +276,9 @@ defaultOptions =
     }
 
 {- |
-Variant of `GEST.programTestFor` for @eventlog-live-otlp@ tests.
+Variant of `GEST.programTestFor` for @eventlog-live@ tests.
 
-This variant hides the eventlog socket from the continuation and manages the @eventlog-live-otlp@ instance and the OTLP server.
+This variant hides the eventlog socket from the continuation and manages the @eventlog-live@ instance and the OTLP server.
 -}
 programTestFor ::
   (HasLogger) =>
@@ -286,7 +286,7 @@ programTestFor ::
   TestName ->
   -- | The program to test against.
   Program ->
-  -- | The command-line arguments for @eventlog-live-otlp@.
+  -- | The command-line arguments for @eventlog-live@.
   EventlogLiveOtlpOptions ->
   -- | The test assertion.
   ((HasTestInfo, HasProgramInfo, HasOtlpServerInfo, HasEventlogLiveOtlpInfo) => Assertion) ->
@@ -302,16 +302,16 @@ programTestFor testName program eventlogLiveOtlpOptions assertion =
         assertion
 
 --------------------------------------------------------------------------------
--- Running @eventlog-live-otlp@
+-- Running @eventlog-live@
 --------------------------------------------------------------------------------
 
 {- |
-An implicit constraint that requires an @eventlog-live-otlp@ instance.
+An implicit constraint that requires an @eventlog-live@ instance.
 -}
 type HasEventlogLiveOtlpInfo = (?eventlogLiveOtlpInfo :: ProgramInfo)
 
 {- |
-Start an instance of @eventlog-live-otlp@ with the given arguments.
+Start an instance of @eventlog-live@ with the given arguments.
 
 The eventlog socket is automatically configured based on the eventlog socket address in the `ProgramInfo`.
 
@@ -344,10 +344,10 @@ withEventlogLiveOtlp eventlogLiveOtlpOptions action = do
 
   -- Create the temporary configuration file, if needed.
   withTempConfigFile eventlogLiveOtlpOptions.maybeConfigBody $ \configArgs -> do
-    -- Configure the eventlog-live-otlp program.
+    -- Configure the eventlog-live program.
     let args = eventlogLiveOtlpOptions.extraArgs <> eventlogSocketArgs <> configArgs
     let env = eventlogLiveOtlpOptions.extraEnv <> otlpEnv
-    let eventlogLiveOtlpProgram = (findProgram "eventlog-live-otlp"){args = args, env = env}
+    let eventlogLiveOtlpProgram = (findProgram "eventlog-live"){args = args, env = env}
     withProgramResource (programResource eventlogLiveOtlpProgram) $ do
       -- NOTE: By the GHC gods, please let this have the correct semantics.
       let ?eventlogLiveOtlpInfo = ?programInfo
@@ -372,7 +372,7 @@ withTempConfigFile maybeConfigBody action =
 --------------------------------------------------------------------------------
 
 -- NOTE: This type is different from the type with the same name found in
---       eventlog-live-otlp, as the latter still uses `OP.ProfileData`.
+--       eventlog-live, as the latter still uses `OP.ProfileData`.
 --       This should be changed, but requires the refactoring that moves the
 --       profiles machinery into eventlog-live.
 
@@ -497,7 +497,7 @@ withGrpcOtlpServer action = do
 liftProto :: (Monad m) => (a -> m b) -> G.Proto a -> m (G.Proto b)
 liftProto f pa = G.Proto <$> f (G.getProto pa)
 
--- TODO: These instances should be shared with eventlog-live-otlp
+-- TODO: These instances should be shared with eventlog-live
 
 type instance G.RequestMetadata (G.Protobuf OLS.LogsService meth) = G.NoMetadata
 type instance G.ResponseInitialMetadata (G.Protobuf OLS.LogsService meth) = G.NoMetadata
