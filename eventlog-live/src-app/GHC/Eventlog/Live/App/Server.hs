@@ -107,7 +107,7 @@ startServer logger ServerOptions{..} exportRequestChan
 
       -- Announce the viewer and open the browser:
       let viewerUrl = "http://localhost:" <> show serverPort.port <> "/viewer/"
-      logInfo logger ("Viewer URL:\n  " <> T.pack viewerUrl)
+      logInfo logger ("Viewer URL: " <> T.pack viewerUrl)
       when viewerOpen $ do
         success <- openBrowser viewerUrl
         unless success $ logWarn logger "Could not open browser."
