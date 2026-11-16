@@ -2,7 +2,7 @@
 
 _Real-time monitoring for any Haskell application with little to no instrumentation!_
 
-# Eventlog Live
+# ![The Eventlog Live logo. A magnifying glass held over the Haskell logo. Under the lens of the magnifying glass, the Haskell logo is opaque, but outside it fades into translucency.](assets/logo.svg) Eventlog Live
 
 > ⚠️ **Warning:**
 > This package is experimental.
