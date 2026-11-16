@@ -32,12 +32,13 @@ import GHC.Eventlog.Live.Types.Attribute ((~=))
 import GHC.Eventlog.Live.Types.Metrics (KnownMetric (..), Metric, SomeMetrics, getMetrics)
 import GHC.Eventlog.Live.Types.Metrics qualified as M
 import GHC.TypeLits (symbolVal)
+import Network.HTTP.Media (MediaType, (//), (/:))
 import Network.Wai (Application)
 import Network.Wai.Application.Static (staticApp)
 import Network.WebSockets qualified as WS
 import Network.WebSockets.Connection.PingPong qualified as WS (PongTimeout (..))
-import Servant.API (Raw, (:>))
-import Servant.Server (Server, Tagged (..))
+import Servant.API (Accept (..), Header, Headers, NoContent (..), Raw, StdMethod (..), Verb, addHeader, (:<|>) (..), (:>))
+import Servant.Server (Handler, Server, Tagged (..))
 import WaiAppStatic.Storage.Embedded (mkSettings)
 import WaiAppStatic.Types qualified as WAS
 import Prelude hiding (null)
@@ -46,10 +47,13 @@ import Prelude hiding (null)
 -- Viewer App Server
 --------------------------------------------------------------------------------
 
-type ViewerApi = "viewer" :> Raw
+type ViewerApi =
+  ViewerRedirect
+    :<|> "viewer" :> Raw
 
 viewerServer :: Server ViewerApi
-viewerServer = Tagged viewerApp
+viewerServer =
+  viewerRedirectServer :<|> Tagged viewerApp
 
 viewerApp :: Application
 viewerApp =
@@ -59,6 +63,26 @@ viewerApp =
       , WAS.ssRedirectToIndex = True
       , WAS.ssAddTrailingSlash = True
       }
+
+--------------------------------------------------------------------------------
+-- HTML content type
+--------------------------------------------------------------------------------
+
+data HTML
+
+instance Accept HTML where
+  contentType :: Proxy HTML -> MediaType
+  contentType _ = "text" // "html" /: ("charset", "utf-8")
+
+--------------------------------------------------------------------------------
+-- Redirect from index
+--------------------------------------------------------------------------------
+
+type ViewerRedirect =
+  Verb 'GET 302 '[HTML] (Headers '[Header "Location" String] NoContent)
+
+viewerRedirectServer :: Handler (Headers '[Header "Location" String] NoContent)
+viewerRedirectServer = pure $ addHeader "viewer" NoContent
 
 --------------------------------------------------------------------------------
 -- Viewer Websocket Server
