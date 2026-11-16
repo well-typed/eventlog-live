@@ -29,8 +29,7 @@ extra-source-files:
   data/viewer/index.css
   data/viewer/index.html
   data/viewer/index.js
-  data/viewer/index.js.map
-  data/viewer/manifest.json
+  data/viewer/manifest.webmanifest
 
 tested-with:
   ghc ==9.6.7 || ==9.8.4 || ==9.10.3 || ==9.12.4
