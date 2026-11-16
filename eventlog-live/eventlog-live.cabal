@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: eventlog-live
-version: 0.10.0.0
+version: 0.11.0.0
 synopsis: Real-time monitoring for any Haskell application with little to no instrumentation
 description: Real-time monitoring for any Haskell application with little to no instrumentation!
 license: BSD-3-Clause
