@@ -10,6 +10,7 @@ _Real-time monitoring for any Haskell application with little to no instrumentat
 > Breaking changes should be expected and no effort will be made to avoid major version bumps until at least version 1.0.0.0.
 
 Eventlog Live analyses the [eventlog](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html#rts-eventlog) of any Haskell program and streams the resulting telemetry data to any observability platform that supports the OpenTelemetry protocol, such as [Grafana Cloud](https://grafana.com), [HoneyComb](https://www.honeycomb.io/), or [Prometheus](https://prometheus.io/docs/guides/opentelemetry/).
+Eventlog Live also ships with a _local web viewer_, which lets you view your application's telemetry data locally, without the need for an observability platform. See [Eventlog Live – The Local Web Viewer](#eventlog-live--the-local-web-viewer) for details.
 
 The following shows the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-pipe.sh) running with _zero instrumentation_.
 
@@ -44,6 +45,7 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
   - [Eventlog Live with Cost-Centre Stack Profiling](#eventlog-live-with-cost-centre-stack-profiling)
   - [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table)
   - [Eventlog Live with GHC Stack Profiler](#eventlog-live-with-ghc-stack-profiler)
+  - [Eventlog Live — The Local Web Viewer](#eventlog-live-the-local-web-viewer)
 - [Fine-Tuning Eventlog Live](#fine-tuning-eventlog-live)
   - [Configuration Files](#configuration-files)
   - [Restricted Event Classes](#restricted-event-classes)
@@ -80,7 +82,7 @@ For the barebones version, you need three things:
 
     ```sh
     cabal install eventlog-live:eventlog-live \
-      --constraint='blockio +serialblockio'        \
+      --constraint='blockio +serialblockio'   \
       --constraint='grpc-spec -snappy'
     ```
 
@@ -142,7 +144,7 @@ your-application                     \
   -RTS                               &
 
 # Start eventlog-live
-eventlog-live                   \
+eventlog-live                        \
   --eventlog-file="${EVENTLOG_PIPE}" \
   -hT                                \
   --eventlog-flush-interval=1
@@ -323,7 +325,7 @@ your-application                                \
   -RTS                                          &
 
 # Start eventlog-live
-eventlog-live                              \
+eventlog-live                                   \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   -hT                                           \
   --eventlog-flush-interval=1                   \
@@ -413,7 +415,7 @@ your-application                                \
   -RTS                                          &
 
 # Start eventlog-live
-eventlog-live                              \
+eventlog-live                                   \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   --eventlog-flush-interval=1                   \
   --control                                     \
@@ -507,7 +509,7 @@ your-application                                \
   -RTS                                          &
 
 # Start eventlog-live
-eventlog-live                              \
+eventlog-live                                   \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   -hi                                           \
   --eventlog-flush-interval=1                   \
@@ -596,7 +598,7 @@ your-application                                \
   -RTS                                          &
 
 # Start eventlog-live
-eventlog-live                              \
+eventlog-live                                   \
   --eventlog-socket="${GHC_EVENTLOG_UNIX_PATH}" \
   -hi                                           \
   --eventlog-flush-interval=1                   \
@@ -627,6 +629,69 @@ If your application is instrumented with Eventlog Socket, the Start and Stop but
 > ⚠️ **Warning:**
 > Due to a bug in GHC, copying the call-stack may cause a segfault at runtime in applications built with GHC 9.14.1 and older.
 > If you use GHC Stack Profiler in production, you should build your application with GHC 9.14.2 or newer.
+
+### Eventlog Live — The Local Web Viewer
+
+Eventlog Live ships with a _local web viewer_, which lets you monitor and control your application without the need for an observability platform. It uses the same instrumentation as the OpenTelemetry exporter, so this section assumes you have followed the instructions in [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version).
+
+To start monitoring your application, pipe its eventlog to Eventlog Live, and pass `--viewer` to enable the local web viewer:
+
+```sh
+# OpenTelemetry Configuration
+export OTEL_SERVICE_NAME="your-application"
+export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
+
+# Disable OpenTelemetry Exporters
+export OTEL_LOGS_EXPORTER="none"
+export OTEL_METRICS_EXPORTER="none"
+export OTEL_PROFILES_EXPORTER="none"
+export OTEL_TRACES_EXPORTER="none"
+
+# Create a pipe for the eventlog
+EVENTLOG_PIPE="/tmp/eventlog.pipe"
+mkfifo "${EVENTLOG_PIPE}"
+
+# Start your application
+your-application                     \
+  +RTS                               \
+  -l                                 \
+  -ol"${EVENTLOG_PIPE}"              \
+  -hT                                \
+  --eventlog-flush-interval=1        \
+  -RTS                               &
+
+# Start eventlog-live
+eventlog-live                        \
+  --eventlog-file="${EVENTLOG_PIPE}" \
+  -hT                                \
+  --eventlog-flush-interval=1        \
+  --viewer                           \
+  --server-port=30179
+
+# See: examples/oddball/oddball-with-viewer.sh
+```
+
+If you run these commands, you should start seeing telemetry show up in your local web viewer.
+
+- Navigate to the Local Web Viewer at <localhost:30179>.
+
+  You should be greeted by a dashboard that looks something like this:
+
+  ![A screen recording of the local web viewer for the oddball example program.](assets/oddball-with-viewer-2026-11-16.gif)
+
+The local web viewer currently only supports a subset of the telemetry signals. Specifically, it supports the heap profile, heap size, and GC statistics metrics. Support for more telemetry signals is planned for future versions.
+
+If your application is instrumented with Eventlog Socket, and both Eventlog Socket and Eventlog Live were built with the `+control` feature flag, the Start and Stop buttons can be used to enable/disable Heap Profiling and the Census button can be used to request a single heap census.
+
+> ℹ️ **Tip:**
+> You must disable the OpenTelemetry exporter to use the local viewer without exporting to the default OpenTelemetry endpoing. Unfortunately, this is quite verbose, so a simpler method is planned for future versions.
+
+> ⚠️ **Warning:**
+> The local web viewer is intended for local use only. Do not expose it to the public internet.
+
+> ⚠️ **Warning:**
+> The local web viewer is not designed to have a small and limited memory footprint.
+> It keeps all received telemetry data until you close or refresh the browser tab.
 
 ## Fine-Tuning Eventlog Live
 
