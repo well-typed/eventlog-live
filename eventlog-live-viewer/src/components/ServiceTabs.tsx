@@ -117,7 +117,7 @@ type ServiceExportRequests = Record<
   z.ViewerExportRequest | null
 >;
 
-const eventlogLiveServiceNamePrefix = "eventlog-live-otlp-for-";
+const eventlogLiveServiceNamePrefix = "eventlog-live-for-";
 
 interface ServiceTabsProps {}
 

@@ -1,4 +1,4 @@
-Use eventlog-live-otlp to export eventlog telemetry to an OTLP endpoint.
+Use eventlog-live to export eventlog telemetry to an OTLP endpoint.
 
 The following sends your application's eventlog over a named pipe and exports the resulting telemetry to an OTLP gRPC endpoint at "localhost:4317".
 
@@ -19,8 +19,8 @@ The following sends your application's eventlog over a named pipe and exports th
       -hT                                            \
       --eventlog-flush-interval=1
 
-  # Start eventlog-live-otlp
-  eventlog-live-otlp                                 \
+  # Start eventlog-live
+  eventlog-live                                 \
     --eventlog-file="/tmp/your-application.eventlog" \
     -hT                                              \
     --eventlog-flush-interval=1

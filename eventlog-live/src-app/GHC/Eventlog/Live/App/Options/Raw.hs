@@ -2,7 +2,7 @@
 
 {- |
 Module      : GHC.Eventlog.Live.App.Options.Raw
-Description : The implementation of @eventlog-live-otlp@.
+Description : The implementation of @eventlog-live@.
 Stability   : experimental
 Portability : portable
 -}

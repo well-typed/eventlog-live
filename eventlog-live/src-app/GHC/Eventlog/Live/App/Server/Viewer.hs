@@ -25,7 +25,7 @@ import Data.Word (Word64)
 import GHC.Eventlog.Live.App.Server.Viewer.AlignedData (AlignedData, toAlignedData)
 import GHC.Eventlog.Live.App.Server.Viewer.AlignedData qualified as AD
 import GHC.Eventlog.Live.App.Server.Viewer.Embedded (mkEmbedded)
-import GHC.Eventlog.Live.Logger (Logger, logException, logInfo, logTrace, logDebug)
+import GHC.Eventlog.Live.Logger (Logger, logDebug, logException, logInfo, logTrace)
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
 import GHC.Eventlog.Live.Processor (ExportRequest (..), InstrumentationScope, Resource, toSomeMetrics)
 import GHC.Eventlog.Live.Types.Attribute ((~=))

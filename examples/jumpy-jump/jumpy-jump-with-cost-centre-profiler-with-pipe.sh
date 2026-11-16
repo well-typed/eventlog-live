@@ -15,8 +15,8 @@ export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 # Build jumpy-jump
 JUMPY_JUMP_BIN=$(cabal_list_bin jumpy-jump --project-dir="$DIR/../.." --project-file="cabal.profiling.project" -f-use-ghc-stack-profiler --enable-profiling)
 
-# Build eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_BIN=$(cabal_list_bin eventlog-live-otlp)
+# Build eventlog-live
+EVENTLOG_LIVE_BIN=$(cabal_list_bin eventlog-live)
 
 # Create the temporary directory
 TMPDIR=$(mktemp -d) || exit
@@ -30,9 +30,9 @@ mkfifo "${JUMPY_JUMP_EVENTLOG_FIFO}" || exit
 JUMPY_JUMP_SCREEN_FIFO="$TMPDIR/jumpy-jump-screen.fifo"
 mkfifo "$JUMPY_JUMP_SCREEN_FIFO" || exit
 
-# Create the screen pipe for eventlog-live-otlp
-EVENTLOG_LIVE_OTLP_SCREEN_FIFO=$TMPDIR/eventlog-live-otlp-screen.fifo
-mkfifo "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO" || exit
+# Create the screen pipe for eventlog-live
+EVENTLOG_LIVE_SCREEN_FIFO=$TMPDIR/eventlog-live-screen.fifo
+mkfifo "$EVENTLOG_LIVE_SCREEN_FIFO" || exit
 
 # Create the command to start jumpy-jump
 # shellcheck disable=SC2089
@@ -48,11 +48,11 @@ echo 'Start jumpy-jump' && \
 		-RTS
 "
 
-# Create the command to start eventlog-live-otlp
+# Create the command to start eventlog-live
 # shellcheck disable=SC2089
-EVENTLOG_LIVE_OTLP_CMD="
-echo 'Start eventlog-live-otlp (for jumpy-jump)' && \
-	${EVENTLOG_LIVE_OTLP_BIN} \
+EVENTLOG_LIVE_CMD="
+echo 'Start eventlog-live (for jumpy-jump)' && \
+	${EVENTLOG_LIVE_BIN} \
 		--config='$DIR/eventlog-live.yaml' \
 	    --eventlog-file='${JUMPY_JUMP_EVENTLOG_FIFO}' \
 	    -hT
@@ -70,9 +70,9 @@ screen -t 'jumpy-jump/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$JUM
 focus down
 split -v
 focus right
-screen -t 'eventlog-live-otlp/stderr' sh -c 'tty > "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO"; read done < "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO"'
+screen -t 'eventlog-live/stderr' sh -c 'tty > "$EVENTLOG_LIVE_SCREEN_FIFO"; read done < "$EVENTLOG_LIVE_SCREEN_FIFO"'
 focus left
-screen -t 'eventlog-live-otlp/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_OTLP_SCREEN_FIFO"; eval "$EVENTLOG_LIVE_OTLP_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_OTLP_FOR_JUMPY_JUMP_SCREEN_FIFO"'
+screen -t 'eventlog-live/stdout' sh -c 'trap "screen -X quit" INT; read tty < "$EVENTLOG_LIVE_SCREEN_FIFO"; eval "$EVENTLOG_LIVE_CMD" 2> "$tty"; echo "[Command exited with status $?, press enter to exit]"; read prompt; echo done > "$EVENTLOG_LIVE_FOR_JUMPY_JUMP_SCREEN_FIFO"'
 EOF
 
 # Start screen
@@ -80,6 +80,6 @@ EOF
 export \
 	JUMPY_JUMP_SCREEN_FIFO \
 	JUMPY_JUMP_CMD \
-	EVENTLOG_LIVE_OTLP_SCREEN_FIFO \
-	EVENTLOG_LIVE_OTLP_CMD
+	EVENTLOG_LIVE_SCREEN_FIFO \
+	EVENTLOG_LIVE_CMD
 screen -mc "$SCREEN_CONF"
