@@ -1,5 +1,9 @@
 ### 0.11.0.0
 
+- Add support for local viewer with `--viewer`.
+- Add support for `--viewer-open` with `open-browser`.
+- Rename `--control-X` CLI options to `--server-X`, as the server is shared by viewer and control.
+- Rename `eventlog-live-otlp` to `eventlog-live`.
 - Changed "cap", "capability", and "evCap" attributes to "capNo" for consistency.
 
 ### 0.10.0.0
