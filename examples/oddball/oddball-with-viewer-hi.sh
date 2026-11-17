@@ -14,10 +14,6 @@ export GHC_EVENTLOG_WAIT="true"
 export OTEL_LOG_LEVEL="debug"
 export OTEL_SERVICE_NAME="oddball"
 export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
-export OTEL_LOGS_EXPORTER="none"
-export OTEL_METRICS_EXPORTER="none"
-export OTEL_PROFILES_EXPORTER="none"
-export OTEL_TRACES_EXPORTER="none"
 
 # Build oddball
 ODDBALL_BIN=$(cabal_list_bin oddball --project-dir="$DIR/../.." --project-file="cabal.ipe.project" --constraint=eventlog-socket+control)
@@ -59,6 +55,7 @@ echo 'Start eventlog-live (for oddball)' && \
 		--eventlog-socket '$GHC_EVENTLOG_UNIX_PATH' \
 	    -hi \
 		--eventlog-flush-interval=1 \
+		--no-otel-exporter \
 		--viewer \
 		--control \
 		--server-cors-ignore-failure \
