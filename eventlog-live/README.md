@@ -639,12 +639,6 @@ To start monitoring your application, pipe its eventlog to Eventlog Live, and pa
 export OTEL_SERVICE_NAME="your-application"
 export OTEL_RESOURCE_ATTRIBUTES="service.instance.id=$(uuidgen)"
 
-# Disable OpenTelemetry Exporters
-export OTEL_LOGS_EXPORTER="none"
-export OTEL_METRICS_EXPORTER="none"
-export OTEL_PROFILES_EXPORTER="none"
-export OTEL_TRACES_EXPORTER="none"
-
 # Create a pipe for the eventlog
 EVENTLOG_PIPE="/tmp/eventlog.pipe"
 mkfifo "${EVENTLOG_PIPE}"
@@ -663,6 +657,7 @@ eventlog-live                        \
   --eventlog-file="${EVENTLOG_PIPE}" \
   -hT                                \
   --eventlog-flush-interval=1        \
+  --no-otel-exporter                 \
   --viewer                           \
   --server-port=30179
 
@@ -680,9 +675,6 @@ If you run these commands, you should start seeing telemetry show up in your loc
 The local web viewer currently only supports a subset of the telemetry signals. Specifically, it supports the heap profile, heap size, and GC statistics metrics. Support for more telemetry signals is planned for future versions.
 
 If your application is instrumented with Eventlog Socket, and both Eventlog Socket and Eventlog Live were built with the `+control` feature flag, the Start and Stop buttons can be used to enable/disable Heap Profiling and the Census button can be used to request a single heap census.
-
-> ℹ️ **Tip:**
-> You must disable the OpenTelemetry exporter to use the local viewer without exporting to the default OpenTelemetry endpoing. Unfortunately, this is quite verbose, so a simpler method is planned for future versions.
 
 > ⚠️ **Warning:**
 > The local web viewer is intended for local use only. Do not expose it to the public internet.
