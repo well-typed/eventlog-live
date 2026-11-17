@@ -628,7 +628,7 @@ If your application is instrumented with Eventlog Socket, the Start and Stop but
 > Due to a bug in GHC, copying the call-stack may cause a segfault at runtime in applications built with GHC 9.14.1 and older.
 > If you use GHC Stack Profiler in production, you should build your application with GHC 9.14.2 or newer.
 
-### Eventlog Live — The Local Web Viewer
+### Eventlog Live – The Local Web Viewer
 
 Eventlog Live ships with a _local web viewer_, which lets you monitor and control your application without the need for an observability platform. It uses the same instrumentation as the OpenTelemetry exporter, so this section assumes you have followed the instructions in [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version).
 
