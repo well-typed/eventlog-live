@@ -21,6 +21,7 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
 import Data.Default (Default (..))
+import Data.Foldable (for_)
 import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, (~>))
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
@@ -30,7 +31,7 @@ import GHC.Debug.Stub.Compat (withMyGhcDebug)
 import GHC.Eventlog.Live.App.Environment (OpenTelemetrySdkOptions (..), ServiceName (..), lookupLogLevel, lookupOpenTelemetrySdkOptions)
 import GHC.Eventlog.Live.App.Exporter.Otlp (exportToOtlp)
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (withExporters)
-import GHC.Eventlog.Live.App.Options (MyDebugOptions (..), Options (..), options)
+import GHC.Eventlog.Live.App.Options (MyDebugOptions (..), OpenTelemetryOptions (openTelemetryExporter), Options (..), options)
 import GHC.Eventlog.Live.App.Server (ControlHooks (..), ServerHandle (..), startServer)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
@@ -185,31 +186,34 @@ main =
                   ]
               }
 
-      -- Create machine to process eventlog into export requests.
-      let internalTelemetryProcessor =
-            chanSource internalTelemetryQueue
-              ~> processInternalTelemetry fullConfig internalResource appScope
-              -- NOTE: eventlogProcessor writes ticks to the exportRequestInChan,
-              --       and we don't want to duplicate those.
-              ~> dropTick
-              ~> mapping Item
-              ~> sending exportRequestInChan
-
       -- Create thread to process internal telemetry into export requests.
-      internalTelemetryProcessorHandle <- fork $ do
-        runT_ internalTelemetryProcessor
+      let internalTelemetryProcessor =
+            runT_ $
+              chanSource internalTelemetryQueue
+                ~> processInternalTelemetry fullConfig internalResource appScope
+                -- NOTE: eventlogProcessor writes ticks to the exportRequestInChan,
+                --       and we don't want to duplicate those.
+                ~> dropTick
+                ~> mapping Item
+                ~> sending exportRequestInChan
+      internalTelemetryProcessorHandle <-
+        fork internalTelemetryProcessor
 
       -- Create machine to process export requests.
-      exportRequestProcessorHandle <- fork $ do
-        withExporters logger exporterOptions $ \exporters ->
-          runT_ $
-            lossyChanSource exportRequestOutChan
-              ~> exportToOtlp logger fullConfig exporters
+      let otelExporter =
+            withExporters logger exporterOptions $ \exporters ->
+              runT_ $
+                lossyChanSource exportRequestOutChan
+                  ~> exportToOtlp logger fullConfig exporters
+      maybeExportRequestProcessorHandle <-
+        if openTelemetryOptions.openTelemetryExporter
+          then Just <$> fork otelExporter
+          else pure Nothing
 
       -- Wait for these threads to finish, then exit.
       join eventlogProcessorHandle
       join internalTelemetryProcessorHandle
-      join exportRequestProcessorHandle
+      for_ maybeExportRequestProcessorHandle join
       server.stop
 
 -- Log all ticks.
