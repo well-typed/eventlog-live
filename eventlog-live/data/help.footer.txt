@@ -1,5 +1,3 @@
-OpenTelemetry options:
-
   OTEL_LOG_LEVEL                  Log level used by Eventlog Live's internal logger. Defaults to "info".
   OTEL_SERVICE_NAME               Sets the value of the service.name resource attribute.
 
