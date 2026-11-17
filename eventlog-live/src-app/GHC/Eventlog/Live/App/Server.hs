@@ -19,7 +19,8 @@ import Data.Char (isSpace)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import GHC.Eventlog.Live.App.Server.Control (ControlApi, ControlHooks (..), control, newControlServer, newDisabledControlServer, noopControlHooks)
+import GHC.Eventlog.Live.App.Server.Control (ControlApi, ControlHooks (..), newControlServer, newDisabledControlServer, noopControlHooks)
+import GHC.Eventlog.Live.App.Server.Control qualified as CF (control)
 import GHC.Eventlog.Live.App.Server.Viewer (ViewerApi, viewerServer, viewerWsServerApp)
 import GHC.Eventlog.Live.Logger (Logger, logDebug, logInfo, logTrace, logWarn)
 import GHC.Eventlog.Live.Machine.Core (Tick)
@@ -62,7 +63,7 @@ startServer ::
   InChan (Tick ExportRequest) ->
   IO ServerHandle
 startServer logger ServerOptions{..} exportRequestChan
-  | viewerOption == Disabled && not controlEnabled =
+  | viewer == ViewerDisabled && not control =
       pure noopServerHandle
   | otherwise = do
       -- Announce the server
@@ -83,13 +84,13 @@ startServer logger ServerOptions{..} exportRequestChan
 
       -- Create the control server.
       (controlHooks, controlServer) <-
-        (if controlEnabled then newControlServer else newDisabledControlServer)
+        (if control then newControlServer else newDisabledControlServer)
           logger
           corsResourcePolicy.corsIgnoreFailures
 
       -- Create the viewer websocket server.
       let viewerWebsocketOr app
-            | viewerOption >= Enabled =
+            | viewer >= ViewerEnabled =
                 let server = viewerWsServerApp logger exportRequestChan
                     options = defaultConnectionOptions
                  in websocketsOr options server app
@@ -108,7 +109,7 @@ startServer logger ServerOptions{..} exportRequestChan
       -- Announce the viewer and open the browser:
       let viewerUrl = "http://localhost:" <> show serverPort.port <> "/viewer/"
       logInfo logger ("Viewer URL: " <> T.pack viewerUrl)
-      when (viewerOption == EnabledAndOpen) $ do
+      when (viewer == ViewerEnabledAndOpen) $ do
         success <- openBrowser viewerUrl
         unless success $ logWarn logger "Could not open browser."
 
@@ -158,8 +159,8 @@ mkLoggerMiddleware logger =
 --------------------------------------------------------------------------------
 
 data ServerOptions = ServerOptions
-  { viewerOption :: !ViewerOption
-  , controlEnabled :: !Bool
+  { viewer :: !Viewer
+  , control :: !Bool
   , serverPort :: !ServerPort
   , serverCors :: !ServerCors
   }
@@ -168,52 +169,44 @@ serverOptionsParser :: O.Parser ServerOptions
 serverOptionsParser =
   OC.parserOptionGroup "Server options:" $
     ServerOptions
-      <$> viewerOptionParser
-      <*> controlToggleParser
+      <$> viewerParser
+      <*> controlParser
       <*> serverPortParser
       <*> serverCorsParser
 
 --------------------------------------------------------------------------------
 -- Server Enabled
 
-data ViewerOption = Disabled | Enabled | EnabledAndOpen
+data Viewer = ViewerDisabled | ViewerEnabled | ViewerEnabledAndOpen
   deriving (Eq, Ord)
 
-viewerOptionParser :: O.Parser ViewerOption
-viewerOptionParser =
+viewerParser :: O.Parser Viewer
+viewerParser =
   asum
-    [ O.flag'
-        Enabled
-        ( O.long "viewer"
-            <> O.help "Enable the local web viewer."
-        )
-    , O.flag'
-        EnabledAndOpen
-        ( O.long "viewer-open"
-            <> O.help "Enable and open the local web viewer."
-        )
-    , O.flag'
-        Disabled
-        ( O.long "no-viewer"
-            <> O.help "Disable the local web viewer."
-        )
-    , pure Disabled
+    [ O.flag' ViewerEnabled $
+        O.long "viewer"
+          <> O.help "Enable the local web viewer."
+    , O.flag' ViewerEnabledAndOpen $
+        O.long "viewer-open"
+          <> O.help "Enable and open the local web viewer."
+    , O.flag' ViewerDisabled $
+        O.long "no-viewer"
+          <> O.help "Disable the local web viewer. Default."
+    , pure ViewerDisabled
     ]
 
 --------------------------------------------------------------------------------
 -- Server Enabled
 
-controlToggleParser :: O.Parser Bool
-controlToggleParser =
+controlParser :: O.Parser Bool
+controlParser =
   asum
-    [ OF.onlyFor control (O.flag' True) mempty $
+    [ OF.onlyFor CF.control (O.flag' True) mempty $
         O.long "control"
           <> O.help "Enable the control server."
-    , O.flag'
-        False
-        ( O.long "no-control"
-            <> O.help "Disable the control server."
-        )
+    , O.flag' False $
+        O.long "no-control"
+          <> O.help "Disable the control server. Default."
     , pure False
     ]
 

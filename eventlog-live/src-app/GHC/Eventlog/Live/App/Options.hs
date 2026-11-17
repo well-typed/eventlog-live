@@ -1,9 +1,11 @@
 module GHC.Eventlog.Live.App.Options (
   Options (..),
   MyDebugOptions (..),
+  OpenTelemetryOptions (..),
   options,
 ) where
 
+import Control.Applicative (asum)
 import Data.Char (isSpace)
 import Data.Default (Default (..))
 import Data.List qualified as L
@@ -106,6 +108,7 @@ data Options = Options
   , maybeConfigFile :: Maybe FilePath
   , serverOptions :: ServerOptions
   , myDebugOptions :: MyDebugOptions
+  , openTelemetryOptions :: OpenTelemetryOptions
   }
 
 optionsParser :: O.Parser Options
@@ -122,6 +125,7 @@ optionsParser =
     <*> O.optional configFileParser
     <*> serverOptionsParser
     <*> myDebugOptionsParser
+    <*> openTelemetryOptionsParser
 
 --------------------------------------------------------------------------------
 -- Configuration
@@ -195,3 +199,28 @@ myDebugOptionsParser =
     MyDebugOptions
       <$> maybeMyEventlogSocketParser
       <*> maybeMyGhcDebugSocketParser
+
+--------------------------------------------------------------------------------
+-- OpenTelemetry Options
+
+newtype OpenTelemetryOptions = OpenTelemetryOptions
+  { openTelemetryExporter :: Bool
+  }
+
+openTelemetryOptionsParser :: O.Parser OpenTelemetryOptions
+openTelemetryOptionsParser =
+  OC.parserOptionGroup "OpenTelemetry options:" $
+    OpenTelemetryOptions
+      <$> openTelemetryExporterParser
+
+openTelemetryExporterParser :: O.Parser Bool
+openTelemetryExporterParser =
+  asum
+    [ O.flag' True $
+        O.long "otel-exporter"
+          <> O.help "Enable the OpenTelemetry Exporter. Default."
+    , O.flag' False $
+        O.long "no-otel-exporter"
+          <> O.help "Disable the Enable the OpenTelemetry Exporter."
+    , pure True
+    ]
