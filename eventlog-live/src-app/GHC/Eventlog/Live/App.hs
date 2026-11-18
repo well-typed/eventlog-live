@@ -15,7 +15,7 @@ import Control.Concurrent (ThreadId, forkIO)
 import Control.Concurrent.Chan (newChan)
 import Control.Concurrent.LossyChan qualified as LC
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
-import Control.Exception (bracket_)
+import Control.Exception (SomeException, bracket_, catch, finally)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (runExceptT)
@@ -35,7 +35,7 @@ import GHC.Eventlog.Live.App.Options (MyDebugOptions (..), OpenTelemetryOptions 
 import GHC.Eventlog.Live.App.Server (ControlHooks (..), ServerHandle (..), startServer)
 import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Config qualified as C
-import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, chanLogger, chanSource, filterBySeverity, logDebug, logFatal, logMetric, logTick, lossyChanSource, mkStderrLogger)
+import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, chanLogger, chanSource, filterBySeverity, logDebug, logException, logFatal, logInfo, logMetric, logTick, lossyChanSource, mkStderrLogger, withScope)
 import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
@@ -153,28 +153,30 @@ main =
               ~> sending exportRequestInChan
 
       -- Create thread to process eventlog into export requests.
-      eventlogProcessorHandle <- fork $ do
-        DB.withNewSession def $ \session -> do
-          withCostCentreTable maybeCCDBPath session $ \ccdb ->
-            withInfoProvTable maybeIpeDBPath session $ \ipedb ->
-              withEventlogSourceHandle
-                logger
-                eventlogSocketTimeoutS
-                eventlogSocketTimeoutExponent
-                eventlogSourceOptions
-                $ \eventlogSourceHandle -> do
-                  -- Notify the control server of the connection status.
-                  let newConnection = server.controlHooks.notifyNewConnection serviceName eventlogSourceHandle
-                  let endConnection = server.controlHooks.notifyEndConnection serviceName
-                  bracket_ newConnection endConnection $
-                    -- Run the eventlog processor.
-                    runWithEventlogSourceHandle
-                      logger
-                      eventlogSourceHandle
-                      fullConfig.batchIntervalMs
-                      Nothing
-                      maybeEventlogLogFile
-                      (eventlogProcessor ccdb ipedb)
+      eventlogProcessorHandle <-
+        withScope "eventlogProcessor" logger $ \logger' ->
+          fork logger' $ do
+            DB.withNewSession def $ \session -> do
+              withCostCentreTable maybeCCDBPath session $ \ccdb ->
+                withInfoProvTable maybeIpeDBPath session $ \ipedb ->
+                  withEventlogSourceHandle
+                    logger'
+                    eventlogSocketTimeoutS
+                    eventlogSocketTimeoutExponent
+                    eventlogSourceOptions
+                    $ \eventlogSourceHandle -> do
+                      -- Notify the control server of the connection status.
+                      let newConnection = server.controlHooks.notifyNewConnection serviceName eventlogSourceHandle
+                      let endConnection = server.controlHooks.notifyEndConnection serviceName
+                      bracket_ newConnection endConnection $
+                        -- Run the eventlog processor.
+                        runWithEventlogSourceHandle
+                          logger'
+                          eventlogSourceHandle
+                          fullConfig.batchIntervalMs
+                          Nothing
+                          maybeEventlogLogFile
+                          (eventlogProcessor ccdb ipedb)
 
       -- Create a resource to represent the eventlog-live process.
       let internalResource :: Resource
@@ -197,7 +199,8 @@ main =
                 ~> mapping Item
                 ~> sending exportRequestInChan
       internalTelemetryProcessorHandle <-
-        fork internalTelemetryProcessor
+        withScope "internalTelemetryProcessor" logger $ \logger' ->
+          fork logger' internalTelemetryProcessor
 
       -- Create machine to process export requests.
       let otelExporter =
@@ -206,9 +209,10 @@ main =
                 lossyChanSource exportRequestOutChan
                   ~> exportToOtlp logger fullConfig exporters
       maybeExportRequestProcessorHandle <-
-        if openTelemetryOptions.openTelemetryExporter
-          then Just <$> fork otelExporter
-          else pure Nothing
+        withScope "otelExporter" logger $ \logger' ->
+          if openTelemetryOptions.openTelemetryExporter
+            then Just <$> fork logger' otelExporter
+            else pure Nothing
 
       -- Wait for these threads to finish, then exit.
       join eventlogProcessorHandle
@@ -271,12 +275,15 @@ sending chan = repeatedly $ await >>= liftIO . LC.send chan
 
 data ThreadHandle = ThreadHandle {threadId :: ThreadId, finished :: MVar ()}
 
-fork :: IO () -> IO ThreadHandle
-fork action = do
+fork :: Logger IO -> IO () -> IO ThreadHandle
+fork logger action = do
   finished <- newEmptyMVar
   threadId <- forkIO $ do
-    action
-    putMVar finished ()
+    let finish :: IO ()
+        finish = logInfo logger "thread finished" >> putMVar finished ()
+        handler :: SomeException -> IO ()
+        handler = logException logger
+    (action `catch` handler) `finally` finish
   pure ThreadHandle{..}
 
 join :: ThreadHandle -> IO ()
