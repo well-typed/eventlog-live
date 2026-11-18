@@ -78,7 +78,7 @@ import Data.Text qualified as T
 import Data.YAML (FromYAML (..), ToYAML, (.:?), (.=))
 import Data.YAML qualified as YAML
 import GHC.Records (HasField (..))
-import Language.Haskell.TH.Lift.Compat (Lift)
+import Language.Haskell.TH.Lift (Lift)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Read (readEither)
