@@ -9,9 +9,11 @@ Portability : portable
 -}
 module GHC.Eventlog.Live.Logger (
   Logger,
+  Scoped (..),
   InternalTelemetry (..),
   InternalMetric (..),
   ExportResult (..),
+  withScope,
   logMetric,
   logTick,
   logTrace,
@@ -30,7 +32,7 @@ module GHC.Eventlog.Live.Logger (
   lossyChanSource,
 ) where
 
-import Colog.Core.Action (cfilter, (<&))
+import Colog.Core.Action (cfilter, cmap, (<&))
 import Colog.Core.Action qualified as CCA (LogAction (..))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
@@ -66,8 +68,20 @@ import System.Console.ANSI (Color (..), ColorIntensity (..), ConsoleLayer (..), 
 import System.Exit (exitFailure)
 import System.IO qualified as IO
 
-newtype Logger m = Logger {unLogger :: CCA.LogAction m (Tick InternalTelemetry)}
+newtype Logger m = Logger {unLogger :: CCA.LogAction m (Tick (Scoped InternalTelemetry))}
   deriving newtype (Semigroup, Monoid)
+
+{- |
+The type of scoped data.
+-}
+data Scoped a = Scoped {scope :: ![Text], unScope :: !a}
+  deriving stock (Functor, Foldable, Traversable)
+
+{- |
+Construct a value without any scope.
+-}
+noScope :: a -> Scoped a
+noScope = Scoped []
 
 {- |
 The type of internal telemetry data.
@@ -114,7 +128,19 @@ writeLog logger severity message =
       , attrs = maybe mempty (\cs -> ["call-stack" ~= prettyCallStack cs]) (cleanCallStack callStack)
       }
  where
-  writeLogRecord = (logger.unLogger <&) . Item . InternalTelemetry'LogRecord
+  writeLogRecord = (logger.unLogger <&) . Item . noScope . InternalTelemetry'LogRecord
+
+{- |
+Use a `Logger` at a particular scope.
+-}
+withScope :: Text -> Logger m -> (Logger m -> m a) -> m a
+withScope scope logger action = action (addScope scope logger)
+
+{- |
+Create a `Logger` for a particular scope.
+-}
+addScope :: Text -> Logger m -> Logger m
+addScope scope (Logger logger) = Logger (cmap (fmap (\(Scoped scopes a) -> Scoped (scope : scopes) a)) logger)
 
 {- |
 Use a `Logger` to log an internal metric.
@@ -129,7 +155,7 @@ logMetric logger internalMetric value =
       , attrs = mempty
       }
  where
-  writeMetric = (logger.unLogger <&) . Item . InternalTelemetry'Metric internalMetric
+  writeMetric = (logger.unLogger <&) . Item . noScope . InternalTelemetry'Metric internalMetric
 
 {- |
 Internal helper.
@@ -210,16 +236,16 @@ mkStderrLogger = do
 
   -- Create a thread that prints log records from the chan
   _threadId <- forkIO $ forever $ do
-    logRecord <- readChan chan
-    withSeverityColor logRecord.maybeSeverity IO.stderr $ \handleWithColor ->
-      TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
+    scopedLogRecord <- readChan chan
+    withSeverityColor scopedLogRecord.unScope.maybeSeverity IO.stderr $ \handleWithColor ->
+      TIO.hPutStrLn handleWithColor $ formatScopedLogRecord scopedLogRecord
     IO.hFlush IO.stderr
 
   -- Create a log action that writes log records to the chan
   pure . Logger . CCA.LogAction $ \case
     Tick -> pure ()
-    Item (toLogRecord -> logRecord) -> liftIO $ do
-      writeChan chan logRecord
+    Item (Scoped scope (toLogRecord -> logRecord)) -> liftIO $ do
+      writeChan chan (Scoped scope logRecord)
 
 {- |
 A `Logger` that writes each `LogRecord` to a `IO.Handle` and ignores all other telemetry data.
@@ -232,9 +258,9 @@ handleLogger ::
 handleLogger handle = Logger . CCA.LogAction $ \case
   Tick ->
     pure ()
-  Item (toLogRecord -> logRecord) -> liftIO $ do
+  Item (Scoped scope (toLogRecord -> logRecord)) -> liftIO $ do
     withSeverityColor logRecord.maybeSeverity handle $ \handleWithColor ->
-      TIO.hPutStrLn handleWithColor $ formatLogRecord logRecord
+      TIO.hPutStrLn handleWithColor $ formatScopedLogRecord (Scoped scope logRecord)
     IO.hFlush handle
 
 {- |
@@ -286,7 +312,7 @@ filterBySeverity severityThreshold =
   Logger . cfilter severityFilter . (.unLogger)
  where
   severityFilter = \case
-    Item (InternalTelemetry'LogRecord logRecord) ->
+    Item (Scoped _scope (InternalTelemetry'LogRecord logRecord)) ->
       maybe False (>= severityThreshold) logRecord.maybeSeverity
     _otherwise -> True
 
@@ -294,11 +320,13 @@ filterBySeverity severityThreshold =
 Internal helper.
 Format the message appropriately for the given verbosity level and threshold.
 -}
-formatLogRecord :: LogRecord -> Text
-formatLogRecord logRecord =
+formatScopedLogRecord :: Scoped LogRecord -> Text
+formatScopedLogRecord (Scoped scope logRecord) =
   TL.toStrict . TLB.toLazyText . mconcat $
     [ -- format the severity
       maybe "" (\severity -> "[" <> TLB.fromString (toSeverityString severity) <> "] ") logRecord.maybeSeverity
+    , -- format the scope
+      if null scope then "" else "(" <> TLB.fromText (T.intercalate "." scope) <> ") "
     , -- format the body
       TLB.fromText logRecord.value
     , -- format the call-stack, if any
@@ -343,10 +371,10 @@ withSeverityColor maybeSeverity handle action = do
 {- |
 A `Logger` that writes the internal telemetry data to a channel.
 -}
-chanLogger :: Chan (Tick InternalTelemetry) -> Logger IO
+chanLogger :: Chan (Tick (Scoped InternalTelemetry)) -> Logger IO
 chanLogger chan =
   Logger . CCA.LogAction $ \x -> do
-    traverse addTimeUnixNano x >>= \x' ->
+    traverse (traverse addTimeUnixNano) x >>= \x' ->
       writeChan chan x'
 
 {- |

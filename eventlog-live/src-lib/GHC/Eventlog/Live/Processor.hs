@@ -22,7 +22,7 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Version (Version)
 import GHC.Eventlog.Live.Config (FullConfig (..))
-import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), InternalTelemetry (..), Logger)
+import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), InternalTelemetry (..), Logger, Scoped (..))
 import GHC.Eventlog.Live.Machine.Core (Tick, deltaToCumulative)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime)
@@ -156,40 +156,41 @@ processInternalTelemetry ::
   FullConfig ->
   Resource ->
   InstrumentationScope ->
-  ProcessT IO (Tick InternalTelemetry) (Tick ExportRequest)
+  ProcessT IO (Tick (Scoped InternalTelemetry)) (Tick ExportRequest)
 processInternalTelemetry fullConfig resource scope =
-  M.fanoutTick
-    [ -- Process internal log messages.
-      CL.process (Proxy @"internalLogMessage") processLogRecords fullConfig
-        ~> M.liftTick (mapping $ D.singleton . Telemetry'Logs)
-    , -- Process internal metrics.
-      M.fanoutTick
-        [ -- Process internal event counts.
-          CM.process (Proxy @"internalEventCount") processEventCount fullConfig
-            ~> M.liftTick (mapping D.singleton)
-        , -- Process internal exported log counts.
-          CM.processAllWith fullConfig processExportLogs $
-            select (Proxy @"internalExportedLogs") (.exported)
-              :&: select (Proxy @"internalRejectedLogs") (.rejected)
-              :&: End
-        , -- Process internal exported metric counts.
-          CM.processAllWith fullConfig processExportMetrics $
-            select (Proxy @"internalExportedMetrics") (.exported)
-              :&: select (Proxy @"internalRejectedMetrics") (.rejected)
-              :&: End
-        , -- Process internal exported sample counts.
-          CM.processAllWith fullConfig processExportSamples $
-            select (Proxy @"internalExportedSamples") (.exported)
-              :&: select (Proxy @"internalRejectedSamples") (.rejected)
-              :&: End
-        , -- Process internal exported span counts.
-          CM.processAllWith fullConfig processExportSpans $
-            select (Proxy @"internalExportedSpans") (.exported)
-              :&: select (Proxy @"internalRejectedSpans") (.rejected)
-              :&: End
-        ]
-        ~> M.liftTick (mapping (fmap Telemetry'Metrics))
-    ]
+  mapping (fmap (.unScope))
+    ~> M.fanoutTick
+      [ -- Process internal log messages.
+        CL.process (Proxy @"internalLogMessage") processLogRecords fullConfig
+          ~> M.liftTick (mapping $ D.singleton . Telemetry'Logs)
+      , -- Process internal metrics.
+        M.fanoutTick
+          [ -- Process internal event counts.
+            CM.process (Proxy @"internalEventCount") processEventCount fullConfig
+              ~> M.liftTick (mapping D.singleton)
+          , -- Process internal exported log counts.
+            CM.processAllWith fullConfig processExportLogs $
+              select (Proxy @"internalExportedLogs") (.exported)
+                :&: select (Proxy @"internalRejectedLogs") (.rejected)
+                :&: End
+          , -- Process internal exported metric counts.
+            CM.processAllWith fullConfig processExportMetrics $
+              select (Proxy @"internalExportedMetrics") (.exported)
+                :&: select (Proxy @"internalRejectedMetrics") (.rejected)
+                :&: End
+          , -- Process internal exported sample counts.
+            CM.processAllWith fullConfig processExportSamples $
+              select (Proxy @"internalExportedSamples") (.exported)
+                :&: select (Proxy @"internalRejectedSamples") (.rejected)
+                :&: End
+          , -- Process internal exported span counts.
+            CM.processAllWith fullConfig processExportSpans $
+              select (Proxy @"internalExportedSpans") (.exported)
+                :&: select (Proxy @"internalRejectedSpans") (.rejected)
+                :&: End
+          ]
+          ~> M.liftTick (mapping (fmap Telemetry'Metrics))
+      ]
     ~> M.liftTick (mapping $ ExportRequest resource scope . D.toList)
  where
   processLogRecords =
