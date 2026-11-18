@@ -87,14 +87,6 @@ flag use-ghc-stack-profiler
   default: False
   manual: True
 
--- 2025-11-06:
--- This flag should enable switching between template-haskell and
--- template-haskell-lift, because the latter is not on nixpkgs.
-flag use-template-haskell-lift
-  description: Use template-haskell-lift in place of template-haskell
-  default: False
-  manual: False
-
 common language
   ghc-options:
     -Wall
@@ -215,6 +207,7 @@ library
     network >=3.2.7 && <3.3,
     optparse-applicative >=0.17 && <0.20,
     random >=1.2 && <1.4,
+    template-haskell-lift >=0.1 && <0.2,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
@@ -236,18 +229,6 @@ library
 
   other-modules:
     Data.Traversable.Compat
-
-  -- 2025-11-06:
-  -- This configures the build requirements for using either template-haskell
-  -- or template-haskell-lift.
-  if flag(use-template-haskell-lift)
-    build-depends: template-haskell-lift >=0.1 && <0.2
-    cpp-options: -DEVENTLOG_LIVE_USE_TEMPLATE_HASKELL_LIFT
-  else
-    build-depends: template-haskell >=2.2 && <3
-
-  other-modules:
-    Language.Haskell.TH.Lift.Compat
 
 executable eventlog-live
   import: language
@@ -326,6 +307,7 @@ executable eventlog-live
     proto-lens >=0.7.1 && <0.8,
     servant >=0.20 && <0.21,
     servant-server >=0.20 && <0.21,
+    template-haskell-lift >=0.1 && <0.2,
     text >=1.2 && <2.2,
     transformers >=0.2 && <0.7,
     unordered-containers >=0.2.20 && <0.3,
@@ -368,18 +350,3 @@ executable eventlog-live
     build-depends: template-haskell
     hs-source-dirs: vendor/hs-opentelemetry-api-1.0.0.0/src
     other-modules: OpenTelemetry.Baggage
-
-  hs-source-dirs:
-    src-compat
-
-  -- 2025-11-06:
-  -- This configures the build requirements for using either template-haskell
-  -- or template-haskell-lift.
-  if flag(use-template-haskell-lift)
-    build-depends: template-haskell-lift >=0.1 && <0.2
-    cpp-options: -DEVENTLOG_LIVE_USE_TEMPLATE_HASKELL_LIFT
-  else
-    build-depends: template-haskell >=2.2 && <3
-
-  other-modules:
-    Language.Haskell.TH.Lift.Compat

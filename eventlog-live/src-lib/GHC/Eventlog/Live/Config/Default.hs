@@ -25,7 +25,7 @@ import GHC.Eventlog.Live.Config.Default.Raw (decodeThrow, defaultConfigByteStrin
 import GHC.Eventlog.Live.Config.Types (Config)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
-import Language.Haskell.TH.Lift.Compat (Exp, Lift (..), Q)
+import Language.Haskell.TH.Lift (Exp, Lift (..), Q)
 
 {- |
 Internal helper.

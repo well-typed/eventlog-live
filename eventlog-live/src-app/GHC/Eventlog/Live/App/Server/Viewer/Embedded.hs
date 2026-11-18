@@ -9,7 +9,7 @@ import Data.ByteString.Base64 qualified as B64B
 import Data.ByteString.Lazy qualified as BSL
 import Data.FileEmbed (makeRelativeToProject)
 import Data.Text qualified as T
-import Language.Haskell.TH.Lift.Compat (Lift (..))
+import Language.Haskell.TH.Lift (Lift (..))
 import WaiAppStatic.Storage.Embedded (EmbeddableEntry (..))
 
 --------------------------------------------------------------------------------
