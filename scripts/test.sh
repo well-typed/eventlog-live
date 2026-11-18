@@ -35,7 +35,7 @@ if [ -n "${DEBUG+x}" ]; then
 	tee "${ERR_FILE}" <"${ERR_FIFO}" >&2 &
 
 	# Run test suite and log debug information.
-	PATH="${EVENTLOG_LIVE_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} -- "$@" >"${OUT_FILE}" 2>"${ERR_FIFO}"
+	PATH="${EVENTLOG_LIVE_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} "$@" >"${OUT_FILE}" 2>"${ERR_FIFO}"
 else
-	PATH="${EVENTLOG_LIVE_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} -- "$@" 2>"${ERR_FILE}"
+	PATH="${EVENTLOG_LIVE_DIR}:${PATH}" ${EVENTLOG_LIVE_TESTS_BIN} "$@" 2>"${ERR_FILE}"
 fi
