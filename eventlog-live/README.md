@@ -1,6 +1,6 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/well-typed/eventlog-live/ci.yml?style=for-the-badge) ![Hackage Version](https://img.shields.io/hackage/v/eventlog-live?style=for-the-badge) ![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=for-the-badge) ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-yellow?style=for-the-badge)
 
-# ![Eventlog Live](assets/social-preview.svg)
+# ![Eventlog Live](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/social-preview.svg?raw=true)
 
 > ⚠️ **Warning:**
 > This package is experimental.
@@ -10,9 +10,9 @@
 Eventlog Live analyses the [eventlog](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html#rts-eventlog) of any Haskell program and streams the resulting telemetry data to any observability platform that supports the OpenTelemetry protocol, such as [Grafana Cloud](https://grafana.com), [HoneyComb](https://www.honeycomb.io/), or [Prometheus](https://prometheus.io/docs/guides/opentelemetry/).
 Eventlog Live also ships with a _local web viewer_, which lets you view your application's telemetry data locally, without the need for an observability platform. See [Eventlog Live – The Local Web Viewer](#eventlog-live--the-local-web-viewer) for details.
 
-The following shows the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-pipe.sh) running with _zero instrumentation_.
+The following shows the Grafana Heap Profiles dashboard for [`oddball`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/examples/oddball/oddball-with-pipe.sh) running with _zero instrumentation_.
 
-![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe-2026-09-21.gif)
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-with-pipe-2026-09-21.gif?raw=true)
 
 Eventlog Live is designed to be _lightweight_, running alongside your application using only in a few megabytes of memory, and _highly configurable_, so that you only send the telemetry data you are interested in. While Eventlog Live works with zero instrumentation, it has support for several Haskell profiling packages that can enable new features.
 
@@ -20,9 +20,9 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
   The [`eventlog-socket`](https://github.com/well-typed/eventlog-socket) package adds two features. First, it lets you to stream the eventlog over Unix domain and TCP/IP sockets. Secondly, it lets you control your program from the observability dashboard. The `eventlog-socket` instrumentation has builtin support that lets you toggle RTS features such as heap and stack profiling at runtime, but its control protocol has an easy-to-use plugin mechanism that lets you integrate other actions into your telemetry platform.
 
-  The following shows dynamic control of heap profiling from the Grafana Heap Profiles dashboard for [`oddball`](examples/oddball/oddball-with-hT.sh) instrumented with `eventlog-socket`. When the _Stop_ button is pressed, the heap profiling is stopped, and the heap profile flatlines. When the _Start_ button is pressed, heap profiling is restarted.
+  The following shows dynamic control of heap profiling from the Grafana Heap Profiles dashboard for [`oddball`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/examples/oddball/oddball-with-hT.sh) instrumented with `eventlog-socket`. When the _Stop_ button is pressed, the heap profiling is stopped, and the heap profile flatlines. When the _Start_ button is pressed, heap profiling is restarted.
 
-  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control-2026-09-21.gif)
+  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-control-2026-09-21.gif?raw=true)
 
 - **GHC Stack Profiler – Lightweight Call-Stack Profiles**
 
@@ -30,9 +30,9 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
   The lightweight call-stack sampler has an approximate 5-10% overhead while running with a sampling interval of 10ms, whereas [GHC's builtin cost-centre profiling](https/downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#time-and-allocation-profiling) has an approximate 50% overhead for the instrumentation alone, i.e., prior to any cost-centres and without sampling.
 
-  The following shows the Grafana Call-Stack Profiles dashboard for [`jumpy-jump`](examples/jumpy-jump/jumpy-jump-with-ghc-stack-profiler.sh) instrumented with `ghc-stack-profiler`.
+  The following shows the Grafana Call-Stack Profiles dashboard for [`jumpy-jump`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/examples/jumpy-jump/jumpy-jump-with-ghc-stack-profiler.sh) instrumented with `ghc-stack-profiler`.
 
-  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif)
+  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif?raw=true)
 
 ## Table of Contents
 
@@ -51,13 +51,13 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
 ## Demos
 
-The [`demo`](demo/) directory contains a [Docker Compose](https://docs.docker.com/compose/) configuration that runs Grafana and all required data sources and opens an OTLP gRPC receiver on port 4317. This configuration is used in [Getting Started](#getting-started) and by the various scripts under the [`examples`](examples/) directory.
-You can import the dashboards under [`demo/config/grafana-dashboards`](demo/config/grafana-dashboards/) into your Grafana setup, but beware that you'll have to change the variables and visualisations to use your data sources and change the buttons to use your control server.
-The dashboards under [`demo-grafana-cloud`](demo-grafana-cloud/grafana-dashboards/) were prepared to be shared with other Grafana instances.
+The [`demo`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/demo/) directory contains a [Docker Compose](https://docs.docker.com/compose/) configuration that runs Grafana and all required data sources and opens an OTLP gRPC receiver on port 4317. This configuration is used in [Getting Started](#getting-started) and by the various scripts under the [`examples`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/examples/) directory.
+You can import the dashboards under [`demo/config/grafana-dashboards`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/demo/config/grafana-dashboards/) into your Grafana setup, but beware that you'll have to change the variables and visualisations to use your data sources and change the buttons to use your control server.
+The dashboards under [`demo-grafana-cloud`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/demo-grafana-cloud/grafana-dashboards/) were prepared to be shared with other Grafana instances.
 
-The [`demo-grafana-cloud`](demo-grafana-cloud/) directory contains an example that runs `jumpy-jump` and Eventlog Live, and sends data directory to Grafana Cloud. This demo shows heap profiles, logs, and cost-centre stack profiles.
+The [`demo-grafana-cloud`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/demo-grafana-cloud/) directory contains an example that runs `jumpy-jump` and Eventlog Live, and sends data directory to Grafana Cloud. This demo shows heap profiles, logs, and cost-centre stack profiles.
 
-The [`demo-nix`](demo-nix/) directory contains a [Nix](https://nixos.org) configuration that builds a self-contained virtual machine that runs `oddball`, Eventlog Live, Grafana, and Prometheus. This demo shows heap profiles.
+The [`demo-nix`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/demo-nix/) directory contains a [Nix](https://nixos.org) configuration that builds a self-contained virtual machine that runs `oddball`, Eventlog Live, Grafana, and Prometheus. This demo shows heap profiles.
 
 ## Getting Started
 
@@ -90,7 +90,7 @@ For the barebones version, you need three things:
 
 2.  You must have _somewhere_ to send the telemetry data.
 
-    Any observability platform that supports OpenTelemetry works. The [demo-grafana-cloud](demo-grafana-cloud/) has a guide for setting up [Grafana Cloud](https://grafana.com).
+    Any observability platform that supports OpenTelemetry works. The [demo-grafana-cloud](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/demo-grafana-cloud/) has a guide for setting up [Grafana Cloud](https://grafana.com).
     For the purposes of this guide, you can run the following [Docker Compose](https://docs.docker.com/compose/) from the root of the repository.
 
     ```sh
@@ -158,17 +158,17 @@ If you run these commands, you should start seeing telemetry show up on your das
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](assets/oddball-with-pipe-2026-09-21.gif)
+  ![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-with-pipe-2026-09-21.gif?raw=true)
 
 - Select '☰ > Dashboards > Logs'
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen capture of the Grafana Logs dashboard for the oddball example program.](assets/oddball-with-pipe-logs-2026-09-21.gif)
+  ![A screen capture of the Grafana Logs dashboard for the oddball example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-with-pipe-logs-2026-09-21.gif?raw=true)
 
   This dashboard will include a separate tab that shows the logs for `eventlog-live`:
 
-  ![A screen capture of the Grafana Logs dashboard for the eventlog-live program for oddball.](assets/eventlog-live-for-oddball-with-pipe-logs-2026-07-31.png)
+  ![A screen capture of the Grafana Logs dashboard for the eventlog-live program for oddball.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/eventlog-live-otlp-for-oddball-with-pipe-logs-2026-07-31.png?raw=true)
 
 Let's briefly discuss what this script does:
 
@@ -336,7 +336,7 @@ eventlog-live                                   \
 
 If you run these commands, you should be greeted by a dashboard that looks something like this:
 
-![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](assets/oddball-control-2026-09-21.gif)
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program that shows dynamic control of heap profiling.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-control-2026-09-21.gif?raw=true)
 
 The Start and Stop buttons can now be used to enable/disable Heap Profiling and the Census button can now be used to request a single heap census.
 
@@ -431,7 +431,7 @@ If you run these commands, you should start seeing profiles show up on your dash
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen capture of the Grafana Cost-Centre Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-cost-centre-profiler-2026-09-21.gif)
+  ![A screen capture of the Grafana Cost-Centre Stack Profiles dashboard for the jumpy-jump example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/jumpy-jump-with-cost-centre-profiler-2026-09-21.gif?raw=true)
 
 If your application is instrumented with Eventlog Socket, the Start and Stop buttons should enable/disable cost-centre stack profiling.
 
@@ -520,7 +520,7 @@ eventlog-live                                   \
 
 If you run these commands, you should be greeted by a dashboard that looks something like this:
 
-![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program using Heap Profiling by Info Table.](assets/oddball-with-hi-2026-09-21.gif)
+![A screen recording of the Grafana Heap Profiles dashboard for the oddball example program using Heap Profiling by Info Table.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-with-hi-2026-09-21.gif?raw=true)
 
 Notably, your Heap Profile should show Info Table information. If you ran Heap Profiles with different breakdowns, you can select the appropriate breakdown in the Heap Profile Breakdown dropdown menu.
 
@@ -615,7 +615,7 @@ If you run these commands, you should start seeing profiles show up on your dash
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif)
+  ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif?raw=true)
 
 If your application is instrumented with Eventlog Socket, the Start and Stop buttons should enable/disable call-stack profiling.
 
@@ -670,7 +670,7 @@ If you run these commands, you should start seeing telemetry show up in your loc
 
   You should be greeted by a dashboard that looks something like this:
 
-  ![A screen recording of the local web viewer for the oddball example program.](assets/oddball-with-viewer-2026-11-16.gif)
+  ![A screen recording of the local web viewer for the oddball example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/oddball-with-viewer-2026-11-16.gif?raw=true)
 
 The local web viewer currently only supports a subset of the telemetry signals. Specifically, it supports the heap profile, heap size, and GC statistics metrics. Support for more telemetry signals is planned for future versions.
 
