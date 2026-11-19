@@ -43,5 +43,5 @@ final: prev: with haskell.lib.compose; {
   tasty-quickcheck = doJailbreak prev.tasty-quickcheck;
   tar = prev.callHackage "tar" "0.7.2.0" { };
   tls = prev.callHackage "tls" "2.1.4" { };
-  lossy-chan = prev.callHackage "lossy-chan" "0.1.1.0" { };
+  lossy-chan = prev.callHackage "lossy-chan" "0.2.0.0" { };
 }
