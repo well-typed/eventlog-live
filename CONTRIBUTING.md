@@ -3,7 +3,7 @@
 ## Publishing a release for `eventlog-live`
 
 1.  Ensure that the current HEAD is ready to be published:
-    - The latest viewer code is distributed with `eventlog-live`. To update the viewer, run `npm run build:export` in `eventlog-live-viewer/`.
+    - The latest viewer code is distributed with `eventlog-live`. To update the viewer, run `npm run export` in `eventlog-live-viewer/`.
     - The version number is updated in all relevant places. This includes at least `eventlog-live/eventlog-live.cabal` and `eventlog-live/CHANGELOG.md`. This includes the `source-repository this` declaration in `eventlog-live/eventlog-live.cabal`, which should refer to the Git tag that you will create in step (2).
     - The Haddock documentation builds without warnings and renders without errors.
     - The tests pass on CI.
