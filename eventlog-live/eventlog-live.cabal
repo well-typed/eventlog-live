@@ -42,7 +42,7 @@ source-repository head
 source-repository this
   type: git
   location: https://github.com/well-typed/eventlog-live.git
-  tag: eventlog-live-v0.10.0.0
+  tag: eventlog-live-v0.11.0.0
   subdir: eventlog-live
 
 -- This flag enables the control command server, which is an HTTP endpoint
