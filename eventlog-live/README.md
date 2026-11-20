@@ -1,9 +1,11 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/well-typed/eventlog-live/ci.yml?style=for-the-badge) ![Hackage Version](https://img.shields.io/hackage/v/eventlog-live?style=for-the-badge) ![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=for-the-badge) ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-yellow?style=for-the-badge)
 
-# ![Eventlog Live](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/social-preview.svg?raw=true)
+![Eventlog Live](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/social-preview.svg?raw=true)
+
+---
 
 > ⚠️ **Warning:**
-> This package is experimental.
+> This package is under active development.
 > It is versioned according to the [PVP](https://pvp.haskell.org).
 > Breaking changes should be expected and no effort will be made to avoid major version bumps until at least version 1.0.0.0.
 
@@ -36,6 +38,7 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [Demos](#demos)
 - [Getting Started](#getting-started)
   - [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version)
@@ -43,7 +46,7 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
   - [Eventlog Live with Cost-Centre Stack Profiling](#eventlog-live-with-cost-centre-stack-profiling)
   - [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table)
   - [Eventlog Live with GHC Stack Profiler](#eventlog-live-with-ghc-stack-profiler)
-  - [Eventlog Live — The Local Web Viewer](#eventlog-live-the-local-web-viewer)
+  - [Eventlog Live – The Local Web Viewer](#eventlog-live--the-local-web-viewer)
 - [Fine-Tuning Eventlog Live](#fine-tuning-eventlog-live)
   - [Configuration Files](#configuration-files)
   - [Restricted Event Classes](#restricted-event-classes)
