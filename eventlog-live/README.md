@@ -1,6 +1,8 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/well-typed/eventlog-live/ci.yml?style=for-the-badge) ![Hackage Version](https://img.shields.io/hackage/v/eventlog-live?style=for-the-badge) ![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=for-the-badge) ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-yellow?style=for-the-badge)
 
-# ![Eventlog Live](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/social-preview.svg?raw=true)
+![Eventlog Live](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/social-preview.svg?raw=true)
+
+---
 
 > ⚠️ **Warning:**
 > This package is under active development.
@@ -8,7 +10,7 @@
 > Breaking changes should be expected and no effort will be made to avoid major version bumps until at least version 1.0.0.0.
 
 Eventlog Live analyses the [eventlog](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html#rts-eventlog) of any Haskell program and streams the resulting telemetry data to any observability platform that supports the OpenTelemetry protocol, such as [Grafana Cloud](https://grafana.com), [HoneyComb](https://www.honeycomb.io/), or [Prometheus](https://prometheus.io/docs/guides/opentelemetry/).
-Eventlog Live also ships with a _local web viewer_, which lets you view your application's telemetry data locally, without the need for an observability platform. See [Eventlog Live – The Local Web Viewer](#eventlog-live--the-local-web-viewer) for details.
+Eventlog Live also ships with a _local web viewer_, which lets you view your application's telemetry data locally, without the need for an observability platform. See [Eventlog Live: The Local Web Viewer](#eventlog-live--the-local-web-viewer) for details.
 
 The following shows the Grafana Heap Profiles dashboard for [`oddball`](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/examples/oddball/oddball-with-pipe.sh) running with _zero instrumentation_.
 
@@ -34,16 +36,16 @@ Eventlog Live is designed to be _lightweight_, running alongside your applicatio
 
   ![A screen recording of the Grafana Call-Stack Profiles dashboard for the jumpy-jump example program.](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/jumpy-jump-with-ghc-stack-profiler-2026-09-21.gif?raw=true)
 
-## Table of Contents
+# Overview
 
 - [Demos](#demos)
 - [Getting Started](#getting-started)
-  - [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version)
+  - [Eventlog Live: The Basic Version](#eventlog-live-the-basic-version)
   - [Eventlog Live with Eventlog Socket](#eventlog-live-with-eventlog-socket)
   - [Eventlog Live with Cost-Centre Stack Profiling](#eventlog-live-with-cost-centre-stack-profiling)
   - [Eventlog Live with Heap Profiling by Info Table](#eventlog-live-with-heap-profiling-by-info-table)
   - [Eventlog Live with GHC Stack Profiler](#eventlog-live-with-ghc-stack-profiler)
-  - [Eventlog Live — The Local Web Viewer](#eventlog-live-the-local-web-viewer)
+  - [Eventlog Live: The Local Web Viewer](#eventlog-live-the-local-web-viewer)
 - [Fine-Tuning Eventlog Live](#fine-tuning-eventlog-live)
   - [Configuration Files](#configuration-files)
   - [Restricted Event Classes](#restricted-event-classes)
@@ -65,7 +67,7 @@ Let's get Evenlog Live working with your application, which we'll conveniently c
 
 We'll start by getting the basic version of Evenlog Live working and progressively add features.
 
-### Eventlog Live – The Basic Version
+### Eventlog Live: The Basic Version
 
 For the barebones version, you need three things:
 
@@ -448,7 +450,7 @@ Let's briefly discuss what the new parts of this script do:
 
 ### Eventlog Live with Heap Profiling by Info Table
 
-In [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version), we told your application's RTS to enable heap profiling, using a breakdown by closure type (`-hT`). While this is incredibly useful, there's a good chance one of the largest categories will be something like `STACK` or `THUNK`.
+In [Eventlog Live: The Basic Version](#eventlog-live-the-basic-version), we told your application's RTS to enable heap profiling, using a breakdown by closure type (`-hT`). While this is incredibly useful, there's a good chance one of the largest categories will be something like `STACK` or `THUNK`.
 We can use Heap Profiling by Info Table to get a much more detailed breakdown.
 
 To use Heap Profiling by Info Table, your application and all its dependencies must be built with the GHC options [`-finfo-table-map`](https://downloads.haskell.org/ghc/latest/docs/users_guide/debug-info.html#ghc-flag-finfo-table-map) and [`-fdistinct-constructor-tables`](https://downloads.haskell.org/ghc/latest/docs/users_guide/debug-info.html#ghc-flag-fdistinct-constructor-tables) GHC options.
@@ -628,9 +630,9 @@ If your application is instrumented with Eventlog Socket, the Start and Stop but
 > Due to a bug in GHC, copying the call-stack may cause a segfault at runtime in applications built with GHC 9.14.1 and older.
 > If you use GHC Stack Profiler in production, you should build your application with GHC 9.14.2 or newer.
 
-### Eventlog Live – The Local Web Viewer
+### Eventlog Live: The Local Web Viewer
 
-Eventlog Live ships with a _local web viewer_, which lets you monitor and control your application without the need for an observability platform. It uses the same instrumentation as the OpenTelemetry exporter, so this section assumes you have followed the instructions in [Eventlog Live – The Basic Version](#eventlog-live-the-basic-version).
+Eventlog Live ships with a _local web viewer_, which lets you monitor and control your application without the need for an observability platform. It uses the same instrumentation as the OpenTelemetry exporter, so this section assumes you have followed the instructions in [Eventlog Live: The Basic Version](#eventlog-live-the-basic-version).
 
 To start monitoring your application, pipe its eventlog to Eventlog Live, and pass `--viewer` to enable the local web viewer:
 
