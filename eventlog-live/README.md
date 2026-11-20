@@ -3,7 +3,7 @@
 # ![Eventlog Live](https://github.com/well-typed/eventlog-live/blob/eventlog-live-v0.11.0.0/assets/social-preview.svg?raw=true)
 
 > ⚠️ **Warning:**
-> This package is experimental.
+> This package is under active development.
 > It is versioned according to the [PVP](https://pvp.haskell.org).
 > Breaking changes should be expected and no effort will be made to avoid major version bumps until at least version 1.0.0.0.
 
