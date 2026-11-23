@@ -44,4 +44,7 @@ final: prev: with haskell.lib.compose; {
   tar = prev.callHackage "tar" "0.7.2.0" { };
   tls = prev.callHackage "tls" "2.1.4" { };
   lossy-chan = prev.callHackage "lossy-chan" "0.2.0.0" { };
+  yamlet = prev.callHackage "yamlet" "1.0.0.2" { };
+  scientific = prev.callHackage "scientific" "0.3.9.0" { };
+  text-iso8601 = prev.callHackage "text-iso8601" "0.1.1.2" { };
 }
