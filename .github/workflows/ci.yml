@@ -184,7 +184,7 @@ jobs:
           tool-cache: true
 
       - name: 🛠️ Install Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v32
         with:
           nix_path: nixpkgs=channel:nixpkgs-unstable
 
@@ -390,7 +390,7 @@ jobs:
         id: dev-dependencies
 
       - name: 🛠️ Install Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v32
         with:
           nix_path: nixpkgs=channel:nixos-26.05
 
@@ -458,7 +458,7 @@ jobs:
           submodules: true
 
       - name: 🛠️ Install Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v32
         with:
           nix_path: nixpkgs=channel:nixpkgs-unstable
 
