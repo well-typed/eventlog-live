@@ -1,3 +1,8 @@
+### 0.11.0.1
+
+- Switch from HsYaml to yamlet for configuration file parsing.
+  See: https://github.com/haskell-hvr/HsYAML/issues/59#issuecomment-7097731694
+
 ### 0.11.0.0
 
 - Add support for local viewer with `--viewer`.

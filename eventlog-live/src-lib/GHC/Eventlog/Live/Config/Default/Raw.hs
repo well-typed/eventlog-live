@@ -13,16 +13,24 @@ module GHC.Eventlog.Live.Config.Default.Raw (
   defaultConfigJSONSchemaString,
 
   -- * Compile-time only helper functions
-  decodeThrow,
+  decodeDefaultConfigOrThrow,
 ) where
 
 import Data.ByteString (ByteString)
-import Data.ByteString.Lazy qualified as BSL
 import Data.FileEmbed (embedFileRelative)
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.YAML (FromYAML)
-import Data.YAML qualified as YAML
+import Yamlet (FromYaml)
+import Yamlet qualified as Yaml
+
+{- |
+Internal helper.
+The relative path to the default configuration file.
+-}
+defaultConfigFilePath :: FilePath
+defaultConfigFilePath = "data/default.yaml"
 
 {- |
 Internal helper.
@@ -58,13 +66,12 @@ __Warning:__ Compile-time only.
 Internal helper.
 Decode a `ByteString` or throw an exception.
 -}
-decodeThrow :: (MonadFail m, FromYAML a) => ByteString -> m a
-decodeThrow byteString =
-  either (fail . prettyErrorMessage) pure $ YAML.decode1Strict byteString
+decodeDefaultConfigOrThrow :: (MonadFail m, FromYaml a) => ByteString -> m a
+decodeDefaultConfigOrThrow byteString =
+  either (fail . prettyErrorMessage) pure $ Yaml.decode byteString
  where
-  prettyErrorMessage :: (YAML.Pos, String) -> String
-  prettyErrorMessage (pos, errorMessage) =
-    YAML.prettyPosWithSource pos (BSL.fromStrict byteString) " error" <> errorMessage
+  prettyErrorMessage :: NonEmpty Yaml.Error -> String
+  prettyErrorMessage = unlines . fmap (Yaml.prettyError defaultConfigFilePath) . NonEmpty.toList
 
 {- |
 Internal helper.

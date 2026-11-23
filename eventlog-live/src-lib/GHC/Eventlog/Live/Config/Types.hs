@@ -75,13 +75,13 @@ import Data.Char (isDigit)
 import Data.Kind (Constraint, Type)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.YAML (FromYAML (..), ToYAML, (.:?), (.=))
-import Data.YAML qualified as YAML
 import GHC.Records (HasField (..))
 import Language.Haskell.TH.Lift (Lift)
 import Text.ParserCombinators.ReadP (ReadP)
 import Text.ParserCombinators.ReadP qualified as P
 import Text.Read (readEither)
+import Yamlet (FromYaml (..), ToYaml (..))
+import Yamlet qualified as Yaml
 
 {- |
 The extended configuration with derived fields.
@@ -102,15 +102,15 @@ newtype Config = Config
   }
   deriving (Lift, Show)
 
-instance FromYAML Config where
-  parseYAML = YAML.withMap "Config" $ \m ->
+instance FromYaml Config where
+  parseYaml = Yaml.withMapping $ \o ->
     Config
-      <$> m .:? "processors"
+      <$> Yaml.parseFieldMaybe o "processors"
 
-instance ToYAML Config where
-  toYAML config =
-    YAML.mapping
-      [ "processors" .= config.processors
+instance ToYaml Config where
+  toYaml config =
+    Yaml.mapping
+      [ "processors" Yaml..= config.processors
       ]
 
 {- |
@@ -124,21 +124,21 @@ data Processors = Processors
   }
   deriving (Lift, Show)
 
-instance FromYAML Processors where
-  parseYAML = YAML.withMap "Processors" $ \m ->
+instance FromYaml Processors where
+  parseYaml = Yaml.withMapping $ \o ->
     Processors
-      <$> m .:? "logs"
-      <*> m .:? "metrics"
-      <*> m .:? "traces"
-      <*> m .:? "profiles"
+      <$> Yaml.parseFieldMaybe o "logs"
+      <*> Yaml.parseFieldMaybe o "metrics"
+      <*> Yaml.parseFieldMaybe o "traces"
+      <*> Yaml.parseFieldMaybe o "profiles"
 
-instance ToYAML Processors where
-  toYAML processors =
-    YAML.mapping
-      [ "logs" .= processors.logs
-      , "metrics" .= processors.metrics
-      , "traces" .= processors.traces
-      , "profiles" .= processors.profiles
+instance ToYaml Processors where
+  toYaml processors =
+    Yaml.mapping
+      [ "logs" Yaml..= processors.logs
+      , "metrics" Yaml..= processors.metrics
+      , "traces" Yaml..= processors.traces
+      , "profiles" Yaml..= processors.profiles
       ]
 
 {- |
@@ -159,24 +159,24 @@ data Logs = Logs
   }
   deriving (Lift, Show)
 
-instance FromYAML Logs where
-  parseYAML =
+instance FromYaml Logs where
+  parseYaml =
     -- NOTE: This should be kept in sync with the list of logs.
-    YAML.withMap "Logs" $ \m ->
+    Yaml.withMapping $ \o ->
       Logs
-        <$> m .:? "thread_label"
-        <*> m .:? "user_marker"
-        <*> m .:? "user_message"
-        <*> m .:? "internal_log_message"
+        <$> Yaml.parseFieldMaybe o "thread_label"
+        <*> Yaml.parseFieldMaybe o "user_marker"
+        <*> Yaml.parseFieldMaybe o "user_message"
+        <*> Yaml.parseFieldMaybe o "internal_log_message"
 
-instance ToYAML Logs where
-  toYAML logs =
+instance ToYaml Logs where
+  toYaml logs =
     -- NOTE: This should be kept in sync with the list of logs.
-    YAML.mapping
-      [ "thread_label" .= logs.threadLabel
-      , "user_marker" .= logs.userMarker
-      , "user_message" .= logs.userMessage
-      , "internal_log_message" .= logs.internalLogMessage
+    Yaml.mapping
+      [ "thread_label" Yaml..= logs.threadLabel
+      , "user_marker" Yaml..= logs.userMarker
+      , "user_message" Yaml..= logs.userMessage
+      , "internal_log_message" Yaml..= logs.internalLogMessage
       ]
 
 {- |
@@ -215,60 +215,60 @@ data Metrics = Metrics
   }
   deriving (Lift, Show)
 
-instance FromYAML Metrics where
-  parseYAML =
+instance FromYaml Metrics where
+  parseYaml =
     -- NOTE: This should be kept in sync with the list of metrics.
-    YAML.withMap "Metrics" $ \m -> do
-      heapAllocated <- m .:? "heap_allocated"
-      blocksSize <- m .:? "blocks_size"
-      heapSize <- m .:? "heap_size"
-      heapLive <- m .:? "heap_live"
-      memCurrent <- m .:? "mem_current"
-      memNeeded <- m .:? "mem_needed"
-      memReturned <- m .:? "mem_returned"
-      gcCopied <- m .:? "gc_copied"
-      gcSlop <- m .:? "gc_slop"
-      gcFragmentation <- m .:? "gc_fragmentation"
-      heapProfSample <- m .:? "heap_prof_sample"
-      capabilityUsage <- m .:? "capability_usage"
-      productivity <- m .:? "productivity"
-      internalEventCount <- m .:? "internal_event_count"
-      internalExportedLogs <- m .:? "internal_exported_logs"
-      internalRejectedLogs <- m .:? "internal_rejected_logs"
-      internalExportedMetrics <- m .:? "internal_exported_metrics"
-      internalRejectedMetrics <- m .:? "internal_rejected_metrics"
-      internalExportedSamples <- m .:? "internal_exported_samples"
-      internalRejectedSamples <- m .:? "internal_rejected_samples"
-      internalExportedSpans <- m .:? "internal_exported_spans"
-      internalRejectedSpans <- m .:? "internal_rejected_spans"
+    Yaml.withMapping $ \o -> do
+      heapAllocated <- Yaml.parseFieldMaybe o "heap_allocated"
+      blocksSize <- Yaml.parseFieldMaybe o "blocks_size"
+      heapSize <- Yaml.parseFieldMaybe o "heap_size"
+      heapLive <- Yaml.parseFieldMaybe o "heap_live"
+      memCurrent <- Yaml.parseFieldMaybe o "mem_current"
+      memNeeded <- Yaml.parseFieldMaybe o "mem_needed"
+      memReturned <- Yaml.parseFieldMaybe o "mem_returned"
+      gcCopied <- Yaml.parseFieldMaybe o "gc_copied"
+      gcSlop <- Yaml.parseFieldMaybe o "gc_slop"
+      gcFragmentation <- Yaml.parseFieldMaybe o "gc_fragmentation"
+      heapProfSample <- Yaml.parseFieldMaybe o "heap_prof_sample"
+      capabilityUsage <- Yaml.parseFieldMaybe o "capability_usage"
+      productivity <- Yaml.parseFieldMaybe o "productivity"
+      internalEventCount <- Yaml.parseFieldMaybe o "internal_event_count"
+      internalExportedLogs <- Yaml.parseFieldMaybe o "internal_exported_logs"
+      internalRejectedLogs <- Yaml.parseFieldMaybe o "internal_rejected_logs"
+      internalExportedMetrics <- Yaml.parseFieldMaybe o "internal_exported_metrics"
+      internalRejectedMetrics <- Yaml.parseFieldMaybe o "internal_rejected_metrics"
+      internalExportedSamples <- Yaml.parseFieldMaybe o "internal_exported_samples"
+      internalRejectedSamples <- Yaml.parseFieldMaybe o "internal_rejected_samples"
+      internalExportedSpans <- Yaml.parseFieldMaybe o "internal_exported_spans"
+      internalRejectedSpans <- Yaml.parseFieldMaybe o "internal_rejected_spans"
       pure Metrics{..}
 
-instance ToYAML Metrics where
-  toYAML metrics =
+instance ToYaml Metrics where
+  toYaml metrics =
     -- NOTE: This should be kept in sync with the list of metrics.
-    YAML.mapping
-      [ "heap_allocated" .= metrics.heapAllocated
-      , "blocks_size" .= metrics.blocksSize
-      , "heap_size" .= metrics.heapSize
-      , "heap_live" .= metrics.heapLive
-      , "mem_current" .= metrics.memCurrent
-      , "mem_needed" .= metrics.memNeeded
-      , "mem_returned" .= metrics.memReturned
-      , "gc_copied" .= metrics.gcCopied
-      , "gc_slop" .= metrics.gcSlop
-      , "gc_fragmentation" .= metrics.gcFragmentation
-      , "heap_prof_sample" .= metrics.heapProfSample
-      , "capability_usage" .= metrics.capabilityUsage
-      , "productivity" .= metrics.productivity
-      , "internal_event_count" .= metrics.internalEventCount
-      , "internal_exported_logs" .= metrics.internalExportedLogs
-      , "internal_rejected_logs" .= metrics.internalRejectedLogs
-      , "internal_exported_metrics" .= metrics.internalExportedMetrics
-      , "internal_rejected_metrics" .= metrics.internalRejectedMetrics
-      , "internal_exported_samples" .= metrics.internalExportedSamples
-      , "internal_rejected_samples" .= metrics.internalRejectedSamples
-      , "internal_exported_spans" .= metrics.internalExportedSpans
-      , "internal_rejected_spans" .= metrics.internalRejectedSpans
+    Yaml.mapping
+      [ "heap_allocated" Yaml..= metrics.heapAllocated
+      , "blocks_size" Yaml..= metrics.blocksSize
+      , "heap_size" Yaml..= metrics.heapSize
+      , "heap_live" Yaml..= metrics.heapLive
+      , "mem_current" Yaml..= metrics.memCurrent
+      , "mem_needed" Yaml..= metrics.memNeeded
+      , "mem_returned" Yaml..= metrics.memReturned
+      , "gc_copied" Yaml..= metrics.gcCopied
+      , "gc_slop" Yaml..= metrics.gcSlop
+      , "gc_fragmentation" Yaml..= metrics.gcFragmentation
+      , "heap_prof_sample" Yaml..= metrics.heapProfSample
+      , "capability_usage" Yaml..= metrics.capabilityUsage
+      , "productivity" Yaml..= metrics.productivity
+      , "internal_event_count" Yaml..= metrics.internalEventCount
+      , "internal_exported_logs" Yaml..= metrics.internalExportedLogs
+      , "internal_rejected_logs" Yaml..= metrics.internalRejectedLogs
+      , "internal_exported_metrics" Yaml..= metrics.internalExportedMetrics
+      , "internal_rejected_metrics" Yaml..= metrics.internalRejectedMetrics
+      , "internal_exported_samples" Yaml..= metrics.internalExportedSamples
+      , "internal_rejected_samples" Yaml..= metrics.internalRejectedSamples
+      , "internal_exported_spans" Yaml..= metrics.internalExportedSpans
+      , "internal_rejected_spans" Yaml..= metrics.internalRejectedSpans
       ]
 
 {- |
@@ -287,20 +287,20 @@ data Traces = Traces
   }
   deriving (Lift, Show)
 
-instance FromYAML Traces where
-  parseYAML =
+instance FromYaml Traces where
+  parseYaml =
     -- NOTE: This should be kept in sync with the list of traces.
-    YAML.withMap "Traces" $ \m ->
+    Yaml.withMapping $ \o ->
       Traces
-        <$> m .:? "capability_usage"
-        <*> m .:? "thread_state"
+        <$> Yaml.parseFieldMaybe o "capability_usage"
+        <*> Yaml.parseFieldMaybe o "thread_state"
 
-instance ToYAML Traces where
-  toYAML traces =
+instance ToYaml Traces where
+  toYaml traces =
     -- NOTE: This should be kept in sync with the list of traces.
-    YAML.mapping
-      [ "capability_usage" .= traces.capabilityUsage
-      , "thread_state" .= traces.threadState
+    Yaml.mapping
+      [ "capability_usage" Yaml..= traces.capabilityUsage
+      , "thread_state" Yaml..= traces.threadState
       ]
 
 {- |
@@ -312,20 +312,20 @@ data Profiles = Profiles
   }
   deriving (Lift, Show)
 
-instance FromYAML Profiles where
-  parseYAML =
+instance FromYaml Profiles where
+  parseYaml =
     -- NOTE: This should be kept in sync with the list of profiles.
-    YAML.withMap "Profiles" $ \m ->
+    Yaml.withMapping $ \o ->
       Profiles
-        <$> m .:? "call_stack_profile"
-        <*> m .:? "cost_centre_stack_profile"
+        <$> Yaml.parseFieldMaybe o "call_stack_profile"
+        <*> Yaml.parseFieldMaybe o "cost_centre_stack_profile"
 
-instance ToYAML Profiles where
-  toYAML profiles =
+instance ToYaml Profiles where
+  toYaml profiles =
     -- NOTE: This should be kept in sync with the list of profiles.
-    YAML.mapping
-      [ "call_stack_profile" .= profiles.callStackProfile
-      , "cost_centre_stack_profile" .= profiles.costCentreStackProfile
+    Yaml.mapping
+      [ "call_stack_profile" Yaml..= profiles.callStackProfile
+      , "cost_centre_stack_profile" Yaml..= profiles.costCentreStackProfile
       ]
 
 -------------------------------------------------------------------------------
@@ -342,11 +342,11 @@ data ThreadLabelLog = ThreadLabelLog
   }
   deriving (Lift, Show)
 
-instance FromYAML ThreadLabelLog where
-  parseYAML = genericParseYAMLLogProcessorConfig "ThreadLabelLog" ThreadLabelLog
+instance FromYaml ThreadLabelLog where
+  parseYaml = genericParseYamlLogProcessorConfig ThreadLabelLog
 
-instance ToYAML ThreadLabelLog where
-  toYAML = genericToYAMLLogProcessorConfig
+instance ToYaml ThreadLabelLog where
+  toYaml = genericToYamlLogProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMessageLog`.
@@ -358,11 +358,11 @@ data UserMessageLog = UserMessageLog
   }
   deriving (Lift, Show)
 
-instance FromYAML UserMessageLog where
-  parseYAML = genericParseYAMLLogProcessorConfig "UserMessageLog" UserMessageLog
+instance FromYaml UserMessageLog where
+  parseYaml = genericParseYamlLogProcessorConfig UserMessageLog
 
-instance ToYAML UserMessageLog where
-  toYAML = genericToYAMLLogProcessorConfig
+instance ToYaml UserMessageLog where
+  toYaml = genericToYamlLogProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Log.processUserMarkerLog`.
@@ -374,11 +374,11 @@ data UserMarkerLog = UserMarkerLog
   }
   deriving (Lift, Show)
 
-instance FromYAML UserMarkerLog where
-  parseYAML = genericParseYAMLLogProcessorConfig "UserMarkerLog" UserMarkerLog
+instance FromYaml UserMarkerLog where
+  parseYaml = genericParseYamlLogProcessorConfig UserMarkerLog
 
-instance ToYAML UserMarkerLog where
-  toYAML = genericToYAMLLogProcessorConfig
+instance ToYaml UserMarkerLog where
+  toYaml = genericToYamlLogProcessorConfig
 
 {- |
 The configuration options for internal log messages.
@@ -390,11 +390,11 @@ data InternalLogMessageLog = InternalLogMessageLog
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalLogMessageLog where
-  parseYAML = genericParseYAMLLogProcessorConfig "InternalLogMessageLog" InternalLogMessageLog
+instance FromYaml InternalLogMessageLog where
+  parseYaml = genericParseYamlLogProcessorConfig InternalLogMessageLog
 
-instance ToYAML InternalLogMessageLog where
-  toYAML = genericToYAMLLogProcessorConfig
+instance ToYaml InternalLogMessageLog where
+  toYaml = genericToYamlLogProcessorConfig
 
 -------------------------------------------------------------------------------
 -- Metrics
@@ -411,11 +411,11 @@ data HeapAllocatedMetric = HeapAllocatedMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML HeapAllocatedMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "HeapAllocatedMetric" HeapAllocatedMetric
+instance FromYaml HeapAllocatedMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig HeapAllocatedMetric
 
-instance ToYAML HeapAllocatedMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml HeapAllocatedMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapSizeData`.
@@ -428,11 +428,11 @@ data HeapSizeMetric = HeapSizeMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML HeapSizeMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "HeapSizeMetric" HeapSizeMetric
+instance FromYaml HeapSizeMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig HeapSizeMetric
 
-instance ToYAML HeapSizeMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml HeapSizeMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processBlocksSizeData`.
@@ -445,11 +445,11 @@ data BlocksSizeMetric = BlocksSizeMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML BlocksSizeMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "BlocksSizeMetric" BlocksSizeMetric
+instance FromYaml BlocksSizeMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig BlocksSizeMetric
 
-instance ToYAML BlocksSizeMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml BlocksSizeMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapLiveData`.
@@ -462,11 +462,11 @@ data HeapLiveMetric = HeapLiveMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML HeapLiveMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "HeapLiveMetric" HeapLiveMetric
+instance FromYaml HeapLiveMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig HeapLiveMetric
 
-instance ToYAML HeapLiveMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml HeapLiveMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the @memCurrent@ field `GHC.Eventlog.Live.Machine.Analysis.Heap.processMemReturnData`.
@@ -479,11 +479,11 @@ data MemCurrentMetric = MemCurrentMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML MemCurrentMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "MemCurrentMetric" MemCurrentMetric
+instance FromYaml MemCurrentMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig MemCurrentMetric
 
-instance ToYAML MemCurrentMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml MemCurrentMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the @memNeeded@ field `GHC.Eventlog.Live.Machine.Analysis.Heap.processMemReturnData`.
@@ -496,11 +496,11 @@ data MemNeededMetric = MemNeededMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML MemNeededMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "MemNeededMetric" MemNeededMetric
+instance FromYaml MemNeededMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig MemNeededMetric
 
-instance ToYAML MemNeededMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml MemNeededMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the @memReturned@ field `GHC.Eventlog.Live.Machine.Analysis.Heap.processMemReturnData`.
@@ -513,11 +513,11 @@ data MemReturnedMetric = MemReturnedMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML MemReturnedMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "MemReturnedMetric" MemReturnedMetric
+instance FromYaml MemReturnedMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig MemReturnedMetric
 
-instance ToYAML MemReturnedMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml MemReturnedMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Heap.processHeapProfSampleData`.
@@ -530,11 +530,11 @@ data HeapProfSampleMetric = HeapProfSampleMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML HeapProfSampleMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "HeapProfSampleMetric" HeapProfSampleMetric
+instance FromYaml HeapProfSampleMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig HeapProfSampleMetric
 
-instance ToYAML HeapProfSampleMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml HeapProfSampleMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the @copied@ field for `GHC.Eventlog.Live.Machine.Analysis.Heap.processGcStats`.
@@ -547,11 +547,11 @@ data GcCopiedMetric = GcCopiedMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML GcCopiedMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "GcCopiedMetric" GcCopiedMetric
+instance FromYaml GcCopiedMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig GcCopiedMetric
 
-instance ToYAML GcCopiedMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml GcCopiedMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the @copied@ field for `GHC.Eventlog.Live.Machine.Analysis.Heap.processGcStats`.
@@ -564,11 +564,11 @@ data GcSlopMetric = GcSlopMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML GcSlopMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "GcSlopMetric" GcSlopMetric
+instance FromYaml GcSlopMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig GcSlopMetric
 
-instance ToYAML GcSlopMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml GcSlopMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the @copied@ field for `GHC.Eventlog.Live.Machine.Analysis.Heap.processGcStats`.
@@ -581,11 +581,11 @@ data GcFragmentationMetric = GcFragmentationMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML GcFragmentationMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "GcFragmentationMetric" GcFragmentationMetric
+instance FromYaml GcFragmentationMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig GcFragmentationMetric
 
-instance ToYAML GcFragmentationMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml GcFragmentationMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processCapabilityUsageDurationData`.
@@ -598,11 +598,11 @@ data CapabilityUsageMetric = CapabilityUsageMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML CapabilityUsageMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "CapabilityUsageMetric" CapabilityUsageMetric
+instance FromYaml CapabilityUsageMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig CapabilityUsageMetric
 
-instance ToYAML CapabilityUsageMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml CapabilityUsageMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Capability.processProductivityData`.
@@ -615,11 +615,11 @@ data ProductivityMetric = ProductivityMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML ProductivityMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "ProductivityMetric" ProductivityMetric
+instance FromYaml ProductivityMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig ProductivityMetric
 
-instance ToYAML ProductivityMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml ProductivityMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of received events.
@@ -632,11 +632,11 @@ data InternalEventCountMetric = InternalEventCountMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalEventCountMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalEventCountMetric" InternalEventCountMetric
+instance FromYaml InternalEventCountMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalEventCountMetric
 
-instance ToYAML InternalEventCountMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalEventCountMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of exported logs metric.
@@ -649,11 +649,11 @@ data InternalExportedLogsMetric = InternalExportedLogsMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalExportedLogsMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedLogsMetric" InternalExportedLogsMetric
+instance FromYaml InternalExportedLogsMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalExportedLogsMetric
 
-instance ToYAML InternalExportedLogsMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalExportedLogsMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of rejected logs.
@@ -666,11 +666,11 @@ data InternalRejectedLogsMetric = InternalRejectedLogsMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalRejectedLogsMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedLogsMetric" InternalRejectedLogsMetric
+instance FromYaml InternalRejectedLogsMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalRejectedLogsMetric
 
-instance ToYAML InternalRejectedLogsMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalRejectedLogsMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of exported metrics metric.
@@ -683,11 +683,11 @@ data InternalExportedMetricsMetric = InternalExportedMetricsMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalExportedMetricsMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedMetricsMetric" InternalExportedMetricsMetric
+instance FromYaml InternalExportedMetricsMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalExportedMetricsMetric
 
-instance ToYAML InternalExportedMetricsMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalExportedMetricsMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of rejected metrics.
@@ -700,11 +700,11 @@ data InternalRejectedMetricsMetric = InternalRejectedMetricsMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalRejectedMetricsMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedMetricsMetric" InternalRejectedMetricsMetric
+instance FromYaml InternalRejectedMetricsMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalRejectedMetricsMetric
 
-instance ToYAML InternalRejectedMetricsMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalRejectedMetricsMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of exported samples metric.
@@ -717,11 +717,11 @@ data InternalExportedSamplesMetric = InternalExportedSamplesMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalExportedSamplesMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedSamplesMetric" InternalExportedSamplesMetric
+instance FromYaml InternalExportedSamplesMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalExportedSamplesMetric
 
-instance ToYAML InternalExportedSamplesMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalExportedSamplesMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of rejected samples.
@@ -734,11 +734,11 @@ data InternalRejectedSamplesMetric = InternalRejectedSamplesMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalRejectedSamplesMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedSamplesMetric" InternalRejectedSamplesMetric
+instance FromYaml InternalRejectedSamplesMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalRejectedSamplesMetric
 
-instance ToYAML InternalRejectedSamplesMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalRejectedSamplesMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of exported spans metric.
@@ -751,11 +751,11 @@ data InternalExportedSpansMetric = InternalExportedSpansMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalExportedSpansMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalExportedSpansMetric" InternalExportedSpansMetric
+instance FromYaml InternalExportedSpansMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalExportedSpansMetric
 
-instance ToYAML InternalExportedSpansMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalExportedSpansMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 {- |
 The configuration options for the internal count of rejected spans.
@@ -768,11 +768,11 @@ data InternalRejectedSpansMetric = InternalRejectedSpansMetric
   }
   deriving (Lift, Show)
 
-instance FromYAML InternalRejectedSpansMetric where
-  parseYAML = genericParseYAMLMetricProcessorConfig "InternalRejectedSpansMetric" InternalRejectedSpansMetric
+instance FromYaml InternalRejectedSpansMetric where
+  parseYaml = genericParseYamlMetricProcessorConfig InternalRejectedSpansMetric
 
-instance ToYAML InternalRejectedSpansMetric where
-  toYAML = genericToYAMLMetricProcessorConfig
+instance ToYaml InternalRejectedSpansMetric where
+  toYaml = genericToYamlMetricProcessorConfig
 
 -------------------------------------------------------------------------------
 -- Traces
@@ -788,11 +788,11 @@ data CapabilityUsageSpan = CapabilityUsageSpan
   }
   deriving (Lift, Show)
 
-instance FromYAML CapabilityUsageSpan where
-  parseYAML = genericParseYAMLTraceProcessorConfig "CapabilityUsageSpan" CapabilityUsageSpan
+instance FromYaml CapabilityUsageSpan where
+  parseYaml = genericParseYamlTraceProcessorConfig CapabilityUsageSpan
 
-instance ToYAML CapabilityUsageSpan where
-  toYAML = genericToYAMLTraceProcessorConfig
+instance ToYaml CapabilityUsageSpan where
+  toYaml = genericToYamlTraceProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Thread.processThreadStateSpan`.
@@ -804,11 +804,11 @@ data ThreadStateSpan = ThreadStateSpan
   }
   deriving (Lift, Show)
 
-instance FromYAML ThreadStateSpan where
-  parseYAML = genericParseYAMLTraceProcessorConfig "ThreadStateSpan" ThreadStateSpan
+instance FromYaml ThreadStateSpan where
+  parseYaml = genericParseYamlTraceProcessorConfig ThreadStateSpan
 
-instance ToYAML ThreadStateSpan where
-  toYAML = genericToYAMLTraceProcessorConfig
+instance ToYaml ThreadStateSpan where
+  toYaml = genericToYamlTraceProcessorConfig
 
 -------------------------------------------------------------------------------
 -- Profiles
@@ -824,11 +824,11 @@ data CallStackProfile = CallStackProfile
   }
   deriving (Lift, Show)
 
-instance FromYAML CallStackProfile where
-  parseYAML = genericParseYAMLProfilerProcessorConfig "CallStackProfile" CallStackProfile
+instance FromYaml CallStackProfile where
+  parseYaml = genericParseYamlProfilerProcessorConfig CallStackProfile
 
-instance ToYAML CallStackProfile where
-  toYAML = genericToYAMLProfilerProcessorConfig
+instance ToYaml CallStackProfile where
+  toYaml = genericToYamlProfilerProcessorConfig
 
 {- |
 The configuration options for `GHC.Eventlog.Live.Machine.Analysis.Profile.processCostCentreProfSampleData`.
@@ -840,11 +840,11 @@ data CostCentreStackProfile = CostCentreStackProfile
   }
   deriving (Lift, Show)
 
-instance FromYAML CostCentreStackProfile where
-  parseYAML = genericParseYAMLProfilerProcessorConfig "CostCentreStackProfile" CostCentreStackProfile
+instance FromYaml CostCentreStackProfile where
+  parseYaml = genericParseYamlProfilerProcessorConfig CostCentreStackProfile
 
-instance ToYAML CostCentreStackProfile where
-  toYAML = genericToYAMLProfilerProcessorConfig
+instance ToYaml CostCentreStackProfile where
+  toYaml = genericToYamlProfilerProcessorConfig
 
 -------------------------------------------------------------------------------
 -- Configuration supertypes
@@ -901,7 +901,7 @@ data Duration
 
 {- |
 Internal helper.
-A `ReadP` style parser for `AggregationStrategy`.
+A `ReadP` style parser for durations.
 -}
 readPDuration :: ReadP Duration
 readPDuration = do
@@ -932,12 +932,30 @@ readPDuration = do
 
 {- |
 Internal helper.
+Parse a duration.
+-}
+parseDuration :: Text -> Maybe Duration
+parseDuration text
+  | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack text) = Just duration
+  | otherwise = Nothing
+
+{- |
+Internal helper.
 Pretty-print a duration.
 -}
-prettyDuration :: Duration -> String
+prettyDuration :: Duration -> Text
 prettyDuration = \case
-  DurationByBatches{..} -> show batches <> "x"
-  DurationBySeconds{..} -> show seconds <> "s"
+  DurationByBatches{..} -> T.show batches <> "x"
+  DurationBySeconds{..} -> T.show seconds <> "s"
+
+instance FromYaml Duration where
+  parseYaml =
+    Yaml.withText $ \text ->
+      maybe (fail $ "Invalid duration '" <> T.unpack text <> "'") pure $
+        parseDuration text
+
+instance ToYaml Duration where
+  toYaml = toYaml . Yaml.String . prettyDuration
 
 --------------------------------------------------------------------------------
 -- Aggregation Strategy
@@ -959,22 +977,16 @@ toAggregationSeconds aggregationStrategy
   | AggregationStrategyDuration DurationBySeconds{..} <- aggregationStrategy = Just seconds
   | otherwise = Nothing
 
-instance FromYAML AggregationStrategy where
-  parseYAML node = YAML.withScalar "AggregationStrategy" parseYAMLScalar node
+instance FromYaml AggregationStrategy where
+  parseYaml node = pBool `Yaml.orElse` pDuration
    where
-    parseYAMLScalar = \case
-      YAML.SBool isOn -> pure AggregationStrategyBool{..}
-      YAML.SStr str
-        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
-            pure AggregationStrategyDuration{..}
-      _otherwise -> YAML.typeMismatch "AggregationStrategy" node
+    pBool = Yaml.withBool (pure . AggregationStrategyBool) node
+    pDuration = AggregationStrategyDuration <$> Yaml.parseYaml node
 
-instance ToYAML AggregationStrategy where
-  toYAML = \case
-    AggregationStrategyBool{..} ->
-      YAML.Scalar () (YAML.SBool isOn)
-    AggregationStrategyDuration{..} ->
-      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
+instance ToYaml AggregationStrategy where
+  toYaml = \case
+    AggregationStrategyBool{..} -> toYaml . Yaml.Bool $ isOn
+    AggregationStrategyDuration{..} -> toYaml duration
 
 --------------------------------------------------------------------------------
 -- Export Strategy
@@ -1015,149 +1027,139 @@ toExportSeconds exportStrategy
   | ExportStrategyDuration DurationBySeconds{..} <- exportStrategy = Just seconds
   | otherwise = Nothing
 
-instance FromYAML ExportStrategy where
-  parseYAML node = YAML.withScalar "ExportStrategy" parseYAMLScalar node
+instance FromYaml ExportStrategy where
+  parseYaml node = pBool `Yaml.orElse` pDuration
    where
-    parseYAMLScalar = \case
-      YAML.SBool isOn -> pure ExportStrategyBool{..}
-      YAML.SStr str
-        | [(duration, "")] <- P.readP_to_S readPDuration (T.unpack str) ->
-            pure ExportStrategyDuration{..}
-      _otherwise -> YAML.typeMismatch "ExportStrategy" node
+    pBool = Yaml.withBool (pure . ExportStrategyBool) node
+    pDuration = ExportStrategyDuration <$> Yaml.parseYaml node
 
-instance ToYAML ExportStrategy where
-  toYAML = \case
-    ExportStrategyBool{..} ->
-      YAML.Scalar () (YAML.SBool isOn)
-    ExportStrategyDuration{..} ->
-      YAML.Scalar () (YAML.SStr . T.pack . prettyDuration $ duration)
+instance ToYaml ExportStrategy where
+  toYaml = \case
+    ExportStrategyBool{..} -> toYaml . Yaml.Bool $ isOn
+    ExportStrategyDuration{..} -> toYaml duration
 
 -------------------------------------------------------------------------------
--- Internal Helpers
+-- Helpers for yamlet
 -------------------------------------------------------------------------------
 
 {- |
 Internal helper.
 Generic parser for log processor configuration.
 -}
-genericParseYAMLLogProcessorConfig ::
-  String ->
+genericParseYamlLogProcessorConfig ::
   (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> logProcessorConfig) ->
-  YAML.Node YAML.Pos ->
-  YAML.Parser logProcessorConfig
-genericParseYAMLLogProcessorConfig log_ mkLogProcessorConfig =
-  YAML.withMap log_ $ \m ->
+  Yaml.Node ->
+  Yaml.Parser logProcessorConfig
+genericParseYamlLogProcessorConfig mkLogProcessorConfig =
+  Yaml.withMapping $ \o ->
     mkLogProcessorConfig
-      <$> m .:? "name"
-      <*> m .:? "description"
-      <*> m .:? "export"
+      <$> Yaml.parseFieldMaybe o "name"
+      <*> Yaml.parseFieldMaybe o "description"
+      <*> Yaml.parseFieldMaybe o "export"
 
 {- |
 Internal helper.
-Generic conversion from log processor configuration to YAML mappings.
+Generic conversion from log processor configuration to Yaml mappings.
 -}
-genericToYAMLLogProcessorConfig ::
+genericToYamlLogProcessorConfig ::
   (IsLogProcessorConfig logProcessorConfig) =>
   logProcessorConfig ->
-  YAML.Node ()
-genericToYAMLLogProcessorConfig logProcessorConfig =
-  YAML.mapping
-    [ "name" .= logProcessorConfig.name
-    , "description" .= logProcessorConfig.description
-    , "export" .= logProcessorConfig.export
+  Yaml.Node
+genericToYamlLogProcessorConfig logProcessorConfig =
+  Yaml.mapping
+    [ "name" Yaml..= logProcessorConfig.name
+    , "description" Yaml..= logProcessorConfig.description
+    , "export" Yaml..= logProcessorConfig.export
     ]
 
 {- |
 Internal helper.
 Generic parser for metric processor configuration.
 -}
-genericParseYAMLMetricProcessorConfig ::
-  String ->
+genericParseYamlMetricProcessorConfig ::
   (Maybe Text -> Maybe Text -> Maybe AggregationStrategy -> Maybe ExportStrategy -> metricProcessorConfig) ->
-  YAML.Node YAML.Pos ->
-  YAML.Parser metricProcessorConfig
-genericParseYAMLMetricProcessorConfig metric mkMetricProcessorConfig =
-  YAML.withMap metric $ \m ->
+  Yaml.Node ->
+  Yaml.Parser metricProcessorConfig
+genericParseYamlMetricProcessorConfig mkMetricProcessorConfig =
+  Yaml.withMapping $ \o ->
     mkMetricProcessorConfig
-      <$> m .:? "name"
-      <*> m .:? "description"
-      <*> m .:? "aggregate"
-      <*> m .:? "export"
+      <$> Yaml.parseFieldMaybe o "name"
+      <*> Yaml.parseFieldMaybe o "description"
+      <*> Yaml.parseFieldMaybe o "aggregate"
+      <*> Yaml.parseFieldMaybe o "export"
 
 {- |
 Internal helper.
-Generic conversion from metric processor configuration to YAML mappings.
+Generic conversion from metric processor configuration to Yaml mappings.
 -}
-genericToYAMLMetricProcessorConfig ::
+genericToYamlMetricProcessorConfig ::
   (IsMetricProcessorConfig metricProcessorConfig) =>
   metricProcessorConfig ->
-  YAML.Node ()
-genericToYAMLMetricProcessorConfig metricProcessorConfig =
-  YAML.mapping
-    [ "name" .= metricProcessorConfig.name
-    , "description" .= metricProcessorConfig.description
-    , "aggregate" .= metricProcessorConfig.aggregate
-    , "export" .= metricProcessorConfig.export
+  Yaml.Node
+genericToYamlMetricProcessorConfig metricProcessorConfig =
+  Yaml.mapping
+    [ "name" Yaml..= metricProcessorConfig.name
+    , "description" Yaml..= metricProcessorConfig.description
+    , "aggregate" Yaml..= metricProcessorConfig.aggregate
+    , "export" Yaml..= metricProcessorConfig.export
     ]
 
 {- |
 Internal helper.
 Generic parser for trace processor configuration.
 -}
-genericParseYAMLTraceProcessorConfig ::
-  String ->
+genericParseYamlTraceProcessorConfig ::
   (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> traceProcessorConfig) ->
-  YAML.Node YAML.Pos ->
-  YAML.Parser traceProcessorConfig
-genericParseYAMLTraceProcessorConfig trace mkTraceProcessorConfig =
-  YAML.withMap trace $ \m ->
+  Yaml.Node ->
+  Yaml.Parser traceProcessorConfig
+genericParseYamlTraceProcessorConfig mkTraceProcessorConfig =
+  Yaml.withMapping $ \o ->
     mkTraceProcessorConfig
-      <$> m .:? "name"
-      <*> m .:? "description"
-      <*> m .:? "export"
+      <$> Yaml.parseFieldMaybe o "name"
+      <*> Yaml.parseFieldMaybe o "description"
+      <*> Yaml.parseFieldMaybe o "export"
 
 {- |
 Internal helper.
-Generic conversion from trace processor configuration to YAML mappings.
+Generic conversion from trace processor configuration to Yaml mappings.
 -}
-genericToYAMLTraceProcessorConfig ::
+genericToYamlTraceProcessorConfig ::
   (IsTraceProcessorConfig traceProcessorConfig) =>
   traceProcessorConfig ->
-  YAML.Node ()
-genericToYAMLTraceProcessorConfig traceProcessorConfig =
-  YAML.mapping
-    [ "name" .= traceProcessorConfig.name
-    , "description" .= traceProcessorConfig.description
-    , "export" .= traceProcessorConfig.export
+  Yaml.Node
+genericToYamlTraceProcessorConfig traceProcessorConfig =
+  Yaml.mapping
+    [ "name" Yaml..= traceProcessorConfig.name
+    , "description" Yaml..= traceProcessorConfig.description
+    , "export" Yaml..= traceProcessorConfig.export
     ]
 
 {- |
 Internal helper.
 Generic parser for processor configuration.
 -}
-genericParseYAMLProfilerProcessorConfig ::
-  String ->
+genericParseYamlProfilerProcessorConfig ::
   (Maybe Text -> Maybe Text -> Maybe ExportStrategy -> profilerConfig) ->
-  YAML.Node YAML.Pos ->
-  YAML.Parser profilerConfig
-genericParseYAMLProfilerProcessorConfig trace mkProfilerConfig =
-  YAML.withMap trace $ \m ->
+  Yaml.Node ->
+  Yaml.Parser profilerConfig
+genericParseYamlProfilerProcessorConfig mkProfilerConfig =
+  Yaml.withMapping $ \o ->
     mkProfilerConfig
-      <$> m .:? "name"
-      <*> m .:? "description"
-      <*> m .:? "export"
+      <$> Yaml.parseFieldMaybe o "name"
+      <*> Yaml.parseFieldMaybe o "description"
+      <*> Yaml.parseFieldMaybe o "export"
 
 {- |
 Internal helper.
 Generic parser for metric configuration.
 -}
-genericToYAMLProfilerProcessorConfig ::
+genericToYamlProfilerProcessorConfig ::
   (IsTraceProcessorConfig profilerConfig) =>
   profilerConfig ->
-  YAML.Node ()
-genericToYAMLProfilerProcessorConfig profilerConfig =
-  YAML.mapping
-    [ "name" .= profilerConfig.name
-    , "description" .= profilerConfig.description
-    , "export" .= profilerConfig.export
+  Yaml.Node
+genericToYamlProfilerProcessorConfig profilerConfig =
+  Yaml.mapping
+    [ "name" Yaml..= profilerConfig.name
+    , "description" Yaml..= profilerConfig.description
+    , "export" Yaml..= profilerConfig.export
     ]

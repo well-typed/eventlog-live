@@ -103,20 +103,20 @@ module GHC.Eventlog.Live.Config (
 import Control.Exception (assert)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.ByteString.Lazy qualified as BSL
+import Data.ByteString qualified as BS
 import Data.Default (Default (..))
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid (Any (..))
 import Data.Semigroup (Semigroup (..))
 import Data.Text (Text)
-import Data.Text.Encoding qualified as TE
-import Data.YAML qualified as YAML
 import GHC.Eventlog.Live.Config.Default (defaultConfig, getDefault)
 import GHC.Eventlog.Live.Config.Default.Raw
 import GHC.Eventlog.Live.Config.Types
 import GHC.Records (HasField (..))
 import GHC.Stack.Types (HasCallStack)
+import Yamlet qualified as Yaml
 
 {- |
 Read a `Config` from a configuration file.
@@ -125,26 +125,23 @@ readConfigFile ::
   FilePath ->
   IO (Either String Config)
 readConfigFile filePath =
-  readConfig =<< liftIO (BSL.readFile filePath)
-
-{- |
-Read a `Config` from a `BSL.ByteString`.
--}
-readConfig ::
-  BSL.ByteString ->
-  IO (Either String Config)
-readConfig fileContents = do
-  case YAML.decode1 fileContents of
-    Left (pos, errorMessage) -> do
-      pure $ Left $ YAML.prettyPosWithSource pos fileContents " error" <> errorMessage
-    Right config ->
-      pure $ Right config
+  readConfig =<< liftIO (BS.readFile filePath)
+ where
+  readConfig ::
+    BS.ByteString ->
+    IO (Either String Config)
+  readConfig fileContents = do
+    case Yaml.decode fileContents of
+      Left errors -> do
+        pure . Left . unlines . fmap (Yaml.prettyError filePath) . NonEmpty.toList $ errors
+      Right config ->
+        pure $ Right config
 
 {- |
 Pretty-print a `Config` to YAML.
 -}
 prettyConfig :: Config -> Text
-prettyConfig = TE.decodeUtf8Lenient . BSL.toStrict . YAML.encode1
+prettyConfig = Yaml.encodeText
 
 {- |
 Create a full configuration.

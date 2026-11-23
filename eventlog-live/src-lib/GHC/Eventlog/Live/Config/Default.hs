@@ -21,7 +21,7 @@ import Data.Bifunctor (Bifunctor (..))
 import Data.Kind (Type)
 import Data.List (intercalate)
 import Data.Proxy (Proxy (..))
-import GHC.Eventlog.Live.Config.Default.Raw (decodeThrow, defaultConfigByteString)
+import GHC.Eventlog.Live.Config.Default.Raw (decodeDefaultConfigOrThrow, defaultConfigByteString)
 import GHC.Eventlog.Live.Config.Types (Config)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
@@ -32,7 +32,7 @@ Internal helper.
 The default configuration.
 -}
 defaultConfig :: Config
-defaultConfig = $(lift =<< decodeThrow @Q @Config defaultConfigByteString)
+defaultConfig = $(lift =<< decodeDefaultConfigOrThrow @Q @Config defaultConfigByteString)
 
 {- |
 __Warning:__ Compile-time only.
