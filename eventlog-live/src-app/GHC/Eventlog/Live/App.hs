@@ -133,22 +133,22 @@ main =
 
       -- Create machine to process eventlog into export requests.
       let eventlogProcessor ccdb ipedb =
-            M.liftTick M.withStartTime
-              ~> M.fanoutTick
-                [ -- Log a warning if no input has been received after 10 ticks.
-                  validateInput logger 10
-                , -- Log event counts.
-                  countEvents logger
-                , -- Log ticks.
-                  logTicks logger
-                , -- If no cost-centre database was provided, index the cost-centre events.
-                  indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
-                , -- If no info-prov database was provided, index the info-prov events.
-                  indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
-                , -- Process the eventlog events.
-                  processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
-                    ~> M.liftTick (mapping D.singleton)
-                ]
+            M.fanoutTick
+              [ -- Log a warning if no input has been received after 10 ticks.
+                validateInput logger 10
+              , -- Log event counts.
+                countEvents logger
+              , -- Log ticks.
+                logTicks logger
+              , -- If no cost-centre database was provided, index the cost-centre events.
+                indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
+              , -- If no info-prov database was provided, index the info-prov events.
+                indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
+              , -- Process the eventlog events.
+                M.liftTick (M.withStartTime logger)
+                  ~> processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
+                  ~> M.liftTick (mapping D.singleton)
+              ]
               ~> M.liftTick asParts
               ~> sending exportRequestInChan
 
@@ -252,18 +252,18 @@ withInfoProvTable maybeIpeDBPath session =
 -- Create machine that indexes CostCentre data.
 indexCostCentreEvents ::
   Maybe (DB.Table CC.CostCentreId CC.CostCentre) ->
-  ProcessT IO (Tick (M.WithStartTime Event)) x
+  ProcessT IO (Tick Event) x
 indexCostCentreEvents =
   -- If a cost-centre database was not provided, don't index any new entries.
-  maybe stopped (\ccdb -> dropTick ~> DB.indexer (CC.toCostCentre . (.value)) def ccdb ~> mapping absurd)
+  maybe stopped (\ccdb -> dropTick ~> DB.indexer CC.toCostCentre def ccdb ~> mapping absurd)
 
 -- Create machine that indexes InfoProv data.
 indexInfoProvEvents ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
-  ProcessT IO (Tick (M.WithStartTime Event)) x
+  ProcessT IO (Tick Event) x
 indexInfoProvEvents =
   -- If an IPE database was not provided, don't index any new entries.
-  maybe stopped (\ipedb -> dropTick ~> DB.indexer (IP.toInfoProv . (.value)) def ipedb ~> mapping absurd)
+  maybe stopped (\ipedb -> dropTick ~> DB.indexer IP.toInfoProv def ipedb ~> mapping absurd)
 
 --------------------------------------------------------------------------------
 -- Internal helpers
