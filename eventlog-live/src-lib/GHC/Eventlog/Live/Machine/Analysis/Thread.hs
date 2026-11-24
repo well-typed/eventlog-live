@@ -33,10 +33,11 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Traces (duration)
 import GHC.RTS.Events (Event (..), EventInfo, ThreadId, ThreadStopStatus (..), showThreadStopStatus)
 import GHC.RTS.Events qualified as E

@@ -51,7 +51,6 @@ import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
 import GHC.Eventlog.Live.Machine.Core (Tick (..))
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Attribute qualified as A
 import GHC.Eventlog.Live.Types.Logs (LogRecord (..))
@@ -59,6 +58,7 @@ import GHC.Eventlog.Live.Types.Logs qualified as LogRecord
 import GHC.Eventlog.Live.Types.Metrics (Metric (..))
 import GHC.Eventlog.Live.Types.Metrics qualified as Metric
 import GHC.Eventlog.Live.Types.Severity (Severity (..), toSeverityString)
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.IsList (IsList (..))
 import GHC.Stack (CallStack, callStack, prettyCallStack)
 import GHC.Stack.Types (HasCallStack)

@@ -11,10 +11,11 @@ module GHC.Eventlog.Live.Machine.Analysis.Log where
 
 import Data.Machine (Process, await, repeatedly, yield)
 import Data.Text (Text)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.RTS.Events (Event)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))

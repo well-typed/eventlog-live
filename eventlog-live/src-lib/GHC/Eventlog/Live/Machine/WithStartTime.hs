@@ -5,7 +5,6 @@ Stability   : experimental
 Portability : portable
 -}
 module GHC.Eventlog.Live.Machine.WithStartTime (
-  TimeUnixNano,
   WithStartTime (..),
   setWithStartTime'value,
   withStartTime,
@@ -16,18 +15,13 @@ module GHC.Eventlog.Live.Machine.WithStartTime (
 import Control.Monad (forever)
 import Data.Foldable (for_)
 import Data.Machine (Process, await, construct, mapping, yield)
-import Data.Word (Word64)
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.RTS.Events (Event (..), EventInfo)
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
 
 -------------------------------------------------------------------------------
 -- Start time
-
-{- |
-Time in nanoseconds since the Unix epoch.
--}
-type TimeUnixNano = Word64
 
 {- |
 Data decorated with a start time in nanoseconds since the Unix epoch.

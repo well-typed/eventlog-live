@@ -26,9 +26,9 @@ import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import GHC.Eventlog.Live.Config
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Severity (Severity)
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 
