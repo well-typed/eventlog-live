@@ -11,7 +11,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Log where
 
 import Data.Machine (Process, await, repeatedly, yield)
 import Data.Text (Text)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -24,7 +24,7 @@ import GHC.Records (HasField (..))
 
 data UserMessage = UserMessage
   { value :: !Text
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   , capNo :: !(Maybe CapNo)
   }
 
@@ -46,7 +46,7 @@ processUserMessage =
             yield
               UserMessage
                 { value = msg
-                , maybeTimeUnixNano = tryGetTimeUnixNano i
+                , timeUnixNano = i.timeUnixNano
                 , capNo = evCapNo i.value
                 }
         | otherwise -> pure ()
@@ -56,7 +56,7 @@ processUserMessage =
 
 data UserMarker = UserMarker
   { value :: !Text
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   , capNo :: !(Maybe CapNo)
   }
 
@@ -78,7 +78,7 @@ processUserMarker =
             yield
               UserMarker
                 { value = markername
-                , maybeTimeUnixNano = tryGetTimeUnixNano i
+                , timeUnixNano = i.timeUnixNano
                 , capNo = evCapNo i.value
                 }
         | otherwise -> pure ()

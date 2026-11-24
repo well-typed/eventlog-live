@@ -113,7 +113,7 @@ instance KnownProfile "costCentreStackProfile" where
 type IsSample s v =
   ( HasField "value" s v
   , HasField "stack" s (Vector Location)
-  , HasField "maybeTimeUnixNano" s (Maybe TimeUnixNano)
+  , HasField "timeUnixNano" s TimeUnixNano
   , HasField "attrs" s Attrs
   )
 
@@ -122,7 +122,7 @@ toSample s =
   Sample
     { value = s.value
     , stack = s.stack
-    , maybeTimeUnixNano = s.maybeTimeUnixNano
+    , timeUnixNano = s.timeUnixNano
     , attrs = s.attrs
     }
 
@@ -137,7 +137,7 @@ toSample s =
 data Sample v = Sample
   { value :: !v
   , stack :: !(Vector Location)
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   -- ^ The time at which the sample was taken.
   , attrs :: Attrs
   -- ^ A set of attributes.
@@ -159,7 +159,7 @@ sampleToKV s =
   mconcat
     [ "value" .= s.value
     , "stack" .?= s.stack
-    , "timeUnixNano" .?= s.maybeTimeUnixNano
+    , "timeUnixNano" .?= s.timeUnixNano
     , "attrs" .?= s.attrs
     ]
 {-# INLINE sampleToKV #-}

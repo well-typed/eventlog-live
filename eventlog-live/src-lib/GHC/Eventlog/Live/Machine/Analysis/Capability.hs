@@ -58,7 +58,7 @@ import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (deltaToCumulative, liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), setWithStartTime'value, tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), setWithStartTime'value)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), evCapNo)
 import GHC.Eventlog.Live.Types.Traces (duration)
@@ -79,8 +79,8 @@ This holds the cumulative elapsed time for both GC and mutator threads.
 data Productivity = Productivity
   { gc :: !TimeUnixNano
   , mutator :: !TimeUnixNano
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
-  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
+  , startTimeUnixNano :: !TimeUnixNano
   , capNo :: CapNo
   }
 
@@ -100,15 +100,10 @@ instance Semigroup Productivity where
     Productivity
       { gc = max x.gc y.gc
       , mutator = max x.mutator y.mutator
-      , maybeTimeUnixNano = forceMaybe $ x.maybeTimeUnixNano `max` y.maybeTimeUnixNano
-      , maybeStartTimeUnixNano = forceMaybe $ x.maybeStartTimeUnixNano `max` y.maybeStartTimeUnixNano
+      , timeUnixNano = x.timeUnixNano `max` y.timeUnixNano
+      , startTimeUnixNano = x.startTimeUnixNano `max` y.startTimeUnixNano
       , capNo = assert (x.capNo == y.capNo) x.capNo
       }
-   where
-    -- NOTE: Without this function, `max` creates a space leak.
-    forceMaybe :: Maybe a -> Maybe a
-    forceMaybe Nothing = Nothing
-    forceMaybe (Just a) = a `seq` Just a
 
 {- |
 Convert a t`CapabilityUsageDuration` to a partial t`Productivity` that only
@@ -179,8 +174,8 @@ The delta capability usage duration.
 data CapabilityUsageDuration a
   = CapabilityUsageDuration
   { value :: !a
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
-  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
+  , startTimeUnixNano :: !TimeUnixNano
   , capNo :: !CapNo
   , usage :: !(Maybe CapabilityUser)
   {- ^
@@ -252,8 +247,8 @@ processCapabilityUsageDuration'Delta =
             yield
               CapabilityUsageDuration
                 { value = j.value.startTimeUnixNano - i.endTimeUnixNano
-                , maybeTimeUnixNano = Just i.endTimeUnixNano
-                , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
+                , timeUnixNano = i.endTimeUnixNano
+                , startTimeUnixNano = j.startTimeUnixNano
                 , capNo = capNo
                 , usage = Nothing -- Idle
                 }
@@ -261,8 +256,8 @@ processCapabilityUsageDuration'Delta =
         yield
           CapabilityUsageDuration
             { value = duration j.value
-            , maybeTimeUnixNano = Just j.value.startTimeUnixNano
-            , maybeStartTimeUnixNano = j.maybeStartTimeUnixNano
+            , timeUnixNano = j.value.startTimeUnixNano
+            , startTimeUnixNano = j.startTimeUnixNano
             , capNo = capNo
             , usage = Just $! capabilityUser j.value
             }
@@ -351,7 +346,7 @@ processCapabilityUsageSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
 processCapabilityUsageSpans logger =
-  processCapabilityUsageSpans' tryGetTimeUnixNano (.value) setWithStartTime'value setWithStartTime'value logger
+  processCapabilityUsageSpans' (.timeUnixNano) (.value) setWithStartTime'value setWithStartTime'value logger
     ~> mapping (either (fmap Left) (fmap Right))
 
 {- |
@@ -361,7 +356,7 @@ work on arbitrary types using a getter and a pair of lenses.
 processCapabilityUsageSpans' ::
   forall m s t1 t2.
   (Monad m) =>
-  (s -> Maybe TimeUnixNano) ->
+  (s -> TimeUnixNano) ->
   (s -> Event) ->
   (s -> GCSpan -> t1) ->
   (s -> MutatorSpan -> t2) ->
@@ -433,7 +428,7 @@ processGCSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime GCSpan)
 processGCSpans =
-  processGCSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
+  processGCSpans' (.timeUnixNano) (.value) setWithStartTime'value
 
 {- |
 Generalised version of `processGCSpans` that can be adapted to work on
@@ -442,7 +437,7 @@ arbitrary types using a getter and a lens.
 processGCSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe TimeUnixNano) ->
+  (s -> TimeUnixNano) ->
   (s -> Event) ->
   (s -> GCSpan -> t) ->
   Logger m ->
@@ -506,8 +501,8 @@ processGCSpans' timeUnixNano getEvent setGCSpan logger =
           Just i
             -- If the previous event was a `StartGC` event, then...
             | E.StartGC{} <- getEventInfo i
-            , Just startTimeUnixNano <- timeUnixNano i
-            , Just endTimeUnixNano <- timeUnixNano j -> do
+            , let startTimeUnixNano = timeUnixNano i
+            , let endTimeUnixNano = timeUnixNano j -> do
                 -- ...yield a GC span, and...
                 yield . setGCSpan j $ GCSpan{..}
                 -- ...continue with the current event.
@@ -597,7 +592,7 @@ processMutatorSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) (WithStartTime MutatorSpan)
 processMutatorSpans =
-  processMutatorSpans' tryGetTimeUnixNano (.value) setWithStartTime'value
+  processMutatorSpans' (.timeUnixNano) (.value) setWithStartTime'value
 
 {- |
 Generalised version of `processMutatorSpans` that can be adapted to work on
@@ -606,7 +601,7 @@ arbitrary types using a getter and a lens.
 processMutatorSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe TimeUnixNano) ->
+  (s -> TimeUnixNano) ->
   (s -> Event) ->
   (s -> MutatorSpan -> t) ->
   Logger m ->

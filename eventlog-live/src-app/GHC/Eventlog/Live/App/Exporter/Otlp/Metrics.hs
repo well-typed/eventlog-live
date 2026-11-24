@@ -16,7 +16,6 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Machine (ProcessT, traversing)
-import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup (Sum (..))
 import Data.Vector qualified as V
@@ -210,8 +209,8 @@ toNumberDataPoint :: (IsNumberDataPoint'Value v) => Metric v -> OM.NumberDataPoi
 toNumberDataPoint i =
   messageWith
     [ OM.maybe'value .~ Just (toNumberDataPoint'Value i.value)
-    , OM.timeUnixNano .~ fromMaybe 0 i.maybeTimeUnixNano
-    , OM.startTimeUnixNano .~ fromMaybe 0 i.maybeStartTimeUnixNano
+    , OM.timeUnixNano .~ i.timeUnixNano
+    , OM.startTimeUnixNano .~ i.startTimeUnixNano
     , OM.attributes .~ toMaybeKeyValues i.attrs
     ]
 

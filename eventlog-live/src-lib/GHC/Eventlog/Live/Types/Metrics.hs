@@ -267,8 +267,8 @@ A metric is any type that has the fields of the generic metric type.
 -}
 type IsMetric ma a =
   ( HasField "value" ma a
-  , HasField "maybeTimeUnixNano" ma (Maybe TimeUnixNano)
-  , HasField "maybeStartTimeUnixNano" ma (Maybe TimeUnixNano)
+  , HasField "timeUnixNano" ma TimeUnixNano
+  , HasField "startTimeUnixNano" ma TimeUnixNano
   , HasField "attrs" ma Attrs
   )
 
@@ -276,8 +276,8 @@ toMetric :: (IsMetric ma a) => ma -> Metric a
 toMetric ma =
   Metric
     { value = ma.value
-    , maybeTimeUnixNano = ma.maybeTimeUnixNano
-    , maybeStartTimeUnixNano = ma.maybeStartTimeUnixNano
+    , timeUnixNano = ma.timeUnixNano
+    , startTimeUnixNano = ma.startTimeUnixNano
     , attrs = ma.attrs
     }
 
@@ -293,9 +293,9 @@ a list of attributes.
 data Metric a = Metric
   { value :: !a
   -- ^ The measurement.
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   -- ^ The time at which the measurement was taken.
-  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
+  , startTimeUnixNano :: !TimeUnixNano
   {- ^ The earliest time at which any measurement could have been taken.
   Usually, this represents the start time of a process.
   -}
@@ -315,8 +315,8 @@ metricToKV :: (KeyValueOmit e kv, Monoid kv, ToJSON a) => Metric a -> kv
 metricToKV m =
   mconcat $
     [ "value" .= m.value
-    , "timeUnixNano" .?= m.maybeTimeUnixNano
-    , "startTimeUnixNano" .?= m.maybeStartTimeUnixNano
+    , "timeUnixNano" .?= m.timeUnixNano
+    , "startTimeUnixNano" .?= m.startTimeUnixNano
     , "attrs" .?= m.attrs
     ]
 {-# INLINE metricToKV #-}
@@ -332,15 +332,10 @@ instance (Semigroup a) => Semigroup (Metric a) where
     assert (x.attrs == y.attrs) $
       Metric
         { value = x.value <> y.value
-        , maybeTimeUnixNano = forceMaybe $ x.maybeTimeUnixNano `max` y.maybeTimeUnixNano
-        , maybeStartTimeUnixNano = forceMaybe $ x.maybeStartTimeUnixNano `min` y.maybeStartTimeUnixNano
+        , timeUnixNano = x.timeUnixNano `max` y.timeUnixNano
+        , startTimeUnixNano = x.startTimeUnixNano `min` y.startTimeUnixNano
         , attrs = x.attrs
         }
-   where
-    -- NOTE: Without this function, `max` creates a space leak.
-    forceMaybe :: Maybe b -> Maybe b
-    forceMaybe Nothing = Nothing
-    forceMaybe (Just b) = b `seq` Just b
 
 (<+>) :: forall a. (Semigroup (Semigroup.Sum a)) => Metric a -> Metric a -> Metric a
 x <+> y = unSum (toSum x <> toSum y)

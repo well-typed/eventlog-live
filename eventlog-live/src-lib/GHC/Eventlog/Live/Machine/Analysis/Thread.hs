@@ -33,7 +33,7 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -60,8 +60,8 @@ data ThreadLabel
 instance HasField "value" ThreadLabel Text where
   getField = (.threadlabel)
 
-instance HasField "maybeTimeUnixNano" ThreadLabel (Maybe TimeUnixNano) where
-  getField = Just . (.startTimeUnixNano)
+instance HasField "timeUnixNano" ThreadLabel TimeUnixNano where
+  getField = (.startTimeUnixNano)
 
 instance HasField "maybeSeverity" ThreadLabel (Maybe Severity) where
   getField = const Nothing
@@ -77,9 +77,8 @@ processThreadLabel = repeatedly go
  where
   go =
     await >>= \i -> case i.value.evSpec of
-      E.ThreadLabel{..}
-        | Just startTimeUnixNano <- tryGetTimeUnixNano i ->
-            yield ThreadLabel{..}
+      E.ThreadLabel{..} ->
+        yield ThreadLabel{startTimeUnixNano = i.startTimeUnixNano, ..}
       _otherwise -> pure ()
 
 -------------------------------------------------------------------------------
@@ -177,7 +176,7 @@ processThreadStateSpans ::
   Logger m ->
   ProcessT m (WithStartTime Event) ThreadStateSpan
 processThreadStateSpans =
-  processThreadStateSpans' tryGetTimeUnixNano (.value) (const id)
+  processThreadStateSpans' (.timeUnixNano) (.value) (const id)
 
 {- |
 Generalised version of `processThreadStateSpans` that can be adapted to work
@@ -186,7 +185,7 @@ on arbitrary types using a getter and a lens.
 processThreadStateSpans' ::
   forall m s t.
   (Monad m) =>
-  (s -> Maybe TimeUnixNano) ->
+  (s -> TimeUnixNano) ->
   (s -> Event) ->
   (s -> ThreadStateSpan -> t) ->
   Logger m ->
@@ -223,9 +222,9 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
           , -- ...the previous event was a `E.StopThread` event, then...
             Just E.StopThread{status} <- getEventInfo <$> mi
           , -- ...gather the end time of the previous event, and...
-            Just startTimeUnixNano <- timeUnixNano =<< mi
+            Just startTimeUnixNano <- timeUnixNano <$> mi
           , -- ...gather the start time of the current event, and...
-            Just endTimeUnixNano <- timeUnixNano j -> do
+            let endTimeUnixNano = timeUnixNano j -> do
               -- ...yield a thread state span, and...
               yield . setThreadStateSpan j $
                 ThreadStateSpan{threadState = Blocked status, ..}
@@ -255,9 +254,9 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
           , -- ...the previous event was a `E.StopThread` event, then...
             Just E.StopThread{status} <- getEventInfo <$> mi
           , -- ...gather the end time of the previous event, and...
-            Just startTimeUnixNano <- timeUnixNano =<< mi
+            Just startTimeUnixNano <- timeUnixNano <$> mi
           , -- ...gather the start time of the current event, and...
-            Just endTimeUnixNano <- timeUnixNano j -> do
+            let endTimeUnixNano = timeUnixNano j -> do
               -- ...yield a thread state span, and...
               yield . setThreadStateSpan j $
                 ThreadStateSpan{threadState = Blocked status, ..}
@@ -275,9 +274,9 @@ processThreadStateSpans' timeUnixNano getEvent setThreadStateSpan logger =
           , -- ...gather the capability of the `E.RunThread` event, and...
             Just capNo <- getEventCapNo =<< mi
           , -- ...gather the end time of the previous event, and...
-            Just startTimeUnixNano <- timeUnixNano =<< mi
+            Just startTimeUnixNano <- timeUnixNano <$> mi
           , -- ...gather the start time of the current event, and...
-            Just endTimeUnixNano <- timeUnixNano j -> do
+            let endTimeUnixNano = timeUnixNano j -> do
               -- ...yield a thread state span, and...
               yield . setThreadStateSpan j $
                 ThreadStateSpan{threadState = Running capNo, ..}

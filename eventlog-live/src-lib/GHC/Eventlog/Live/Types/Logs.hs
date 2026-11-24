@@ -96,7 +96,7 @@ A log record is any type that has the fields of the generic `LogRecord` type.
 -}
 type IsLogRecord l =
   ( HasField "value" l Text
-  , HasField "maybeTimeUnixNano" l (Maybe TimeUnixNano)
+  , HasField "timeUnixNano" l TimeUnixNano
   , HasField "maybeSeverity" l (Maybe Severity)
   , HasField "attrs" l Attrs
   )
@@ -105,7 +105,7 @@ toLogRecord :: (IsLogRecord l) => l -> LogRecord
 toLogRecord l =
   LogRecord
     { value = l.value
-    , maybeTimeUnixNano = l.maybeTimeUnixNano
+    , timeUnixNano = l.timeUnixNano
     , maybeSeverity = l.maybeSeverity
     , attrs = l.attrs
     }
@@ -116,7 +116,7 @@ LogRecords combine a timestamp, message and a severity.
 data LogRecord = LogRecord
   { value :: !Text
   -- ^ The log message.
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   -- ^ The time at which the log was created.
   , maybeSeverity :: !(Maybe Severity)
   -- ^ The severity of the log.
@@ -136,7 +136,7 @@ logRecordToKV :: (KeyValueOmit e kv, Monoid kv) => LogRecord -> kv
 logRecordToKV l =
   mconcat $
     [ "value" .= l.value
-    , "timeUnixNano" .?= l.maybeTimeUnixNano
+    , "timeUnixNano" .?= l.timeUnixNano
     , "severity" .?= l.maybeSeverity
     , "attrs" .?= l.attrs
     ]

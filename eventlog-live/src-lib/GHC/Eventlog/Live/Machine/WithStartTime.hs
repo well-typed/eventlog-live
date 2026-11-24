@@ -8,17 +8,18 @@ module GHC.Eventlog.Live.Machine.WithStartTime (
   TimeUnixNano,
   WithStartTime (..),
   setWithStartTime'value,
-  tryGetTimeUnixNano,
   withStartTime,
   withStartTime',
   dropStartTime,
 ) where
 
 import Control.Monad (forever)
-import Data.Machine (Is (..), PlanT, Process, await, construct, mapping, yield)
+import Data.Foldable (for_)
+import Data.Machine (Process, await, construct, mapping, yield)
 import Data.Word (Word64)
 import GHC.RTS.Events (Event (..), EventInfo)
 import GHC.RTS.Events qualified as E
+import GHC.Records (HasField (..))
 
 -------------------------------------------------------------------------------
 -- Start time
@@ -33,22 +34,18 @@ Data decorated with a start time in nanoseconds since the Unix epoch.
 -}
 data WithStartTime a = WithStartTime
   { value :: !a
-  , maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
+  , startTimeUnixNano :: !TimeUnixNano
   }
   deriving (Functor, Show)
+
+instance HasField "timeUnixNano" (WithStartTime Event) TimeUnixNano where
+  getField i = i.value.evTime + i.startTimeUnixNano
 
 {- |
 Setter for the value of a t`WithStartTime`
 -}
 setWithStartTime'value :: WithStartTime a -> b -> WithStartTime b
 setWithStartTime'value (WithStartTime _a t) b = WithStartTime b t
-
-{- |
-If the event has a start time, return `Just` the time of the event in
-nanoseconds since the Unix epoch. Otherwise, return `Nothing`.
--}
-tryGetTimeUnixNano :: WithStartTime Event -> Maybe TimeUnixNano
-tryGetTimeUnixNano i = (i.value.evTime +) <$> i.maybeStartTimeUnixNano
 
 {- |
 Wrap every event in t`WithStartTime`. Every event after `E.WallClockTime` will
@@ -63,33 +60,32 @@ withStartTime = withStartTime' E.evSpec WithStartTime
 Generalised version of `withStartTime` that can be adapted to work on arbitrary
 types using a getter and a setter.
 -}
-withStartTime' :: (a -> EventInfo) -> (a -> Maybe TimeUnixNano -> b) -> Process a b
-withStartTime' getEventInfo setStartTime = construct start
+withStartTime' :: (a -> EventInfo) -> (a -> TimeUnixNano -> b) -> Process a b
+withStartTime' getEventInfo setStartTime =
+  construct $ start []
  where
-  start =
+  start acc =
     await >>= \case
-      value
-        -- The `WallClockTime` event announces the wall-clock time at which the
-        -- process was started.
-        | E.WallClockTime{..} <- getEventInfo value -> do
+      i
+        | -- If this is the WallClockTime event, convert the timestamp to
+          -- nanoseconds and continue.
+          E.WallClockTime{..} <- getEventInfo i -> do
             -- This will start overflowing on Sunday, 21 July 2554 23:34:33, UTC.
-            let !startTimeNs = sec * 1_000_000_000 + fromIntegral nsec
-            -- We do not re-emit the `WallClockTime` event.
-            continue startTimeNs
-        | otherwise ->
-            yield (value `setStartTime` Nothing) >> start
+            let !startTimeUnixNano = sec * 1_000_000_000 + fromIntegral nsec
+            -- Emit all buffered events with the start time.
+            --
+            -- NOTE: This does not reemit the WallClockTime event.
+            for_ (reverse acc) $ \j -> yield (j `setStartTime` startTimeUnixNano)
+            -- From here on, simply reemit the events with their start time immediately.
+            continue startTimeUnixNano
+        | -- If this is not the WallClockTime event, buffer it and continue.
+          otherwise ->
+            start (i : acc)
   continue startTimeUnixNano =
-    mappingPlan $ \value ->
-      value `setStartTime` Just startTimeUnixNano
+    forever (await >>= yield . (`setStartTime` startTimeUnixNano))
 
 {- |
 Drop the t`WithStartTime` wrapper.
 -}
 dropStartTime :: Process (WithStartTime a) a
 dropStartTime = mapping (.value)
-
-{- |
-Internal helper. Variant of `mapping` for plans.
--}
-mappingPlan :: (a -> b) -> PlanT (Is a) b m a
-mappingPlan f = forever (await >>= \a -> yield (f a))

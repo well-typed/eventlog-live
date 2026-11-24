@@ -45,7 +45,6 @@ import Data.Functor.Identity (Identity (..))
 import Data.Int (Int64)
 import Data.Ix (Ix (..))
 import Data.Machine (SourceT, repeatedly, yield)
-import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -124,7 +123,7 @@ writeLog logger severity message =
     LogRecord
       { value = message
       , maybeSeverity = Just severity
-      , maybeTimeUnixNano = Nothing
+      , timeUnixNano = 0
       , attrs = maybe mempty (\cs -> ["call-stack" ~= prettyCallStack cs]) (cleanCallStack callStack)
       }
  where
@@ -150,8 +149,8 @@ logMetric logger internalMetric value =
   writeMetric
     Metric
       { value = value
-      , maybeTimeUnixNano = Nothing
-      , maybeStartTimeUnixNano = Nothing
+      , timeUnixNano = 0
+      , startTimeUnixNano = 0
       , attrs = mempty
       }
  where
@@ -298,7 +297,7 @@ toLogRecord = \case
    where
     logRecord :: Severity -> Text -> LogRecord
     logRecord severity value =
-      LogRecord{maybeTimeUnixNano = metric.maybeTimeUnixNano, maybeSeverity = Just severity, attrs = metric.attrs, ..}
+      LogRecord{timeUnixNano = metric.timeUnixNano, maybeSeverity = Just severity, attrs = metric.attrs, ..}
 
 {- |
 Filter a @`Logger` m@ by a `Severity`.
@@ -396,8 +395,8 @@ Add the current Unix timestamp in nanoseconds to telemetry data.
 -}
 addTimeUnixNano :: InternalTelemetry -> IO InternalTelemetry
 addTimeUnixNano i
-  | has maybeTimeUnixNano'InternalTelemetry i = pure i
-  | otherwise = set maybeTimeUnixNano'InternalTelemetry i . Just <$> getTimeUnixNano
+  | get timeUnixNano'InternalTelemetry i /= 0 = pure i
+  | otherwise = set timeUnixNano'InternalTelemetry i <$> getTimeUnixNano
 
 {- |
 Get the current Unix time in nanoseconds.
@@ -425,26 +424,22 @@ get :: Lens s a -> s -> a
 get l s = getConst $ l Const s
 {-# INLINE get #-}
 
-has :: Lens s (Maybe a) -> s -> Bool
-has l s = isJust (get l s)
-{-# INLINE has #-}
-
 set :: Lens s a -> s -> a -> s
 set l s a = runIdentity $ l (const $ Identity a) s
 {-# INLINE set #-}
 
-maybeTimeUnixNano'InternalTelemetry :: Lens InternalTelemetry (Maybe TimeUnixNano)
-maybeTimeUnixNano'InternalTelemetry f = \case
-  InternalTelemetry'LogRecord l -> InternalTelemetry'LogRecord <$> maybeTimeUnixNano'LogRecord f l
-  InternalTelemetry'Metric t m -> InternalTelemetry'Metric t <$> maybeTimeUnixNano'Metric f m
-{-# INLINE maybeTimeUnixNano'InternalTelemetry #-}
+timeUnixNano'InternalTelemetry :: Lens InternalTelemetry TimeUnixNano
+timeUnixNano'InternalTelemetry f = \case
+  InternalTelemetry'LogRecord l -> InternalTelemetry'LogRecord <$> timeUnixNano'LogRecord f l
+  InternalTelemetry'Metric t m -> InternalTelemetry'Metric t <$> timeUnixNano'Metric f m
+{-# INLINE timeUnixNano'InternalTelemetry #-}
 
-maybeTimeUnixNano'LogRecord :: Lens LogRecord (Maybe TimeUnixNano)
-maybeTimeUnixNano'LogRecord f l =
-  fmap (\x -> l{LogRecord.maybeTimeUnixNano = x}) (f l.maybeTimeUnixNano)
-{-# INLINE maybeTimeUnixNano'LogRecord #-}
+timeUnixNano'LogRecord :: Lens LogRecord TimeUnixNano
+timeUnixNano'LogRecord f l =
+  fmap (\x -> l{LogRecord.timeUnixNano = x}) (f l.timeUnixNano)
+{-# INLINE timeUnixNano'LogRecord #-}
 
-maybeTimeUnixNano'Metric :: Lens (Metric a) (Maybe TimeUnixNano)
-maybeTimeUnixNano'Metric f m =
-  fmap (\x -> m{Metric.maybeTimeUnixNano = x}) (f m.maybeTimeUnixNano)
-{-# INLINE maybeTimeUnixNano'Metric #-}
+timeUnixNano'Metric :: Lens (Metric a) TimeUnixNano
+timeUnixNano'Metric f m =
+  fmap (\x -> m{Metric.timeUnixNano = x}) (f m.timeUnixNano)
+{-# INLINE timeUnixNano'Metric #-}
