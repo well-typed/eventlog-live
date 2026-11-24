@@ -22,7 +22,7 @@ import Control.Monad.Trans.Except (runExceptT)
 import Data.DList qualified as D
 import Data.Default (Default (..))
 import Data.Foldable (for_)
-import Data.Machine (ProcessT, asParts, await, mapping, repeatedly, runT_, stopped, (~>))
+import Data.Machine (ProcessT, asParts, await, filtered, mapping, repeatedly, runT_, stopped, (~>))
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -46,6 +46,7 @@ import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
 import GHC.Eventlog.Socket.Compat (startMyEventlogSocket)
 import GHC.IsList (IsList (..))
 import GHC.RTS.Events (Event (..))
+import GHC.RTS.Events qualified as E
 import GHC.Stack.Profiler.Compat (withGhcStackProfiler)
 import IpeDB.Database qualified as DB
 import IpeDB.Types.CostCentre qualified as CC
@@ -141,11 +142,15 @@ main =
               , -- Log ticks.
                 logTicks logger
               , -- If no cost-centre database was provided, index the cost-centre events.
-                indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
+                dropTick
+                  ~> filtered isInfoTableProv
+                  ~> indexCostCentreEvents (ccdb `onlyIf` isNothing maybeCCDBPath)
               , -- If no info-prov database was provided, index the info-prov events.
-                indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
+                dropTick
+                  ~> filtered isCostCentre
+                  ~> indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
               , -- Process the eventlog events.
-                M.liftTick (M.withStartTime logger)
+                M.liftTick (filtered (\ev -> not (isCostCentre ev || isInfoTableProv ev)) ~> M.withStartTime logger)
                   ~> processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
                   ~> M.liftTick (mapping D.singleton)
               ]
@@ -241,6 +246,12 @@ withCostCentreTable maybeCCDBPath session =
     (\ccDBPath -> DB.withTableFrom session ccDBPath def)
     maybeCCDBPath
 
+-- Is this event a cost-centre event?
+isCostCentre :: Event -> Bool
+isCostCentre ev
+  | E.HeapProfCostCentre{} <- ev.evSpec = True
+  | otherwise = False
+
 -- Run an action with access to an info-prov table.
 withInfoProvTable :: Maybe FilePath -> DB.Session -> (DB.Table IP.InfoProvId IP.InfoProv -> IO ()) -> IO ()
 withInfoProvTable maybeIpeDBPath session =
@@ -249,21 +260,27 @@ withInfoProvTable maybeIpeDBPath session =
     (\ipeDBPath -> DB.withTableFrom session ipeDBPath def)
     maybeIpeDBPath
 
+-- Is this event an info-table prov event?
+isInfoTableProv :: Event -> Bool
+isInfoTableProv ev
+  | E.InfoTableProv{} <- ev.evSpec = True
+  | otherwise = False
+
 -- Create machine that indexes CostCentre data.
 indexCostCentreEvents ::
   Maybe (DB.Table CC.CostCentreId CC.CostCentre) ->
-  ProcessT IO (Tick Event) x
+  ProcessT IO Event x
 indexCostCentreEvents =
   -- If a cost-centre database was not provided, don't index any new entries.
-  maybe stopped (\ccdb -> dropTick ~> DB.indexer CC.toCostCentre def ccdb ~> mapping absurd)
+  maybe stopped (\ccdb -> DB.indexer CC.toCostCentre def ccdb ~> mapping absurd)
 
 -- Create machine that indexes InfoProv data.
 indexInfoProvEvents ::
   Maybe (DB.Table IP.InfoProvId IP.InfoProv) ->
-  ProcessT IO (Tick Event) x
+  ProcessT IO Event x
 indexInfoProvEvents =
   -- If an IPE database was not provided, don't index any new entries.
-  maybe stopped (\ipedb -> dropTick ~> DB.indexer IP.toInfoProv def ipedb ~> mapping absurd)
+  maybe stopped (\ipedb -> DB.indexer IP.toInfoProv def ipedb ~> mapping absurd)
 
 --------------------------------------------------------------------------------
 -- Internal helpers
