@@ -21,9 +21,9 @@ import Data.Vector qualified as V
 import Data.Vector.Mutable (MVector)
 import Data.Vector.Mutable qualified as VM
 import Data.Vector.Unboxed qualified as U
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Metrics (Metric (..))
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import Prelude hiding (null)
 
 type TimeUnix = Int

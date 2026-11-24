@@ -171,6 +171,7 @@ library
     GHC.Eventlog.Live.Types.Profiles
     GHC.Eventlog.Live.Types.Severity
     GHC.Eventlog.Live.Types.Thread
+    GHC.Eventlog.Live.Types.Time
     GHC.Eventlog.Live.Types.Traces
 
   other-modules:

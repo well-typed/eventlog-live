@@ -62,9 +62,9 @@ import Data.Text qualified as T
 import Data.Type.Equality (type (:~:) (Refl))
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Eventlog.Live.Config
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano)
 import GHC.Eventlog.Live.Types.Attribute (Attrs)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.Records (HasField (..))
 import GHC.TypeLits (KnownSymbol (..), Symbol, sameSymbol, symbolVal)
 

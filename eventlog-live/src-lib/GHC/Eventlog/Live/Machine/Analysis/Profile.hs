@@ -33,11 +33,12 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word8)
 import GHC.Eventlog.Live.Logger (Logger, logError, logWarn)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Types.Profiles (Location (..))
 import GHC.Eventlog.Live.Types.Thread (ThreadId (..), fromThreadId)
+import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.RTS.Events (Event (..))
 import GHC.RTS.Events qualified as E
 import GHC.Records (HasField (..))
