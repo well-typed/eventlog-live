@@ -12,11 +12,9 @@ module GHC.Eventlog.Live.App.Server.Viewer.AlignedData (
 import Control.Monad.ST.Strict (runST)
 import Data.Aeson.Types (Encoding, KeyValue (..), ToJSON (..), Value (..), pairs)
 import Data.Foldable (for_)
-import Data.Functor ((<&>))
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.Map.Strict qualified as M
-import Data.Maybe (mapMaybe)
 import Data.Set qualified as S
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -76,14 +74,14 @@ validate d = V.all (\s -> U.length d.xValues == V.length s.yValues) d.series
 
 data DataPoint a = DataPoint {attrs :: !Attrs, timeUnix :: !TimeUnix, value :: !a}
 
-toDataPoint :: Metric a -> Maybe (DataPoint a)
+toDataPoint :: Metric a -> DataPoint a
 toDataPoint Metric{..} =
-  maybeTimeUnixNano <&> \timeUnixNano -> DataPoint{timeUnix = toTimeUnix timeUnixNano, ..}
+  DataPoint{timeUnix = toTimeUnix timeUnixNano, ..}
 
 toAlignedData :: [Metric a] -> AlignedData a
 toAlignedData metrics = AlignedData xValues series
  where
-  dps = mapMaybe toDataPoint metrics
+  dps = toDataPoint <$> metrics
   (xValuesSet, attrsSet) = foldMap (\dp -> (IS.singleton dp.timeUnix, S.singleton dp.attrs)) dps
 
   xValuesCount = IS.size xValuesSet

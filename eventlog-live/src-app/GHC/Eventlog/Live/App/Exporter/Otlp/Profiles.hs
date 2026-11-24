@@ -213,7 +213,7 @@ getSample fullConfig (_profile :: Proxy profile) sample = do
           [ OP.values .~ [fromIntegral @(GetProfileMetricType profile) @Int64 sample.value]
           , OP.stackIndex .~ stackIndex
           , OP.attributeIndices .~ attributeIndices
-          , OP.timestampsUnixNano .~? sequence [sample.maybeTimeUnixNano]
+          , OP.timestampsUnixNano .~ [sample.timeUnixNano]
           ]
   pure opSample
 

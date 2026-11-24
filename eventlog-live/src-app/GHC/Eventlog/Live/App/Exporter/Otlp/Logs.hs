@@ -19,7 +19,6 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Data (Proxy (..))
 import Data.Int (Int64)
 import Data.Machine (ProcessT, traversing)
-import Data.Maybe (fromMaybe)
 import Data.Semigroup (Sum (..))
 import Data.Vector qualified as V
 import GHC.Eventlog.Live.App.Exporter.Otlp.Core (CanExportToConsole, CanExportToOltpViaHttpProtobuf (..), ExportError (..), Exporter (..), export, ifNonEmpty, messageWith, toMaybeKeyValues)
@@ -149,8 +148,8 @@ toLogRecord :: LogRecord -> OL.LogRecord
 toLogRecord l =
   messageWith
     [ OL.body .~ messageWith [OC.stringValue .~ l.value]
-    , OL.timeUnixNano .~ fromMaybe 0 l.maybeTimeUnixNano
-    , OL.observedTimeUnixNano .~ fromMaybe 0 l.maybeTimeUnixNano
+    , OL.timeUnixNano .~ l.timeUnixNano
+    , OL.observedTimeUnixNano .~ l.timeUnixNano
     , OL.severityNumber .~ toSeverityNumber l.maybeSeverity
     , OL.attributes .~ toMaybeKeyValues l.attrs
     ]

@@ -14,7 +14,6 @@ module GHC.Eventlog.Live.Machine.Analysis.Profile (
 )
 where
 
-import Control.Applicative (Alternative (..))
 import Control.Exception (Exception (..))
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -34,7 +33,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word8)
 import GHC.Eventlog.Live.Logger (Logger, logError, logWarn)
-import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (TimeUnixNano, WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Types.Profiles (Location (..))
@@ -59,7 +58,7 @@ data CallStack = CallStack
   { capNo :: !CapNo
   , threadId :: !ThreadId
   , callStack :: !(Vector CallStackFrame)
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   }
   deriving stock (Show)
 
@@ -109,7 +108,7 @@ The internal state for `processGhcStackProfilerData`.
 data GhcStackProfilerState = GhcStackProfilerState
   { warnOnDeserializeError :: !Bool
   , callStackChunksRev :: ![GSP.CallStackChunk]
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNanos :: ![TimeUnixNano]
   , symbolTable :: !GSP.IntMapTable
   }
 
@@ -123,7 +122,7 @@ emptyGhcStackProfilerState =
   GhcStackProfilerState
     { warnOnDeserializeError = True
     , callStackChunksRev = []
-    , maybeTimeUnixNano = Nothing
+    , timeUnixNanos = []
     , symbolTable = GSP.emptyIntMapTable
     }
 
@@ -162,20 +161,20 @@ processGhcStackProfilerData logger infoProvTable =
             Right (GSP.CallStackFinal callStackChunk) -> do
               let symbolTableReader = GSP.mkIntMapSymbolTableReader st.symbolTable
               let callStackChunks = NE.reverse (callStackChunk :| st.callStackChunksRev)
-              let !maybeTimeUnixNano = st.maybeTimeUnixNano <|> tryGetTimeUnixNano i
-              callStack <- lift $ decodeCallStack maybeTimeUnixNano symbolTableReader callStackChunks
+              let !timeUnixNanos = i.timeUnixNano : st.timeUnixNanos
+              callStack <- lift $ decodeCallStack timeUnixNanos symbolTableReader callStackChunks
               unless (V.null callStack.callStack) $ yield callStack
               go
                 st
                   { callStackChunksRev = []
-                  , maybeTimeUnixNano = Nothing
+                  , timeUnixNanos = []
                   }
             -- If we receive a call-stack chunk, add it to the list of chunks and continue...
             Right (GSP.CallStackChunk callStackChunk) ->
               go
                 st
                   { callStackChunksRev = callStackChunk : st.callStackChunksRev
-                  , maybeTimeUnixNano = st.maybeTimeUnixNano <|> tryGetTimeUnixNano i
+                  , timeUnixNanos = i.timeUnixNano : st.timeUnixNanos
                   }
             -- If we receive a string definition, update the symbol table and continue...
             Right (GSP.StringDef string) -> do
@@ -195,11 +194,11 @@ processGhcStackProfilerData logger infoProvTable =
         _otherwise -> go st
 
   decodeCallStack ::
-    Maybe TimeUnixNano ->
+    [TimeUnixNano] ->
     GSP.SymbolTableReader ->
     NonEmpty GSP.CallStackChunk ->
     m CallStack
-  decodeCallStack maybeTimeUnixNano symbolTableReader callStackChunks = do
+  decodeCallStack timeUnixNanos symbolTableReader callStackChunks = do
     -- Concatenate the chunks into a full binary call-stack message.
     let !gspBinaryCallStack = GSP.joinCallStackChunks callStackChunks
 
@@ -237,6 +236,7 @@ processGhcStackProfilerData logger infoProvTable =
 
     let !capNo = fromCapabilityId . GSP.callCapabilityId $ gspCallStackMessage
     let !threadId = fromThreadId . GSP.callThreadId $ gspCallStackMessage
+    let !timeUnixNano = minimum timeUnixNanos
     pure CallStack{..}
 
 {- |
@@ -269,7 +269,7 @@ A GHC cost-centre stack.
 data CostCentreStack = CostCentreStack
   { capNo :: !CapNo
   , costCentreStack :: !(Vector CostCentreStackFrame)
-  , maybeTimeUnixNano :: !(Maybe TimeUnixNano)
+  , timeUnixNano :: !TimeUnixNano
   }
   deriving stock (Show)
 
@@ -329,8 +329,7 @@ processProfSampleCostCentreData logger costCentreTable =
 
           -- Yield the cost centre stack.
           let !capNo = CapNo $ fromIntegral @Word16 @Word32 profCap
-          let !maybeTimeUnixNano = tryGetTimeUnixNano i
-          yield CostCentreStack{..}
+          yield CostCentreStack{timeUnixNano = i.timeUnixNano, ..}
         _otherwise -> pure ()
 
 --------------------------------------------------------------------------------

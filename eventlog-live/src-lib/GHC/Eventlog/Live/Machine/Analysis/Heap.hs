@@ -35,7 +35,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Logger (Logger, logTrace, logWarn)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), tryGetTimeUnixNano)
+import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (evCapNo)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
@@ -426,7 +426,7 @@ metric ::
 metric i v attrs =
   Metric
     { value = v
-    , maybeTimeUnixNano = tryGetTimeUnixNano i
-    , maybeStartTimeUnixNano = i.maybeStartTimeUnixNano
+    , timeUnixNano = i.timeUnixNano
+    , startTimeUnixNano = i.startTimeUnixNano
     , attrs = ["capNo" ~= evCapNo i.value] <> attrs
     }
