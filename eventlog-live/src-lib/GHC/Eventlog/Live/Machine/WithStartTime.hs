@@ -12,9 +12,12 @@ module GHC.Eventlog.Live.Machine.WithStartTime (
   dropStartTime,
 ) where
 
-import Control.Monad (forever)
+import Control.Monad (forever, when)
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Foldable (for_)
-import Data.Machine (Process, await, construct, mapping, yield)
+import Data.Machine (Process, ProcessT, await, construct, mapping, yield)
+import Data.Text qualified as T
+import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.RTS.Events (Event (..), EventInfo)
 import GHC.RTS.Events qualified as E
@@ -47,15 +50,15 @@ have its start time field set to `Just` the process start time.
 
 This machine swallows the first and only `E.WallClockTime` event.
 -}
-withStartTime :: Process Event (WithStartTime Event)
-withStartTime = withStartTime' E.evSpec WithStartTime
+withStartTime :: (Monad m) => Logger m -> ProcessT m Event (WithStartTime Event)
+withStartTime logger = withStartTime' logger E.evSpec WithStartTime
 
 {- |
 Generalised version of `withStartTime` that can be adapted to work on arbitrary
 types using a getter and a setter.
 -}
-withStartTime' :: (a -> EventInfo) -> (a -> TimeUnixNano -> b) -> Process a b
-withStartTime' getEventInfo setStartTime =
+withStartTime' :: (Monad m) => Logger m -> (a -> EventInfo) -> (a -> TimeUnixNano -> b) -> ProcessT m a b
+withStartTime' logger getEventInfo setStartTime =
   construct $ start []
  where
   start acc =
@@ -73,7 +76,9 @@ withStartTime' getEventInfo setStartTime =
             -- From here on, simply reemit the events with their start time immediately.
             continue startTimeUnixNano
         | -- If this is not the WallClockTime event, buffer it and continue.
-          otherwise ->
+          otherwise -> do
+            lift . when (shouldWorry (getEventInfo i)) . logWarn logger . T.pack $
+              "Unexpected event received prior to WallClockTime event: " <> show (getEventInfo i)
             start (i : acc)
   continue startTimeUnixNano =
     forever (await >>= yield . (`setStartTime` startTimeUnixNano))
@@ -83,3 +88,16 @@ Drop the t`WithStartTime` wrapper.
 -}
 dropStartTime :: Process (WithStartTime a) a
 dropStartTime = mapping (.value)
+
+{- |
+Should `withStartTime'` be worried if it sees this event before the `E.WallClockTime` event?
+-}
+shouldWorry :: EventInfo -> Bool
+shouldWorry E.InfoTableProv{} = False
+shouldWorry E.HeapInfoGHC{} = False
+shouldWorry E.HeapProfCostCentre{} = False
+shouldWorry E.OsProcessPid{} = False
+shouldWorry E.OsProcessParentPid{} = False
+shouldWorry E.RtsIdentifier{} = False
+shouldWorry E.ProgramArgs{} = False
+shouldWorry _ = True
