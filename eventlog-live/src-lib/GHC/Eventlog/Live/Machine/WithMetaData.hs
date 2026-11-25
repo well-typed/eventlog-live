@@ -101,4 +101,5 @@ shouldWorry E.OsProcessPid{} = False
 shouldWorry E.OsProcessParentPid{} = False
 shouldWorry E.RtsIdentifier{} = False
 shouldWorry E.ProgramArgs{} = False
+shouldWorry E.UserBinaryMessage{} = False
 shouldWorry _ = True
