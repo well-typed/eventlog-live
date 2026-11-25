@@ -11,7 +11,7 @@ module GHC.Eventlog.Live.Machine.Analysis.Log where
 
 import Data.Machine (Process, await, repeatedly, yield)
 import Data.Text (Text)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -38,7 +38,7 @@ instance HasField "attrs" UserMessage Attrs where
 {- |
 This machine processes `E.UserMessage` events into logs.
 -}
-processUserMessage :: Process (WithStartTime Event) UserMessage
+processUserMessage :: Process (WithMetaData Event) UserMessage
 processUserMessage =
   repeatedly $
     await >>= \case
@@ -70,7 +70,7 @@ instance HasField "attrs" UserMarker Attrs where
 {- |
 This machine processes `E.UserMarker` events into logs.
 -}
-processUserMarker :: Process (WithStartTime Event) UserMarker
+processUserMarker :: Process (WithMetaData Event) UserMarker
 processUserMarker =
   repeatedly $
     await >>= \case

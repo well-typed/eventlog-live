@@ -33,7 +33,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word16, Word32, Word8)
 import GHC.Eventlog.Live.Logger (Logger, logError, logWarn)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), fromCapabilityId)
 import GHC.Eventlog.Live.Types.Profiles (Location (..))
@@ -136,11 +136,11 @@ processGhcStackProfilerData ::
   (MonadIO m) =>
   Logger m ->
   DB.Table InfoProvId InfoProv ->
-  ProcessT m (WithStartTime Event) CallStack
+  ProcessT m (WithMetaData Event) CallStack
 processGhcStackProfilerData logger infoProvTable =
   construct $ go emptyGhcStackProfilerState
  where
-  go :: GhcStackProfilerState -> PlanT (Is (WithStartTime Event)) CallStack m ()
+  go :: GhcStackProfilerState -> PlanT (Is (WithMetaData Event)) CallStack m ()
   go st =
     await >>= \i -> do
       case i.value.evSpec of
@@ -310,7 +310,7 @@ processProfSampleCostCentreData ::
   (MonadIO m) =>
   Logger m ->
   DB.Table CostCentreId CostCentre ->
-  ProcessT m (WithStartTime Event) CostCentreStack
+  ProcessT m (WithMetaData Event) CostCentreStack
 processProfSampleCostCentreData logger costCentreTable =
   repeatedly $
     await >>= \i ->

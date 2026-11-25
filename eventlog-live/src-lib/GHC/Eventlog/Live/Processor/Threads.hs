@@ -25,8 +25,8 @@ import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateOrder)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
-import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
+import GHC.Eventlog.Live.Machine.WithMetaData qualified as M
 import GHC.Eventlog.Live.Processor.Core (runIf)
 import GHC.Eventlog.Live.Processor.Core.Metrics qualified as CM
 import GHC.Eventlog.Live.Processor.Core.Traces qualified as CT
@@ -40,7 +40,7 @@ processThreadEvents ::
   (MonadIO m) =>
   Logger m ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList (Either SomeMetrics SomeSpans)))
+  ProcessT m (Tick (WithMetaData Event)) (Tick (DList (Either SomeMetrics SomeSpans)))
 processThreadEvents verbosity fullConfig =
   runIf (shouldProcessThreadEvents fullConfig) $
     M.sortByTicks (.value.evTime) fullConfig.eventlogFlushIntervalX
@@ -51,9 +51,9 @@ processThreadEvents verbosity fullConfig =
                 M.processGCSpans verbosity
                   ~> mapping (D.singleton . A)
             , runIf (shouldComputeThreadStateSpan fullConfig) $
-                M.processThreadStateSpans' (.timeUnixNano) (.value) M.setWithStartTime'value verbosity
+                M.processThreadStateSpans' (.timeUnixNano) (.value) M.setWithMetaData'value verbosity
                   ~> fanout
-                    [ M.asMutatorSpans' (.value) M.setWithStartTime'value
+                    [ M.asMutatorSpans' (.value) M.setWithMetaData'value
                         ~> mapping (D.singleton . B)
                     , mapping (D.singleton . C)
                     ]
@@ -71,12 +71,12 @@ processThreadEvents verbosity fullConfig =
                         ~> M.liftTick (mapping D.singleton)
                     ]
                   ~> mapping (fmap (fmap Left))
-              , M.liftTick M.dropStartTime
+              , M.liftTick M.dropMetaData
                   ~> CT.process (Proxy @"capabilityUsage") fullConfig
                   ~> M.liftTick (mapping (D.singleton . Right))
               ]
         , M.liftTick (mapping rightToMaybe ~> asParts)
-            ~> M.liftTick M.dropStartTime
+            ~> M.liftTick M.dropMetaData
             ~> CT.process (Proxy @"threadState") fullConfig
             ~> M.liftTick (mapping (D.singleton . Right))
         ]

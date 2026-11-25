@@ -156,7 +156,7 @@ library
     GHC.Eventlog.Live.Machine.Sink
     GHC.Eventlog.Live.Machine.Source
     GHC.Eventlog.Live.Machine.Validate
-    GHC.Eventlog.Live.Machine.WithStartTime
+    GHC.Eventlog.Live.Machine.WithMetaData
     GHC.Eventlog.Live.Options
     GHC.Eventlog.Live.Processor
     GHC.Eventlog.Live.Processor.Core

@@ -263,9 +263,9 @@ The following diagram documents the information flow in the eventlog processor r
 
 ```mermaid
 stateDiagram-v2
-    [*]                                                 --> withStartTime                                   : Tick Event
+    [*]                                                 --> withMetaData                                   : Tick Event
 
-    withStartTime                                       --> processHeapEvents                               : Tick (WithStartTime Event)
+    withMetaData                                       --> processHeapEvents                               : Tick (WithMetaData Event)
     state processHeapEvents {
         [*]                                             --> processHeapAllocated
         processHeapAllocated'asNumberDataPoint                                                              : asNumberDataPoint
@@ -357,17 +357,17 @@ stateDiagram-v2
         processHeapProfSample'asMetric                  --> [*]
     }
 
-    withStartTime                                       --> processThreadEvents                             : Tick (WithStartTime Event)
+    withMetaData                                       --> processThreadEvents                             : Tick (WithMetaData Event)
     state processThreadEvents {
         processThreadEvents'batchByTick                                                                     : batchByTick
         [*]                                             --> processThreadEvents'batchByTick
         processThreadEvents'sortByBatch                                                                     : sortByBatch
-        processThreadEvents'batchByTick                 --> processThreadEvents'sortByBatch                 : [WithStartTime Event]
+        processThreadEvents'batchByTick                 --> processThreadEvents'sortByBatch                 : [WithMetaData Event]
 
-        processThreadEvents'sortByBatch                 --> processGCSpans                                  : [WithStartTime Event]
+        processThreadEvents'sortByBatch                 --> processGCSpans                                  : [WithMetaData Event]
         processGCSpans                                  --> asCapabilityUsageSpans                          : [GCSpan]
 
-        processThreadEvents'sortByBatch                 --> processThreadStateSpans                         : [WithStartTime Event]
+        processThreadEvents'sortByBatch                 --> processThreadStateSpans                         : [WithMetaData Event]
         processThreadStateSpans                         --> asMutatorSpan                                   : [ThreadStateSpan]
 
         asMutatorSpan                                   --> asCapabilityUsageSpans                          : [MutatorSpan]

@@ -20,7 +20,7 @@ import GHC.Eventlog.Live.Logger (Logger)
 import GHC.Eventlog.Live.Machine.Analysis.Profile qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Processor.Core
 import GHC.Eventlog.Live.Types.Profiles (SomeSamples (..), toSample)
 import GHC.RTS.Events (Event (..))
@@ -39,7 +39,7 @@ processProfileEvents ::
   DB.Table CC.CostCentreId CC.CostCentre ->
   DB.Table IP.InfoProvId IP.InfoProv ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList SomeSamples))
+  ProcessT m (Tick (WithMetaData Event)) (Tick (DList SomeSamples))
 processProfileEvents logger ccdb ipedb config =
   M.fanoutTick
     [ processProfSampleCostCentre logger ccdb config
@@ -58,7 +58,7 @@ processGhcStackProfiler ::
   Logger m ->
   DB.Table IP.InfoProvId IP.InfoProv ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick SomeSamples)
+  ProcessT m (Tick (WithMetaData Event)) (Tick SomeSamples)
 processGhcStackProfiler logger ipedb config =
   runIf (C.processorEnabled (.profiles) (.callStackProfile) config) $
     M.liftTick (M.processGhcStackProfilerData logger ipedb ~> mapping (D.singleton . toSample))
@@ -75,7 +75,7 @@ processProfSampleCostCentre ::
   Logger m ->
   DB.Table CC.CostCentreId CC.CostCentre ->
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick SomeSamples)
+  ProcessT m (Tick (WithMetaData Event)) (Tick SomeSamples)
 processProfSampleCostCentre logger ccdb config =
   runIf (C.processorEnabled (.profiles) (.costCentreStackProfile) config) $
     M.liftTick (M.processProfSampleCostCentreData logger ccdb ~> mapping (D.singleton . toSample))

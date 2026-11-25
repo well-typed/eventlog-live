@@ -1,15 +1,15 @@
 {- |
-Module      : GHC.Eventlog.Live.Machine.WithStartTime
+Module      : GHC.Eventlog.Live.Machine.WithMetaData
 Description : Machines for processing eventlog data.
 Stability   : experimental
 Portability : portable
 -}
-module GHC.Eventlog.Live.Machine.WithStartTime (
-  WithStartTime (..),
-  setWithStartTime'value,
-  withStartTime,
-  withStartTime',
-  dropStartTime,
+module GHC.Eventlog.Live.Machine.WithMetaData (
+  WithMetaData (..),
+  setWithMetaData'value,
+  withMetaData,
+  withMetaData',
+  dropMetaData,
 ) where
 
 import Control.Monad (forever, when)
@@ -27,38 +27,39 @@ import GHC.Records (HasField (..))
 -- Start time
 
 {- |
-Data decorated with a start time in nanoseconds since the Unix epoch.
+Values decorated with program meta data.
 -}
-data WithStartTime a = WithStartTime
+data WithMetaData a = WithMetaData
   { value :: !a
   , startTimeUnixNano :: !TimeUnixNano
+  -- ^ The program start time in nanoseconds since the Unix epoch
   }
   deriving (Functor, Show)
 
-instance HasField "timeUnixNano" (WithStartTime Event) TimeUnixNano where
+instance HasField "timeUnixNano" (WithMetaData Event) TimeUnixNano where
   getField i = i.value.evTime + i.startTimeUnixNano
 
 {- |
-Setter for the value of a t`WithStartTime`
+Setter for the value of a t`WithMetaData`
 -}
-setWithStartTime'value :: WithStartTime a -> b -> WithStartTime b
-setWithStartTime'value (WithStartTime _a t) b = WithStartTime b t
+setWithMetaData'value :: WithMetaData a -> b -> WithMetaData b
+setWithMetaData'value (WithMetaData _a t) b = WithMetaData b t
 
 {- |
-Wrap every event in t`WithStartTime`. Every event after `E.WallClockTime` will
+Wrap every event in t`WithMetaData`. Every event after `E.WallClockTime` will
 have its start time field set to `Just` the process start time.
 
 This machine swallows the first and only `E.WallClockTime` event.
 -}
-withStartTime :: (Monad m) => Logger m -> ProcessT m Event (WithStartTime Event)
-withStartTime logger = withStartTime' logger E.evSpec WithStartTime
+withMetaData :: (Monad m) => Logger m -> ProcessT m Event (WithMetaData Event)
+withMetaData logger = withMetaData' logger E.evSpec WithMetaData
 
 {- |
-Generalised version of `withStartTime` that can be adapted to work on arbitrary
+Generalised version of `withMetaData` that can be adapted to work on arbitrary
 types using a getter and a setter.
 -}
-withStartTime' :: (Monad m) => Logger m -> (a -> EventInfo) -> (a -> TimeUnixNano -> b) -> ProcessT m a b
-withStartTime' logger getEventInfo setStartTime =
+withMetaData' :: (Monad m) => Logger m -> (a -> EventInfo) -> (a -> TimeUnixNano -> b) -> ProcessT m a b
+withMetaData' logger getEventInfo setStartTime =
   construct $ start []
  where
   start acc =
@@ -84,13 +85,13 @@ withStartTime' logger getEventInfo setStartTime =
     forever (await >>= yield . (`setStartTime` startTimeUnixNano))
 
 {- |
-Drop the t`WithStartTime` wrapper.
+Drop the t`WithMetaData` wrapper.
 -}
-dropStartTime :: Process (WithStartTime a) a
-dropStartTime = mapping (.value)
+dropMetaData :: Process (WithMetaData a) a
+dropMetaData = mapping (.value)
 
 {- |
-Should `withStartTime'` be worried if it sees this event before the `E.WallClockTime` event?
+Should `withMetaData'` be worried if it sees this event before the `E.WallClockTime` event?
 -}
 shouldWorry :: EventInfo -> Bool
 shouldWorry E.InfoTableProv{} = False

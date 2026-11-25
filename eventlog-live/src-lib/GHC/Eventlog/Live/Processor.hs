@@ -25,7 +25,7 @@ import GHC.Eventlog.Live.Config (FullConfig (..))
 import GHC.Eventlog.Live.Logger (ExportResult (..), InternalMetric (..), InternalTelemetry (..), Logger, Scoped (..))
 import GHC.Eventlog.Live.Machine.Core (Tick, deltaToCumulative)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime)
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData)
 import GHC.Eventlog.Live.Processor.Core.Logs qualified as CL
 import GHC.Eventlog.Live.Processor.Core.Metrics (MetricProcessors (..), select)
 import GHC.Eventlog.Live.Processor.Core.Metrics qualified as CM
@@ -129,7 +129,7 @@ processEventlogTelemetry ::
   Maybe HeapProfBreakdown ->
   DB.Table CC.CostCentreId CC.CostCentre ->
   DB.Table IP.InfoProvId IP.InfoProv ->
-  ProcessT IO (Tick (WithStartTime Event)) (Tick ExportRequest)
+  ProcessT IO (Tick (WithMetaData Event)) (Tick ExportRequest)
 processEventlogTelemetry logger fullConfig resource scope maybeHeapProfBreakdown ccdb ipedb =
   M.fanoutTick
     [ -- Process the heap events.

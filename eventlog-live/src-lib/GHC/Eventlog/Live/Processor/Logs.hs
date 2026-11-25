@@ -19,7 +19,7 @@ import GHC.Eventlog.Live.Machine.Analysis.Log qualified as M
 import GHC.Eventlog.Live.Machine.Analysis.Thread qualified as M
 import GHC.Eventlog.Live.Machine.Core (Tick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Processor.Core.Logs (process)
 import GHC.Eventlog.Live.Types.Logs (SomeLogs (..))
 import GHC.RTS.Events (Event (..))
@@ -31,7 +31,7 @@ import GHC.RTS.Events (Event (..))
 processLogEvents ::
   (MonadIO m) =>
   FullConfig ->
-  ProcessT m (Tick (WithStartTime Event)) (Tick (DList SomeLogs))
+  ProcessT m (Tick (WithMetaData Event)) (Tick (DList SomeLogs))
 processLogEvents fullConfig =
   M.fanoutTick
     [ processThreadLabel fullConfig
@@ -45,20 +45,20 @@ processLogEvents fullConfig =
 --------------------------------------------------------------------------------
 -- UserMessage
 
-processUserMessage :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
+processUserMessage :: FullConfig -> Process (Tick (WithMetaData Event)) (Tick SomeLogs)
 processUserMessage =
   process (Proxy @"userMessage") M.processUserMessage
 
 --------------------------------------------------------------------------------
 -- UserMarker
 
-processUserMarker :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
+processUserMarker :: FullConfig -> Process (Tick (WithMetaData Event)) (Tick SomeLogs)
 processUserMarker =
   process (Proxy @"userMarker") M.processUserMarker
 
 --------------------------------------------------------------------------------
 -- ThreadLabel
 
-processThreadLabel :: FullConfig -> Process (Tick (WithStartTime Event)) (Tick SomeLogs)
+processThreadLabel :: FullConfig -> Process (Tick (WithMetaData Event)) (Tick SomeLogs)
 processThreadLabel =
   process (Proxy @"threadLabel") M.processThreadLabel

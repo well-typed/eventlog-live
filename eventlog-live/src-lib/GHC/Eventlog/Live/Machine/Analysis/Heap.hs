@@ -35,7 +35,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word32, Word64)
 import GHC.Eventlog.Live.Logger (Logger, logTrace, logWarn)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (evCapNo)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
@@ -62,7 +62,7 @@ This machine processes `E.HeapAllocated` events into metrics.
 
 This metric is the total bytes allocated over the whole run by the heap capability set.
 -}
-processHeapAllocated :: Process (WithStartTime Event) (Metric Word64)
+processHeapAllocated :: Process (WithMetaData Event) (Metric Word64)
 processHeapAllocated =
   repeatedly $
     await >>= \case
@@ -79,7 +79,7 @@ This machine processes `E.HeapSize` events into metrics.
 
 This metric is the current bytes allocated from the OS to use for the heap.
 -}
-processHeapSize :: Process (WithStartTime Event) (Metric Word64)
+processHeapSize :: Process (WithMetaData Event) (Metric Word64)
 processHeapSize =
   repeatedly $
     await >>= \case
@@ -94,7 +94,7 @@ processHeapSize =
 {- |
 This machine processes `E.BlocksSize` events into metrics.
 -}
-processBlocksSize :: Process (WithStartTime Event) (Metric Word64)
+processBlocksSize :: Process (WithMetaData Event) (Metric Word64)
 processBlocksSize =
   repeatedly $
     await >>= \case
@@ -111,7 +111,7 @@ This machine processes `E.HeapLive` events into metrics.
 
 This metric is the current amount of live/reachable data in the heap.
 -}
-processHeapLive :: Process (WithStartTime Event) (Metric Word64)
+processHeapLive :: Process (WithMetaData Event) (Metric Word64)
 processHeapLive =
   repeatedly $
     await >>= \case
@@ -138,7 +138,7 @@ data MemReturn = MemReturn
 {- |
 This machine processes `E.MemReturn` events into metrics.
 -}
-processMemReturn :: Process (WithStartTime Event) (Metric MemReturn)
+processMemReturn :: Process (WithMetaData Event) (Metric MemReturn)
 processMemReturn =
   repeatedly $
     await >>= \case
@@ -169,7 +169,7 @@ data GcStats = GcStats
 {- |
 This machine processes `E.GCStatsGHC` events into metrics.
 -}
-processGcStats :: Process (WithStartTime Event) (Metric GcStats)
+processGcStats :: Process (WithMetaData Event) (Metric GcStats)
 processGcStats =
   repeatedly $
     await >>= \case
@@ -251,7 +251,7 @@ processHeapProfSample ::
   Logger m ->
   Maybe (Table InfoProvId InfoProv) ->
   Maybe HeapProfBreakdown ->
-  ProcessT m (WithStartTime Event) HeapProfSample
+  ProcessT m (WithMetaData Event) HeapProfSample
 processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   construct $
     go
@@ -261,7 +261,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
         , maybeHeapProfSample = mempty
         }
  where
-  -- go :: HeapProfSampleState -> PlanT (Is (WithStartTime Event)) HeapProfSample m Void
+  -- go :: HeapProfSampleState -> PlanT (Is (WithMetaData Event)) HeapProfSample m Void
   go st@HeapProfSampleState{..} = do
     await >>= \i -> case i.value.evSpec of
       -- Announces the heap profile breakdown, amongst other things.
@@ -415,11 +415,11 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
 
 {- |
 Internal helper. Construct a t`Metric` from an event with a start time
-(t`WithStartTime` t`Event`), together with the measurement and any attributes.
+(t`WithMetaData` t`Event`), together with the measurement and any attributes.
 This is a smart constructor that pulls the various timestamps out of the event.
 -}
 metric ::
-  WithStartTime Event ->
+  WithMetaData Event ->
   v ->
   Attrs ->
   Metric v

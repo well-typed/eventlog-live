@@ -58,7 +58,7 @@ import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Analysis.Thread (ThreadState (..), ThreadStateSpan (..), processThreadStateSpans')
 import GHC.Eventlog.Live.Machine.Core (deltaToCumulative, liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..), setWithStartTime'value)
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..), setWithMetaData'value)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue, Attrs, IsAttrValue (..), (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo (..), evCapNo)
 import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
@@ -161,7 +161,7 @@ that contain the cumulative elapsed time for each category (idle, GC, mutator).
 processCapabilityUsageDuration ::
   forall m.
   (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
+  ProcessT m (WithMetaData CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
 processCapabilityUsageDuration =
   processCapabilityUsageDuration'Delta
     ~> processCapabilityUsageDuration'DeltaToCumulative
@@ -225,19 +225,19 @@ between.
 processCapabilityUsageDuration'Delta ::
   forall m.
   (Monad m) =>
-  ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
+  ProcessT m (WithMetaData CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
 processCapabilityUsageDuration'Delta =
   liftRouter measure spawn
  where
-  measure :: WithStartTime CapabilityUsageSpan -> Maybe CapNo
+  measure :: WithMetaData CapabilityUsageSpan -> Maybe CapNo
   measure = Just . (.value.capNo)
 
-  spawn :: CapNo -> ProcessT m (WithStartTime CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
+  spawn :: CapNo -> ProcessT m (WithMetaData CapabilityUsageSpan) (CapabilityUsageDuration TimeUnixNano)
   spawn capNo = construct $ go Nothing
    where
     go ::
       Maybe CapabilityUsageSpan ->
-      PlanT (Is (WithStartTime CapabilityUsageSpan)) (CapabilityUsageDuration TimeUnixNano) m Void
+      PlanT (Is (WithMetaData CapabilityUsageSpan)) (CapabilityUsageDuration TimeUnixNano) m Void
     go mi =
       await >>= \j -> do
         -- If there is a previous span, and...
@@ -345,9 +345,9 @@ processCapabilityUsageSpans ::
   forall m.
   (Monad m) =>
   Logger m ->
-  ProcessT m (WithStartTime Event) (WithStartTime CapabilityUsageSpan)
+  ProcessT m (WithMetaData Event) (WithMetaData CapabilityUsageSpan)
 processCapabilityUsageSpans logger =
-  processCapabilityUsageSpans' (.timeUnixNano) (.value) setWithStartTime'value setWithStartTime'value logger
+  processCapabilityUsageSpans' (.timeUnixNano) (.value) setWithMetaData'value setWithMetaData'value logger
     ~> mapping (either (fmap Left) (fmap Right))
 
 {- |
@@ -427,9 +427,9 @@ processGCSpans ::
   forall m.
   (Monad m) =>
   Logger m ->
-  ProcessT m (WithStartTime Event) (WithStartTime GCSpan)
+  ProcessT m (WithMetaData Event) (WithMetaData GCSpan)
 processGCSpans =
-  processGCSpans' (.timeUnixNano) (.value) setWithStartTime'value
+  processGCSpans' (.timeUnixNano) (.value) setWithMetaData'value
 
 {- |
 Generalised version of `processGCSpans` that can be adapted to work on
@@ -591,9 +591,9 @@ processMutatorSpans ::
   forall m.
   (Monad m) =>
   Logger m ->
-  ProcessT m (WithStartTime Event) (WithStartTime MutatorSpan)
+  ProcessT m (WithMetaData Event) (WithMetaData MutatorSpan)
 processMutatorSpans =
-  processMutatorSpans' (.timeUnixNano) (.value) setWithStartTime'value
+  processMutatorSpans' (.timeUnixNano) (.value) setWithMetaData'value
 
 {- |
 Generalised version of `processMutatorSpans` that can be adapted to work on

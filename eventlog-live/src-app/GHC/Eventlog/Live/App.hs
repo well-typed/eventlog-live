@@ -39,7 +39,7 @@ import GHC.Eventlog.Live.Logger (InternalMetric (..), Logger, chanLogger, chanSo
 import GHC.Eventlog.Live.Machine.Core (Tick (..), dropTick, onlyTick)
 import GHC.Eventlog.Live.Machine.Core qualified as M
 import GHC.Eventlog.Live.Machine.Validate (validateInput)
-import GHC.Eventlog.Live.Machine.WithStartTime qualified as M
+import GHC.Eventlog.Live.Machine.WithMetaData qualified as M
 import GHC.Eventlog.Live.Processor (InstrumentationScope (..), Resource (..), processEventlogTelemetry, processInternalTelemetry)
 import GHC.Eventlog.Live.Source (runWithEventlogSourceHandle, withEventlogSourceHandle)
 import GHC.Eventlog.Live.Types.Attribute (AttrValue (..), (~=))
@@ -150,7 +150,7 @@ main =
                   ~> filtered isCostCentre
                   ~> indexInfoProvEvents (ipedb `onlyIf` isNothing maybeIpeDBPath)
               , -- Process the eventlog events.
-                M.liftTick (filtered (\ev -> not (isCostCentre ev || isInfoTableProv ev)) ~> M.withStartTime logger)
+                M.liftTick (filtered (\ev -> not (isCostCentre ev || isInfoTableProv ev)) ~> M.withMetaData logger)
                   ~> processEventlogTelemetry logger fullConfig eventlogResource appScope maybeHeapProfBreakdown ccdb ipedb
                   ~> M.liftTick (mapping D.singleton)
               ]

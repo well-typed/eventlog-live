@@ -33,7 +33,7 @@ import Data.Text qualified as T
 import Data.Void (Void)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
 import GHC.Eventlog.Live.Machine.Core (liftRouter)
-import GHC.Eventlog.Live.Machine.WithStartTime (WithStartTime (..))
+import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (CapNo, evCapNo)
 import GHC.Eventlog.Live.Types.Severity (Severity (..))
@@ -73,7 +73,7 @@ instance HasField "attrs" ThreadLabel Attrs where
 {- |
 This machine processes `E.ThreadLabel` events and yields t`ThreadLabel` values.
 -}
-processThreadLabel :: Process (WithStartTime Event) ThreadLabel
+processThreadLabel :: Process (WithMetaData Event) ThreadLabel
 processThreadLabel = repeatedly go
  where
   go =
@@ -175,7 +175,7 @@ with a `E.StopThread` event with the `ThreadFinished` status.
 processThreadStateSpans ::
   (Monad m) =>
   Logger m ->
-  ProcessT m (WithStartTime Event) ThreadStateSpan
+  ProcessT m (WithMetaData Event) ThreadStateSpan
 processThreadStateSpans =
   processThreadStateSpans' (.timeUnixNano) (.value) (const id)
 
