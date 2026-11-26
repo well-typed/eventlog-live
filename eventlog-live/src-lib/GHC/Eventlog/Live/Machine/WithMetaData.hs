@@ -13,7 +13,7 @@ module GHC.Eventlog.Live.Machine.WithMetaData (
   dropMetaData,
 ) where
 
-import Control.Applicative (Alternative (..))
+import Control.Applicative (Alternative (..), asum)
 import Control.Monad (forever, when)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Foldable (for_)
@@ -22,7 +22,9 @@ import Data.Machine.Plan (PlanT)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
+import Data.Word (Word64)
 import GHC.Eventlog.Live.Logger (Logger, logWarn)
+import GHC.Eventlog.Live.Types.HeapProfBreakdown (HeapProfBreakdown, findHeapProfBreakdown)
 import GHC.Eventlog.Live.Types.Time (TimeUnixNano)
 import GHC.RTS.Events (Event (..), EventInfo, PID)
 import GHC.RTS.Events qualified as E
@@ -39,7 +41,7 @@ data MetaData = MetaData
   -- ^ The program start time in nanoseconds since the Unix epoch
   , processId :: {-# UNPACK #-} !PID
   -- ^ The program's process ID.
-  , parentProcessId :: {-# UNPACK #-} !(Maybe PID)
+  , parentProcessId :: !(Maybe PID)
   {- ^ The program's parent process ID.
 
   This event is not emitted on Windows, which doesn't have process hierarchy.
@@ -50,6 +52,11 @@ data MetaData = MetaData
   -- ^ The program's environment.
   , rtsIdentifier :: !Text
   -- ^ The identifier for the runtime system.
+  , heapInfo :: !HeapInfo
+  -- ^ The heap information.
+  , heapProfInfo :: !(Maybe HeapProfInfo)
+  -- ^ The heap profile information.
+  , inferredHeapProfBreakdown :: !(Maybe HeapProfBreakdown)
   }
   deriving (Show)
 
@@ -83,6 +90,15 @@ instance HasField "programEnv" (WithMetaData a) (Maybe [Text]) where
 instance HasField "rtsIdentifier" (WithMetaData a) Text where
   getField = (.rtsIdentifier) . (.meta)
 
+instance HasField "heapInfo" (WithMetaData a) HeapInfo where
+  getField = (.heapInfo) . (.meta)
+
+instance HasField "heapProfInfo" (WithMetaData a) (Maybe HeapProfInfo) where
+  getField = (.heapProfInfo) . (.meta)
+
+instance HasField "inferredHeapProfBreakdown" (WithMetaData a) (Maybe HeapProfBreakdown) where
+  getField = (.inferredHeapProfBreakdown) . (.meta)
+
 {- |
 Setter for the value of a t`WithMetaData`
 -}
@@ -100,33 +116,39 @@ withMetaData logger = construct $ start mempty 0 []
  where
   start :: PartialMetaData -> Word -> [Event] -> PlanT (Is Event) (WithMetaData Event) m Void
   start partial nonInitCount buffer =
-    await >>= \case
-      ev
-        | -- If the event is a WallClockTime event...
-          E.WallClockTime{..} <- E.evSpec ev -> do
-            -- ...construct the singleton partial metadata for start time...
-            --
-            -- NOTE: This will start overflowing on Sunday, 21 July 2554
-            --       23:34:33, UTC. Hey! What's your life like there?
-            let !startTimeUnixNano = sec * 1_000_000_000 + fromIntegral nsec
-            let !wallClockTime = mempty{maybeStartTimeUnixNano = Just startTimeUnixNano}
-            -- ...and combine it with the buffered partial metadata...
-            start (partial <> wallClockTime) nonInitCount buffer
-        | E.OsProcessPid{..} <- E.evSpec ev -> do
-            let processId = mempty{maybeProcessId = Just pid}
-            start (partial <> processId) nonInitCount buffer
-        | E.OsProcessParentPid{..} <- E.evSpec ev -> do
-            let parentProcessId = mempty{maybeParentProcessId = Just ppid}
-            start (partial <> parentProcessId) nonInitCount buffer
-        | E.RtsIdentifier{..} <- E.evSpec ev -> do
-            let rtsIdentifier = mempty{maybeRtsIdentifier = Just rtsident}
-            start (partial <> rtsIdentifier) nonInitCount buffer
-        | E.ProgramArgs{..} <- E.evSpec ev -> do
-            let programArgs = mempty{maybeProgramArgs = Just args}
-            start (partial <> programArgs) nonInitCount buffer
-        | E.ProgramEnv{..} <- E.evSpec ev -> do
-            let programEnv = mempty{maybeProgramEnv = Just env}
-            start (partial <> programEnv) nonInitCount buffer
+    await >>= \ev -> case E.evSpec ev of
+      E.HeapInfoGHC{..} -> do
+        let heapInfo = mempty{maybeHeapInfo = Just HeapInfo{..}}
+        start (partial <> heapInfo) nonInitCount buffer
+      E.HeapProfBegin{..} -> do
+        let heapProfInfo = mempty{maybeHeapProfInfo = Just HeapProfInfo{..}}
+        start (partial <> heapProfInfo) nonInitCount buffer
+      E.OsProcessPid{..} -> do
+        let processId = mempty{maybeProcessId = Just pid}
+        start (partial <> processId) nonInitCount buffer
+      E.OsProcessParentPid{..} -> do
+        let parentProcessId = mempty{maybeParentProcessId = Just ppid}
+        start (partial <> parentProcessId) nonInitCount buffer
+      E.ProgramArgs{..} -> do
+        let programArgs = mempty{maybeProgramArgs = Just args}
+        start (partial <> programArgs) nonInitCount buffer
+      E.ProgramEnv{..} -> do
+        let programEnv = mempty{maybeProgramEnv = Just env}
+        start (partial <> programEnv) nonInitCount buffer
+      E.RtsIdentifier{..} -> do
+        let rtsIdentifier = mempty{maybeRtsIdentifier = Just rtsident}
+        start (partial <> rtsIdentifier) nonInitCount buffer
+      E.WallClockTime{..} -> do
+        -- ...construct the singleton partial metadata for start time...
+        --
+        -- NOTE: This will start overflowing on Sunday, 21 July 2554
+        --       23:34:33, UTC. Hey! What's your life like there?
+        --
+        let !startTimeUnixNano = sec * 1_000_000_000 + fromIntegral nsec
+        let !wallClockTime = mempty{maybeStartTimeUnixNano = Just startTimeUnixNano}
+        -- ...and combine it with the buffered partial metadata...
+        start (partial <> wallClockTime) nonInitCount buffer
+      _evSpec
         | -- If the event is any other init event...
           isInitEvent ev -> do
             -- ...buffer it and continue...
@@ -159,7 +181,6 @@ Drop the t`WithMetaData` wrapper.
 dropMetaData :: Process (WithMetaData a) a
 dropMetaData = mapping (.value)
 
-
 --------------------------------------------------------------------------------
 -- Init Events
 --------------------------------------------------------------------------------
@@ -183,8 +204,34 @@ isInitEvent = isInitEventInfo . E.evSpec
   isInitEventInfo E.ProgramArgs{} = True
   isInitEventInfo E.ProgramEnv{} = True
   isInitEventInfo E.UserBinaryMessage{} = True
+  isInitEventInfo E.WallClockTime{} = True
   isInitEventInfo _ = False
 
+--------------------------------------------------------------------------------
+-- Heap & Heap Profile Info
+--------------------------------------------------------------------------------
+
+data HeapInfo = HeapInfo
+  { gens :: !Int
+  , maxHeapSize :: !Word64
+  , allocAreaSize :: !Word64
+  , mblockSize :: !Word64
+  , blockSize :: !Word64
+  }
+  deriving (Show)
+
+data HeapProfInfo = HeapProfInfo
+  { heapProfSamplingPeriod :: !Word64
+  , heapProfBreakdown :: !HeapProfBreakdown
+  , heapProfModuleFilter :: !Text
+  , heapProfClosureDescrFilter :: !Text
+  , heapProfTypeDescrFilter :: !Text
+  , heapProfCostCentreFilter :: !Text
+  , heapProfCostCentreStackFilter :: !Text
+  , heapProfRetainerFilter :: !Text
+  , heapProfBiographyFilter :: !Text
+  }
+  deriving (Show)
 
 --------------------------------------------------------------------------------
 -- Partial Program Metadata
@@ -194,44 +241,47 @@ isInitEvent = isInitEventInfo . E.evSpec
 Partial program metadata.
 -}
 data PartialMetaData = PartialMetaData
-  { maybeStartTimeUnixNano :: Maybe TimeUnixNano
+  { maybeStartTimeUnixNano :: !(Maybe TimeUnixNano)
   -- ^ The program start time in nanoseconds since the Unix epoch
-  , maybeProcessId :: Maybe PID
+  , maybeProcessId :: !(Maybe PID)
   -- ^ The program's process ID.
-  , maybeParentProcessId :: Maybe PID
+  , maybeParentProcessId :: !(Maybe PID)
   -- ^ The program's parent process ID.
-  , maybeProgramArgs :: Maybe [Text]
+  , maybeProgramArgs :: !(Maybe [Text])
   -- ^ The program's command-line arguments.
-  , maybeProgramEnv :: Maybe [Text]
+  , maybeProgramEnv :: !(Maybe [Text])
   {- ^ The program's environment.
 
   This event is not emitted on any recent GHC build, but may be emitted by the user.
   -}
-  , maybeRtsIdentifier :: Maybe Text
+  , maybeRtsIdentifier :: !(Maybe Text)
   -- ^ The identifier for the runtime system.
+  , maybeHeapInfo :: !(Maybe HeapInfo)
+  -- ^ The heap information.
+  , maybeHeapProfInfo :: !(Maybe HeapProfInfo)
+  -- ^ The heap profile information.
   }
 
 instance Semigroup PartialMetaData where
   p1 <> p2 =
     PartialMetaData
       { maybeStartTimeUnixNano =
-          forceMaybe $ p1.maybeStartTimeUnixNano <|> p2.maybeStartTimeUnixNano
+          p1.maybeStartTimeUnixNano <|> p2.maybeStartTimeUnixNano
       , maybeProcessId =
-          forceMaybe $ p1.maybeProcessId <|> p2.maybeProcessId
+          p1.maybeProcessId <|> p2.maybeProcessId
       , maybeParentProcessId =
-          forceMaybe $ p1.maybeParentProcessId <|> p2.maybeParentProcessId
+          p1.maybeParentProcessId <|> p2.maybeParentProcessId
       , maybeProgramArgs =
-          forceMaybe $ p1.maybeProgramArgs <|> p2.maybeProgramArgs
+          p1.maybeProgramArgs <|> p2.maybeProgramArgs
       , maybeProgramEnv =
-          forceMaybe $ p1.maybeProgramEnv <|> p2.maybeProgramEnv
+          p1.maybeProgramEnv <|> p2.maybeProgramEnv
       , maybeRtsIdentifier =
-          forceMaybe $ p1.maybeRtsIdentifier <|> p2.maybeRtsIdentifier
+          p1.maybeRtsIdentifier <|> p2.maybeRtsIdentifier
+      , maybeHeapInfo =
+          p1.maybeHeapInfo <|> p2.maybeHeapInfo
+      , maybeHeapProfInfo =
+          p1.maybeHeapProfInfo <|> p2.maybeHeapProfInfo
       }
-   where
-    -- NOTE: Without this function, `min` creates a space leak.
-    forceMaybe :: Maybe a -> Maybe a
-    forceMaybe Nothing = Nothing
-    forceMaybe (Just a) = a `seq` Just a
 
 instance Monoid PartialMetaData where
   mempty =
@@ -242,6 +292,8 @@ instance Monoid PartialMetaData where
       , maybeProgramArgs = Nothing
       , maybeProgramEnv = Nothing
       , maybeRtsIdentifier = Nothing
+      , maybeHeapInfo = Nothing
+      , maybeHeapProfInfo = Nothing
       }
 
 {- |
@@ -255,4 +307,16 @@ toMetaData PartialMetaData{..} = do
   programArgs <- maybeProgramArgs
   let programEnv = maybeProgramEnv
   rtsIdentifier <- maybeRtsIdentifier
+  heapInfo <- maybeHeapInfo
+  let heapProfInfo = maybeHeapProfInfo
+  let inferredHeapProfBreakdown =
+        asum
+          [ -- Use the HeapProfBreakdown provided by the HeapProfBegin event.
+            -- This event was not emitted as an init event prior to GHC 9.14,
+            -- so its unreliable, but it's the preferred source of truth.
+            (.heapProfBreakdown) <$> maybeHeapProfInfo
+          , -- Use the explict -h argument passed to the RTS. This won't work
+            -- if the -h argument is compiled into the binary.
+            findHeapProfBreakdown programArgs
+          ]
   pure MetaData{..}

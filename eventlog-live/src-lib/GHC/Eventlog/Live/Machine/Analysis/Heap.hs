@@ -22,10 +22,10 @@ module GHC.Eventlog.Live.Machine.Analysis.Heap (
   processHeapProfSample,
 ) where
 
+import Control.Applicative (Alternative (..))
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Data.Either (isLeft)
 import Data.Foldable (for_)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as M
@@ -39,7 +39,7 @@ import GHC.Eventlog.Live.Machine.WithMetaData (WithMetaData (..))
 import GHC.Eventlog.Live.Types.Attribute (Attrs, (~=))
 import GHC.Eventlog.Live.Types.Capability (evCapNo)
 import GHC.Eventlog.Live.Types.Group (GroupBy (..))
-import GHC.Eventlog.Live.Types.HeapProfBreakdown (findHeapProfBreakdown, heapProfBreakdownShow)
+import GHC.Eventlog.Live.Types.HeapProfBreakdown (heapProfBreakdownShow)
 import GHC.Eventlog.Live.Types.Metrics (Metric (..), (<+>))
 import GHC.RTS.Events (Event (..), HeapProfBreakdown (..))
 import GHC.RTS.Events qualified as E
@@ -233,18 +233,15 @@ Internal helper.
 The type of the state kept by `processHeapProfSample`.
 -}
 data HeapProfSampleState = HeapProfSampleState
-  { eitherShouldWarnOrHeapProfBreakdown :: !(Either Bool HeapProfBreakdown)
+  { shouldWarn :: !Bool
   , heapProfSampleEraStack :: ![Word64]
   , maybeHeapProfSample :: !(Maybe HeapProfSample)
   }
   deriving (Show)
 
 {- |
-This machine processes `E.HeapProfSampleString` events into metrics.
-Furthermore, it processes the `E.HeapProfBegin` and `E.ProgramArgs` events
-to determine the heap profile breakdown, processes `E.InfoTableProv` events to
-build an info table map, if necessary, and processes `E.HeapProfSampleBegin`
-and `E.HeapProfSampleEnd` events to maintain an era stack.
+This machine processes `E.HeapProfSampleString` events into metrics and
+`E.HeapProfSampleBegin` and `E.HeapProfSampleEnd` events into an era stack.
 -}
 processHeapProfSample ::
   (MonadIO m) =>
@@ -256,7 +253,7 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   construct $
     go
       HeapProfSampleState
-        { eitherShouldWarnOrHeapProfBreakdown = maybe (Left True) Right maybeHeapProfBreakdown
+        { shouldWarn = True
         , heapProfSampleEraStack = mempty
         , maybeHeapProfSample = mempty
         }
@@ -264,18 +261,6 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
   -- go :: HeapProfSampleState -> PlanT (Is (WithMetaData Event)) HeapProfSample m Void
   go st@HeapProfSampleState{..} = do
     await >>= \i -> case i.value.evSpec of
-      -- Announces the heap profile breakdown, amongst other things.
-      -- This event is only emitted for code compiled with GHC >=9.14.
-      E.HeapProfBegin{..}
-        | isLeft eitherShouldWarnOrHeapProfBreakdown ->
-            go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
-      -- Announces the arguments with which the program was called.
-      -- This *may* include RTS options, which can be used to determine the
-      -- heap profile breakdown for code compiled with GHC <9.14.
-      E.ProgramArgs{..}
-        | isLeft eitherShouldWarnOrHeapProfBreakdown
-        , Just heapProfBreakdown <- findHeapProfBreakdown args ->
-            go st{eitherShouldWarnOrHeapProfBreakdown = Right heapProfBreakdown}
       -- Announces the beginning of a heap profile sample.
       E.HeapProfSampleBegin{..} -> do
         -- Check that maybeHeapProfSample is Nothing.
@@ -326,33 +311,34 @@ processHeapProfSample logger maybeInfoProvTable maybeHeapProfBreakdown =
       -- Announces a heap profile sample.
       E.HeapProfSampleString{..}
         -- If there is no heap profile breakdown, issue a warning, then disable warnings.
-        | Left True <- eitherShouldWarnOrHeapProfBreakdown -> do
+        | Nothing <- i.inferredHeapProfBreakdown <|> maybeHeapProfBreakdown
+        , shouldWarn -> do
             let msg =
                   "Cannot infer heap profile breakdown.\n\
                   \         If your binary was compiled with a GHC version prior to 9.14,\n\
                   \         you must also pass the heap profile type to this executable.\n\
                   \         See: https://gitlab.haskell.org/ghc/ghc/-/commit/76d392a"
             lift $ logWarn logger $ msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
+            go st{shouldWarn = False}
         -- If the heap profile breakdown is by info table, but the shared info
         -- prov table was not provided, issue a warning, then disable warnings.
-        | Right HeapProfBreakdownInfoTable <- eitherShouldWarnOrHeapProfBreakdown
+        | Just HeapProfBreakdownInfoTable <- i.inferredHeapProfBreakdown <|> maybeHeapProfBreakdown
         , Nothing <- maybeInfoProvTable -> do
             let msg =
                   "Heap profile breakdown is "
                     <> heapProfBreakdownShow HeapProfBreakdownInfoTable
                     <> ", but no shared InfoProv table was provided."
             lift $ logWarn logger $ T.pack msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
+            go st{shouldWarn = False}
         -- If the heap profile breakdown is biographical, issue a warning, then disable warnings.
-        | Right HeapProfBreakdownBiography <- eitherShouldWarnOrHeapProfBreakdown -> do
+        | Just HeapProfBreakdownBiography <- i.inferredHeapProfBreakdown <|> maybeHeapProfBreakdown -> do
             let msg =
                   "Unsupported heap profile breakdown "
                     <> heapProfBreakdownShow HeapProfBreakdownBiography
             lift $ logWarn logger $ T.pack msg
-            go st{eitherShouldWarnOrHeapProfBreakdown = Left False}
+            go st{shouldWarn = False}
         -- If there is a heap profile breakdown, handle it appropriately.
-        | Right heapProfBreakdown <- eitherShouldWarnOrHeapProfBreakdown -> do
+        | Just heapProfBreakdown <- i.inferredHeapProfBreakdown <|> maybeHeapProfBreakdown -> do
             -- If the heap profile breakdown is by info table, add the info table.
             maybeInfoProv <-
               case heapProfBreakdown of
