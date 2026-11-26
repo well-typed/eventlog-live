@@ -114,6 +114,20 @@
         - GHC.Eventlog.Live.Test
         - GHC.Eventlog.Live.App.Exporter.Otlp
         - GHC.Eventlog.Live.App.Exporter.Otlp.*
+- functions:
+    # The withMetaData machine consumes these events, so
+    # they should not be relied upon in later machines:
+    - name:
+        - HeapInfoGHC
+        - HeapProfBegin
+        - OsProcessPid
+        - OsProcessParentPid
+        - ProgramArgs
+        - ProgramEnv
+        - RtsIdentifier
+        - WallClockTime
+      within:
+        - GHC.Eventlog.Live.Machine.WithMetaData
 # Ignore some builtin hints
 #
 - ignore:
